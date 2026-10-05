@@ -77,6 +77,7 @@ private:
     void analyse() noexcept;
     void synthesiseUpTo (int64_t limit) noexcept;
     double alignMark (double prevMark, double candidate, double P) const noexcept;
+    double grainEnergy (double centre, double P) const noexcept;
 
     PitchParams params;
     double sr = 48000.0;
@@ -122,6 +123,7 @@ private:
     // Synthesis.
     double synthPos = 0.0;             // next output grain centre (input time)
     double anaPos = 0.0;               // analysis mark (input time)
+    double noteEnergy = 0.0;           // recent grain energy (join timing)
     double drift = 0.0;                // anaPos - synthPos, eased back to 0 in breaths
     double gPeriod = 0.0, gRatio = 1.0;
     bool wasNeutral = true;

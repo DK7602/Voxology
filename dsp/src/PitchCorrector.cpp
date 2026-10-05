@@ -60,7 +60,7 @@ void PitchCorrector::reset() noexcept
     aa1.reset(); aa2.reset();
     now = 0; dnow = 0; decAcc = 0.0; decCount = 0; hopCount = 0;
     period = 0.0; levelMs = 0.0;
-    note = -1; corr = 0.0; sustain = 0.0; voicedRun = 0; lastP = 0.0;
+    note = -1; corr = 0.0; sustain = 0.0; voicedRun = 0; lastP = 0.0; noteEnergy = 0.0;
     rawP = { 0.0, 0.0, 0.0 };
     last = {};
     synthPos = anaPos = 0.0;
@@ -252,6 +252,15 @@ PitchCorrector::Frame PitchCorrector::frameAt (double t) const noexcept
     return *after;   // older than everything we kept: the oldest reading
 }
 
+double PitchCorrector::grainEnergy (double centre, double P) const noexcept
+{
+    const auto c0 = static_cast<int64_t> (std::lround (centre));
+    const int half = static_cast<int> (P);
+    double e = 0.0;
+    for (int k = -half; k < half; k += 2) { const double v = mono[static_cast<size_t> ((c0 + k) & mask)]; e += v * v; }
+    return e / std::max (1, half);
+}
+
 double PitchCorrector::alignMark (double prevMark, double candidate, double P) const noexcept
 {
     // Real voices aren't perfectly periodic: put the new mark where the waveform best matches the
@@ -297,9 +306,16 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
         {
             // Joins happen past +-0.6 P, so right after one (offset ~ -+0.4 P) the opposite join needs a
             // clear push: no flipping back and forth between repeat and skip (a burst of ticks).
-            if (drift > 0.6 * P)
+            // Join timing: a join in a quiet moment (a note's decay, the edge of a breath) can't be
+            // heard, so past 0.6 P it waits for one - the grain quieter than the note's recent level -
+            // and only joins regardless at 0.95 P.
+            const double e = grainEnergy (synthPos + drift, P);
+            noteEnergy += (e - noteEnergy) * 0.1;
+            const bool quiet = e < 0.5 * noteEnergy;
+            const double limit = quiet ? 0.6 * P : 0.95 * P;
+            if (drift > limit)
                 drift = alignMark (synthPos + drift, synthPos + drift - P, P) - synthPos;
-            else if (drift < -0.6 * P)
+            else if (drift < -limit)
                 drift = alignMark (synthPos + drift, synthPos + drift + P, P) - synthPos;
         }
         // In breaths / consonants the offset just holds: a constant offset joins seamlessly (any

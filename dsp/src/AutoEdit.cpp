@@ -120,7 +120,7 @@ double activeRmsDb (const Signal& x, const std::vector<bool>& mask, int hop)
 }
 
 // --- pitch -------------------------------------------------------------------------------------
-std::vector<double> pitchTrack (const Signal& x, double sr, const std::vector<bool>& mask, int hop)
+std::vector<double> pitchTrack (const Signal& x, double sr, const std::vector<bool>& mask, int hop, std::vector<long>* stepIndex = nullptr)
 {
     const int dec = std::max (1, static_cast<int> (std::lround (sr / 12000.0)));
     const double fs = sr / dec;
@@ -159,6 +159,7 @@ std::vector<double> pitchTrack (const Signal& x, double sr, const std::vector<bo
                 const double a = r[lag - 1], b = r[lag], c = r[lag + 1], den = a - 2.0 * b + c;
                 const double frac = std::abs (den) > 1.0e-12 ? std::clamp (0.5 * (a - c) / den, -0.5, 0.5) : 0.0;
                 f0s.push_back (fs / (static_cast<double> (lag) + frac));
+                if (stepIndex) stepIndex->push_back (static_cast<long> (s / step));
                 break;
             }
     }
@@ -449,7 +450,22 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
         a.noisePeakDb = percentile (quietPeak, 90.0);
     }
 
-    const auto f0 = pitchTrack (raw, sr, mask, f.hop);
+    std::vector<long> steps;
+    const auto f0 = pitchTrack (raw, sr, mask, f.hop, &steps);
+    {
+        // Held notes: runs of consecutive 20 ms readings that stay within half a semitone of the
+        // run's start for 160 ms or more. Singing holds notes; rap glides (even when it's pitched).
+        size_t held = 0, i = 0;
+        while (i < f0.size())
+        {
+            size_t j = i + 1;
+            const double m0 = 12.0 * std::log2 (f0[i] / 440.0);
+            while (j < f0.size() && steps[j] == steps[j - 1] + 1 && std::abs (12.0 * std::log2 (f0[j] / 440.0) - m0) < 0.5) ++j;
+            if (j - i >= 8) held += j - i;
+            i = j;
+        }
+        a.heldShare = f0.empty() ? 0.0 : 100.0 * static_cast<double> (held) / static_cast<double> (f0.size());
+    }
     if (f0.size() >= 10)
     {
         a.f0Median = percentile (f0, 50.0);
