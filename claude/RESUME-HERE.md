@@ -46,6 +46,18 @@ Auto-Edit on synthetic vocals (noisy/sibilant, clean, boomy+clipped, too short).
 Local Linux checks: plug-in builds (VST3 + Standalone), pluginval strictness 10 SUCCESS. CPU: full
 chain ~6 % of one core (48 kHz stereo). UI checked in a browser with mock.js (screenshots).
 
+## UI and fixes (2026-10-05, later)
+- Look (user-directed): honeycomb panel art (assets/honeycomb.webp, panel crop of the user's image) is the
+  stage background AND the surface inside Signal Chain + module panels; header, footer and Learn use the
+  cream hive-tile marble (marble_cream_panel.webp + 160deg white sheen + inset blue shadow). Hive tiles
+  alternate blue / cream marble cut from the art. Knobs = the user's knob art (knob_db / knob_hz cut from a
+  fake-checkerboard JPG; knob_blank = Q knob with a generated marble disc, engraved %, ms, s, :1); art stays
+  still, glowing value arc + pointer move. Geometry per face in app.js FACES. knob_q / knob_switch unused
+  (for future Q / filter-shape controls). User rejected generic glass looks: match their art exactly.
+- Crash fix: sibilance scan read 1025 bins from a 513-bin spectrum (intermittent SIGSEGV on Windows CI).
+  CI now also runs the engine tests under ASan + UBSan on Linux (~2.5 min) on every push.
+- Run 37251336431: all green (Windows build + tests + pluginval 10 + VST3 validator; sanitizers).
+
 ## Honest gaps vs Nectar 4 Advanced (the plan)
 1. Pitch correction (Nectar has it; trap needs it). Plan: real-time YIN pitch detection + PSOLA
    shifter, key / scale, retune speed, humanize; Auto-Edit sets key from the vocal.
