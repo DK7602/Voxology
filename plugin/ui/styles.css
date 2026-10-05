@@ -119,7 +119,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #visual { left: 376px; top: 150px; width: 752px; height: 282px; }
 .legend { margin-left: auto; font-size: 13px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; }
 .legend .sw { display: inline-block; width: 18px; height: 4px; border-radius: 2px; margin-left: 10px; }
-.sw.in { background: #9db6c9; } .sw.out { background: var(--gold); } .sw.eq { background: var(--blue-deep); }
+.sw.in { background: #9db6c9; } .sw.out { background: var(--gold); } .sw.eq { background: var(--blue-deep); } .sw.dyn { background: #c8642c; }
 #plot { position: absolute; left: 14px; right: 14px; top: 54px; bottom: 14px; border-radius: 12px; overflow: hidden;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(220, 235, 246, 0.62)); box-shadow: inset 0 0 0 2px rgba(201, 151, 58, 0.7), inset 0 0 20px rgba(36, 97, 143, 0.15); }
 #spec { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -129,6 +129,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: radial-gradient(circle, transparent 50%, #c9973a 53%), var(--marble); display: grid; place-items: center;
   font: 600 11px "Plex"; color: var(--blue-deep); }
 .node.flat { opacity: 0.55; }
+.node.dyn { background: radial-gradient(circle, transparent 50%, #c8642c 53%), var(--marble-cream); color: #8a3f14; }
+.node[hidden] { display: none; }
 .node:active { cursor: grabbing; }
 #eq-readout { position: absolute; right: 10px; top: 8px; font-size: 13px; color: var(--blue-deep); background: rgba(255, 250, 240, 0.85);
   padding: 3px 8px; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(201, 151, 58, 0.5); }
@@ -247,7 +249,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #cells[data-cols="5"] .knob { height: 96px; margin-top: 4px; }
 #cells[data-cols="5"] .cell-value { margin-top: 4px; }
 
-/* Signal chain: 11 cells. */
+/* Signal chain: 12 cells. */
 .hex { width: 108px; height: 124px; }
 .hex .name { font-size: 12.5px; padding: 0 8px; }
 .hex .num, .hex .stat { font-size: 11px; }
@@ -277,3 +279,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #cells[data-page="pitch"] .cell:nth-child(5), #cells[data-page="pitch"] .cell:nth-child(6) { width: 116px; }
 #cells[data-page="pitch"] .vseg.keys { width: 160px; gap: 4px; }
 #cells[data-page="pitch"] .vseg.keys button { height: 32px; font-size: 13px; }
+
+/* Dynamic EQ page: four live cut bars in one cell. */
+.dyn-meter .dyn-bars { display: flex; gap: 6px; margin-top: 6px; }
+.dyn-meter .dyn-col { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.dyn-meter .dyn-col .mbar { width: 20px; height: 84px; margin-top: 0; }
+.dyn-meter .dyn-col .mbar i { background: linear-gradient(180deg, #e7a06a, #c8642c); }
+.dyn-meter .dyn-col.off { opacity: 0.4; }
+.dyn-meter .dyn-name { font-size: 12px; font-weight: 700; color: var(--ink); text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+#cells[data-cols="5"] .dyn-meter .cell-value { margin-top: 2px; }

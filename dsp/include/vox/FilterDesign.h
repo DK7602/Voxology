@@ -57,6 +57,14 @@ inline Coeffs highShelf (double f, double gainDb, double sr, double q = 0.707) n
              ((A + 1.0) - (A - 1.0) * cw - k) / a0 };
 }
 
+/** Band-pass, 0 dB at the centre (constant peak gain). */
+inline Coeffs bandPass (double f, double q, double sr) noexcept
+{
+    const double w0 = 2.0 * std::numbers::pi * std::min (f, 0.45 * sr) / sr, cw = std::cos (w0);
+    const double alpha = std::sin (w0) / (2.0 * q), a0 = 1.0 + alpha;
+    return { alpha / a0, 0.0, -alpha / a0, -2.0 * cw / a0, (1.0 - alpha) / a0 };
+}
+
 /** One-pole smoothing coefficient for a time constant (seconds): y += (x - y) * coeff. */
 inline double onePole (double seconds, double sr) noexcept
 {

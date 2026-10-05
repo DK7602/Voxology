@@ -5,6 +5,7 @@ add_library(vox_dsp STATIC
     src/SoftClipper.cpp
     src/Saturation.cpp
     src/Modules.cpp
+    src/DynamicEq.cpp
     src/Space.cpp
     src/VocalChain.cpp
     src/AutoEdit.cpp

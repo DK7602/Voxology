@@ -53,6 +53,7 @@ public:
         std::atomic<float> inShort { -100.0f }, outShort { -100.0f };     // LUFS
         std::atomic<float> inPeak { -100.0f }, outPeak { -100.0f };       // dBFS, held until read
         std::atomic<float> gate { 0.0f }, deEss { 0.0f }, rider { 0.0f };  // dB
+        std::array<std::atomic<float>, vox::kDynBands> dynEq {};            // dB per band, held until read
         std::atomic<float> peakGr { 0.0f }, levelGr { 0.0f };             // dB, held until read
         std::atomic<float> satResidual { 0.0f }, satSignal { 0.0f };      // energies, drained by the editor
         std::atomic<float> matchDb { 0.0f };

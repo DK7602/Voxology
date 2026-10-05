@@ -174,6 +174,12 @@ void VoxWebEditor::timerCallback()
     auto holdDown = [] (float& hold, float now) { hold = now < hold ? now : hold * 0.8f + now * 0.2f; };   // deepest, then glide back
     holdDown (gateHold, m.gate.exchange (0.0f));
     holdDown (essHold, m.deEss.exchange (0.0f));
+    juce::Array<juce::var> dyn;
+    for (size_t b = 0; b < dynHold.size(); ++b)
+    {
+        holdDown (dynHold[b], m.dynEq[b].exchange (0.0f));
+        dyn.add (roundTo (dynHold[b], 0.1f));
+    }
     holdDown (peakHold, m.peakGr.exchange (0.0f));
     holdDown (levelHold, m.levelGr.exchange (0.0f));
     const float inPk = m.inPeak.exchange (-100.0f), outPk = m.outPeak.exchange (-100.0f);
@@ -190,6 +196,7 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("outPeak", roundTo (outPkHold, 0.1f));
     frame->setProperty ("gate", roundTo (gateHold, 0.1f));
     frame->setProperty ("deEss", roundTo (essHold, 0.1f));
+    frame->setProperty ("dyn", dyn);
     frame->setProperty ("rider", roundTo (m.rider.load(), 0.1f));
     frame->setProperty ("peakGr", roundTo (peakHold, 0.1f));
     frame->setProperty ("levelGr", roundTo (levelHold, 0.1f));

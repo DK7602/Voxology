@@ -18,6 +18,8 @@ namespace VoxParams
     {
         juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "clLowCut", "clGateThr", "clGateRange" };
         for (int b = 0; b < vox::kEqBands; ++b) { ids.add (n ("eqGain", b)); ids.add (n ("eqFreq", b)); }
+        ids.add ("dqSens");
+        for (int b = 0; b < vox::kDynBands; ++b) { ids.add (n ("dqCut", b)); ids.add (n ("dqFreq", b)); }
         ids.addArray ({ "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
                         "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix",
                         "dbAmount", "dbWidth", "dlFeedback", "dlMix", "dlTone", "dlDuck",
@@ -26,7 +28,7 @@ namespace VoxParams
     }
     inline juce::StringArray toggleIds()
     {
-        return { "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
+        return { "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
     }
     inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime" }; }
 
@@ -81,6 +83,20 @@ namespace VoxParams
             slider (n ("eqGain", b).toRawUTF8(), String ("EQ ") + info.name + " Gain",
                     NormalisableRange<float> (static_cast<float> (-vox::kEqMaxDb), static_cast<float> (vox::kEqMaxDb), 0.1f), 0.0f, "dB", dbText);
             slider (n ("eqFreq", b).toRawUTF8(), String ("EQ ") + info.name + " Freq",
+                    skewed (static_cast<float> (info.lo), static_cast<float> (info.hi), 1.0f, static_cast<float> (std::sqrt (info.lo * info.hi))),
+                    static_cast<float> (info.def), "Hz", hzText);
+        }
+
+        // Dynamic EQ: Max Cut 0 = band off.
+        toggle ("dqOn", "Dynamic EQ On", true);
+        slider ("dqSens", "Dynamic EQ Sensitivity", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f, "%", pctText);
+        for (int b = 0; b < vox::kDynBands; ++b)
+        {
+            const auto& info = vox::kDynBandInfo[static_cast<size_t> (b)];
+            slider (n ("dqCut", b).toRawUTF8(), String ("Dynamic EQ ") + info.name + " Max Cut",
+                    NormalisableRange<float> (0.0f, static_cast<float> (vox::kDynMaxCutDb), 0.1f), 0.0f, "dB",
+                    [] (float v, int) { return v < 0.05f ? String ("Off") : String (-v, 1) + " dB"; });
+            slider (n ("dqFreq", b).toRawUTF8(), String ("Dynamic EQ ") + info.name + " Freq",
                     skewed (static_cast<float> (info.lo), static_cast<float> (info.hi), 1.0f, static_cast<float> (std::sqrt (info.lo * info.hi))),
                     static_cast<float> (info.def), "Hz", hzText);
         }
@@ -151,6 +167,13 @@ namespace VoxParams
             set (n ("eqGain", b), static_cast<float> (p.eq.gainDb[static_cast<size_t> (b)]));
             set (n ("eqFreq", b), static_cast<float> (p.eq.freqHz[static_cast<size_t> (b)]));
         }
+        set ("dqOn", 1.0f);
+        set ("dqSens", static_cast<float> (p.dynEq.sensitivity));
+        for (int b = 0; b < vox::kDynBands; ++b)
+        {
+            set (n ("dqCut", b), static_cast<float> (p.dynEq.maxCutDb[static_cast<size_t> (b)]));
+            set (n ("dqFreq", b), static_cast<float> (p.dynEq.freqHz[static_cast<size_t> (b)]));
+        }
         set ("dsOn", 1.0f);
         set ("dsAmount", static_cast<float> (p.deEsser.amount));
         set ("dsSens", static_cast<float> (p.deEsser.sensitivity));
@@ -215,6 +238,13 @@ namespace VoxParams
                 p.eq.gainDb[b] = eqGain[b]->load();
                 p.eq.freqHz[b] = eqFreq[b]->load();
             }
+            p.dynEq.enabled = on ("dqOn");
+            p.dynEq.sensitivity = d ("dqSens");
+            for (size_t b = 0; b < static_cast<size_t> (vox::kDynBands); ++b)
+            {
+                p.dynEq.maxCutDb[b] = dqCut[b]->load();
+                p.dynEq.freqHz[b] = dqFreq[b]->load();
+            }
             p.deEsser = { on ("dsOn"), d ("dsAmount"), d ("dsSens"), d ("dsFreq") };
             p.rider = { on ("rdOn"), d ("rdTarget"), d ("rdRange"), idx ("rdSpeed", 2) };
             p.comp = { on ("cpOn"), d ("cpPeak"), d ("cpThr"), d ("cpRatio"), d ("cpMakeup"), d ("cpMix") };
@@ -239,6 +269,11 @@ namespace VoxParams
                 if (id == n ("eqGain", b)) eqGain[static_cast<size_t> (b)] = a;
                 if (id == n ("eqFreq", b)) eqFreq[static_cast<size_t> (b)] = a;
             }
+            for (int b = 0; b < vox::kDynBands; ++b)
+            {
+                if (id == n ("dqCut", b)) dqCut[static_cast<size_t> (b)] = a;
+                if (id == n ("dqFreq", b)) dqFreq[static_cast<size_t> (b)] = a;
+            }
         }
         float v (const char* id) const noexcept
         {
@@ -251,5 +286,6 @@ namespace VoxParams
 
         std::vector<std::pair<juce::String, std::atomic<float>*>> values;
         std::array<std::atomic<float>*, vox::kEqBands> eqGain {}, eqFreq {};
+        std::array<std::atomic<float>*, vox::kDynBands> dqCut {}, dqFreq {};
     };
 }

@@ -25,7 +25,7 @@ struct AutoEditSettings
 /** One explained decision: which module and control, the value chosen and why (plain language). */
 struct AutoEditReason
 {
-    std::string module;        // "cleanup", "eq", "deess", "rider", "comp", "sat", "double", "delay", "reverb", "out"
+    std::string module;        // "cleanup", "eq", "dyneq", "deess", "rider", "comp", "sat", "double", "delay", "reverb", "out"
     std::string control, value, why;
 };
 

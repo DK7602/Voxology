@@ -25,8 +25,8 @@ fit();
 const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "clLowCut", "clGateThr", "clGateRange", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
   "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth",
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain",
-  ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b])];
-const TOGGLES = ["bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
+  ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
+const TOGGLES = ["bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
 const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
@@ -48,7 +48,7 @@ function scaledToNorm(state, v) {
 function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 
 // Latest meter frame.
-const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
+const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
@@ -62,6 +62,14 @@ const EQ_BANDS = [
   { name: "Body", type: 0, q: 0.7 }, { name: "Mud", type: 1, q: 1.4 }, { name: "Nasal", type: 1, q: 1.6 },
   { name: "Presence", type: 1, q: 0.9 }, { name: "Air", type: 2, q: 0.7 },
 ];
+const DYN_BANDS = [
+  { name: "Boom", short: "B", q: 1.0, def: 150 }, { name: "Mud", short: "M", q: 1.4, def: 350 },
+  { name: "Nasal", short: "N", q: 1.6, def: 1000 }, { name: "Harsh", short: "H", q: 1.4, def: 3500 },
+];
+const dynCut = (b) => val("dqCut" + (b + 1));
+const dynFreq = (b) => val("dqFreq" + (b + 1));
+const dynLive = (b) => (M.dyn && Number.isFinite(M.dyn[b]) ? M.dyn[b] : 0);   // dB, <= 0
+const fmtCut = (v) => (v < 0.05 ? "Off" : `${MINUS}${v.toFixed(1)} dB`);
 const eqGain = (b) => val("eqGain" + (b + 1));
 const eqFreq = (b) => val("eqFreq" + (b + 1));
 const compNeutral = () => val("cpPeak") > -0.05 && val("cpRatio") < 1.005 && Math.abs(val("cpMakeup")) < 0.005;
@@ -119,6 +127,19 @@ const MODULES = [
       ...EQ_BANDS.map((b, i) => knob("eqFreq" + (i + 1), b.name, "frequency", fmtHz, [180, 300, 900, 4000, 12000][i])),
     ],
     stat: () => { const n = [0, 1, 2, 3, 4].filter((b) => Math.abs(eqGain(b)) >= 0.05).length; return n ? [`${n} band${n > 1 ? "s" : ""}`, true] : ["flat", false]; } },
+  { key: "dyneq", name: "DYNAMIC EQ", onId: "dqOn", what: "cuts boom, mud, honk and harshness only when they jump out",
+    cells: () => [
+      ...DYN_BANDS.map((b, i) => knob("dqCut" + (i + 1), b.name, "max cut", fmtCut, 0)),
+      dynMeter(),
+      ...DYN_BANDS.map((b, i) => knob("dqFreq" + (i + 1), b.name, "frequency", fmtHz, b.def)),
+      knob("dqSens", "Sensitivity", "how easily", fmtPct, 50),
+    ],
+    stat: () => {
+      const n = [0, 1, 2, 3].filter((b) => dynCut(b) >= 0.05).length;
+      if (!n) return ["idle", false];
+      const deepest = Math.min(...[0, 1, 2, 3].map(dynLive));
+      return deepest < -0.3 ? [fmtDb(deepest), true] : [`${n} band${n > 1 ? "s" : ""}`, true];
+    } },
   { key: "deess", name: "DE-ESSER", onId: "dsOn", what: "tames sharp s, t, sh and ch sounds",
     cells: () => [
       knob("dsAmount", "Amount", "how hard", fmtPct, 0),
@@ -208,7 +229,7 @@ function faceFor(id) {
   if (id === "rvDecay") return ["blank", "s"];
   if (id === "rvPredelay") return ["blank", "ms"];
   if (id === "cpRatio") return ["blank", ":1"];
-  if (/Gain|Thr|Target|Range|Peak|Makeup|Drive/.test(id)) return ["db", ""];
+  if (/Gain|Thr|Target|Range|Peak|Makeup|Drive|Cut/.test(id)) return ["db", ""];
   return ["blank", "%"];
 }
 function knobSvg(face, glyph) {
@@ -342,6 +363,28 @@ function meter(label, sub, get, range, up, fmt, floor = 0) {
   return cell;
 }
 
+/** Dynamic EQ: one live bar per band (how much it's cutting right now). */
+function dynMeter() {
+  const cell = document.createElement("div");
+  cell.className = "cell meter-cell dyn-meter";
+  cell.innerHTML = `<span class="cell-label">Cutting</span><span class="cell-sub">right now</span><div class="dyn-bars">${DYN_BANDS.map((b) =>
+    `<div class="dyn-col"><div class="mbar"><i></i></div><span class="dyn-name mono">${b.short}</span></div>`).join("")}</div><span class="cell-value"></span>`;
+  const bars = [...cell.querySelectorAll(".mbar i")], cols = [...cell.querySelectorAll(".dyn-col")], v = cell.querySelector(".cell-value");
+  cell.update = () => {
+    let deepest = 0;
+    bars.forEach((bar, b) => {
+      const x = dynLive(b);
+      deepest = Math.min(deepest, x);
+      bar.style.height = `${clamp(-x / 12, 0, 1) * (bar.parentElement.clientHeight - 6)}px`;
+      cols[b].classList.toggle("off", dynCut(b) < 0.05);
+    });
+    v.textContent = deepest > -0.1 ? "0 dB" : fmtDb(deepest);
+  };
+  liveMeters.push(cell);
+  cell.update();
+  return cell;
+}
+
 // Build every module's cells once (they stay bound to their parameters).
 const cellsByModule = MODULES.map((m) => m.cells());
 
@@ -349,7 +392,7 @@ const cellsByModule = MODULES.map((m) => m.cells());
 // Honeycomb chain
 const hive = $("hive");
 const hexes = MODULES.map((m, i) => {
-  const row = Math.floor(i / 2), col = i % 2;   // 11 cells in a honeycomb, two per row
+  const row = Math.floor(i / 2), col = i % 2;   // 12 cells in a honeycomb, two per row
   const h = document.createElement("div");
   h.className = "hex";
   h.style.setProperty("--tex", `linear-gradient(160deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 45%), url("assets/${["marble_blue", "marble_cream", "marble_blue2", "marble_cream2"][(i * 3 + row) % 4]}.webp") center / cover`);
@@ -396,7 +439,7 @@ $("mod-power").addEventListener("click", () => {
 });
 function select(i) {
   selected = i;
-  cellsEl.dataset.cols = MODULES[i].key === "eq" ? "5" : "6";   // EQ: gains on top, frequencies below
+  cellsEl.dataset.cols = MODULES[i].key === "eq" || MODULES[i].key === "dyneq" ? "5" : "6";   // EQs: amounts on top, frequencies below
   cellsEl.dataset.page = MODULES[i].key;
   cellsEl.replaceChildren(...cellsByModule[i]);
   cellsByModule[i].forEach((c) => c.refresh && c.refresh());
@@ -449,6 +492,15 @@ function eqResponse(f) {
   return db;
 }
 
+/** Dynamic EQ curve for a set of cuts (dB, >= 0 each). */
+function dynResponse(f, cuts) {
+  const sr = M.sr || 48000;
+  let db = 0;
+  DYN_BANDS.forEach((b, i) => { if (cuts[i] > 1e-3) db += magDb(coeffs(1, dynFreq(i), -cuts[i], b.q, sr), f, sr); });
+  return db;
+}
+const dynPage = () => MODULES[selected] && MODULES[selected].key === "dyneq";
+
 const nodes = EQ_BANDS.map((b, i) => {
   const n = document.createElement("div");
   n.className = "node";
@@ -472,6 +524,33 @@ const nodes = EQ_BANDS.map((b, i) => {
   $("eq-nodes").appendChild(n);
   return n;
 });
+// Dynamic EQ points: left / right = frequency, down = Max Cut (shown while its page is open).
+const dynNodes = DYN_BANDS.map((b, i) => {
+  const n = document.createElement("div");
+  n.className = "node dyn";
+  n.textContent = b.short;
+  n.title = `${b.name}: drag to set where and how much it may cut, double-click to turn the band off`;
+  const ids = ["dqCut" + (i + 1), "dqFreq" + (i + 1)];
+  let drag = false;
+  n.addEventListener("pointerdown", (e) => { n.setPointerCapture(e.pointerId); drag = true; ids.forEach((id) => P[id].sliderDragStarted()); showDynNode(i); e.preventDefault(); });
+  n.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const r = plot.getBoundingClientRect(), scale = r.width / PW;
+    const x = (e.clientX - r.left) / scale, y = (e.clientY - r.top) / scale;
+    setScaled("dqFreq" + (i + 1), fFor(x));
+    setScaled("dqCut" + (i + 1), clamp(-dbForY(y), 0, 12));
+    if (!on("dqOn")) P.dqOn.setValue(true);
+    showDynNode(i); anyEdited();
+  });
+  const end = () => { if (drag) { drag = false; ids.forEach((id) => P[id].sliderDragEnded()); $("eq-readout").textContent = ""; } };
+  n.addEventListener("pointerup", end);
+  n.addEventListener("pointercancel", end);
+  n.addEventListener("dblclick", () => { P[ids[0]].sliderDragStarted(); setScaled(ids[0], 0); P[ids[0]].sliderDragEnded(); anyEdited(); });
+  $("eq-nodes").appendChild(n);
+  return n;
+});
+function showDynNode(i) { $("eq-readout").textContent = `${DYN_BANDS[i].name}  up to ${fmtCut(dynCut(i))} at ${fmtHz(dynFreq(i))}`; }
+
 function showNode(i) { $("eq-readout").textContent = `${EQ_BANDS[i].name}  ${fmtSigned(eqGain(i))} at ${fmtHz(eqFreq(i))}`; }
 
 function drawSpectrum(data, color, fill) {
@@ -502,14 +581,41 @@ function draw() {
   ctx.strokeStyle = "rgba(36,97,143,0.25)"; ctx.beginPath(); ctx.moveTo(0, yEq(0) + 0.5); ctx.lineTo(PW, yEq(0) + 0.5); ctx.stroke();
   drawSpectrum(M.in, null, "rgba(157,182,201,0.45)");
   drawSpectrum(M.out, "#c9973a", null);
-  // EQ curve
+  // Dynamic EQ: the most each band may cut (dashed, on its page) and what it cuts right now (filled).
+  const dynOn = on("dqOn") && !on("bypass");
+  const page = dynPage();
+  if (page) {
+    const maxCuts = [0, 1, 2, 3].map((b) => (on("dqOn") ? dynCut(b) : 0));
+    if (maxCuts.some((c) => c >= 0.05)) {
+      ctx.beginPath();
+      for (let x = 0; x <= PW; x += 3) { const y = yEq(dynResponse(fFor(x), maxCuts)); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.setLineDash([6, 5]); ctx.strokeStyle = "rgba(141,100,31,0.75)"; ctx.lineWidth = 1.8; ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+  const live = [0, 1, 2, 3].map((b) => (dynOn ? -dynLive(b) : 0));
+  if (live.some((c) => c >= 0.1)) {
+    ctx.beginPath();
+    ctx.moveTo(0, yEq(0));
+    for (let x = 0; x <= PW; x += 3) ctx.lineTo(x, yEq(dynResponse(fFor(x), live)));
+    ctx.lineTo(PW, yEq(0)); ctx.closePath();
+    ctx.fillStyle = "rgba(214,120,60,0.30)"; ctx.fill();
+    ctx.strokeStyle = "#c8642c"; ctx.lineWidth = 2; ctx.stroke();
+  }
+  // Tone EQ curve
   ctx.beginPath();
   for (let x = 0; x <= PW; x += 3) { const y = yEq(eqResponse(fFor(x))); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-  ctx.strokeStyle = on("eqOn") ? "#24618f" : "rgba(36,97,143,0.35)"; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.strokeStyle = on("eqOn") ? (page ? "rgba(36,97,143,0.45)" : "#24618f") : "rgba(36,97,143,0.35)"; ctx.lineWidth = 2.5; ctx.stroke();
   nodes.forEach((n, i) => {
+    n.hidden = page;
     n.style.left = `${(xFor(eqFreq(i)) / PW) * 100}%`;
     n.style.top = `${(yEq(eqGain(i)) / PH) * 100}%`;
     n.classList.toggle("flat", Math.abs(eqGain(i)) < 0.05);
+  });
+  dynNodes.forEach((n, i) => {
+    n.hidden = !page;
+    n.style.left = `${(xFor(dynFreq(i)) / PW) * 100}%`;
+    n.style.top = `${(yEq(-dynCut(i)) / PH) * 100}%`;
+    n.classList.toggle("flat", dynCut(i) < 0.05);
   });
 }
 
@@ -580,6 +686,21 @@ const LEARN = {
       const big = [0, 1, 2, 3, 4].filter((b) => Math.abs(eqGain(b)) > 8);
       if (big.length) t.push(tip("BIG EQ MOVE", `${big.map((b) => EQ_BANDS[b].name).join(", ")} ${big.length > 1 ? "are" : "is"} moved more than 8 dB. That usually means the recording itself needs a fix.`, "calm",
         { need: "Optional. Use your ears: if it sounds good, it is good.", steps: ["Try halving the move and compare with A / B.", "Next take: check mic distance (a fist away) and room echo."] }));
+      return t;
+    } },
+  dyneq: {
+    does: "An EQ that only works when it's needed. Some words boom, some vowels go muddy or honky, some loud notes get piercing, but the rest of the time your voice is fine. Each of the four bands learns how that part of your voice normally sits and cuts it only in the moments it jumps out, then lets go. The steady tone stays Tone EQ's job, and s sounds stay the De-Esser's.",
+    how: ["Max Cut (top row): the most a band may cut. Off = band not used. 2 - 4 dB is natural; 6 dB+ is strong.",
+      "Frequency (bottom row): where the problem lives. Easy trick: raise Max Cut, then sweep Frequency while a problem word plays until the orange cut appears on it.",
+      "Sensitivity: how far a band may rise above your normal before it's pulled back. Higher catches more.",
+      "On the spectrum, drag the B, M, N, H points: left / right = where, down = Max Cut. The orange shape is what it's cutting right now."],
+    live: () => {
+      const t = [];
+      if (on("dqOn") && [0, 1, 2, 3].every((b) => dynCut(b) < 0.05)) t.push(tip("NO BANDS SET", "Every band's Max Cut is Off, so the Dynamic EQ does nothing yet.", "calm",
+        { need: "No. Only use it if some words boom, cloud up, honk or bite.", steps: ["Run Auto-Edit: it finds the spots that jump out in your voice.", "Or raise a band's Max Cut to 3 dB and sweep its Frequency while the problem word plays."] }));
+      const maxed = [0, 1, 2, 3].filter((b) => dynCut(b) >= 1 && dynLive(b) <= -(dynCut(b) - 0.15));
+      if (maxed.length) t.push(tip("AT THE LIMIT", `${maxed.map((b) => DYN_BANDS[b].name).join(", ")} ${maxed.length > 1 ? "are" : "is"} cutting the full Max Cut right now: that spot jumps out further than the band is allowed to fix.`, "calm",
+        { need: "Optional. Fine if it sounds right.", steps: ["Raise that band's Max Cut 1 - 2 dB and listen on the problem word.", "If it's cutting nearly all the time, the spot is too strong overall: cut it in Tone EQ instead."] }));
       return t;
     } },
   deess: {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DynamicEq.h"
 #include "Modules.h"
 #include "PitchCorrector.h"
 #include "Saturation.h"
@@ -16,6 +17,7 @@ struct ChainParams
     PitchParams pitch;
     CleanupParams cleanup;
     EqParams eq;
+    DynEqParams dynEq;
     DeEsserParams deEsser;
     RiderParams rider;
     CompParams comp;
@@ -30,13 +32,14 @@ struct ChainParams
 };
 
 /** The modules in signal order, for the UI and the report. */
-enum class Module { pitch = 0, cleanup, eq, deEsser, rider, comp, saturation, doubler, delay, reverb, output, count };
+enum class Module { pitch = 0, cleanup, eq, dynEq, deEsser, rider, comp, saturation, doubler, delay, reverb, output, count };
 inline constexpr int kModules = static_cast<int> (Module::count);
 
 /** What the meters read since the last takeMeters() call. */
 struct ChainMeters
 {
     double gateDb = 0.0;        // deepest gate turn-down (<= 0)
+    std::array<double, kDynBands> dynEqDb {};   // deepest Dynamic EQ cut per band (<= 0)
     double deEssDb = 0.0;       // deepest de-esser cut (<= 0)
     double riderDb = 0.0;       // rider gain now
     double peakGrDb = 0.0, levelGrDb = 0.0;   // compressor stages (<= 0)
@@ -45,7 +48,7 @@ struct ChainMeters
 };
 
 /** Voxology's vocal chain:
-      Pitch -> Cleanup -> Tone EQ -> De-Esser -> Rider -> Compressor -> Saturation      (inserts, linked)
+      Pitch -> Cleanup -> Tone EQ -> Dynamic EQ -> De-Esser -> Rider -> Compressor -> Saturation      (inserts, linked)
       -> Doubler -> Delay -> Reverb (added to the vocal, stereo) -> Output gain
     Constant latency (Pitch look-ahead + Saturation oversampling). Framework-free: the plug-in, Auto-Edit and the
     tests all run this same class. prepare() allocates; process() never does (any block size). */
@@ -94,6 +97,7 @@ private:
     PitchCorrector pitch;
     Cleanup cleanup;
     VocalEQ eq;
+    DynamicEq dynEq;
     DeEsser deEsser;
     Rider rider;
     VocalCompressor comp;

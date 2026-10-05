@@ -1,4 +1,4 @@
-# Voxology: resume here (updated 2026-10-05)
+# Voxology: resume here (updated 2026-10-05, v0.3.0 Dynamic EQ)
 
 Read this first in a new chat. Code: github.com/DK7602/voxology, branch `claude/voxology`.
 Sister project: Polisher (github.com/DK7602/polisher, mastering) - same user, same template.
@@ -216,3 +216,29 @@ gold note names. Last good build: Actions run 37368105904. Voxology VST3 categor
 A NEW THREAD was started for "Voxology add-ons" (user's request). Still open from here: Capture mode for non-ARA hosts
 (FL Studio, Ableton), Auto-Edit / Learn inside Honey Tune, render only changed notes (speed), Pro Tools AAX + PACE,
 code signing (Chrome flags the unsigned zip), trademark check (Voxology / Honey Tune).
+
+## Add-ons thread (2026-10-05): v0.3.0 Dynamic EQ
+User showed ChatGPT's Nectar-gap list; agreed order: 1 Dynamic EQ (DONE, v0.3.0), 2 Breath control + plosive
+remover (one build), 3 Reference Match (reuses analyseVocal), 4 Unmask (needs 2nd instance on the beat +
+sidechain; give Cubase routing steps), 5 Harmony / Voices + formant (biggest, CPU heavy, last).
+ChatGPT's "Gate / Expander" and "2-stage compression" are already covered (Cleanup gate; Compressor = Peak +
+Level stages, plus Rider); a gentle expander mode can ride along in a later build.
+Dynamic EQ (dsp DynamicEq.h/.cpp, module 04, between Tone EQ and De-Esser; Module enum + UI MODULES shifted by one):
+- 4 bands, bell cuts: Boom 80-300 (Q1.0), Mud 200-800 (1.4), Nasal 600-2500 (1.6), Harsh 2-8 kHz (1.4). Params dqOn,
+  dqSens, dqCut1-4 (Max Cut 0-12 dB, 0 = band off), dqFreq1-4. Neutral (all cuts 0 / off) = bit-exact.
+- Detector: band-pass energy vs the REST of the voice (80 Hz HP minus band), true mean-square (2 one-poles, 4-10 ms)
+  -> ratio dB; "normal" = learned per band while singing (fast 0.4 s for the first 1.5 s, then rises 4 s / falls 1 s, so
+  frequent jumps don't become normal); gaps (> 24 dB under the recent voice peak, or < -60 dBFS) don't count; 50 ms
+  warm-up. Cut = 1.5 x (rise - threshold) with 3 dB knee, threshold = 5.5 - 0.05 x Sensitivity dB (50 % = 3 dB),
+  clamped to Max Cut; per-band attack/release (2-6 ms / 60-120 ms). Harsh holds while energy above 6 kHz exceeds it
+  (an "s" = De-Esser's job). Level-independent (whisper vs shout within 0.01 dB in tests). CPU ~0.7 % of a core.
+- Auto-Edit (after Tone EQ): per band, runs the module at each third-octave in a zone (Boom 100-200, Mud 250-630,
+  Nasal 800-2000, Harsh 2.5-4 kHz), ignoring sibilant frames; keeps the spot whose P95 cut is biggest; off if < 1.5 dB,
+  else Max Cut = P95 x intensity (2-8 dB). Adds ~2 s to Auto-Edit on a 30 s capture. Report module key "dyneq".
+- UI: page uses the Tone EQ two-row layout (Max Cut row + live "Cutting" bars B/M/N/H; Frequency row + Sensitivity).
+  Spectrum: orange filled = live cut (always), dashed = Max Cut curve and draggable B/M/N/H points on its page (Tone EQ
+  points hide there). Learn text + tips (NO BANDS SET, AT THE LIMIT).
+- Tests: tests/test_dyneq.cpp (pass-through, cuts only during the bloom, level independence, steady tone untouched,
+  Max Cut / Sensitivity, band selectivity, block-size invariance, Auto-Edit finds a bloom / leaves a steady voice).
+- Honest gap: tuned only on synthetic vocals. User test: run Auto-Edit on a real verse, open 04 DYNAMIC EQ, watch the
+  orange cuts land on boomy / muddy / harsh words; A/B with MATCH. Retune thresholds from what they hear.

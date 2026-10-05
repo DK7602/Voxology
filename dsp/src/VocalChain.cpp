@@ -11,6 +11,7 @@ void VocalChain::prepare (double sampleRate, int numChannels)
     pitch.prepare (sr, chanCount);
     cleanup.prepare (sr, chanCount);
     eq.prepare (sr, chanCount);
+    dynEq.prepare (sr, chanCount);
     deEsser.prepare (sr, chanCount);
     rider.prepare (sr, chanCount);
     comp.prepare (sr, chanCount);
@@ -32,6 +33,7 @@ void VocalChain::reset() noexcept
     pitch.reset();
     cleanup.reset();
     eq.reset();
+    dynEq.reset();
     deEsser.reset();
     rider.reset();
     comp.reset();
@@ -54,6 +56,7 @@ void VocalChain::setParams (const ChainParams& p) noexcept
     pitch.setParams (p.pitch);
     cleanup.setParams (p.cleanup);
     eq.setParams (p.eq);
+    dynEq.setParams (p.dynEq);
     deEsser.setParams (p.deEsser);
     rider.setParams (p.rider);
     comp.setParams (p.comp);
@@ -67,6 +70,7 @@ ChainMeters VocalChain::takeMeters() noexcept
 {
     ChainMeters m = meters;
     m.gateDb = cleanup.takeGateDb();
+    m.dynEqDb = dynEq.takeCutDb();
     m.deEssDb = deEsser.takeCutDb();
     m.riderDb = Rider::isNeutral (params.rider) ? 0.0 : rider.currentGainDb();
     m.peakGrDb = comp.takePeakGrDb();
@@ -106,6 +110,7 @@ void VocalChain::processChunk (int nch, int len) noexcept
         pitch.process (ch.data(), nch, len);
         cleanup.process (ch.data(), nch, len);
         eq.process (ch.data(), nch, len);
+        dynEq.process (ch.data(), nch, len);
         deEsser.process (ch.data(), nch, len);
         rider.process (ch.data(), nch, len);
         comp.process (ch.data(), nch, len);

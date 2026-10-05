@@ -1,5 +1,6 @@
 #include "vox/AutoEdit.h"
 
+#include "vox/DynamicEq.h"
 #include "vox/Fft.h"
 #include "vox/LoudnessMeter.h"
 
@@ -633,7 +634,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                                                          : "Auto-Edit heard no gaps between phrases (or you sing straight through), so the gate stays off to protect word endings.");
     }
 
-    // ---------------------------------------------------------------------------------------- 02 Tone EQ
+    // ---------------------------------------------------------------------------------------- 03 Tone EQ
     {
         const auto target = styleTarget (style);
         const auto& bands = analysisBands();
@@ -717,7 +718,105 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                                 : "Your top end is " + num (air) + " dB brighter than the target, so it's eased down a little to avoid fizz.");
     }
 
-    // ---------------------------------------------------------------------------------------- 03 De-Esser
+    // ---------------------------------------------------------------------------------------- 04 Dynamic EQ
+    {
+        // Runs the Dynamic EQ on the vocal (after Tone EQ) one band at a time, at each third-octave in
+        // the band's zone, and keeps the spot that jumps out most. Max Cut follows how far it jumps.
+        const Signal afterTone = renderMono (raw, sr, p);
+        const Frames f = frames (highPass (afterTone, 80.0, sr), sr);
+        double thr = 0.0;
+        const auto mask = activeMask (f, thr);
+        // "s" moments belong to the De-Esser: they don't count here.
+        const Signal hf = highPass (afterTone, 5000.0, sr, 2);
+        std::vector<bool> use (mask.size(), false);
+        for (size_t i = 0; i < mask.size(); ++i)
+        {
+            if (! mask[i]) continue;
+            double eh = 0.0, ef = 0.0;
+            const size_t a0 = i * static_cast<size_t> (f.hop), b0 = std::min (afterTone.size(), a0 + 2 * static_cast<size_t> (f.hop));
+            for (size_t k2 = a0; k2 < b0; ++k2) { eh += hf[k2] * hf[k2]; ef += afterTone[k2] * afterTone[k2]; }
+            use[i] = ef > 0.0 && energyDb (eh / ef) < -6.0;
+        }
+        struct Run { double p95 = 0.0, share = 0.0; };
+        auto runBand = [&] (const DynEqParams& d, int band)
+        {
+            DynamicEq de;
+            de.prepare (sr, 1);
+            de.setParams (d);
+            Signal y = afterTone;
+            std::vector<double> cuts;
+            size_t frame = 0;
+            for (size_t s0 = 0; s0 < y.size(); s0 += static_cast<size_t> (f.hop), ++frame)
+            {
+                double* ptr = y.data() + s0;
+                de.process (&ptr, 1, static_cast<int> (std::min<size_t> (static_cast<size_t> (f.hop), y.size() - s0)));
+                const double c = -de.takeCutDb()[static_cast<size_t> (band)];
+                if (frame < use.size() && use[frame]) cuts.push_back (c);
+            }
+            Run r2;
+            if (cuts.empty()) return r2;
+            r2.p95 = percentile (cuts, 95.0);
+            r2.share = 100.0 * static_cast<double> (std::count_if (cuts.begin(), cuts.end(), [] (double c) { return c > 1.0; })) / static_cast<double> (cuts.size());
+            return r2;
+        };
+
+        // Each band searches its own zone (the zones don't overlap, like Tone EQ's; above 4 kHz is the De-Esser's).
+        static constexpr std::array<std::array<double, 2>, kDynBands> zones {{ { 100, 200 }, { 250, 630 }, { 800, 2000 }, { 2500, 4000 } }};
+        static constexpr std::array<const char*, kDynBands> sounds {
+            "boom: the low end swells on some words (singing close to the mic, low notes, p and b sounds)",
+            "mud: some vowels (\"oh\", \"oo\") cloud up and sound boxy",
+            "honk: some words get nasal and pinched",
+            "harshness: loud notes and shouted words get piercing" };
+        auto& d = p.dynEq;
+        d = {};
+        d.sensitivity = 50.0;
+        const double scale = k / 0.85;
+        int used = 0;
+        for (int b = 0; b < kDynBands; ++b)
+        {
+            const auto bi = static_cast<size_t> (b);
+            const auto& info = kDynBandInfo[bi];
+            double bestHz = info.def;
+            Run best;
+            for (double fc : analysisBands())
+            {
+                if (fc < zones[bi][0] || fc > zones[bi][1] || fc < p.cleanup.lowCutHz * 1.3 || fc > 0.4 * sr) continue;
+                DynEqParams one;
+                one.maxCutDb[bi] = kDynMaxCutDb;
+                one.freqHz[bi] = fc;
+                one.sensitivity = d.sensitivity;
+                const Run r2 = runBand (one, b);
+                if (r2.p95 > best.p95) { best = r2; bestHz = fc; }
+            }
+            d.freqHz[bi] = bestHz;
+            const std::string name = info.name;
+            if (best.p95 < 1.5)
+            {
+                reason ("dyneq", name, "Off", "Your " + std::string (b == 0 ? "low end" : b == 1 ? "low mids" : b == 2 ? "mids" : "upper mids") +
+                        " (" + hz (zones[bi][0]) + " - " + hz (zones[bi][1]) + ") stay steady from word to word, so there's nothing to catch here.");
+                continue;
+            }
+            d.maxCutDb[bi] = std::clamp (std::round (best.p95 * scale * 2.0) / 2.0, 2.0, 8.0);
+            ++used;
+            reason ("dyneq", name, "up to " + db (-d.maxCutDb[bi]) + " at " + hz (bestHz),
+                    "Some words jump out around " + hz (bestHz) + ": " + sounds[bi] + ". The loudest of those moments rise about " + num (best.p95) +
+                    " dB past your voice's normal there (about " + num (best.share, 0) + " % of the time). The band cuts up to " + num (d.maxCutDb[bi]) +
+                    " dB only while that happens; the rest of the time it does nothing.");
+        }
+        if (used == 0)
+        {
+            keep (Module::dynEq);
+            reason ("dyneq", "Sensitivity", "50 %", "No spot in your voice jumps out from word to word, so the Dynamic EQ stays off. Tone EQ already handles the steady balance.");
+        }
+        else
+        {
+            reason ("dyneq", "Sensitivity", pct (d.sensitivity),
+                    "A band is pulled back once it rises " + num (DynamicEq::thresholdDb (d.sensitivity)) +
+                    " dB past how it usually sits in your voice. It learns that from your voice as it plays, so it works the same on quiet and loud lines.");
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------- 05 De-Esser
     Signal afterEq;
     {
         ChainParams q = p;

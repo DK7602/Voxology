@@ -21,7 +21,12 @@
     sliders["eqGain" + (i + 1)] = lin(-12, 12, 0);
     sliders["eqFreq" + (i + 1)] = centre(lo, hi, Math.sqrt(lo * hi), def);
   });
-  const toggles = { bypass: false, listenA: false, levelMatch: false, ptOn: true, clOn: true, eqOn: true, dsOn: true, rdOn: true, cpOn: true, saOn: true, dbOn: true, dlOn: true, dlPing: false, rvOn: true };
+  sliders.dqSens = lin(0, 100, 50);
+  [[80, 300, 150], [200, 800, 350], [600, 2500, 1000], [2000, 8000, 3500]].forEach(([lo, hi, def], i) => {
+    sliders["dqCut" + (i + 1)] = lin(0, 12, 0);
+    sliders["dqFreq" + (i + 1)] = centre(lo, hi, Math.sqrt(lo * hi), def);
+  });
+  const toggles = { bypass: false, listenA: false, levelMatch: false, ptOn: true, clOn: true, eqOn: true, dqOn: true, dsOn: true, rdOn: true, cpOn: true, saOn: true, dbOn: true, dlOn: true, dlPing: false, rvOn: true };
   const combos = {
     aeStyle: { choices: ["Trap Lead", "Rap", "Melodic", "Ad-libs", "R&B"], value: 0 },
     aeIntensity: { choices: ["Light", "Balanced", "Strong"], value: 0.5 },
@@ -42,7 +47,7 @@
   const ae = { state: 0, progress: 0, undo: false, version: 0, report: "", snapshot: null };
   function aeFinish() {
     ae.snapshot = { sliders: JSON.parse(JSON.stringify(sliders)), toggles: { ...toggles }, combos: JSON.parse(JSON.stringify(combos)) };
-    const v = { ptAmount: 100, ptSpeed: 10, ptHumanize: 20, clLowCut: 95, clGateThr: -40, clGateRange: 12, eqGain1: 1.3, eqGain2: -1.1, eqFreq2: 630, eqGain4: 1.4, eqGain5: -3, dsAmount: 63, dsFreq: 5400,
+    const v = { ptAmount: 100, ptSpeed: 10, ptHumanize: 20, clLowCut: 95, clGateThr: -40, clGateRange: 12, eqGain1: 1.3, eqGain2: -1.1, eqFreq2: 630, eqGain4: 1.4, eqGain5: -3, dqCut1: 3, dqFreq1: 125, dqCut2: 4.5, dqFreq2: 400, dqCut4: 3.5, dqFreq4: 3150, dsAmount: 63, dsFreq: 5400,
       rdTarget: -24, rdRange: 2, cpPeak: -14, cpThr: -27, cpRatio: 4, cpMakeup: 7, saDrive: 3, saMix: 50, dbAmount: 30, dbWidth: 80,
       dlFeedback: 22, dlMix: 14, dlTone: 5000, dlDuck: 60, rvDecay: 1.4, rvPredelay: 30, rvMix: 12, rvTone: 6500, rvDuck: 40, outGain: 1.5 };
     for (const [k, x] of Object.entries(v)) setSlider(k, x);
@@ -50,7 +55,7 @@
     setCombo("saMode", 1); setCombo("rdSpeed", 1); setCombo("dlTime", 0);
     const R = (module, control, value, why) => ({ module, control, value, why });
     ae.report = JSON.stringify({
-      ok: true, style: "Trap Lead", intensity: "Balanced", time: new Date().toISOString(), kept: [false, false, false, false, false, false, false, false, false, false, false],
+      ok: true, style: "Trap Lead", intensity: "Balanced", time: new Date().toISOString(), kept: [false, false, false, false, false, false, false, false, false, false, false, false],
       summary: "Listened to 12.0 s of voice (Trap Lead, Balanced). Your vocal came in at −23.7 LUFS with peaks at −4.8 dB. The chain is set for a Trap Lead sound: upfront, bright and controlled, with a short wide space around it. Every change is explained below.",
       notes: ["NOISY RECORDING: the noise in your gaps is only 28 dB under your voice, so very soft words and breaths sit close to it.\nNEED: Optional. The gate handles most of it; listen to quiet word endings.\nSTEP: If soft words get cut off, lower the Gate threshold 3 dB at a time (Cleanup module).\nSTEP: Next take: turn off fans / AC, record closer to the mic (a fist away), keep headphones quieter so they don't leak."],
       tips: ["Compare with A / B and MATCH on: MATCH plays both at the same loudness, so you judge the tone, not the volume.",
@@ -67,6 +72,11 @@
         R("eq", "Nasal", "0 dB", "No honky / nasal peak (800 Hz - 1.6 kHz)."),
         R("eq", "Presence", "+1.4 dB at 4.0 kHz", "Your vocal is 2.8 dB short of a finished Trap Lead vocal in the presence range, where the words live. This lifts it so lyrics are clear over the beat."),
         R("eq", "Air", "−3.0 dB above 12.0 kHz", "Your top end is 6.8 dB brighter than the target, so it's eased down a little to avoid fizz."),
+        R("dyneq", "Boom", "up to −3.0 dB at 125 Hz", "Some words jump out around 125 Hz: boom: the low end swells on some words (singing close to the mic, low notes, p and b sounds). The loudest of those moments rise about 3.1 dB past your voice's normal there (about 9 % of the time). The band cuts up to 3.0 dB only while that happens; the rest of the time it does nothing."),
+        R("dyneq", "Mud", "up to −4.5 dB at 400 Hz", "Some words jump out around 400 Hz: mud: some vowels (\"oh\", \"oo\") cloud up and sound boxy. The loudest of those moments rise about 4.4 dB past your voice's normal there (about 12 % of the time). The band cuts up to 4.5 dB only while that happens; the rest of the time it does nothing."),
+        R("dyneq", "Nasal", "Off", "Your mids (800 Hz - 2.0 kHz) stay steady from word to word, so there's nothing to catch here."),
+        R("dyneq", "Harsh", "up to −3.5 dB at 3.2 kHz", "Some words jump out around 3.2 kHz: harshness: loud notes and shouted words get piercing. The loudest of those moments rise about 3.6 dB past your voice's normal there (about 7 % of the time). The band cuts up to 3.5 dB only while that happens; the rest of the time it does nothing."),
+        R("dyneq", "Sensitivity", "50 %", "A band is pulled back once it rises 3.0 dB past how it usually sits in your voice. It learns that from your voice as it plays, so it works the same on quiet and loud lines."),
         R("deess", "Amount", "63 % at 5.4 kHz", "Your loudest \"s\" and \"t\" sounds peak at +1.5 dB vs your voice (around 6.3 kHz), which is sharp on headphones and earbuds. 63 % brings them to −4.1 dB, where a finished Trap Lead vocal sits, and only while they happen."),
         R("rider", "Range", "±2.0 dB, Medium", "Your loud and quiet lines are 10.3 dB apart. The rider turns quiet words up and loud ones down toward −24.0 dB, like riding a fader."),
         R("comp", "Peak", "−14.0 dB", "Catches the sudden loud syllables: about 5.0 dB off the loudest 5 % of moments, so nothing jumps out of the beat."),
@@ -150,6 +160,7 @@
       inShort: +(-24 + 2 * Math.sin(t / 3)).toFixed(1), outShort: +(-23 + 2 * Math.sin(t / 3) + s("outGain")).toFixed(1),
       inPeak: +(level + 9).toFixed(1), outPeak: +(level + 8 + s("outGain")).toFixed(1),
       gate: active("clOn") && s("clGateRange") > 0 && !sing ? -s("clGateRange") : 0,
+      dyn: [0, 1, 2, 3].map((b) => (active("dqOn") && s("dqCut" + (b + 1)) > 0 && sing ? +(-Math.min(s("dqCut" + (b + 1)), s("dqCut" + (b + 1)) * Math.max(0, Math.sin(t * (2.1 + b * 0.7) + b)) ** 3)).toFixed(1) : 0)),
       deEss: active("dsOn") && s("dsAmount") > 0 && word > 0.9 ? +(-s("dsAmount") / 100 * 7).toFixed(1) : 0,
       rider: active("rdOn") && s("rdRange") > 0 ? +(s("rdRange") * Math.sin(t / 2)).toFixed(1) : 0,
       peakGr: active("cpOn") && s("cpPeak") < 0 ? +(-5 * word * word).toFixed(1) : 0,

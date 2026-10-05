@@ -97,6 +97,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     const auto m = chain.takeMeters();
     holdMin (meters.gate, static_cast<float> (m.gateDb));
     holdMin (meters.deEss, static_cast<float> (m.deEssDb));
+    for (size_t b = 0; b < meters.dynEq.size(); ++b) holdMin (meters.dynEq[b], static_cast<float> (m.dynEqDb[b]));
     meters.rider.store (static_cast<float> (m.riderDb));
     holdMin (meters.peakGr, static_cast<float> (m.peakGrDb));
     holdMin (meters.levelGr, static_cast<float> (m.levelGrDb));
