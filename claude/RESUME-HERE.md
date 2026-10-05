@@ -106,6 +106,16 @@ voice (period halving 142 -> 76) made the grain size jump and joins flip repeat/
 octave guard (half / double of the last period -> keep the old octave if correlation >= 0.85 of best)
 and join hysteresis (joins at |drift| > 0.6 P). Joins on the clip: 38 -> 19, no bursts. Sent fix3 render.
 
+Round 4 (user was on MELODIC, not Rap: 100 %, 5 ms; crackle left at 0:02; user A/B'd in Cubase: Pitch is the
+source, Reverb / Doubler clean): no waveform kinks; spectrogram shows PSOLA chopping the noisy / raspy part
+of the voice into a buzz at the pitch rate (2.06-2.18 s "s"/"sh" in a note, 2.28-2.45 s raspy onset).
+With no correction the engine is transparent (-320 dB error), so this is the technique's known weakness on
+rough voices. Done: clarity-weighted correction (YIN aperiodicity + period match; clean vowel = full tune,
+rasp / breath less), 4-point cubic interpolation, join timing for quieter moments. Buzz windows 21 -> 16 of
+402 (metric /tmp buzz.py: 3-8 kHz envelope modulation 60-600 Hz vs 30 Hz envelope). Sent renders at 5 ms
+and 20 ms retune. Next if needed: two-band tuning (shift < ~4 kHz only, drift-aligned high band with
+crossfaded joins), or accept for live tuning and do the clean version in Honey Tune (offline).
+
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble
 honeycomb cell on a piano-roll grid (off-key notes glow blue; pulled into key the cell "fills" gold).

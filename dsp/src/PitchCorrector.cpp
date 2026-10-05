@@ -60,7 +60,7 @@ void PitchCorrector::reset() noexcept
     aa1.reset(); aa2.reset();
     now = 0; dnow = 0; decAcc = 0.0; decCount = 0; hopCount = 0;
     period = 0.0; levelMs = 0.0;
-    note = -1; corr = 0.0; sustain = 0.0; voicedRun = 0; lastP = 0.0; noteEnergy = 0.0;
+    note = -1; corr = 0.0; sustain = 0.0; voicedRun = 0; lastP = 0.0; noteEnergy = 0.0; clarityS = 1.0;
     rawP = { 0.0, 0.0, 0.0 };
     last = {};
     synthPos = anaPos = 0.0;
@@ -204,7 +204,14 @@ void PitchCorrector::analyse() noexcept
         const double tau = params.speedMs / 1000.0 * (1.0 + 3.0 * std::clamp (params.humanize, 0.0, 100.0) / 100.0 * std::clamp (sustain / 0.6, 0.0, 1.0));
         corr += (desired - corr) * (tau <= 1.0e-4 ? 1.0 : 1.0 - std::exp (-hopSec / tau));
         last = { true, midi, note, corr };
-        pushFrame (static_cast<double> (now - 1) - 0.5 * (len + p), period, corr);
+        // Tune by how clear the note is: a clean vowel gets the full correction; rasp, breath and
+        // "s" / "sh" mixed into the note get less (re-pitching the noisy part chops it into a buzz at
+        // the voice's pitch: the crackle). Clarity from the YIN aperiodicity and the period match.
+        const double clarity = std::min (std::clamp ((kVoicedAperiodicity - aper) / 0.15, 0.0, 1.0),
+                                         std::clamp ((bestR - 0.75) / 0.17, 0.0, 1.0));
+        clarityS += (clarity - clarityS) * 0.5;
+        last.correction = corr * clarityS;
+        pushFrame (static_cast<double> (now - 1) - 0.5 * (len + p), period, corr * clarityS);
     }
     else
     {
@@ -336,11 +343,23 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
             const double src = anaPos + u;
             const auto s0 = static_cast<int64_t> (std::floor (src));
             const double f = src - static_cast<double> (s0);
-            const auto i0 = static_cast<size_t> (s0 & mask), i1 = static_cast<size_t> ((s0 + 1) & mask), o = static_cast<size_t> (j & mask);
+            const auto o = static_cast<size_t> (j & mask);
+            // 4-point cubic (Hermite) interpolation: a straight-line blend dulls the top end by a
+            // different amount on every grain (the fraction changes), which flutters the airy part
+            // of the voice at its pitch - a buzz / crackle.
+            const auto im1 = static_cast<size_t> ((s0 - 1) & mask), i0 = static_cast<size_t> (s0 & mask),
+                       i1 = static_cast<size_t> ((s0 + 1) & mask), i2 = static_cast<size_t> ((s0 + 2) & mask);
             for (int c = 0; c < channels; ++c)
             {
                 const auto& buf = in[static_cast<size_t> (c)];
-                acc[static_cast<size_t> (c)][o] += w * (f == 0.0 ? buf[i0] : buf[i0] * (1.0 - f) + buf[i1] * f);
+                double v = buf[i0];
+                if (f != 0.0)
+                {
+                    const double ym1 = buf[im1], y0 = buf[i0], y1 = buf[i1], y2 = buf[i2];
+                    const double c1 = 0.5 * (y1 - ym1), c2 = ym1 - 2.5 * y0 + 2.0 * y1 - 0.5 * y2, c3 = 0.5 * (y2 - ym1) + 1.5 * (y0 - y1);
+                    v = ((c3 * f + c2) * f + c1) * f + y0;
+                }
+                acc[static_cast<size_t> (c)][o] += w * v;
             }
             wsum[o] += w;
         }

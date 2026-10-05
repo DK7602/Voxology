@@ -107,7 +107,8 @@ private:
     double corr = 0.0;                 // semitones, smoothed
     double sustain = 0.0;              // seconds on the current note
     std::array<double, 3> rawP {};
-    double lastP = 0.0;                // previous period reading (octave guard)     // newest period readings (median of three)
+    double lastP = 0.0;
+    double clarityS = 1.0;             // smoothed note clarity (how much of the correction to apply)                // previous period reading (octave guard)     // newest period readings (median of three)
     int voicedRun = 0;                 // + consecutive voiced readings, - consecutive unvoiced
     Reading last;
 
