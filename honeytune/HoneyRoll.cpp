@@ -1,13 +1,14 @@
 #include "HoneyRoll.h"
 
+#include "HoneyTheme.h"
+
 using namespace juce;
 
 namespace
 {
-    // Voxology palette
-    const Colour cream { 0xfff3ede0 }, creamDark { 0xffe4d8bf }, ink { 0xff1d2733 }, slate { 0xff566170 };
-    const Colour gold { 0xffc9952f }, goldLight { 0xfff4d684 }, goldDeep { 0xff8d641f };
-    const Colour blue { 0xff3fa9f5 }, navy { 0xff1d4f8a };
+    using honeytheme::ink; using honeytheme::navy; using honeytheme::deepBlue;
+    using honeytheme::gold; using honeytheme::goldDeep;
+    const Colour glowBlue = honeytheme::glow;
 
     constexpr double kLowestMidi = 24.0, kHighestMidi = 108.0;
 
@@ -30,8 +31,6 @@ HoneyRoll::HoneyRoll()
     {
         b->addListener (this);
         b->setAutoHide (false);
-        b->setColour (ScrollBar::thumbColourId, gold.withAlpha (0.7f));
-        b->setColour (ScrollBar::trackColourId, creamDark);
         addAndMakeVisible (*b);
     }
 }
@@ -159,7 +158,7 @@ int HoneyRoll::noteAt (Point<float> pt) const
 void HoneyRoll::paint (Graphics& g)
 {
     const auto grid = gridArea();
-    g.fillAll (cream);
+    g.fillAll (Colour (0xfff5f8fb));
     drawBackground (g, grid);
 
     {
@@ -180,36 +179,38 @@ void HoneyRoll::paint (Graphics& g)
 
     if (snap.status != 2 || snap.notes.empty())
     {
-        g.setColour (ink);
-        g.setFont (FontOptions (16.0f));
         const String msg = snap.status == 1 ? "Listening to the clip..."
                          : snap.status == 3 ? "Couldn't read the clip's audio."
                          : snap.status == 2 ? "No sung notes found in this clip."
                                             : "Waiting for the clip's audio...";
-        g.drawFittedText (msg, grid.toNearestInt(), Justification::centred, 2);
+        const auto box = grid.withSizeKeepingCentre (320.0f, 44.0f);
+        honeytheme::drawGlass (g, box, 8.0f, 0.85f);
+        g.setColour (ink);
+        g.setFont (FontOptions (16.0f, Font::bold));
+        g.drawFittedText (msg, box.toNearestInt(), Justification::centred, 2);
     }
 }
 
 void HoneyRoll::drawBackground (Graphics& g, Rectangle<float> grid)
 {
-    // Rows: notes of the key light, the rest a shade darker; the key's root gets a gold line.
+    // Liquid marble, washed light so the notes read; then the rows.
+    honeytheme::drawMarble (g, grid, 0.72f);
     const int top = static_cast<int> (std::ceil (topMidi)), bottom = static_cast<int> (std::floor (midiAt (grid.getBottom())));
     for (int m = top; m >= bottom; --m)
     {
         const float y = yOf (m) - static_cast<float> (rowHeight) / 2;
         const auto row = Rectangle<float> (grid.getX(), y, grid.getWidth(), static_cast<float> (rowHeight)).getIntersection (grid);
-        g.setColour (inScale (m, snap.key, snap.scale) ? cream.brighter (0.25f) : creamDark);
-        g.fillRect (row);
-        g.setColour (((m - snap.key) % 12 + 12) % 12 == 0 ? gold.withAlpha (0.45f) : goldDeep.withAlpha (0.10f));
-        g.drawHorizontalLine (roundToInt (y + rowHeight), grid.getX(), grid.getRight());
+        const bool root = ((m - snap.key) % 12 + 12) % 12 == 0;
+        if (root)                                   { g.setColour (gold.withAlpha (0.16f)); g.fillRect (row); }
+        else if (! inScale (m, snap.key, snap.scale)) { g.setColour (navy.withAlpha (0.10f)); g.fillRect (row); }
     }
 
-    // The honeycomb pattern, faint (drawn once per size).
+    // The honeycomb, in gold (drawn once per size).
     if (! honeycomb.isValid() || honeycomb.getWidth() != getWidth() || honeycomb.getHeight() != getHeight())
     {
         honeycomb = Image (Image::ARGB, std::max (1, getWidth()), std::max (1, getHeight()), true);
         Graphics hg (honeycomb);
-        const float r = 22.0f, w = std::sqrt (3.0f) * r;
+        const float r = 20.0f, w = std::sqrt (3.0f) * r;
         Path hex;
         for (int k = 0; k < 6; ++k)
         {
@@ -218,11 +219,15 @@ void HoneyRoll::drawBackground (Graphics& g, Rectangle<float> grid)
             if (k == 0) hex.startNewSubPath (p); else hex.lineTo (p);
         }
         hex.closeSubPath();
-        hg.setColour (goldDeep.withAlpha (0.07f));
         int row = 0;
         for (float y = 0; y < static_cast<float> (getHeight()) + r; y += r * 1.5f, ++row)
             for (float x = (row % 2) ? w / 2 : 0.0f; x < static_cast<float> (getWidth()) + w; x += w)
-                hg.strokePath (hex, PathStrokeType (1.2f), AffineTransform::translation (x, y));
+            {
+                hg.setColour (goldDeep.withAlpha (0.16f));
+                hg.strokePath (hex, PathStrokeType (1.6f), AffineTransform::translation (x, y));
+                hg.setColour (Colours::white.withAlpha (0.25f));
+                hg.strokePath (hex, PathStrokeType (0.6f), AffineTransform::translation (x + 0.8f, y + 0.8f));
+            }
     }
     {
         Graphics::ScopedSaveState save (g);
@@ -230,11 +235,20 @@ void HoneyRoll::drawBackground (Graphics& g, Rectangle<float> grid)
         g.drawImageAt (honeycomb, 0, 0);
     }
 
-    // Seconds
+    // Gold row lines (thin, so they never hide a note) and second lines.
+    for (int m = top; m >= bottom; --m)
+    {
+        const float y = yOf (m) + static_cast<float> (rowHeight) / 2;
+        const bool octave = ((m - snap.key) % 12 + 12) % 12 == 0;
+        g.setColour (goldDeep.withAlpha (octave ? 0.55f : 0.22f));
+        g.fillRect (grid.getX(), y - (octave ? 1.0f : 0.5f), grid.getWidth(), octave ? 2.0f : 1.0f);
+    }
     const double step = pixelsPerSecond > 60 ? 1.0 : pixelsPerSecond > 15 ? 5.0 : 10.0;
-    g.setColour (slate.withAlpha (0.12f));
     for (double s = std::ceil (viewStart / step) * step; xOf (s) < grid.getRight(); s += step)
-        g.drawVerticalLine (roundToInt (xOf (s)), grid.getY(), grid.getBottom());
+    {
+        g.setColour (goldDeep.withAlpha (0.35f));
+        g.fillRect (xOf (s) - 0.5f, grid.getY(), 1.2f, grid.getHeight());
+    }
 }
 
 void HoneyRoll::drawCell (Graphics& g, int index)
@@ -243,7 +257,7 @@ void HoneyRoll::drawCell (Graphics& g, int index)
     const bool isSel = index == selected;
     const double target = (dragging && isSel) ? dragTarget : v.note.target;
     const bool moved = std::abs (target - v.note.pitch) > 0.04;
-    const bool glow = v.wasOff && ! v.fixed && ! (dragging && isSel);
+    const bool off = v.wasOff && ! v.fixed && ! (dragging && isSel);
     const bool filled = v.fixed || (dragging && isSel && v.wasOff);
 
     // Where it was sung (dashed ghost) when it has moved.
@@ -252,46 +266,42 @@ void HoneyRoll::drawCell (Graphics& g, int index)
         const auto ghost = cellPath (index, v.note.pitch);
         Path dashed;
         const float dashes[] = { 4.0f, 3.0f };
-        PathStrokeType (1.0f).createDashedStroke (dashed, ghost, dashes, 2);
-        g.setColour (slate.withAlpha (0.45f));
+        PathStrokeType (1.2f).createDashedStroke (dashed, ghost, dashes, 2);
+        g.setColour (navy.withAlpha (0.55f));
         g.fillPath (dashed);
     }
 
     const auto cell = cellPath (index, target);
     const auto b = cell.getBounds();
 
-    if (glow)   // blue glow around off-key notes
-        for (auto [width, alpha] : { std::pair { 9.0f, 0.10f }, { 6.0f, 0.16f }, { 3.5f, 0.30f } })
+    // Drop shadow, then the glow around off-key notes.
+    g.setColour (Colours::black.withAlpha (0.18f));
+    g.fillPath (cell, AffineTransform::translation (1.0f, 1.5f));
+    if (off)
+        for (auto [width, alpha] : { std::pair { 10.0f, 0.18f }, { 6.0f, 0.30f }, { 3.0f, 0.55f } })
         {
-            g.setColour (blue.withAlpha (alpha));
+            g.setColour (glowBlue.withAlpha (alpha));
             g.strokePath (cell, PathStrokeType (width, PathStrokeType::curved));
         }
 
-    // Marble fill: cream (or gold once fixed), with a couple of soft veins.
-    const Colour c1 = filled ? goldLight : Colour (0xfffbf7ee), c2 = filled ? gold : Colour (0xffe6dcc6);
-    g.setGradientFill (ColourGradient (c1, b.getX(), b.getY(), c2, b.getRight(), b.getBottom(), false));
-    g.fillPath (cell);
+    // Blue / white marble, or polished gold once fixed.
+    if (filled) honeytheme::fillGold (g, cell, b);
+    else
     {
+        // Blue marble: a deep blue body with the white veins of the marble over it.
+        g.setGradientFill (ColourGradient (Colour (off ? 0xff6aa6dc : 0xff4f8cc6), b.getX(), b.getY(),
+                                           Colour (off ? 0xff3a73ab : 0xff24507f), b.getX(), b.getBottom(), false));
+        g.fillPath (cell);
+        honeytheme::fillMarble (g, cell, index, 0.0f, 0.42f);
+    }
+    {
+        // Glassy top highlight
         Graphics::ScopedSaveState save (g);
         g.reduceClipRegion (cell);
-        Random rnd (index * 7919 + 17);
-        g.setColour ((filled ? Colours::white : slate).withAlpha (filled ? 0.35f : 0.16f));
-        for (int k = 0; k < 2; ++k)
-        {
-            Path vein;
-            float x = b.getX() + rnd.nextFloat() * b.getWidth() * 0.3f, y = b.getY() + rnd.nextFloat() * b.getHeight();
-            vein.startNewSubPath (x, y);
-            while (x < b.getRight())
-            {
-                const float nx = x + 10.0f + rnd.nextFloat() * 18.0f;
-                const float ny = jlimit (b.getY(), b.getBottom(), y + (rnd.nextFloat() - 0.5f) * b.getHeight());
-                vein.quadraticTo ((x + nx) / 2, y + (rnd.nextFloat() - 0.5f) * b.getHeight(), nx, ny);
-                x = nx; y = ny;
-            }
-            g.strokePath (vein, PathStrokeType (0.8f));
-        }
+        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.45f), 0, b.getY(), Colours::transparentWhite, 0, b.getCentreY(), false));
+        g.fillRect (b);
 
-        // The sung pitch line inside the cell (moved with the note), like a melody blob.
+        // The sung pitch line inside the cell (moved with the note).
         if (snap.track != nullptr && b.getWidth() > 8.0f)
         {
             const auto& t = *snap.track;
@@ -305,29 +315,32 @@ void HoneyRoll::drawCell (Graphics& g, int index)
                 const Point<float> p { xOf (t.time[static_cast<size_t> (r)] / t.sampleRate), yOf (m + shift) };
                 if (! started) { line.startNewSubPath (p); started = true; } else line.lineTo (p);
             }
-            g.setColour (navy.withAlpha (0.75f));
+            g.setColour (filled ? goldDeep.darker (0.5f).withAlpha (0.8f) : Colours::white.withAlpha (0.9f));
             g.strokePath (line, PathStrokeType (1.3f, PathStrokeType::curved, PathStrokeType::rounded));
         }
     }
 
-    // Gold rim (with a light inner edge), heavier when selected.
-    g.setGradientFill (ColourGradient (Colour (0xffe9c46a), b.getX(), b.getY(), goldDeep, b.getX(), b.getBottom(), false));
-    g.strokePath (cell, PathStrokeType (isSel ? 2.6f : 1.6f));
+    // Gold rim, heavier (on a dark outline) when selected.
     if (isSel)
     {
-        g.setColour (ink.withAlpha (0.8f));
-        g.strokePath (cell, PathStrokeType (1.0f), AffineTransform());
+        g.setColour (ink);
+        g.strokePath (cell, PathStrokeType (5.0f));
     }
-    else if (index == hovered)
+    Path rim;
+    PathStrokeType (isSel ? 3.0f : 2.0f).createStrokedPath (rim, cell);
+    honeytheme::fillGold (g, rim, b);
+    g.setColour (goldDeep);
+    g.strokePath (cell, PathStrokeType (0.6f));
+    if (index == hovered && ! isSel)
     {
-        g.setColour (Colours::white.withAlpha (0.6f));
+        g.setColour (Colours::white.withAlpha (0.7f));
         g.strokePath (cell, PathStrokeType (1.0f));
     }
 
     // Note name when there's room.
     if (b.getWidth() > 34.0f && rowHeight >= 14.0)
     {
-        g.setColour (ink.withAlpha (0.85f));
+        g.setColour (filled ? ink : Colours::white);
         g.setFont (FontOptions (std::min (12.0f, static_cast<float> (rowHeight) * 0.62f), Font::bold));
         g.drawText (noteName (target), b.reduced (b.getHeight() * 0.45f, 0.0f), Justification::centredLeft, false);
     }
@@ -339,52 +352,56 @@ void HoneyRoll::drawKeyboard (Graphics& g)
     const Rectangle<float> keys (0.0f, grid.getY(), kKeysWidth, grid.getHeight());
     Graphics::ScopedSaveState save (g);
     g.reduceClipRegion (keys.toNearestInt());
-    g.setColour (Colour (0xffeae0cb));
-    g.fillRect (keys);
+    honeytheme::drawMarble (g, keys, 0.3f);
     const int top = static_cast<int> (std::ceil (topMidi)), bottom = static_cast<int> (std::floor (midiAt (grid.getBottom())));
     for (int m = top; m >= bottom; --m)
     {
         const float y = yOf (m) - static_cast<float> (rowHeight) / 2;
-        const auto row = Rectangle<float> (0.0f, y, kKeysWidth - 1.0f, static_cast<float> (rowHeight));
+        const auto row = Rectangle<float> (2.0f, y, kKeysWidth - 6.0f, static_cast<float> (rowHeight)).reduced (0.0f, 1.0f);
         const bool black = vox::kNoteNames[static_cast<size_t> ((m % 12 + 12) % 12)][1] == '#';
         const bool root = ((m - snap.key) % 12 + 12) % 12 == 0;
-        g.setColour (root ? goldLight : black ? Colour (0xff3a4452) : Colour (0xfffbf7ee));
-        g.fillRect (row.reduced (0.0f, 0.5f));
+        Path key;
+        key.addRoundedRectangle (row, 3.0f);
+        if (root)       honeytheme::fillGold (g, key, row);
+        else if (black) { g.setColour (deepBlue); g.fillPath (key); }
+        else            { g.setColour (Colours::white.withAlpha (0.8f)); g.fillPath (key); }
+        g.setColour (goldDeep.withAlpha (0.5f));
+        g.strokePath (key, PathStrokeType (0.7f));
         if (inScale (m, snap.key, snap.scale) && snap.scale != 0)
         {
             g.setColour (gold);
-            g.fillRect (row.withX (kKeysWidth - 5.0f).withWidth (4.0f).reduced (0.0f, 1.0f));
+            g.fillRect (Rectangle<float> (kKeysWidth - 4.0f, row.getY(), 3.0f, row.getHeight()));
         }
         if (rowHeight >= 11.0 || ((m % 12 + 12) % 12) == 0)
         {
-            g.setColour (black && ! root ? cream : ink);
-            g.setFont (FontOptions (std::min (11.0f, static_cast<float> (rowHeight) * 0.7f)));
-            g.drawText (noteName (m), row.withTrimmedLeft (4.0f).withTrimmedRight (6.0f), Justification::centredLeft, false);
+            g.setColour (black && ! root ? Colours::white : ink);
+            g.setFont (FontOptions (std::min (11.0f, static_cast<float> (rowHeight) * 0.7f), Font::bold));
+            g.drawText (noteName (m), row.withTrimmedLeft (4.0f).withTrimmedRight (4.0f), Justification::centredLeft, false);
         }
     }
-    g.setColour (goldDeep.withAlpha (0.5f));
-    g.drawVerticalLine (kKeysWidth - 1, keys.getY(), keys.getBottom());
+    honeytheme::fillGold (g, [&] { Path p; p.addRectangle (kKeysWidth - 2.0f, keys.getY(), 2.0f, keys.getHeight()); return p; }(), keys);
 }
 
 void HoneyRoll::drawRuler (Graphics& g)
 {
+    // A polished gold strip with the time on it.
+    const Rectangle<float> strip (0.0f, 0.0f, static_cast<float> (getWidth()), kRulerHeight);
+    honeytheme::fillGold (g, [&] { Path p; p.addRectangle (strip); return p; }(), strip);
+    g.setColour (goldDeep);
+    g.drawHorizontalLine (kRulerHeight - 1, 0.0f, static_cast<float> (getWidth()));
     const auto grid = gridArea();
     const Rectangle<float> ruler (grid.getX(), 0.0f, grid.getWidth(), kRulerHeight);
-    g.setColour (Colour (0xffeae0cb));
-    g.fillRect (Rectangle<float> (0.0f, 0.0f, static_cast<float> (getWidth()), kRulerHeight));
-    g.setColour (goldDeep.withAlpha (0.5f));
-    g.drawHorizontalLine (kRulerHeight - 1, 0.0f, static_cast<float> (getWidth()));
     Graphics::ScopedSaveState save (g);
     g.reduceClipRegion (ruler.toNearestInt());
     const double step = pixelsPerSecond > 60 ? 1.0 : pixelsPerSecond > 15 ? 5.0 : 10.0;
-    g.setFont (FontOptions (11.0f));
+    g.setFont (FontOptions (11.0f, Font::bold));
     for (double s = std::ceil (viewStart / step) * step; xOf (s) < ruler.getRight(); s += step)
     {
         const float x = xOf (s);
-        g.setColour (slate);
-        g.drawVerticalLine (roundToInt (x), kRulerHeight - 6.0f, kRulerHeight - 1.0f);
+        g.setColour (ink);
+        g.drawVerticalLine (roundToInt (x), kRulerHeight - 7.0f, kRulerHeight - 1.0f);
         const int secs = roundToInt (s);
-        g.drawText (String (secs / 60) + ":" + String (secs % 60).paddedLeft ('0', 2), Rectangle<float> (x + 3, 2, 40, 14), Justification::centredLeft);
+        g.drawText (String (secs / 60) + ":" + String (secs % 60).paddedLeft ('0', 2), Rectangle<float> (x + 3, 3, 40, 14), Justification::centredLeft);
     }
 }
 

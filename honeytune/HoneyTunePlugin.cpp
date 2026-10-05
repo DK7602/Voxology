@@ -521,7 +521,7 @@ public:
         panel.setModel (dc != nullptr ? this : nullptr);
         setResizable (true, false);
         setResizeLimits (900, 460, 4000, 2400);
-        setSize (1100, 620);
+        setSize (1200, 680);
     }
 
     ~HoneyEditor() override

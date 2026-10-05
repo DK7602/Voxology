@@ -1,6 +1,7 @@
 #pragma once
 
 #include "HoneyRoll.h"
+#include "HoneyTheme.h"
 
 /** The whole Honey Tune window: key / scale / clip-wide amounts on top, the honeycomb roll in the
     middle, the selected note's controls at the bottom. */
@@ -15,6 +16,7 @@ public:
     void refresh();
 
     void paint (juce::Graphics&) override;
+    void paintOverChildren (juce::Graphics&) override;
     void resized() override;
 
     HoneyRoll roll;
@@ -24,8 +26,12 @@ private:
     void updateNoteControls();
     void applyNoteEdit();
 
-    struct Look;
-    std::unique_ptr<Look> look;
+    juce::Rectangle<float> frameArea() const;
+
+    std::unique_ptr<honeytheme::Look> look;
+    juce::Rectangle<float> topBar, bottomBar, legendArea, logoArea, noteInfoArea, statusArea;
+    std::vector<juce::Rectangle<float>> cards;
+    static constexpr float kFrame = 7.0f, kSeparator = 5.0f, kDripRoom = 24.0f;
     honeyui::Model* model = nullptr;
 
     juce::ComboBox key, scale;

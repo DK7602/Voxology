@@ -1,11 +1,12 @@
 #include "HoneyPanel.h"
 
+#include "HoneyTheme.h"
+
 using namespace juce;
 
 namespace
 {
-    const Colour cream { 0xfff3ede0 }, panel { 0xffeae0cb }, ink { 0xff1d2733 }, slate { 0xff566170 };
-    const Colour gold { 0xffc9952f }, goldDeep { 0xff8d641f }, blue { 0xff3fa9f5 };
+    using honeytheme::ink; using honeytheme::navy;
 
     String noteName (double midi)
     {
@@ -19,47 +20,7 @@ namespace
     }
 }
 
-/** Dark text on cream, gold accents. */
-struct HoneyPanel::Look final : public LookAndFeel_V4
-{
-    Look()
-    {
-        setColour (Label::textColourId, ink);
-        setColour (ComboBox::backgroundColourId, Colour (0xfffffaf0));
-        setColour (ComboBox::textColourId, ink);
-        setColour (ComboBox::outlineColourId, gold);
-        setColour (ComboBox::arrowColourId, goldDeep);
-        setColour (PopupMenu::backgroundColourId, Colour (0xfffffaf0));
-        setColour (PopupMenu::textColourId, ink);
-        setColour (PopupMenu::highlightedBackgroundColourId, gold);
-        setColour (PopupMenu::highlightedTextColourId, Colours::white);
-        setColour (Slider::backgroundColourId, Colour (0xffd8c9a8));
-        setColour (Slider::trackColourId, gold);
-        setColour (Slider::thumbColourId, goldDeep);
-        setColour (Slider::textBoxTextColourId, ink);
-        setColour (Slider::textBoxBackgroundColourId, Colour (0xfffffaf0));
-        setColour (Slider::textBoxOutlineColourId, gold.withAlpha (0.6f));
-        setColour (TextButton::buttonColourId, Colour (0xfffffaf0));
-        setColour (TextButton::textColourOffId, ink);
-        setColour (TextButton::textColourOnId, ink);
-        setColour (ComboBox::focusedOutlineColourId, goldDeep);
-    }
-
-    Label* createSliderTextBox (Slider& slider) override
-    {
-        auto* l = LookAndFeel_V4::createSliderTextBox (slider);
-        l->setColour (Label::textColourId, ink);
-        l->setColour (Label::backgroundColourId, Colour (0xfffffaf0));
-        l->setColour (Label::outlineColourId, gold.withAlpha (0.6f));
-        l->setColour (TextEditor::textColourId, ink);
-        l->setColour (TextEditor::backgroundColourId, Colour (0xfffffaf0));
-        l->setColour (TextEditor::highlightColourId, gold.withAlpha (0.4f));
-        l->setColour (CaretComponent::caretColourId, ink);
-        return l;
-    }
-};
-
-HoneyPanel::HoneyPanel() : look (std::make_unique<Look>())
+HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
 {
     setLookAndFeel (look.get());
     addAndMakeVisible (roll);
@@ -73,14 +34,14 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<Look>())
         s->setRange (0.0, 100.0, 1.0);
         s->setTextValueSuffix (" %");
         s->setSliderStyle (Slider::LinearHorizontal);
-        s->setTextBoxStyle (Slider::TextBoxRight, false, 52, 20);
+        s->setTextBoxStyle (Slider::TextBoxRight, false, 46, 20);
         addAndMakeVisible (*s);
     }
     auto label = [this] (Label& l, const String& text)
     {
         l.setText (text, dontSendNotification);
         l.setFont (FontOptions (12.0f, Font::bold));
-        l.setColour (Label::textColourId, slate);
+        l.setColour (Label::textColourId, navy);
         addAndMakeVisible (l);
     };
     label (keyLabel, "KEY");
@@ -229,25 +190,23 @@ void HoneyPanel::applyNoteEdit()
 //==============================================================================
 void HoneyPanel::paint (Graphics& g)
 {
-    g.fillAll (cream);
-    auto r = getLocalBounds();
-    auto top = r.removeFromTop (64);
-    auto bottom = r.removeFromBottom (78);
+    using namespace honeytheme;
+    g.fillAll (night);
+    const auto fr = frameArea();
+    const auto inner = fr.reduced (kFrame);
 
-    // Top and bottom bars: cream glass with a gold edge.
-    for (auto bar : { top, bottom })
-    {
-        g.setGradientFill (ColourGradient (Colour (0xfffbf7ee), 0, (float) bar.getY(), panel, 0, (float) bar.getBottom(), false));
-        g.fillRect (bar);
-    }
-    g.setColour (gold.withAlpha (0.7f));
-    g.drawHorizontalLine (top.getBottom() - 1, 0.0f, (float) getWidth());
-    g.drawHorizontalLine (bottom.getY(), 0.0f, (float) getWidth());
+    // Marble bars (top and bottom); the roll paints the middle.
+    drawMarble (g, topBar, 0.05f);
+    drawMarble (g, bottomBar, 0.0f, { 200.0f, 300.0f });
 
-    // Title: a small honeycomb cell + HONEY TUNE
+    // Glass cards behind every group of controls and text.
+    for (const auto& c : cards)
+        drawGlass (g, c, 7.0f, 0.78f);
+
+    // Title: honeycomb cell + HONEY TUNE
     {
+        const float cx = topBar.getX() + 22.0f, cy = topBar.getCentreY() - 6.0f, rad = 12.0f;
         Path hex;
-        const float cx = 26.0f, cy = 24.0f, rad = 12.0f;
         for (int k = 0; k < 6; ++k)
         {
             const float a = MathConstants<float>::pi / 3.0f * (float) k + MathConstants<float>::pi / 6.0f;
@@ -255,78 +214,139 @@ void HoneyPanel::paint (Graphics& g)
             if (k == 0) hex.startNewSubPath (p); else hex.lineTo (p);
         }
         hex.closeSubPath();
-        g.setGradientFill (ColourGradient (Colour (0xfff4d684), cx, cy - rad, gold, cx, cy + rad, false));
-        g.fillPath (hex);
+        fillGold (g, hex, hex.getBounds());
         g.setColour (goldDeep);
-        g.strokePath (hex, PathStrokeType (1.5f));
+        g.strokePath (hex, PathStrokeType (1.2f));
+        g.setColour (ink);
+        g.setFont (FontOptions (20.0f, Font::bold));
+        g.drawText ("HONEY TUNE", Rectangle<float> (cx + 18.0f, cy - 14.0f, 150.0f, 26.0f), Justification::centredLeft);
+        g.setFont (FontOptions (11.0f, Font::bold));
+        g.setColour (navy);
+        g.drawText ("by Voxology", Rectangle<float> (cx + 19.0f, cy + 11.0f, 120.0f, 14.0f), Justification::centredLeft);
     }
-    g.setColour (goldDeep);
-    g.setFont (FontOptions (20.0f, Font::bold));
-    g.drawText ("HONEY TUNE", 46, 10, 160, 28, Justification::centredLeft);
-    g.setColour (slate);
-    g.setFont (FontOptions (11.0f));
-    g.drawText ("by Voxology", 48, 36, 160, 14, Justification::centredLeft);
 
     // Legend
-    g.setFont (FontOptions (11.0f));
-    auto legend = top.removeFromRight (150).reduced (6, 8);
-    auto item = [&] (Colour fill, Colour edge, bool glow, const String& text)
     {
-        auto row = legend.removeFromTop (16);
-        auto sw = row.removeFromLeft (22).toFloat().reduced (2.0f, 3.0f);
-        if (glow) { g.setColour (blue.withAlpha (0.35f)); g.fillRoundedRectangle (sw.expanded (2.0f), 4.0f); }
-        g.setColour (fill); g.fillRoundedRectangle (sw, 3.0f);
-        g.setColour (edge); g.drawRoundedRectangle (sw, 3.0f, 1.2f);
-        g.setColour (ink); g.drawText (text, row.withTrimmedLeft (4), Justification::centredLeft);
-    };
-    item (Colour (0xfff6f0e2), gold, false, "in key");
-    item (Colour (0xfff6f0e2), gold, true, "off-key");
-    item (Colour (0xfff4d684), gold, false, "fixed");
+        auto legend = legendArea.reduced (8.0f, 5.0f);
+        g.setFont (FontOptions (11.0f, Font::bold));
+        int k = 0;
+        for (const auto* text : { "in key", "off-key", "fixed" })
+        {
+            auto row = legend.removeFromTop (legend.getHeight() / (float) (3 - k));
+            auto sw = row.removeFromLeft (24.0f).withSizeKeepingCentre (20.0f, 10.0f);
+            Path p;
+            p.addRoundedRectangle (sw, 3.0f);
+            if (k == 1) { g.setColour (glow.withAlpha (0.7f)); g.strokePath (p, PathStrokeType (4.0f)); }
+            if (k == 2) fillGold (g, p, sw); else fillMarble (g, p, 5, 0.3f);
+            g.setColour (goldDeep);
+            g.strokePath (p, PathStrokeType (1.2f));
+            g.setColour (ink);
+            g.drawText (text, row.withTrimmedLeft (4.0f), Justification::centredLeft);
+            ++k;
+        }
+    }
 
-    // Bottom: the selected note, then the status line.
+    // Logo, top right
+    g.setOpacity (1.0f);
+    if (const auto img = logo(); img.isValid())
+        g.drawImage (img, logoArea, RectanglePlacement::centred);
+
+    // Bottom text: the selected note, then the status line.
     g.setColour (ink);
-    g.setFont (FontOptions (13.0f));
-    g.drawFittedText (noteInfo, bottom.reduced (12, 0).removeFromTop (30), Justification::centredLeft, 1);
-    g.setColour (slate);
-    g.setFont (FontOptions (11.5f));
-    g.drawFittedText (status, bottom.reduced (12, 0).removeFromBottom (20), Justification::centredLeft, 1);
+    g.setFont (FontOptions (13.0f, Font::bold));
+    g.drawFittedText (noteInfo, noteInfoArea.reduced (10.0f, 0.0f).toNearestInt(), Justification::centredLeft, 1);
+    g.setColour (navy);
+    g.setFont (FontOptions (11.5f, Font::bold));
+    g.drawFittedText (status, statusArea.reduced (10.0f, 0.0f).toNearestInt(), Justification::centredLeft, 1);
+
+    // Gold: the frame and the bars between the sections.
+    drawGoldFrame (g, fr, kFrame, 12.0f);
+    for (const auto& sep : { Rectangle<float> (inner.getX(), topBar.getBottom(), inner.getWidth(), kSeparator),
+                             Rectangle<float> (inner.getX(), bottomBar.getY() - kSeparator, inner.getWidth(), kSeparator) })
+    {
+        Path p;
+        p.addRectangle (sep);
+        fillGold (g, p, sep);
+        g.setColour (goldDeep);
+        g.drawRect (sep, 0.6f);
+    }
+}
+
+void HoneyPanel::paintOverChildren (Graphics& g)
+{
+    // Honey dripping from the top bar over the roll, and from the frame below the window.
+    const auto fr = frameArea();
+    const float rulerBottom = (float) roll.getY() + 20.0f;   // drips hang from the gold time ruler
+    honeytheme::drawDrips (g, fr.getX() + 70.0f, fr.getX() + fr.getWidth() * 0.45f, rulerBottom, 26.0f, 4, 3);
+    honeytheme::drawDrips (g, fr.getRight() - 260.0f, fr.getRight() - 60.0f, rulerBottom, 16.0f, 2, 9);
+    honeytheme::drawDrips (g, fr.getX() + fr.getWidth() * 0.55f, fr.getRight() - 30.0f, fr.getBottom() - 1.0f, kDripRoom - 4.0f, 6, 17);
+    honeytheme::drawDrips (g, fr.getX() + 30.0f, fr.getX() + 260.0f, fr.getBottom() - 1.0f, kDripRoom - 6.0f, 3, 23);
+}
+
+Rectangle<float> HoneyPanel::frameArea() const
+{
+    return getLocalBounds().toFloat().reduced (6.0f).withTrimmedBottom (kDripRoom);
 }
 
 void HoneyPanel::resized()
 {
-    auto r = getLocalBounds();
-    auto top = r.removeFromTop (64).withTrimmedLeft (190).withTrimmedRight (150).reduced (0, 8);
-    auto bottom = r.removeFromBottom (78);
-    roll.setBounds (r);
+    const auto inner = frameArea().reduced (kFrame);
+    auto r = inner;
+    topBar = r.removeFromTop (70.0f);
+    r.removeFromTop (kSeparator);
+    bottomBar = r.removeFromBottom (84.0f);
+    r.removeFromBottom (kSeparator);
+    roll.setBounds (r.toNearestInt());
+    cards.clear();
 
-    auto column = [&top] (int width, Label& l, Component& c)
+    // Top: title | key | scale | snap | drift | vibrato | fit ... legend | logo
+    auto top = topBar.reduced (8.0f, 8.0f);
+    top.removeFromLeft (172.0f);
+    logoArea = top.removeFromRight (120.0f);
+    top.removeFromRight (6.0f);
+    legendArea = top.removeFromRight (92.0f);
+    cards.push_back (legendArea);
+    top.removeFromRight (10.0f);
+    fit.setBounds (top.removeFromRight (52.0f).withSizeKeepingCentre (52.0f, 28.0f).translated (0.0f, 8.0f).toNearestInt());
+    top.removeFromRight (8.0f);
+    auto column = [this, &top] (float width, Label& l, Component& c)
     {
         auto col = top.removeFromLeft (width);
-        top.removeFromLeft (14);
-        l.setBounds (col.removeFromTop (18));
-        c.setBounds (col.removeFromTop (26));
+        top.removeFromLeft (8.0f);
+        cards.push_back (col);
+        col = col.reduced (8.0f, 4.0f);
+        l.setBounds (col.removeFromTop (16.0f).toNearestInt());
+        c.setBounds (col.removeFromTop (26.0f).toNearestInt());
     };
-    column (70, keyLabel, key);
-    column (150, scaleLabel, scale);
-    const int sliderW = jlimit (120, 200, (top.getWidth() - 3 * 14 - 50) / 3);
+    column (70.0f, keyLabel, key);
+    column (136.0f, scaleLabel, scale);
+    const float sliderW = jlimit (120.0f, 210.0f, (top.getWidth() - 3 * 8.0f) / 3.0f);
     column (sliderW, snapLabel, snap);
     column (sliderW, driftLabel, drift);
     column (sliderW, vibratoLabel, vibrato);
-    fit.setBounds (top.removeFromLeft (50).withTrimmedTop (18).withHeight (26));
 
-    auto row = bottom.withTrimmedTop (28).withTrimmedBottom (22).reduced (12, 0);
-    auto pair = [&row] (int width, Label& l, Slider& s)
+    // Bottom: note info line, then per-note sliders and buttons, then the status line.
+    auto bottom = bottomBar.reduced (8.0f, 6.0f);
+    noteInfoArea = bottom.removeFromTop (22.0f);
+    statusArea = bottom.removeFromBottom (18.0f);
+    cards.push_back (noteInfoArea);
+    cards.push_back (statusArea);
+    auto row = bottom.reduced (0.0f, 3.0f);
+    auto pair = [this, &row] (float width, Label& l, Slider& s)
     {
         auto c = row.removeFromLeft (width);
-        row.removeFromLeft (12);
-        l.setBounds (c.removeFromLeft (130));
-        s.setBounds (c);
+        row.removeFromLeft (8.0f);
+        cards.push_back (c);
+        c = c.reduced (8.0f, 2.0f);
+        l.setBounds (c.removeFromLeft (128.0f).toNearestInt());
+        s.setBounds (c.toNearestInt());
     };
-    pair (330, noteDriftLabel, noteDrift);
-    pair (340, noteVibratoLabel, noteVibrato);
-    resetAll.setBounds (row.removeFromRight (120).reduced (0, 1));
-    row.removeFromRight (8);
-    resetNote.setBounds (row.removeFromRight (100).reduced (0, 1));
-    row.removeFromRight (8);
-    snapNote.setBounds (row.removeFromRight (130).reduced (0, 1));
+    const float pairW = jlimit (250.0f, 360.0f, (row.getWidth() - 380.0f) / 2.0f);
+    pair (pairW, noteDriftLabel, noteDrift);
+    pair (pairW, noteVibratoLabel, noteVibrato);
+    resetAll.setBounds (row.removeFromRight (116.0f).toNearestInt());
+    row.removeFromRight (6.0f);
+    resetNote.setBounds (row.removeFromRight (96.0f).toNearestInt());
+    row.removeFromRight (6.0f);
+    snapNote.setBounds (row.removeFromRight (130.0f).toNearestInt());
 }

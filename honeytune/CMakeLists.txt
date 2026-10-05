@@ -21,7 +21,11 @@ juce_add_plugin(HoneyTune
     VST3_CATEGORIES             Fx "Pitch Shift"
     AU_MAIN_TYPE                kAudioUnitType_Effect)
 
-target_sources(HoneyTune PRIVATE HoneyTunePlugin.cpp HoneyRoll.cpp HoneyPanel.cpp)
+juce_add_binary_data(HoneyAssets HEADER_NAME HoneyAssets.h NAMESPACE HoneyAssets
+    SOURCES assets/marble_blue_white.jpg assets/gold.jpg assets/logo.png)
+set_target_properties(HoneyAssets PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+target_sources(HoneyTune PRIVATE HoneyTunePlugin.cpp HoneyRoll.cpp HoneyPanel.cpp HoneyTheme.cpp)
 
 target_compile_definitions(HoneyTune PUBLIC
     JUCE_WEB_BROWSER=0
@@ -32,6 +36,7 @@ target_compile_definitions(HoneyTune PUBLIC
 target_link_libraries(HoneyTune
     PRIVATE
         vox_dsp
+        HoneyAssets
         juce::juce_audio_utils
     PUBLIC
         juce::juce_recommended_config_flags
@@ -42,7 +47,7 @@ target_link_libraries(HoneyTune
 option(VOX_HONEY_PREVIEW "Build the Honey Tune editor preview tool" OFF)
 if(VOX_HONEY_PREVIEW)
     juce_add_console_app(HoneyPreview PRODUCT_NAME "HoneyPreview")
-    target_sources(HoneyPreview PRIVATE preview/HoneyPreview.cpp HoneyRoll.cpp HoneyPanel.cpp)
+    target_sources(HoneyPreview PRIVATE preview/HoneyPreview.cpp HoneyRoll.cpp HoneyPanel.cpp HoneyTheme.cpp)
     target_compile_definitions(HoneyPreview PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    target_link_libraries(HoneyPreview PRIVATE vox_dsp juce::juce_gui_basics PUBLIC juce::juce_recommended_config_flags)
+    target_link_libraries(HoneyPreview PRIVATE vox_dsp HoneyAssets juce::juce_gui_basics PUBLIC juce::juce_recommended_config_flags)
 endif()
