@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Voxology</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<script src="mock.js"></script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<div id="viewport">
+<div id="stage">
+  <div class="veil"></div>
+
+  <!-- HEADER -->
+  <header id="header" class="card">
+    <img class="logo" id="logo" src="assets/logo.webp" alt="Voxology logo">
+    <img class="title" src="assets/title.webp" alt="Voxology">
+    <div class="h-group">
+      <span class="h-label">STYLE</span>
+      <div class="picker" title="What finished should sound like: Auto-Edit aims for this">
+        <button type="button" id="style-prev" aria-label="Previous style">&#8249;</button>
+        <span id="style-name">Trap Lead</span>
+        <button type="button" id="style-next" aria-label="Next style">&#8250;</button>
+      </div>
+    </div>
+    <div class="h-group">
+      <span class="h-label">INTENSITY</span>
+      <div class="seg" id="intensity"></div>
+    </div>
+    <button type="button" id="auto-edit" class="auto-edit">
+      <span class="ae-fill"></span>
+      <span class="ae-text" id="ae-text">AUTO-EDIT</span>
+      <span class="ae-sub" id="ae-sub">listens, then sets everything</span>
+    </button>
+    <button type="button" id="undo" class="chip" disabled title="Put back the settings from before Auto-Edit">UNDO</button>
+    <div class="h-group">
+      <span class="h-label">COMPARE</span>
+      <div class="seg ab" id="ab">
+        <button type="button" data-ab="a" title="Hear your original vocal">A</button>
+        <button type="button" data-ab="b" title="Hear Voxology">B</button>
+      </div>
+    </div>
+    <button type="button" id="match" class="chip" title="MATCH: A and B play at the same loudness, so you compare tone, not volume">MATCH</button>
+    <button type="button" id="bypass" class="power" title="Bypass all of Voxology" aria-label="Bypass">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>
+    </button>
+  </header>
+
+  <!-- SIGNAL CHAIN (honeycomb) -->
+  <nav id="chain" class="card" aria-label="Signal chain">
+    <div class="card-head"><span class="caps">SIGNAL CHAIN</span><span class="mono dim">10 MODULES</span></div>
+    <div id="hive"></div>
+    <div class="chain-foot mono dim">Click a cell to open it · dot = on / off</div>
+  </nav>
+
+  <!-- VISUAL -->
+  <section id="visual" class="card">
+    <div class="card-head">
+      <span class="caps">VOCAL SPECTRUM</span>
+      <span class="legend"><i class="sw in"></i>your vocal <i class="sw out"></i>after Voxology <i class="sw eq"></i>Tone EQ</span>
+    </div>
+    <div id="plot">
+      <canvas id="spec"></canvas>
+      <div id="eq-nodes"></div>
+      <div id="eq-readout" class="mono"></div>
+    </div>
+  </section>
+
+  <!-- MODULE -->
+  <section id="module" class="card">
+    <div class="card-head">
+      <span class="mod-num mono" id="mod-num">01</span>
+      <span class="caps" id="mod-name">CLEANUP</span>
+      <span class="mod-what" id="mod-what"></span>
+      <span class="grow"></span>
+      <span class="kept mono" id="mod-kept" hidden>CHECKED · KEPT</span>
+      <button type="button" class="chip on" id="mod-power">ON</button>
+    </div>
+    <div id="cells"></div>
+  </section>
+
+  <!-- LEARN -->
+  <aside id="learn" class="card">
+    <div class="card-head">
+      <span class="caps">LEARN</span>
+      <span class="grow"></span>
+      <div class="seg tabs" id="learn-tabs">
+        <button type="button" data-tab="module" class="sel">THIS MODULE</button>
+        <button type="button" data-tab="report">AUTO-EDIT REPORT</button>
+      </div>
+    </div>
+    <div id="learn-body"></div>
+  </aside>
+
+  <!-- FOOTER -->
+  <footer id="footer" class="card">
+    <div class="meter"><span class="m-label">IN</span><div class="bar"><i id="in-bar"></i></div><span class="mono" id="in-text">−inf</span></div>
+    <div class="meter"><span class="m-label">OUT</span><div class="bar"><i id="out-bar"></i></div><span class="mono" id="out-text">−inf</span></div>
+    <span class="grow"></span>
+    <span class="mono dim" id="status"></span>
+    <span class="mono dim">VOXOLOGY v0.1</span>
+  </footer>
+</div>
+</div>
+</body>
+</html>
