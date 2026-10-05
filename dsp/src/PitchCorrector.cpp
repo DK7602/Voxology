@@ -60,7 +60,7 @@ void PitchCorrector::reset() noexcept
     aa1.reset(); aa2.reset();
     now = 0; dnow = 0; decAcc = 0.0; decCount = 0; hopCount = 0;
     period = 0.0; levelMs = 0.0;
-    note = -1; corr = 0.0; sustain = 0.0; voicedRun = 0;
+    note = -1; corr = 0.0; sustain = 0.0; voicedRun = 0; lastP = 0.0;
     rawP = { 0.0, 0.0, 0.0 };
     last = {};
     synthPos = anaPos = 0.0;
@@ -166,6 +166,29 @@ void PitchCorrector::analyse() noexcept
             const double d2 = ra - 2.0 * rb + rc;
             if (std::abs (d2) > 1.0e-12) p += std::clamp (0.5 * (ra - rc) / d2, -0.5, 0.5);
         }
+        // Octave guard: a reading at half or double the last period is usually the detector
+        // slipping (raspy voices); keep the old octave if the waveform still repeats at it.
+        if (lastP > 0.0)
+        {
+            const double q = p / lastP;
+            double alt = 0.0;
+            if (q > 0.42 && q < 0.6) alt = p * 2.0;
+            else if (q > 1.7 && q < 2.4) alt = p * 0.5;
+            if (alt > 8.0 && alt < static_cast<double> (mask) / 4.0)
+            {
+                const int la = static_cast<int> (std::lround (alt)), ln = static_cast<int> (std::ceil (std::max (alt, p)));
+                double xy = 0.0, xx = 0.0, yy = 0.0;
+                for (int j = 0; j < ln; ++j)
+                {
+                    const double a0 = mono[static_cast<size_t> ((now - 1 - j) & mask)];
+                    const double b0 = mono[static_cast<size_t> ((now - 1 - j - la) & mask)];
+                    xy += a0 * b0; xx += a0 * a0; yy += b0 * b0;
+                }
+                if (xy / std::sqrt (xx * yy + 1.0e-30) > 0.85 * bestR) p = alt;
+            }
+        }
+        lastP = p;
+
         // Median of the last three readings: a one-reading octave glitch (gritty voices do that)
         // never reaches the grains.
         rawP[2] = rawP[1]; rawP[1] = rawP[0]; rawP[0] = p;
@@ -187,6 +210,7 @@ void PitchCorrector::analyse() noexcept
     {
         period = 0.0;
         rawP = { 0.0, 0.0, 0.0 };
+        if (sustain > 0.1) lastP = 0.0;   // a real gap: the next note may be any octave
         corr += (0.0 - corr) * (1.0 - std::exp (-hopSec / 0.03));
         sustain += hopSec;
         if (sustain > 0.2) note = -1;   // a real gap: the next phrase picks its note afresh
@@ -271,9 +295,11 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
         // jump around at word edges: ticks).
         if (voiced)
         {
-            if (drift > 0.5 * P)
+            // Joins happen past +-0.6 P, so right after one (offset ~ -+0.4 P) the opposite join needs a
+            // clear push: no flipping back and forth between repeat and skip (a burst of ticks).
+            if (drift > 0.6 * P)
                 drift = alignMark (synthPos + drift, synthPos + drift - P, P) - synthPos;
-            else if (drift < -0.5 * P)
+            else if (drift < -0.6 * P)
                 drift = alignMark (synthPos + drift, synthPos + drift + P, P) - synthPos;
         }
         // In breaths / consonants the offset just holds: a constant offset joins seamlessly (any

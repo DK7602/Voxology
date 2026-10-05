@@ -101,6 +101,11 @@ long windows can't see ticks: the user's ears are the judge. Sent Will_vocal_Vox
 If still crackly: (a) check 44.1k-specific issues, (b) grain-boundary epoch alignment (glottal pulses),
 (c) for rap, Auto-Edit should keep Pitch off unless clearly sung (raise the 15 % pitched-share rule).
 
+Round 3 (user: 0:02 and 0:24 fixed; small crackle left at 0:03-04 and 0:14): octave slips in the raspy
+voice (period halving 142 -> 76) made the grain size jump and joins flip repeat/skip 5x in 40 ms. Fixes:
+octave guard (half / double of the last period -> keep the old octave if correlation >= 0.85 of best)
+and join hysteresis (joins at |drift| > 0.6 P). Joins on the clip: 38 -> 19, no bursts. Sent fix3 render.
+
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble
 honeycomb cell on a piano-roll grid (off-key notes glow blue; pulled into key the cell "fills" gold).
