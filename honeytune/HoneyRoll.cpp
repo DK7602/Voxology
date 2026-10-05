@@ -234,6 +234,31 @@ void HoneyRoll::paint (Graphics& g)
         g.reduceClipRegion (grid.toNearestInt());
         const auto vis = g.getClipBounds().toFloat();
         const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
+        // Phrase connectors: a black line from each note's end to the next note's start when they're sung
+        // in one breath (gap under 0.2 s); a longer gap (a pause) leaves a space.
+        {
+            const bool original = model != nullptr && model->isOriginal();
+            auto shown = [&] (int i)
+            {
+                const auto& v = snap.notes[static_cast<size_t> (i)];
+                return original ? v.note.pitch : (dragging && i == selected) ? dragTarget : v.note.target;
+            };
+            Path links;
+            for (int i = 0; i + 1 < static_cast<int> (snap.notes.size()); ++i)
+            {
+                const auto& a = snap.notes[static_cast<size_t> (i)].note;
+                const auto& b = snap.notes[static_cast<size_t> (i + 1)].note;
+                if ((b.start - a.end) / sr > 0.2) continue;
+                const auto pa = cellPath (i, shown (i)).getBounds(), pb = cellPath (i + 1, shown (i + 1)).getBounds();
+                if (pa.getRight() < vis.getX() - 50.0f || pb.getX() > vis.getRight() + 50.0f) continue;
+                links.startNewSubPath (pa.getRight(), pa.getCentreY());
+                links.lineTo (std::max (pb.getX(), pa.getRight() + 1.0f), pb.getCentreY());
+            }
+            g.setColour (Colours::white.withAlpha (0.5f));   // a light edge so it reads on gold bars too
+            g.strokePath (links, PathStrokeType (3.6f, PathStrokeType::curved, PathStrokeType::rounded));
+            g.setColour (Colours::black.withAlpha (0.88f));
+            g.strokePath (links, PathStrokeType (2.0f, PathStrokeType::curved, PathStrokeType::rounded));
+        }
         for (int i = 0; i < static_cast<int> (snap.notes.size()); ++i)
         {
             const auto& n = snap.notes[static_cast<size_t> (i)].note;
