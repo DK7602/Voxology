@@ -21,6 +21,10 @@ struct MemoryModel final : honeyui::Model
     {
         auto s = honeyui::makeSnapshot (track, notes, edits, guess, settings);
         s.status = 2;
+        if (const char* bpm = std::getenv ("HONEY_BPM"))   // a fake host tempo map (4/4)
+            for (int b = 0; b < 400; ++b)
+                for (int k = 0; k < 4; ++k)
+                    s.timeline.lines.push_back ({ (b * 4 + k) * 60.0 / std::atof (bpm), b + 1, k + 1 });
         return s;
     }
     honeyui::Settings getSettings() override { return settings; }
@@ -73,7 +77,7 @@ int main (int argc, char** argv)
     }
     panel.refresh();
     panel.roll.setSelected (static_cast<int> (m.notes.size() / 3));
-    panel.roll.setPlayhead (2.5);
+    panel.setPlayhead (2.5);
 
     if (std::getenv ("HONEY_DEBUG"))
         for (auto* c : panel.getChildren())

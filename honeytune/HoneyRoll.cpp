@@ -321,16 +321,37 @@ void HoneyRoll::drawBackground (Graphics& g, Rectangle<float> grid)
                 honeytheme::drawGoldBar (g, { grid.getX(), yOf (m) + static_cast<float> (rowHeight) / 2 - 1.0f, grid.getWidth(), 2.0f }, 0.5f);
         }
 
-        // Second lines: thin raised gold.
-        const double step = pixelsPerSecond > 60 ? 1.0 : pixelsPerSecond > 15 ? 5.0 : 10.0;
-        for (double s = std::ceil (viewStart / step) * step; xOf (s) < grid.getRight(); s += step)
+        // Bar lines (raised gold) and beat lines (fine) from the host's tempo; seconds when it has none.
+        auto raised = [&] (float x, float width)
         {
             Path p;
-            const Rectangle<float> line (xOf (s) - 1.0f, grid.getY(), 2.2f, grid.getHeight());
+            const Rectangle<float> line (x - width * 0.5f, grid.getY(), width, grid.getHeight());
             p.addRectangle (line);
             g.setColour (Colours::black.withAlpha (0.18f));
             g.fillRect (line.translated (1.2f, 0.0f));
             honeytheme::fillGold (g, p, line.withY (0.0f).withHeight (40.0f));
+        };
+        const auto& tl = snap.timeline;
+        if (tl.valid())
+        {
+            const double beatPx = pixelsPerSecond * (tl.lines[1].seconds - tl.lines[0].seconds);
+            for (const auto& l : tl.lines)
+            {
+                const float x = xOf (l.seconds);
+                if (x < grid.getX() - 2.0f || x > grid.getRight() + 2.0f) continue;
+                if (l.beat == 1) raised (x, 2.2f);
+                else if (beatPx > 14.0)
+                {
+                    g.setColour (goldDeep.withAlpha (0.35f));
+                    g.fillRect (x - 0.5f, grid.getY(), 1.0f, grid.getHeight());
+                }
+            }
+        }
+        else
+        {
+            const double step = pixelsPerSecond > 60 ? 1.0 : pixelsPerSecond > 15 ? 5.0 : 10.0;
+            for (double s = std::ceil (viewStart / step) * step; xOf (s) < grid.getRight(); s += step)
+                raised (xOf (s), 2.2f);
         }
     }
 }
@@ -488,19 +509,43 @@ void HoneyRoll::drawRuler (Graphics& g)
     const Rectangle<float> ruler (grid.getX(), 0.0f, grid.getWidth(), kRulerHeight);
     Graphics::ScopedSaveState save (g);
     g.reduceClipRegion (ruler.toNearestInt());
-    const double step = pixelsPerSecond > 60 ? 1.0 : pixelsPerSecond > 15 ? 5.0 : 10.0;
     g.setFont (FontOptions (11.0f, Font::bold));
-    for (double s = std::ceil (viewStart / step) * step; xOf (s) < ruler.getRight(); s += step)
+    auto label = [&g] (float x, const String& text)
     {
-        const float x = xOf (s);
         g.setColour (Colour (0xff3a2a0a));
         g.drawVerticalLine (roundToInt (x), kRulerHeight - 7.0f, kRulerHeight - 1.0f);
-        const int secs = roundToInt (s);
-        const auto label = String (secs / 60) + ":" + String (secs % 60).paddedLeft ('0', 2);
         g.setColour (Colours::white.withAlpha (0.45f));
-        g.drawText (label, Rectangle<float> (x + 3, 4, 40, 14), Justification::centredLeft);
+        g.drawText (text, Rectangle<float> (x + 3, 4, 40, 14), Justification::centredLeft);
         g.setColour (Colour (0xff3a2a0a));
-        g.drawText (label, Rectangle<float> (x + 3, 3, 40, 14), Justification::centredLeft);
+        g.drawText (text, Rectangle<float> (x + 3, 3, 40, 14), Justification::centredLeft);
+    };
+    const auto& tl = snap.timeline;
+    if (tl.valid())
+    {
+        // Bar numbers like the host's ruler (every 2nd / 4th ... bar when they'd crowd), beat ticks between.
+        double barPx = 1.0e9;
+        for (size_t i = 1; i < tl.lines.size(); ++i)
+            if (tl.lines[i].beat == 1) { for (size_t j = i; j-- > 0;) if (tl.lines[j].beat == 1) { barPx = (tl.lines[i].seconds - tl.lines[j].seconds) * pixelsPerSecond; break; } break; }
+        int every = 1;
+        while (barPx * every < 34.0 && every < 64) every *= 2;
+        for (const auto& l : tl.lines)
+        {
+            const float x = xOf (l.seconds);
+            if (x < ruler.getX() - 40.0f || x > ruler.getRight()) continue;
+            if (l.beat == 1 && (l.bar - 1) % every == 0) label (x, String (l.bar));
+            else if (l.beat != 1 && barPx > 60.0)
+            {
+                g.setColour (Colour (0xff3a2a0a).withAlpha (0.6f));
+                g.drawVerticalLine (roundToInt (x), kRulerHeight - 4.0f, kRulerHeight - 1.0f);
+            }
+        }
+        return;
+    }
+    const double step = pixelsPerSecond > 60 ? 1.0 : pixelsPerSecond > 15 ? 5.0 : 10.0;
+    for (double s = std::ceil (viewStart / step) * step; xOf (s) < ruler.getRight(); s += step)
+    {
+        const int secs = roundToInt (s + tl.songOffset);
+        label (xOf (s), String (secs / 60) + ":" + String (secs % 60).paddedLeft ('0', 2));
     }
 }
 

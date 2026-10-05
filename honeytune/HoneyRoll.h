@@ -35,6 +35,7 @@ public:
 
     /** Where playback is in the clip (seconds); negative = stopped. The view follows it. */
     void setPlayhead (double seconds);
+    double getPlayhead() const { return playhead; }
 
     /** Fit the whole clip and its notes into view. */
     void fitAll();

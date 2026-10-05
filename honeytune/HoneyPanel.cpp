@@ -150,6 +150,16 @@ void HoneyPanel::refresh()
     repaint();
 }
 
+void HoneyPanel::setPlayhead (double seconds)
+{
+    roll.setPlayhead (seconds);
+    if (seconds >= 0.0 && std::abs (seconds - lastPosition) > 0.0005)
+    {
+        lastPosition = seconds;
+        repaint (readoutArea.toNearestInt());
+    }
+}
+
 void HoneyPanel::applySettings()
 {
     if (model == nullptr) return;
@@ -258,6 +268,19 @@ void HoneyPanel::paint (Graphics& g)
     if (const auto img = logo(); img.isValid())
         g.drawImage (img, logoArea, RectanglePlacement::centred);
 
+    // Time readout (bars . beats like the host, and the song time), synced to playback.
+    {
+        const bool playing = roll.getPlayhead() >= 0.0;
+        drawGlass (g, readoutArea, 7.0f, 0.85f);
+        g.setColour (playing ? Colour (0xff1e7d32) : Colour (0xff8d641f));
+        g.setFont (FontOptions (13.0f, Font::bold));
+        g.drawText (playing ? String (CharPointer_UTF8 ("\xe2\x96\xb6")) : String (CharPointer_UTF8 ("\xe2\x96\xa0")),
+                    readoutArea.withWidth (24.0f).translated (6.0f, 0.0f), Justification::centred);
+        g.setColour (ink);
+        g.setFont (FontOptions (Font::getDefaultMonospacedFontName(), 14.0f, Font::bold));
+        g.drawText (roll.getSnapshot().timeline.describe (lastPosition), readoutArea.withTrimmedLeft (32.0f), Justification::centredLeft);
+    }
+
     // Bottom text: the selected note, then the status line.
     g.setColour (ink);
     g.setFont (FontOptions (13.0f, Font::bold));
@@ -347,6 +370,8 @@ void HoneyPanel::resized()
     // Bottom: note info line, then per-note sliders and buttons, then the status line.
     auto bottom = bottomBar.reduced (8.0f, 4.0f);
     noteInfoArea = bottom.removeFromTop (22.0f);
+    readoutArea = noteInfoArea.removeFromRight (230.0f);
+    noteInfoArea.removeFromRight (8.0f);
     statusArea = bottom.removeFromBottom (18.0f);
     cards.push_back (noteInfoArea);
     cards.push_back (statusArea);

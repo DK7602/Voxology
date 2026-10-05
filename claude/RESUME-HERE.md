@@ -180,7 +180,10 @@ playPosition/playStamp per source (audio thread atomics), editor timer 30 Hz -> 
 Round 7: black note text; RED glow = will SOUND off-key (NoteView.off from target; fixed = wasOff && !off; dragged
 notes judged where they land); Original A/B button (controller playOriginal -> SourceState.playOriginal, renderer
 plays `recorded` copy; also plays the recording instead of silence while analysing); vertical fit centres on the
-duration-weighted median pitch. Chrome blocks the unsigned zip as dangerous: user must Keep (code signing later). drips de-haloed and drawn BEFORE the frame with tops tucked under it.
+duration-weighted median pitch. Round 8: ruler shows the HOST's bars/beats (editor buildTimeline: region songOffset + ARA TempoConverter /
+BarSignaturesConverter -> honeyui::Timeline lines in clip seconds; seconds fallback), bar lines raised gold, beat
+lines fine; time readout card (bar . beat + song time, play/stop icon) in the bottom bar, synced via panel.setPlayhead;
+refresh every 1.5 s for tempo changes. Preview: HONEY_BPM fakes a tempo map. Chrome blocks the unsigned zip as dangerous: user must Keep (code signing later). drips de-haloed and drawn BEFORE the frame with tops tucked under it.
 
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble

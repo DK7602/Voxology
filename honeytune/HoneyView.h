@@ -3,6 +3,7 @@
 #include "vox/HoneyTune.h"
 
 #include <cmath>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
@@ -74,9 +75,36 @@ struct NoteView
     bool fixed = false;        // was off-key, now lands on a note of the key
 };
 
+/** The host's bars and beats over the clip (from the song's tempo map and time signatures), in clip
+    seconds. Empty when the host doesn't share them: the editor then shows seconds. */
+struct Timeline
+{
+    struct Line { double seconds; int bar; int beat; };   // bar from 1, beat from 1 (1 = the bar line)
+    std::vector<Line> lines;
+    double songOffset = 0.0;   // song time = clip time + songOffset
+
+    bool valid() const { return lines.size() >= 2; }
+
+    /** "Bar 5 . 2" style position for a clip time, plus the song time. */
+    std::string describe (double clipSeconds) const
+    {
+        const double song = clipSeconds + songOffset;
+        const int ms = static_cast<int> (std::round (std::max (0.0, song) * 1000.0));
+        char time[32];
+        std::snprintf (time, sizeof time, "%d:%02d.%03d", ms / 60000, (ms / 1000) % 60, ms % 1000);
+        if (! valid()) return time;
+        const Line* at = &lines.front();
+        for (const auto& l : lines) { if (l.seconds > clipSeconds) break; at = &l; }
+        char out[64];
+        std::snprintf (out, sizeof out, "%d . %d     %s", at->bar, at->beat, time);
+        return out;
+    }
+};
+
 /** One clip, ready to draw. */
 struct Snapshot
 {
+    Timeline timeline;
     int status = 0;            // 0 waiting, 1 listening, 2 ready, 3 couldn't read
     std::string name;
     std::shared_ptr<const vox::honey::Track> track;

@@ -9,6 +9,8 @@
 
 #include "HoneyPanel.h"
 
+#include <ARA_Library/Utilities/ARATimelineConversion.h>
+
 #include <map>
 #include <memory>
 
@@ -566,7 +568,41 @@ private:
     honeyui::Snapshot snapshot() override
     {
         if (dc == nullptr || state == nullptr) return {};
-        return dc->snapshot (state);
+        auto snap = dc->snapshot (state);
+        for (auto* src : dc->sources())
+            if (src->state == state)
+                for (auto* mod : src->getAudioModifications())
+                    if (! mod->getPlaybackRegions().empty())
+                    {
+                        snap.timeline = buildTimeline (mod->getPlaybackRegions().front(), snap.seconds);
+                        return snap;
+                    }
+        return snap;
+    }
+
+    /** The song's bars and beats over this clip, from the host's tempo map and time signatures. */
+    static honeyui::Timeline buildTimeline (ARAPlaybackRegion* region, double clipSeconds)
+    {
+        honeyui::Timeline tl;
+        tl.songOffset = region->getStartInPlaybackTime() - region->getStartInAudioModificationTime();
+        auto* sequence = region->getRegionSequence();
+        auto* context = sequence != nullptr ? sequence->getMusicalContext() : nullptr;
+        if (context == nullptr) return tl;
+        const ARA::PlugIn::HostContentReader<ARA::kARAContentTypeTempoEntries> tempoReader (context);
+        const ARA::PlugIn::HostContentReader<ARA::kARAContentTypeBarSignatures> barReader (context);
+        if (! tempoReader || ! barReader) return tl;
+        const ARA::TempoConverter<decltype (tempoReader)> tempo (tempoReader);
+        const ARA::BarSignaturesConverter<decltype (barReader)> bars (barReader);
+        const auto q0 = tempo.getQuarterForTime (tl.songOffset - 2.0), q1 = tempo.getQuarterForTime (tl.songOffset + clipSeconds + 2.0);
+        for (int b = bars.getBarIndexForQuarter (q0); b <= bars.getBarIndexForQuarter (q1) && tl.lines.size() < 50000; ++b)
+        {
+            const auto barStart = bars.getQuarterForBarIndex (b);
+            const auto sig = bars.getBarSignatureForQuarter (barStart);
+            const double quartersPerBeat = 4.0 / std::max (1, (int) sig.denominator);
+            for (int k = 0; k < std::max (1, (int) sig.numerator); ++k)
+                tl.lines.push_back ({ tempo.getTimeForQuarter (barStart + k * quartersPerBeat) - tl.songOffset, b >= 0 ? b + 1 : b, k + 1 });
+        }
+        return tl;
     }
     Settings getSettings() override { return dc != nullptr ? dc->getSettings() : Settings {}; }
     void setSettings (const Settings& s) override { if (dc != nullptr) dc->setSettings (s); }
@@ -609,8 +645,9 @@ private:
         if (state == nullptr || ! state->alive) { state = nullptr; pickSource ({}); panel.refresh(); return; }
         // Playhead: where the host is playing in this clip (hidden once playback stops).
         const bool playing = Time::getMillisecondCounter() - state->playStamp.load() < 250;
-        panel.roll.setPlayhead (playing ? state->playPosition.load() / std::max (1.0, state->sampleRate) : -1.0);
-        if (state->status != 2 && ++slowTicks % 15 == 0) panel.refresh();
+        panel.setPlayhead (playing ? state->playPosition.load() / std::max (1.0, state->sampleRate) : -1.0);
+        // Now and then: the status while listening, and the bars / beats if the song's tempo changed.
+        if (++slowTicks % (state->status != 2 ? 15 : 45) == 0 && ! panel.roll.isMouseButtonDown()) panel.refresh();
     }
 
     HoneyDocumentController* dc = nullptr;
