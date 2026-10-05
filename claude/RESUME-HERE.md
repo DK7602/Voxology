@@ -208,3 +208,11 @@ Housekeeping: trademark check "Voxology" / "Honey Tune" before selling (VOX amps
 - Read this file; branch claude/voxology. Pushes build Windows only; Mac on request.
 - First: user's real-vocal test (Auto-Edit on a verse; read the report; A / B with MATCH). Fix what
   they hear. Then the plan above in order (pitch correction first) unless the user says otherwise.
+
+## Thread handoff (2026-10-05)
+Honey Tune step 3 is DONE and user-tested in Cubase Artist 14 ("works perfect"): honeycomb editor in the mockup look,
+red/cream glows, Original | Tuned switch, host bars/beats ruler + time readout, click-to-seek, phrase connectors,
+gold note names. Last good build: Actions run 37368105904. Voxology VST3 category is now Fx|Vocals.
+A NEW THREAD was started for "Voxology add-ons" (user's request). Still open from here: Capture mode for non-ARA hosts
+(FL Studio, Ableton), Auto-Edit / Learn inside Honey Tune, render only changed notes (speed), Pro Tools AAX + PACE,
+code signing (Chrome flags the unsigned zip), trademark check (Voxology / Honey Tune).
