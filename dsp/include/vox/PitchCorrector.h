@@ -76,6 +76,7 @@ public:
 private:
     void analyse() noexcept;
     void synthesiseUpTo (int64_t limit) noexcept;
+    double alignMark (double prevMark, double candidate, double P) const noexcept;
 
     PitchParams params;
     double sr = 48000.0;
@@ -104,8 +105,8 @@ private:
     int note = -1;
     double corr = 0.0;                 // semitones, smoothed
     double sustain = 0.0;              // seconds on the current note
+    std::array<double, 3> rawP {};     // newest period readings (median of three)
     int voicedRun = 0;                 // + consecutive voiced readings, - consecutive unvoiced
-    double blend = 0.0, blendCoeff = 0.0;   // grains vs untouched voice (by how much needs fixing)
     Reading last;
 
     // Every analysis, stamped with the input time it describes, so each grain uses the reading for

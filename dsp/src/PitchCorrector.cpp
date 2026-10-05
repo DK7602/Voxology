@@ -5,6 +5,10 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#ifdef VOX_PITCH_DEBUG
+#include <cstdio>
+double dbgFrom = 0, dbgTo = 0;
+#endif
 
 namespace vox {
 
@@ -43,7 +47,6 @@ void PitchCorrector::prepare (double sampleRate, int numChannels)
     design::apply (aa2, lp);
     hop = std::max (32, static_cast<int> (std::lround (0.00267 * sr)));
     levelCoeff = design::onePole (0.010, sr);
-    blendCoeff = design::onePole (0.010, sr);
     reset();
 }
 
@@ -57,7 +60,8 @@ void PitchCorrector::reset() noexcept
     aa1.reset(); aa2.reset();
     now = 0; dnow = 0; decAcc = 0.0; decCount = 0; hopCount = 0;
     period = 0.0; levelMs = 0.0;
-    note = -1; corr = 0.0; sustain = 0.0; voicedRun = 0; blend = 0.0;
+    note = -1; corr = 0.0; sustain = 0.0; voicedRun = 0;
+    rawP = { 0.0, 0.0, 0.0 };
     last = {};
     synthPos = anaPos = 0.0;
     drift = 0.0;
@@ -162,6 +166,11 @@ void PitchCorrector::analyse() noexcept
             const double d2 = ra - 2.0 * rb + rc;
             if (std::abs (d2) > 1.0e-12) p += std::clamp (0.5 * (ra - rc) / d2, -0.5, 0.5);
         }
+        // Median of the last three readings: a one-reading octave glitch (gritty voices do that)
+        // never reaches the grains.
+        rawP[2] = rawP[1]; rawP[1] = rawP[0]; rawP[0] = p;
+        if (rawP[1] > 0.0 && rawP[2] > 0.0)
+            p = std::max (std::min (rawP[0], rawP[1]), std::min (std::max (rawP[0], rawP[1]), rawP[2]));
         period = p;
 
         const double midi = 69.0 + 12.0 * std::log2 (sr / period / 440.0);
@@ -177,6 +186,7 @@ void PitchCorrector::analyse() noexcept
     else
     {
         period = 0.0;
+        rawP = { 0.0, 0.0, 0.0 };
         corr += (0.0 - corr) * (1.0 - std::exp (-hopSec / 0.03));
         sustain += hopSec;
         if (sustain > 0.2) note = -1;   // a real gap: the next phrase picks its note afresh
@@ -218,6 +228,31 @@ PitchCorrector::Frame PitchCorrector::frameAt (double t) const noexcept
     return *after;   // older than everything we kept: the oldest reading
 }
 
+double PitchCorrector::alignMark (double prevMark, double candidate, double P) const noexcept
+{
+    // Real voices aren't perfectly periodic: put the new mark where the waveform best matches the
+    // one at the previous mark (normalised cross-correlation over one period, within +-15 % of a
+    // period), so repeated / skipped cycles join on matching shapes instead of ticking.
+    const int len = static_cast<int> (P);
+    const int reach = std::max (2, static_cast<int> (0.15 * P));
+    const auto p0 = static_cast<int64_t> (std::lround (prevMark)) - len / 2;
+    const auto c0 = static_cast<int64_t> (std::lround (candidate)) - len / 2;
+    double best = -2.0; int bestD = 0;
+    for (int d = -reach; d <= reach; ++d)
+    {
+        double xy = 0.0, xx = 0.0, yy = 0.0;
+        for (int k = 0; k < len; k += 2)
+        {
+            const double a = mono[static_cast<size_t> ((p0 + k) & mask)];
+            const double b = mono[static_cast<size_t> ((c0 + d + k) & mask)];
+            xy += a * b; xx += a * a; yy += b * b;
+        }
+        const double r = xy / std::sqrt (xx * yy + 1.0e-30);
+        if (r > best) { best = r; bestD = d; }
+    }
+    return std::round (candidate) + bestD + (candidate - std::round (candidate));
+}
+
 void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
 {
     const double uvP = kUnvoicedGrainSeconds * sr;
@@ -226,23 +261,29 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
         const Frame fr = frameAt (synthPos);
         const bool voiced = fr.period > 0.0;
         const double P = voiced ? fr.period : uvP;
-        const double ratio = voiced ? std::pow (2.0, fr.corr / 12.0) : 1.0;
+        // Corrections under 3 cents aren't worth a repeated / skipped cycle: leave the voice alone.
+        const double ratio = voiced && std::abs (fr.corr) >= 0.03 ? std::pow (2.0, fr.corr / 12.0) : 1.0;
+
+        // The analysis point is the synthesis point plus a drift that only ever changes smoothly:
+        // in a note it moves by P - P/ratio per grain (that's the pitch shift), and when it passes
+        // half a period one cycle is repeated or skipped - once, at a matching waveform point. It is
+        // never re-derived from scratch when the detected period changes (that made the read point
+        // jump around at word edges: ticks).
         if (voiced)
         {
-            // Analysis marks stay one input period apart; use the one nearest this output grain.
-            while (anaPos + 0.5 * P < synthPos) anaPos += P;
-            while (anaPos - 0.5 * P > synthPos) anaPos -= P;
-            drift = anaPos - synthPos;
+            if (drift > 0.5 * P)
+                drift = alignMark (synthPos + drift, synthPos + drift - P, P) - synthPos;
+            else if (drift < -0.5 * P)
+                drift = alignMark (synthPos + drift, synthPos + drift + P, P) - synthPos;
         }
-        else
-        {
-            // Breath / consonant: ease back in line with the output instead of snapping (a snap
-            // is a small jump in time = a tick at the end of a note).
-            drift *= 0.5;
-            if (std::abs (drift) < 0.5) drift = 0.0;
-            anaPos = synthPos + drift;
-        }
+        // In breaths / consonants the offset just holds: a constant offset joins seamlessly (any
+        // change in it misaligns two overlapping grains = a tick at the end of a note).
+        anaPos = synthPos + drift;
 
+#ifdef VOX_PITCH_DEBUG
+        if (synthPos > dbgFrom && synthPos < dbgTo)
+            std::fprintf (stderr, "grain s=%.1f a=%.1f P=%.2f ratio=%.5f voiced=%d drift=%.1f\n", synthPos, anaPos, P, ratio, voiced ? 1 : 0, drift);
+#endif
         const auto first = static_cast<int64_t> (std::ceil (synthPos - P));
         const auto lastJ = static_cast<int64_t> (std::floor (synthPos + P));
         for (int64_t j = first; j <= lastJ; ++j)
@@ -261,7 +302,10 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
             }
             wsum[o] += w;
         }
+        // Next grain: one output period later; the input moves on one full period (drift grows by
+        // P - P/ratio, the pitch change).
         synthPos += P / ratio;
+        drift += P - P / ratio;   // 0 when unvoiced (ratio 1)
     }
 }
 
@@ -318,20 +362,11 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
 
         const auto ti = static_cast<size_t> (t & mask);
         const double ws = wsum[ti];
-        // Shift only when there's something to fix: blend the grains with the untouched voice by how
-        // much correction this moment needs (0 cents = the plain voice; 10 cents or more = all grains).
-        // Re-stitching a voice that needs no change only adds fizz at word edges.
-        const double need = std::clamp (std::abs (frameAt (static_cast<double> (t)).corr) * 10.0, 0.0, 1.0);
-        blend += (need - blend) * blendCoeff;
         for (int c = 0; c < nch; ++c)
         {
             double y = 0.0;
             if (t >= 0)
-            {
-                const double dry = in[static_cast<size_t> (c)][ti];
-                const double wet = ws > 0.05 ? acc[static_cast<size_t> (c)][ti] / ws : dry;
-                y = dry + blend * (wet - dry);
-            }
+                y = ws > 0.05 ? acc[static_cast<size_t> (c)][ti] / ws : in[static_cast<size_t> (c)][ti];
             ch[c][i] = y;
         }
         for (auto& v : acc) v[ti] = 0.0;

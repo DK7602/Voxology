@@ -90,6 +90,17 @@ level RMS 30 ms, attacks 1 / 10 ms); De-Esser shelf always runs (no switching). 
 Sent the user old vs new renders of their vocal to judge by ear. Remaining: ~3 (Rap) / 10 (hard tune)
 5-ms blips per 28 s at 8-10 dB; next step if still audible: epoch (waveform-peak) aligned pitch marks.
 
+Round 2 (user: still crackles at 0:02, 0:04, 0:14, 0:24): grain logging showed the read point jumping
+erratically at word edges (re-derived from scratch whenever the period changed), drift halving at
+note->breath, and the v0.2.1 dry/wet blend (comb filter: wet drifts up to ~0.7 ms vs dry). Redesign:
+drift (analysis - synthesis offset) only changes smoothly (+= P - P/ratio per grain), one aligned cycle
+repeat / skip when |drift| > P/2 (alignMark: best-matching waveform within +-15 % P), held constant in
+breaths; corrections < 3 cents not applied; blend removed; median-of-3 period readings. Joins on the user's
+28 s vocal: 148 -> 38. NOTE: short-window band-energy "fizz" metrics are fooled by the drift (phase) and
+long windows can't see ticks: the user's ears are the judge. Sent Will_vocal_Voxology_fix2.mp3.
+If still crackly: (a) check 44.1k-specific issues, (b) grain-boundary epoch alignment (glottal pulses),
+(c) for rap, Auto-Edit should keep Pitch off unless clearly sung (raise the 15 % pitched-share rule).
+
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble
 honeycomb cell on a piano-roll grid (off-key notes glow blue; pulled into key the cell "fills" gold).
