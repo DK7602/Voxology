@@ -70,8 +70,8 @@ const MODULES = [
   { key: "cleanup", name: "CLEANUP", onId: "clOn", what: "low cut + gate: rumble and room noise out",
     cells: () => [
       knob("clLowCut", "Low Cut", "rumble below", (v) => (v <= 20.5 ? "Off" : fmtHz(v)), 20),
-      knob("clGateThr", "Gate Threshold", "opens above", fmtDb, -60),
-      knob("clGateRange", "Gate Range", "gaps turned down", (v) => (v < 0.05 ? "Off" : fmtDb(v)), 0),
+      knob("clGateThr", "Threshold", "gate opens above", fmtDb, -60),
+      knob("clGateRange", "Range", "gaps turned down", (v) => (v < 0.05 ? "Off" : fmtDb(v)), 0),
       meter("Gate", "turning down now", () => M.gate, 30, false, (v) => (v > -0.1 ? "open" : fmtDb(v))),
     ],
     stat: () => (M.gate < -0.5 ? [`gate ${fmtNum(M.gate, 0)} dB`, true] : val("clLowCut") > 20.5 || val("clGateRange") >= 0.05
@@ -157,24 +157,54 @@ function arcPath(a0, a1, r = 40) {
   return `M ${x0} ${y0} A ${r} ${r} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} ${a1 > a0 ? 1 : 0} ${x1} ${y1}`;
 }
 let gradId = 0;
-function knobSvg() {
-  const g = `kg${gradId++}`;
-  return `<svg viewBox="0 0 100 100">
-    <defs><linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8d641f"/><stop offset="0.4" stop-color="#f2d37c"/><stop offset="1" stop-color="#b8862e"/></linearGradient>
-    <radialGradient id="${g}m" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#fff"/><stop offset="0.5" stop-color="#e3eff8"/><stop offset="1" stop-color="#9cc6e6"/></radialGradient></defs>
-    <path d="${arcPath(-ARC, ARC)}" fill="none" stroke="#e6dcc6" stroke-width="7" stroke-linecap="round"/>
-    <path class="k-val" d="" fill="none" stroke="#3f86c0" stroke-width="7" stroke-linecap="round"/>
-    <circle cx="50" cy="50" r="30" fill="url(#${g}m)" stroke="url(#${g})" stroke-width="5"/>
-    <line class="k-ptr" x1="50" y1="50" x2="50" y2="27" stroke="#1d2733" stroke-width="4" stroke-linecap="round"/>
+// The knob faces are the user's artwork (assets/knob_*.webp). The art stays still (so the gold drips
+// never spin); a glowing value arc runs round the lattice ring and a pointer sits on the marble disc.
+// Geometry in image pixels: inner disc centre / radius and outer ring radius (measured from the art).
+const FACES = {
+  db: { w: 226, h: 269, cx: 103, cy: 111, R: 68, outer: 106 },
+  hz: { w: 223, h: 302, cx: 107, cy: 109, R: 65, outer: 104 },
+  blank: { w: 223, h: 287, cx: 111, cy: 109, R: 66, outer: 105 },
+};
+function faceFor(id) {
+  if (/Freq|LowCut|Tone/.test(id)) return ["hz", ""];
+  if (id === "rvDecay") return ["blank", "s"];
+  if (id === "rvPredelay") return ["blank", "ms"];
+  if (id === "cpRatio") return ["blank", ":1"];
+  if (/Gain|Thr|Target|Range|Peak|Makeup|Drive/.test(id)) return ["db", ""];
+  return ["blank", "%"];
+}
+function knobSvg(face, glyph) {
+  const f = FACES[face], g = `kg${gradId++}`, r = (f.R + f.outer) / 2;
+  const p = (a, rad) => [f.cx + rad * Math.sin((a * Math.PI) / 180), f.cy - rad * Math.cos((a * Math.PI) / 180)];
+  const arc = (a0, a1) => { const [x0, y0] = p(a0, r), [x1, y1] = p(a1, r); return `M ${x0} ${y0} A ${r} ${r} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} 1 ${x1} ${y1}`; };
+  return `<img src="assets/knob_${face}.webp" alt="" draggable="false">
+  <svg viewBox="0 0 ${f.w} ${f.h}">
+    <defs><filter id="${g}g" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="${g}t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6cf"/><stop offset="0.5" stop-color="#e2b453"/><stop offset="1" stop-color="#9a6d1f"/></linearGradient></defs>
+    <path d="${arc(-ARC, ARC)}" fill="none" stroke="rgba(20,40,70,0.22)" stroke-width="11" stroke-linecap="round"/>
+    <path class="k-val" d="" fill="none" stroke="#7cc4ff" stroke-width="8" stroke-linecap="round" filter="url(#${g}g)"/>
+    ${glyph ? `<text x="${f.cx}" y="${f.cy + 16}" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="${glyph.length > 1 ? 46 : 54}"
+      fill="rgba(235,225,195,0.22)" stroke="#5e420f" stroke-width="7" stroke-linejoin="round">${glyph}</text>
+    <text x="${f.cx}" y="${f.cy + 16}" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="${glyph.length > 1 ? 46 : 54}"
+      fill="rgba(235,225,195,0.22)" stroke="url(#${g}t)" stroke-width="3.6" stroke-linejoin="round">${glyph}</text>` : ""}
+    <g class="k-ptr"><rect x="${f.cx - 5}" y="${f.cy - f.R + 2}" width="10" height="22" rx="4" fill="#fffaf0" stroke="#8d641f" stroke-width="2.5"/></g>
   </svg>`;
 }
+const arcFor = (face, a0, a1) => {
+  const f = FACES[face], r = (f.R + f.outer) / 2;
+  const p = (a) => [f.cx + r * Math.sin((a * Math.PI) / 180), f.cy - r * Math.cos((a * Math.PI) / 180)];
+  const [x0, y0] = p(a0), [x1, y1] = p(a1);
+  return `M ${x0} ${y0} A ${r} ${r} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} 1 ${x1} ${y1}`;
+};
 
 function knob(id, label, sub, fmt, def, bipolar = false) {
   const s = P[id];
+  const [face, glyph] = faceFor(id);
+  const fc = FACES[face];
   const cell = document.createElement("div");
   cell.className = "cell";
   cell.innerHTML = `<span class="cell-label">${label}</span><span class="cell-sub">${sub}</span>
-    <div class="knob" tabindex="0" role="slider" aria-label="${label}">${knobSvg()}</div><span class="cell-value"></span>`;
+    <div class="knob" tabindex="0" role="slider" aria-label="${label}">${knobSvg(face, glyph)}</div><span class="cell-value"></span>`;
   const k = cell.querySelector(".knob"), valEl = cell.querySelector(".cell-value");
   const arc = cell.querySelector(".k-val"), ptr = cell.querySelector(".k-ptr");
   const refresh = () => {
@@ -182,8 +212,8 @@ function knob(id, label, sub, fmt, def, bipolar = false) {
     const n = Number.isFinite(raw) ? raw : 0;   // before the plug-in has sent the ranges
     const a = -ARC + 2 * ARC * clamp(n, 0, 1);
     const from = bipolar ? 0 : -ARC;
-    arc.setAttribute("d", Math.abs(a - from) < 0.5 ? "" : arcPath(Math.min(from, a), Math.max(from, a)));
-    ptr.setAttribute("transform", `rotate(${a} 50 50)`);
+    arc.setAttribute("d", Math.abs(a - from) < 0.5 ? "" : arcFor(face, Math.min(from, a), Math.max(from, a)));
+    ptr.setAttribute("transform", `rotate(${a} ${fc.cx} ${fc.cy})`);
     valEl.textContent = fmt(s.getScaledValue());
   };
   const setNorm = (n) => { s.setNormalisedValue(clamp(n, 0, 1)); refresh(); anyEdited(); };
@@ -258,7 +288,7 @@ function meter(label, sub, get, range, up, fmt, floor = 0) {
   cell.update = () => {
     const x = get();
     const frac = up === true ? (x - floor) / range : up === null ? Math.abs(x) / range : -x / range;
-    bar.style.height = `${clamp(frac, 0, 1) * 68}px`;
+    bar.style.height = `${clamp(frac, 0, 1) * (bar.parentElement.clientHeight - 6)}px`;
     v.textContent = fmt(x);
   };
   liveMeters.push(cell);
@@ -276,6 +306,7 @@ const hexes = MODULES.map((m, i) => {
   const row = Math.floor(i / 2), col = i % 2;
   const h = document.createElement("div");
   h.className = "hex";
+  h.style.setProperty("--tex", `linear-gradient(160deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 45%), url("assets/${["marble_blue", "marble_cream", "marble_blue2", "marble_cream2"][(i * 3 + row) % 4]}.webp") center / cover`);
   h.style.left = `${col * 128 + (row % 2) * 64 + 8}px`;
   h.style.top = `${row * 108 + 4}px`;
   h.innerHTML = `<div class="rim"></div><div class="face"><span class="num">${String(i + 1).padStart(2, "0")}</span>
@@ -332,7 +363,7 @@ function select(i) {
 // Spectrum + Tone EQ curve
 const canvas = $("spec"), ctx = canvas.getContext("2d");
 const plot = $("plot");
-const PW = 724, PH = 262;
+const PW = 714, PH = 204;
 canvas.width = PW * 2; canvas.height = PH * 2;
 ctx.scale(2, 2);
 const F_LO = 20, F_HI = 20000, DB_TOP = -6, DB_BOT = -84, EQ_VIEW = 15;

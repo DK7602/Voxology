@@ -29,7 +29,7 @@
     dlTime: { choices: ["1/4", "1/8", "1/8 dot", "1/4 dot", "1/16", "1/2"], value: 0 },
   };
 
-  const send = (id, obj) => setTimeout(() => window.__JUCE__.backend.emitByBackend(id, JSON.stringify(obj)), 0);
+  const send = (id, obj) => setTimeout(() => window.__JUCE__.backend && window.__JUCE__.backend.emitByBackend(id, JSON.stringify(obj)), 0);
   const setSlider = (k, v) => { sliders[k].value = v; send("__juce__slider" + k, { eventType: "valueChanged", value: v }); };
   const setToggle = (k, v) => { toggles[k] = v; send("__juce__toggle" + k, { eventType: "valueChanged", value: v }); };
   const setCombo = (k, i) => { const c = combos[k]; c.value = i / (c.choices.length - 1); send("__juce__comboBox" + k, { eventType: "valueChanged", value: c.value }); };
@@ -139,7 +139,7 @@
       inS.push(+v.toFixed(1)); outS.push(+(v + (toggles.bypass ? 0 : 3 + sliders.outGain.value)).toFixed(1));
     }
     const s = (k) => sliders[k].value;
-    window.__JUCE__.backend.emitByBackend("voxMeters", JSON.stringify({
+    if (window.__JUCE__.backend) window.__JUCE__.backend.emitByBackend("voxMeters", JSON.stringify({
       inShort: +(-24 + 2 * Math.sin(t / 3)).toFixed(1), outShort: +(-23 + 2 * Math.sin(t / 3) + s("outGain")).toFixed(1),
       inPeak: +(level + 9).toFixed(1), outPeak: +(level + 8 + s("outGain")).toFixed(1),
       gate: active("clOn") && s("clGateRange") > 0 && !sing ? -s("clGateRange") : 0,
