@@ -146,8 +146,8 @@ Step 2 BUILT (2026-10-05, user said "B Major render is great"): honeytune/HoneyT
 Doc controller: on sample access -> reads whole clip (message thread), ThreadPool job analyse + findNotes + detectKey,
 render per channel with document Settings (key Auto/0-11, scale, snap, drift, vibrato; saved in ARA archive).
 Playback renderer plays rendered audio (spin try-lock), returns false while not ready. Plain JUCE editor (sliders +
-status). CI: pluginval 10 on Honey Tune as insert (pass-through). NEXT: user test in Cubase Artist 14
-(event -> Audio > Extensions > Honey Tune), then step 3 honeycomb note editor, Capture mode for non-ARA hosts.
+status). CI: pluginval 10 on Honey Tune as insert (pass-through). USER TESTED in Cubase Artist 14: shows in Extensions,
+335 notes, detected B major 72 %, "sounds good!". Editor labels white-on-cream (fix). NEXT: step 3 honeycomb note editor, Capture mode for non-ARA hosts.
 
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble
