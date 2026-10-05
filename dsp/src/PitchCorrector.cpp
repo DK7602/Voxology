@@ -203,7 +203,7 @@ void PitchCorrector::analyse() noexcept
         const double desired = (note - midi) * std::clamp (params.amount, 0.0, 100.0) / 100.0;
         const double tau = params.speedMs / 1000.0 * (1.0 + 3.0 * std::clamp (params.humanize, 0.0, 100.0) / 100.0 * std::clamp (sustain / 0.6, 0.0, 1.0));
         corr += (desired - corr) * (tau <= 1.0e-4 ? 1.0 : 1.0 - std::exp (-hopSec / tau));
-        last = { true, midi, note, corr };
+        last = { true, midi, note, corr, 0.0, 0.0, 0.0 };
         // Tune by how clear the note is: a clean vowel gets the full correction; rasp, breath and
         // "s" / "sh" mixed into the note get less (re-pitching the noisy part chops it into a buzz at
         // the voice's pitch: the crackle). Clarity from the YIN aperiodicity and the period match.
@@ -211,7 +211,11 @@ void PitchCorrector::analyse() noexcept
                                          std::clamp ((bestR - 0.75) / 0.17, 0.0, 1.0));
         clarityS += (clarity - clarityS) * 0.5;
         last.correction = corr * clarityS;
-        pushFrame (static_cast<double> (now - 1) - 0.5 * (len + p), period, corr * clarityS);
+        last.period = period;
+        last.clarity = clarityS;
+        last.time = static_cast<double> (now - 1) - 0.5 * (len + p);
+        if (guide == nullptr)
+            pushFrame (last.time, period, corr * clarityS);
     }
     else
     {
@@ -221,9 +225,19 @@ void PitchCorrector::analyse() noexcept
         corr += (0.0 - corr) * (1.0 - std::exp (-hopSec / 0.03));
         sustain += hopSec;
         if (sustain > 0.2) note = -1;   // a real gap: the next phrase picks its note afresh
-        last = { false, 0.0, -1, corr };
-        pushFrame (static_cast<double> (now - 1) - 0.25 * sr / kMinHz, 0.0, corr);
+        last = { false, 0.0, -1, corr, 0.0, 0.0, static_cast<double> (now - 1) - 0.25 * sr / kMinHz };
+        if (guide == nullptr)
+            pushFrame (last.time, 0.0, corr);
     }
+}
+
+void PitchCorrector::guideFrame() noexcept
+{
+    // The plan knows every moment in advance: stamp a reading one max period behind the newest input.
+    const double t = static_cast<double> (now - 1) - std::ceil (sr / kMinHz);
+    double p = 0.0, sh = 0.0;
+    guide->at (t, p, sh);
+    pushFrame (t, p, sh);
 }
 
 void PitchCorrector::pushFrame (double time, double p, double c) noexcept
@@ -319,10 +333,10 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
             const double e = grainEnergy (synthPos + drift, P);
             noteEnergy += (e - noteEnergy) * 0.1;
             const bool quiet = e < 0.5 * noteEnergy;
-            const double limit = quiet ? 0.6 * P : 0.95 * P;
-            if (drift > limit)
+            const double joinAt = quiet ? 0.6 * P : 0.95 * P;
+            if (drift > joinAt)
                 drift = alignMark (synthPos + drift, synthPos + drift - P, P) - synthPos;
-            else if (drift < -limit)
+            else if (drift < -joinAt)
                 drift = alignMark (synthPos + drift, synthPos + drift + P, P) - synthPos;
         }
         // In breaths / consonants the offset just holds: a constant offset joins seamlessly (any
@@ -396,7 +410,7 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
             ++dnow;
         }
         ++now;
-        if (++hopCount >= hop) { hopCount = 0; analyse(); }
+        if (++hopCount >= hop) { hopCount = 0; analyse(); if (guide != nullptr) guideFrame(); }
 
         const int64_t t = now - 1 - latency;   // the sample leaving now
         if (neutral)

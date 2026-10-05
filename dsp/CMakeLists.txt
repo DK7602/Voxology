@@ -8,7 +8,8 @@ add_library(vox_dsp STATIC
     src/Space.cpp
     src/VocalChain.cpp
     src/AutoEdit.cpp
-    src/PitchCorrector.cpp)
+    src/PitchCorrector.cpp
+    src/HoneyTune.cpp)
 
 target_include_directories(vox_dsp PUBLIC include)
 target_compile_features(vox_dsp PUBLIC cxx_std_20)

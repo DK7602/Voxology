@@ -126,6 +126,16 @@ Steps: 1 note engine (offline note segmentation + offline shifter) -> 2 ARA + Ca
 piano-roll editor + Auto-Edit suggestions + Learn -> 4 tests + user test in Cubase Artist 14.
 Pitch live module: user accepted the remaining minimal buzz (technique limit, not a bug).
 
+Step 1 DONE (2026-10-05): dsp/src/HoneyTune.cpp (vox::honey): analyse (live detector readings + offline
+clean-up: octave slips vs +-12 readings, gaps <= 16 ms bridged, median-5), findNotes (boundaries on a 180 ms
+averaged pitch, > 0.6 semitone for 30 ms, min 50 ms), snapToKey, centsOff, render (PitchCorrector driven by a
+Guide plan: shift = smoothed note move + unsmoothed drift / vibrato detail, faded at note edges).
+PitchCorrector got Guide support + Reading.period / clarity / time. Tests test_honey.cpp (4): notes found
+within 8 cents, untouched = unchanged (< -60 dB), snap within 4 cents, drag +2 st, vibrato 76 -> 14 cents,
+drift 37 -> 0. User's vocal: 132 notes, analysis 0.34 s + render 0.36 s for 28 s. Key guess (B major,
+65 %) left 79/132 notes > 25 cents off: likely wrong key -> ask the user's song key; demo render sent
+chromatic. NEXT: step 2 (ARA: ARA_SDK releases/2.2.0 + Capture mode), separate plug-in target "Honey Tune".
+
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble
 honeycomb cell on a piano-roll grid (off-key notes glow blue; pulled into key the cell "fills" gold).

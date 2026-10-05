@@ -70,16 +70,30 @@ public:
         double sungMidi = 0.0;     // what you sing (fractional MIDI note)
         int targetMidi = -1;       // the note it's pulled to
         double correction = 0.0;   // semitones applied right now
+        double period = 0.0;       // samples (0 = unvoiced)
+        double clarity = 0.0;      // 0..1, how clear the note is
+        double time = 0.0;         // the input time (samples) this reading describes
     };
     Reading reading() const noexcept { return last; }
 
+    /** Offline (Honey Tune): a plan made from the whole clip replaces the live note decisions. For an
+        input time (samples) it gives the period (0 = unvoiced) and the shift in semitones. */
+    struct Guide
+    {
+        virtual ~Guide() = default;
+        virtual void at (double time, double& period, double& shiftSemis) const = 0;
+    };
+    void setGuide (const Guide* g) noexcept { guide = g; }
+
 private:
     void analyse() noexcept;
+    void guideFrame() noexcept;
     void synthesiseUpTo (int64_t limit) noexcept;
     double alignMark (double prevMark, double candidate, double P) const noexcept;
     double grainEnergy (double centre, double P) const noexcept;
 
     PitchParams params;
+    const Guide* guide = nullptr;
     double sr = 48000.0;
     int channels = 2;
     int latency = 1536;
