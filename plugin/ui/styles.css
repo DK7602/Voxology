@@ -246,3 +246,34 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #cells[data-cols="5"] .cell-sub { display: none; }
 #cells[data-cols="5"] .knob { height: 96px; margin-top: 4px; }
 #cells[data-cols="5"] .cell-value { margin-top: 4px; }
+
+/* Signal chain: 11 cells. */
+.hex { width: 108px; height: 124px; }
+.hex .name { font-size: 12.5px; padding: 0 8px; }
+.hex .num, .hex .stat { font-size: 11px; }
+.hex .dot { width: 12px; height: 12px; margin-top: 2px; }
+
+/* Pitch page. */
+.cell .vseg.keys { gap: 3px; margin-top: 10px; }
+.cell .vseg.keys button { height: 30px; font-size: 12px; padding: 0; }
+.cell .vseg.list { gap: 3px; margin-top: 6px; width: 112px; }
+.cell .vseg.list button { height: 22px; font-size: 11.5px; }
+.pitch-face { margin-top: 12px; width: 112px; padding: 8px 6px; border-radius: 14px; background: rgba(255, 250, 240, 0.94);
+  box-shadow: inset 0 0 0 2px var(--gold), 0 0 10px rgba(110, 185, 255, 0.8); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.pf-row { display: flex; align-items: baseline; gap: 4px; font-family: Georgia, serif; font-weight: 700; }
+.pf-sung { font-size: 20px; color: var(--ink-soft); }
+.pf-arrow { font-size: 14px; color: var(--gold-deep); }
+.pf-target { font-size: 26px; color: var(--blue-deep); }
+.pf-bar { position: relative; width: 96px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #e9a184, #f6e7c2 35%, #cfe6c6 50%, #f6e7c2 65%, #e9a184); box-shadow: inset 0 0 0 1px var(--gold); }
+.pf-zero { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--gold-deep); }
+.pf-dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 6px rgba(93, 159, 211, 0.9); transition: left 0.08s; }
+.pf-dot.idle { opacity: 0.3; }
+.pf-cents { font-size: 10.5px; color: var(--ink-soft); }
+#cells[data-page="pitch"] { padding-left: 6px; padding-right: 6px; }
+#cells[data-page="pitch"] .cell { width: 104px; }
+#cells[data-page="pitch"] .knob, #cells[data-page="pitch"] .knob img, #cells[data-page="pitch"] .knob svg { width: 104px; }
+#cells[data-page="pitch"] .knob { height: 126px; }
+#cells[data-page="pitch"] .cell:nth-child(4) { width: 168px; }
+#cells[data-page="pitch"] .cell:nth-child(5), #cells[data-page="pitch"] .cell:nth-child(6) { width: 116px; }
+#cells[data-page="pitch"] .vseg.keys { width: 160px; gap: 4px; }
+#cells[data-page="pitch"] .vseg.keys button { height: 32px; font-size: 13px; }

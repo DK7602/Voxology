@@ -8,6 +8,7 @@ void VocalChain::prepare (double sampleRate, int numChannels)
 {
     sr = sampleRate;
     chanCount = std::clamp (numChannels, 1, kMaxChannels);
+    pitch.prepare (sr, chanCount);
     cleanup.prepare (sr, chanCount);
     eq.prepare (sr, chanCount);
     deEsser.prepare (sr, chanCount);
@@ -18,7 +19,7 @@ void VocalChain::prepare (double sampleRate, int numChannels)
     delay.prepare (sr);
     reverb.prepare (sr);
     for (auto& w : work) w.assign (kChunk, 0.0);
-    for (auto& d : dryLine) d.assign (kLatency + 1, 0.0);
+    for (auto& d : dryLine) d.assign (static_cast<size_t> (latencySamples() + 1), 0.0);
     mono.assign (kChunk, 0.0);
     outGlide = design::onePole (0.020, sr);
     abGlide = design::onePole (0.020, sr);
@@ -28,6 +29,7 @@ void VocalChain::prepare (double sampleRate, int numChannels)
 
 void VocalChain::reset() noexcept
 {
+    pitch.reset();
     cleanup.reset();
     eq.reset();
     deEsser.reset();
@@ -49,6 +51,7 @@ void VocalChain::reset() noexcept
 void VocalChain::setParams (const ChainParams& p) noexcept
 {
     params = p;
+    pitch.setParams (p.pitch);
     cleanup.setParams (p.cleanup);
     eq.setParams (p.eq);
     deEsser.setParams (p.deEsser);
@@ -69,6 +72,7 @@ ChainMeters VocalChain::takeMeters() noexcept
     m.peakGrDb = comp.takePeakGrDb();
     m.levelGrDb = comp.takeLevelGrDb();
     saturation.takeEnergies (m.satResidual, m.satSignal);
+    m.pitch = pitch.reading();
     meters = {};
     return m;
 }
@@ -80,14 +84,15 @@ void VocalChain::processChunk (int nch, int len) noexcept
 
     // Keep the untouched input, delayed by the chain's latency (bypass and A of A/B).
     std::array<std::array<double, kChunk>, kMaxChannels> dry;
-    const int dlen = kLatency + 1;
+    const int lat = latencySamples();
+    const int dlen = lat + 1;
     for (int i = 0; i < len; ++i)
     {
         for (int c = 0; c < nch; ++c)
         {
             auto& line = dryLine[static_cast<size_t> (c)];
             line[static_cast<size_t> (dryPos)] = ch[static_cast<size_t> (c)][i];
-            int r = dryPos - kLatency; if (r < 0) r += dlen;
+            int r = dryPos - lat; if (r < 0) r += dlen;
             dry[static_cast<size_t> (c)][static_cast<size_t> (i)] = line[static_cast<size_t> (r)];
         }
         if (++dryPos >= dlen) dryPos = 0;
@@ -98,6 +103,7 @@ void VocalChain::processChunk (int nch, int len) noexcept
     if (! fullyA || ! params.bypass)
     {
         // Inserts (the chain keeps running while you listen to A, so B comes back without a jump).
+        pitch.process (ch.data(), nch, len);
         cleanup.process (ch.data(), nch, len);
         eq.process (ch.data(), nch, len);
         deEsser.process (ch.data(), nch, len);
@@ -153,7 +159,8 @@ std::vector<std::vector<float>> VocalChain::render (const std::vector<std::vecto
     std::array<double*, kMaxChannels> ptr {};
     for (int c = 0; c < nch; ++c) ptr[static_cast<size_t> (c)] = buf[static_cast<size_t> (c)].data();
 
-    const int total = n + kLatency;
+    const int lat = chain.latencySamples();
+    const int total = n + lat;
     for (int start = 0; start < total; start += kChunk)
     {
         const int len = std::min (kChunk, total - start);
@@ -167,7 +174,7 @@ std::vector<std::vector<float>> VocalChain::render (const std::vector<std::vecto
         for (int c = 0; c < nch; ++c)
             for (int i = 0; i < len; ++i)
             {
-                const int o = start + i - kLatency;
+                const int o = start + i - lat;
                 if (o >= 0 && o < n)
                     out[static_cast<size_t> (c)][static_cast<size_t> (o)] = static_cast<float> (buf[static_cast<size_t> (c)][static_cast<size_t> (i)]);
             }

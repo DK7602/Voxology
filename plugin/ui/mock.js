@@ -7,6 +7,7 @@
   const lin = (start, end, value, interval = 0.1) => ({ start, end, skew: 1, interval, value });
   const centre = (start, end, c, value, interval = 1) => ({ start, end, skew: Math.log(0.5) / Math.log((c - start) / (end - start)), interval, value });
   const sliders = {
+    ptAmount: lin(0, 100, 0), ptSpeed: centre(0, 400, 60, 50), ptHumanize: lin(0, 100, 0),
     clLowCut: centre(20, 400, 80, 20), clGateThr: lin(-80, -20, -60), clGateRange: lin(0, 30, 0),
     dsAmount: lin(0, 100, 0), dsSens: lin(0, 100, 50), dsFreq: centre(3000, 12000, 6000, 6000, 10),
     rdTarget: lin(-40, -6, -20), rdRange: lin(0, 12, 0),
@@ -20,10 +21,12 @@
     sliders["eqGain" + (i + 1)] = lin(-12, 12, 0);
     sliders["eqFreq" + (i + 1)] = centre(lo, hi, Math.sqrt(lo * hi), def);
   });
-  const toggles = { bypass: false, listenA: false, levelMatch: false, clOn: true, eqOn: true, dsOn: true, rdOn: true, cpOn: true, saOn: true, dbOn: true, dlOn: true, dlPing: false, rvOn: true };
+  const toggles = { bypass: false, listenA: false, levelMatch: false, ptOn: true, clOn: true, eqOn: true, dsOn: true, rdOn: true, cpOn: true, saOn: true, dbOn: true, dlOn: true, dlPing: false, rvOn: true };
   const combos = {
     aeStyle: { choices: ["Trap Lead", "Rap", "Melodic", "Ad-libs", "R&B"], value: 0 },
     aeIntensity: { choices: ["Light", "Balanced", "Strong"], value: 0.5 },
+    ptKey: { choices: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"], value: 0 },
+    ptScale: { choices: ["Chromatic", "Major", "Minor", "Harmonic Minor", "Minor Pentatonic", "Major Pentatonic"], value: 0 },
     rdSpeed: { choices: ["Slow", "Medium", "Fast"], value: 0.5 },
     saMode: { choices: ["Tape", "Tube", "Clip"], value: 0 },
     dlTime: { choices: ["1/4", "1/8", "1/8 dot", "1/4 dot", "1/16", "1/2"], value: 0 },
@@ -39,20 +42,24 @@
   const ae = { state: 0, progress: 0, undo: false, version: 0, report: "", snapshot: null };
   function aeFinish() {
     ae.snapshot = { sliders: JSON.parse(JSON.stringify(sliders)), toggles: { ...toggles }, combos: JSON.parse(JSON.stringify(combos)) };
-    const v = { clLowCut: 95, clGateThr: -40, clGateRange: 12, eqGain1: 1.3, eqGain2: -1.1, eqFreq2: 630, eqGain4: 1.4, eqGain5: -3, dsAmount: 63, dsFreq: 5400,
+    const v = { ptAmount: 100, ptSpeed: 10, ptHumanize: 20, clLowCut: 95, clGateThr: -40, clGateRange: 12, eqGain1: 1.3, eqGain2: -1.1, eqFreq2: 630, eqGain4: 1.4, eqGain5: -3, dsAmount: 63, dsFreq: 5400,
       rdTarget: -24, rdRange: 2, cpPeak: -14, cpThr: -27, cpRatio: 4, cpMakeup: 7, saDrive: 3, saMix: 50, dbAmount: 30, dbWidth: 80,
       dlFeedback: 22, dlMix: 14, dlTone: 5000, dlDuck: 60, rvDecay: 1.4, rvPredelay: 30, rvMix: 12, rvTone: 6500, rvDuck: 40, outGain: 1.5 };
     for (const [k, x] of Object.entries(v)) setSlider(k, x);
+    setCombo("ptKey", 9); setCombo("ptScale", 2);
     setCombo("saMode", 1); setCombo("rdSpeed", 1); setCombo("dlTime", 0);
     const R = (module, control, value, why) => ({ module, control, value, why });
     ae.report = JSON.stringify({
-      ok: true, style: "Trap Lead", intensity: "Balanced", time: new Date().toISOString(), kept: [false, false, false, false, false, false, false, false, false, false],
+      ok: true, style: "Trap Lead", intensity: "Balanced", time: new Date().toISOString(), kept: [false, false, false, false, false, false, false, false, false, false, false],
       summary: "Listened to 12.0 s of voice (Trap Lead, Balanced). Your vocal came in at −23.7 LUFS with peaks at −4.8 dB. The chain is set for a Trap Lead sound: upfront, bright and controlled, with a short wide space around it. Every change is explained below.",
       notes: ["NOISY RECORDING: the noise in your gaps is only 28 dB under your voice, so very soft words and breaths sit close to it.\nNEED: Optional. The gate handles most of it; listen to quiet word endings.\nSTEP: If soft words get cut off, lower the Gate threshold 3 dB at a time (Cleanup module).\nSTEP: Next take: turn off fans / AC, record closer to the mic (a fist away), keep headphones quieter so they don't leak."],
       tips: ["Compare with A / B and MATCH on: MATCH plays both at the same loudness, so you judge the tone, not the volume.",
         "Using Auto-Tune or Melodyne? Put it BEFORE Voxology in the insert list, so the tuner hears the dry voice.",
         "Several vocal tracks? Turn Delay and Reverb off here and use one shared FX send instead: it glues the stack together and saves CPU."],
       reasons: [
+        R("pitch", "Key", "A minor", "Your sung notes fit A minor best (78 % sure), so notes are pulled only to notes of that scale. If your beat is in another key, change Key / Scale in the Pitch module: the beat's key always wins."),
+        R("pitch", "Retune", "10 ms, Humanize 20 %", "For Trap Lead: a tight, modern trap tune: notes snap in, long notes keep a little life. Lower = more robotic, higher = more natural."),
+        R("pitch", "Amount", "100 %", "You sing on average 21 cents away from the nearest note (normal for a take: the tune tightens it)."),
         R("cleanup", "Low Cut", "95 Hz", "Your lowest notes sit around 130 Hz, so everything under 95 Hz is rumble, mic handling and pops, not voice. Cutting it cleans the low end for the 808 and kick."),
         R("cleanup", "Gate", "−40.0 dB, 12.0 dB down", "The gaps between your phrases have noise at −58.1 dB (room, interface hiss or headphone bleed), 32 dB under your voice. The gate turns those gaps down 12 dB, so the compressor and saturation don't bring that noise up."),
         R("eq", "Body", "+1.3 dB at 180 Hz", "Your voice is 3.0 dB thinner down low than a finished Trap Lead vocal, so a little body adds warmth and weight."),
@@ -149,6 +156,8 @@
       levelGr: active("cpOn") && s("cpRatio") > 1.01 ? +(-4 * word).toFixed(1) : 0,
       satHarm: active("saOn") && s("saDrive") > 0 ? +(-42 + s("saDrive") * 3 + 2 * word).toFixed(1) : -100,
       matchDb: -1.2, bpm: 140, sr: 48000,
+      pitchSung: sing ? +(57 + 0.25 * Math.sin(t * 3)).toFixed(2) : 0, pitchTarget: sing ? 57 : -1,
+      pitchCorr: sing && sliders.ptAmount.value > 0 ? +(-0.25 * Math.sin(t * 3) * sliders.ptAmount.value / 100).toFixed(2) : 0,
       aeState: ae.state, aeProgress: +ae.progress.toFixed(2), aeHearing: true, aeUndo: ae.undo, aeReport: ae.version,
       in: inS, out: outS,
     }));

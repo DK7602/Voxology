@@ -46,7 +46,7 @@ TEST_CASE ("Auto-Edit sets up a noisy, sibilant rap vocal", "[autoedit]")
 
     std::set<std::string> modules;
     for (const auto& reason : r.reasons) { modules.insert (reason.module); CHECK (! reason.why.empty()); }
-    for (const char* m : { "cleanup", "eq", "deess", "rider", "comp", "sat", "double", "delay", "reverb", "out" })
+    for (const char* m : { "pitch", "cleanup", "eq", "deess", "rider", "comp", "sat", "double", "delay", "reverb", "out" })
         CHECK (modules.count (m) == 1);
 
     // The processed vocal comes out at about the loudness it went in.

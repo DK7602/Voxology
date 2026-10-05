@@ -16,7 +16,7 @@ namespace VoxParams
 
     inline juce::StringArray sliderIds()
     {
-        juce::StringArray ids { "clLowCut", "clGateThr", "clGateRange" };
+        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "clLowCut", "clGateThr", "clGateRange" };
         for (int b = 0; b < vox::kEqBands; ++b) { ids.add (n ("eqGain", b)); ids.add (n ("eqFreq", b)); }
         ids.addArray ({ "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
                         "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix",
@@ -26,9 +26,9 @@ namespace VoxParams
     }
     inline juce::StringArray toggleIds()
     {
-        return { "bypass", "listenA", "levelMatch", "clOn", "eqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
+        return { "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
     }
-    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "rdSpeed", "saMode", "dlTime" }; }
+    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime" }; }
 
     inline void addTo (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
     {
@@ -56,6 +56,17 @@ namespace VoxParams
         for (auto* s : vox::kDelayNames) delays.add (s);
         choice ("aeStyle", "Auto-Edit Style", styles, 0);
         choice ("aeIntensity", "Auto-Edit Intensity", intensities, 1);
+
+        // Pitch (first in the chain). Amount 0 = off.
+        toggle ("ptOn", "Pitch On", true);
+        slider ("ptAmount", "Pitch Amount", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
+        StringArray keys, scales;
+        for (auto* k : vox::kNoteNames) keys.add (k);
+        for (auto* sc : vox::kScaleNames) scales.add (sc);
+        choice ("ptKey", "Pitch Key", keys, 0);
+        choice ("ptScale", "Pitch Scale", scales, 0);
+        slider ("ptSpeed", "Pitch Retune Speed", skewed (0.0f, 400.0f, 1.0f, 60.0f), 50.0f, "ms", msText);
+        slider ("ptHumanize", "Pitch Humanize", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
 
         toggle ("clOn", "Cleanup On", true);
         slider ("clLowCut", "Low Cut", skewed (20.0f, 400.0f, 1.0f, 80.0f), 20.0f, "Hz",
@@ -124,6 +135,12 @@ namespace VoxParams
     template <typename Set>
     void forEachValue (const vox::ChainParams& p, Set&& set)
     {
+        set ("ptOn", 1.0f);
+        set ("ptAmount", static_cast<float> (p.pitch.amount));
+        set ("ptKey", static_cast<float> (p.pitch.key));
+        set ("ptScale", static_cast<float> (p.pitch.scale));
+        set ("ptSpeed", static_cast<float> (p.pitch.speedMs));
+        set ("ptHumanize", static_cast<float> (p.pitch.humanize));
         set ("clOn", 1.0f);
         set ("clLowCut", static_cast<float> (p.cleanup.lowCutHz));
         set ("clGateThr", static_cast<float> (p.cleanup.gateThrDb));
@@ -190,6 +207,7 @@ namespace VoxParams
 
             p.bypass = on ("bypass");
             p.listenOriginal = on ("listenA");
+            p.pitch = { on ("ptOn"), d ("ptAmount"), idx ("ptKey", 11), idx ("ptScale", vox::kScales - 1), d ("ptSpeed"), d ("ptHumanize") };
             p.cleanup = { on ("clOn"), d ("clLowCut"), d ("clGateThr"), d ("clGateRange") };
             p.eq.enabled = on ("eqOn");
             for (size_t b = 0; b < static_cast<size_t> (vox::kEqBands); ++b)

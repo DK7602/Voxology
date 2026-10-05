@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Modules.h"
+#include "PitchCorrector.h"
 #include "Saturation.h"
 #include "Space.h"
 
@@ -12,6 +13,7 @@ namespace vox {
 /** Every setting of the chain (the plug-in fills this from its parameters each block). */
 struct ChainParams
 {
+    PitchParams pitch;
     CleanupParams cleanup;
     EqParams eq;
     DeEsserParams deEsser;
@@ -28,7 +30,7 @@ struct ChainParams
 };
 
 /** The modules in signal order, for the UI and the report. */
-enum class Module { cleanup = 0, eq, deEsser, rider, comp, saturation, doubler, delay, reverb, output, count };
+enum class Module { pitch = 0, cleanup, eq, deEsser, rider, comp, saturation, doubler, delay, reverb, output, count };
 inline constexpr int kModules = static_cast<int> (Module::count);
 
 /** What the meters read since the last takeMeters() call. */
@@ -39,18 +41,20 @@ struct ChainMeters
     double riderDb = 0.0;       // rider gain now
     double peakGrDb = 0.0, levelGrDb = 0.0;   // compressor stages (<= 0)
     double satResidual = 0.0, satSignal = 0.0;   // saturation energies
+    PitchCorrector::Reading pitch;                // what Pitch hears and does right now
 };
 
 /** Voxology's vocal chain:
-      Cleanup -> Tone EQ -> De-Esser -> Rider -> Compressor -> Saturation      (inserts, linked)
+      Pitch -> Cleanup -> Tone EQ -> De-Esser -> Rider -> Compressor -> Saturation      (inserts, linked)
       -> Doubler -> Delay -> Reverb (added to the vocal, stereo) -> Output gain
-    Constant latency (Saturation's oversampling). Framework-free: the plug-in, Auto-Edit and the
+    Constant latency (Pitch look-ahead + Saturation oversampling). Framework-free: the plug-in, Auto-Edit and the
     tests all run this same class. prepare() allocates; process() never does (any block size). */
 class VocalChain
 {
 public:
     static constexpr int kChunk = 256;
-    static constexpr int kLatency = Saturation::kLatency;
+    /** Pitch's look-ahead + Saturation's oversampling; constant for a given sample rate. */
+    int latencySamples() const noexcept { return pitch.latencySamples() + Saturation::kLatency; }
 
     void prepare (double sampleRate, int numChannels);
     void reset() noexcept;
@@ -87,6 +91,7 @@ private:
     ChainParams params;
     double sr = 48000.0;
     int chanCount = 2;
+    PitchCorrector pitch;
     Cleanup cleanup;
     VocalEQ eq;
     DeEsser deEsser;
@@ -97,7 +102,7 @@ private:
     EchoDelay delay;
     Reverb reverb;
     std::array<std::vector<double>, kMaxChannels> work;
-    std::array<std::vector<double>, kMaxChannels> dryLine;   // kLatency-delayed input (bypass / A)
+    std::array<std::vector<double>, kMaxChannels> dryLine;   // latency-delayed input (bypass / A)
     int dryPos = 0;
     std::vector<double> mono;
     double outGain = 1.0, outGlide = 0.0;

@@ -57,6 +57,9 @@ public:
         std::atomic<float> satResidual { 0.0f }, satSignal { 0.0f };      // energies, drained by the editor
         std::atomic<float> matchDb { 0.0f };
         std::atomic<float> bpm { 0.0f };
+        std::atomic<float> pitchSung { 0.0f };      // fractional MIDI note heard, 0 = none
+        std::atomic<int> pitchTarget { -1 };        // the note it pulls to, -1 = none
+        std::atomic<float> pitchCorr { 0.0f };      // semitones applied
     };
     Meters meters;
 

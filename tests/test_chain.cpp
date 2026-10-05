@@ -13,6 +13,7 @@ constexpr double kSr = 48000.0;
 ChainParams busy()
 {
     ChainParams p;
+    p.pitch.amount = 100; p.pitch.speedMs = 20; p.pitch.scale = 2; p.pitch.key = 9;
     p.cleanup.lowCutHz = 90; p.cleanup.gateThrDb = -50; p.cleanup.gateRangeDb = 12;
     p.eq.gainDb = { -2, -3, -1.5, 3, 4 };
     p.deEsser.amount = 60;
@@ -25,6 +26,15 @@ ChainParams busy()
     p.outputDb = -2;
     return p;
 }
+
+size_t latency()
+{
+    VocalChain c;
+    c.prepare (kSr, 2);
+    return static_cast<size_t> (c.latencySamples());
+}
+
+const size_t kLat = latency();
 
 std::vector<std::vector<double>> process (const ChainParams& p, const std::vector<float>& mono, int channels, int block)
 {
@@ -48,8 +58,8 @@ TEST_CASE ("Neutral chain = input delayed by the latency", "[chain]")
     const auto x = testsig::vocal (kSr, 1.0);
     const auto y = process (p, x, 2, 480);
     double err = 0.0;
-    for (size_t i = VocalChain::kLatency; i < x.size(); ++i)
-        err = std::max (err, std::abs (y[0][i] - x[i - VocalChain::kLatency]));
+    for (size_t i = kLat; i < x.size(); ++i)
+        err = std::max (err, std::abs (y[0][i] - x[i - kLat]));
     CHECK (err < 1.0e-9);
 }
 
@@ -60,8 +70,8 @@ TEST_CASE ("Bypass and A (original) play the delayed input", "[chain]")
     const auto x = testsig::vocal (kSr, 1.0);
     const auto y = process (p, x, 2, 333);
     double err = 0.0;
-    for (size_t i = VocalChain::kLatency; i < x.size(); ++i)
-        err = std::max ({ err, std::abs (y[0][i] - x[i - VocalChain::kLatency]), std::abs (y[1][i] - x[i - VocalChain::kLatency]) });
+    for (size_t i = kLat; i < x.size(); ++i)
+        err = std::max ({ err, std::abs (y[0][i] - x[i - kLat]), std::abs (y[1][i] - x[i - kLat]) });
     CHECK (err < 1.0e-9);
 
     p.bypass = false; p.listenOriginal = true; p.gainOriginalDb = -6.0;
@@ -69,7 +79,7 @@ TEST_CASE ("Bypass and A (original) play the delayed input", "[chain]")
     std::vector<double> z (x.begin(), x.end());
     double* ptr = z.data();
     c.process (&ptr, 1, static_cast<int> (z.size()));
-    CHECK (z[30000] == Approx (x[30000 - VocalChain::kLatency] * std::pow (10.0, -6.0 / 20.0)).margin (1e-9));
+    CHECK (z[30000] == Approx (x[30000 - kLat] * std::pow (10.0, -6.0 / 20.0)).margin (1e-9));
 }
 
 TEST_CASE ("Any block size gives the same result", "[chain]")

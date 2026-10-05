@@ -23,7 +23,7 @@ with A / B + MATCH), later blind loudness-matched shoot-outs vs Nectar 4 and oth
 Learn rule: every warning carries "Do I need to fix it?" + numbered steps; "No / Optional" shows calm
 (blue). Auto-Edit notes use "TITLE: text" + "\nNEED: ..." + "\nSTEP: ..." lines; a test enforces it.
 
-## Status: v0.1.0 (2026-10-05) - first build
+## Status: v0.1.0 (2026-10-05) - first build (v0.2.0 adds Pitch, below)
 Chain: Cleanup (low cut 24 dB/oct + gate w/ hysteresis + hold) -> Tone EQ (5 bands) -> De-Esser
 (ratio detector: sibilance band vs whole voice, so level-independent; dynamic high shelf) -> Rider
 (auto level, holds in gaps) -> Compressor (peak 6:1 fast + opto-style leveler with program-dependent
@@ -58,9 +58,27 @@ chain ~6 % of one core (48 kHz stereo). UI checked in a browser with mock.js (sc
   CI now also runs the engine tests under ASan + UBSan on Linux (~2.5 min) on every push.
 - Run 37251336431: all green (Windows build + tests + pluginval 10 + VST3 validator; sanitizers).
 
+## Pitch correction (v0.2.0, 2026-10-05): module 01, first in the chain
+dsp/src/PitchCorrector.cpp. Detection: YIN on a 12 kHz copy every ~2.7 ms (80 - 1000 Hz), period refined
+at full rate by normalised cross-correlation + parabolic interpolation; voicing = YIN aperiodicity < 0.25
+and level > -55 dBFS. Decision: nearest note of key / scale (6 scales) with 0.3-semitone hysteresis;
+correction (semitones) glides with Retune Speed (0 = hard); Humanize slows it on sustained notes (x4 at
+0.6 s). Shifter: streaming TD-PSOLA (2-period Hann grains, analysis marks one period apart, synthesis
+marks period/ratio apart, normalised by window sum) -> formants kept; unvoiced = fixed 5 ms grains.
+Each analysis is time-stamped; grains use the reading for their own moment (fixed vibrato lag).
+Latency 32 ms (1536 @ 48k) + saturation 55, constant; chain.latencySamples() reported to the host.
+Measured: lands within 0.1 cent; hard tune cuts 77 cents of vibrato to 9; slow (400 ms) keeps it all;
+G3->C4 glide becomes steps (55/58 windows on a note); no clicks; noise passes (< -40 dB error);
+block-size invariant; CPU whole chain ~5 % of a core. 7 tests (test_pitch.cpp); 27 total, ASan clean.
+Auto-Edit: key from sung notes (Krumhansl profiles; < 45 % sure -> Chromatic + KEY UNSURE note);
+off-cents reported; per-style retune (Trap Lead 10 ms / Rap 60 ms 70 % / Melodic 5 / Ad-libs 0 /
+R&B 80 ms + humanize 50); Pitch stays off when < 15 % of the vocal is pitched (rap). User can change
+Key / Scale (Pitch page: 12-key grid, scale list, live "you sing -> you get" readout with cents).
+Bug fixed on the way: grains written before the start point came back one ring-length later.
+NEXT for pitch: test on the user's real vocals; maybe formant control, MIDI note input, a note graph.
+
 ## Honest gaps vs Nectar 4 Advanced (the plan)
-1. Pitch correction (Nectar has it; trap needs it). Plan: real-time YIN pitch detection + PSOLA
-   shifter, key / scale, retune speed, humanize; Auto-Edit sets key from the vocal.
+1. Pitch correction: DONE in v0.2.0 (see above).
 2. Unmask vs the beat (Nectar's "Audio Lens" / unmasking): sidechain the beat, dip the beat's
    competing band only where the vocal sits (needs a 2nd plug-in instance on the beat or sidechain bus).
 3. Breath control, plosive (p/b pop) remover, harmony / backer voices, de-reverb / noise reduction.

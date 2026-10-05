@@ -155,7 +155,10 @@ std::vector<double> pitchTrack (const Signal& x, double sr, const std::vector<bo
         for (size_t lag = minLag + 1; lag < maxLag; ++lag)
             if (r[lag] >= 0.9 * best && r[lag] >= r[lag - 1] && r[lag] >= r[lag + 1])
             {
-                f0s.push_back (fs / static_cast<double> (lag));
+                // Parabolic interpolation: whole-sample lags at 12 kHz are up to ~20 cents apart.
+                const double a = r[lag - 1], b = r[lag], c = r[lag + 1], den = a - 2.0 * b + c;
+                const double frac = std::abs (den) > 1.0e-12 ? std::clamp (0.5 * (a - c) / den, -0.5, 0.5) : 0.0;
+                f0s.push_back (fs / (static_cast<double> (lag) + frac));
                 break;
             }
     }
@@ -452,6 +455,14 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
         a.f0Median = percentile (f0, 50.0);
         a.f0Low = percentile (f0, 10.0);
     }
+    {
+        // pitchTrack hops 20 ms over singing frames (10 ms apart): share of them with a clear pitch.
+        const double tries = std::max (1.0, static_cast<double> (voice.size()) / 2.0);
+        a.pitchedShare = std::min (100.0, 100.0 * static_cast<double> (f0.size()) / tries);
+        std::vector<double> midi;
+        for (double hz : f0) midi.push_back (69.0 + 12.0 * std::log2 (hz / 440.0));
+        a.key = detectKey (midi);
+    }
 
     const auto spec = averageSpectrum (raw, mask, f.hop);
     double total = 0.0;
@@ -515,7 +526,57 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                            "\nNEED: Yes if this is your beat or Stereo Out."
                            "\nSTEP: Move Voxology to the vocal track's inserts (or the vocal group), then run Auto-Edit again.");
 
-    // ---------------------------------------------------------------------------------------- 01 Cleanup
+    // ---------------------------------------------------------------------------------------- 01 Pitch
+    {
+        struct Tune { double speed, humanize, amount; const char* feel; };
+        static constexpr std::array<Tune, kStyles> tunes {{
+            { 10.0, 20.0, 100.0, "a tight, modern trap tune: notes snap in, long notes keep a little life" },
+            { 60.0, 30.0, 70.0, "a light touch: it keeps sung bits near the note without sounding tuned" },
+            { 5.0, 10.0, 100.0, "the hard melodic-trap sound: every note locks on" },
+            { 0.0, 0.0, 100.0, "the full robotic effect, the classic ad-lib sound" },
+            { 80.0, 50.0, 90.0, "natural R&B tuning: slides and vibrato stay, only drift is fixed" },
+        }};
+        const auto& t = tunes[static_cast<size_t> (style)];
+        auto& pt = p.pitch;
+        const auto& kg = a.key;
+        const std::string keyName = std::string (kNoteNames[static_cast<size_t> (kg.key)]) + (kg.minor ? " minor" : " major");
+        if (a.f0Median <= 0.0 || a.pitchedShare < 15.0)
+        {
+            pt.amount = 0.0;
+            keep (Module::pitch);
+            reason ("pitch", "Amount", "Off", "Auto-Edit heard almost no held notes (" + num (a.pitchedShare, 0) +
+                    " % of the vocal has a clear pitch), so this sounds like rapping, not singing. Tuning spoken words only adds artefacts, so Pitch stays off. Turn it up yourself for the robotic effect.");
+        }
+        else
+        {
+            double speed = t.speed, amount = t.amount;
+            if (intensity == 0) { speed = speed * 2.0 + 20.0; amount *= 0.8; }
+            if (intensity == 2) { speed *= 0.5; amount = 100.0; }
+            pt.amount = std::round (amount);
+            pt.speedMs = std::round (speed);
+            pt.humanize = t.humanize;
+            const bool sure = kg.confidence >= 0.45;
+            pt.key = kg.key;
+            pt.scale = sure ? (kg.minor ? 2 : 1) : 0;
+            if (sure)
+                reason ("pitch", "Key", keyName, "Your sung notes fit " + keyName + " best (" + num (100.0 * kg.confidence, 0) +
+                        " % sure), so notes are pulled only to notes of that scale. If your beat is in another key, change Key / Scale in the Pitch module: the beat's key always wins.");
+            else
+                reason ("pitch", "Key", "Chromatic", "Auto-Edit couldn't tell the key from this part (best guess " + keyName +
+                        "), so Pitch uses all 12 notes: it can't pull you to a wrong-key note. Set Key / Scale to your beat's key for a tighter tune.");
+            reason ("pitch", "Retune", std::to_string (static_cast<int> (pt.speedMs)) + " ms, Humanize " + pct (pt.humanize),
+                    std::string ("For ") + kStyleNames[static_cast<size_t> (style)] + ": " + t.feel + ". Lower = more robotic, higher = more natural.");
+            reason ("pitch", "Amount", pct (pt.amount), "You sing on average " + num (kg.offCents, 0) + " cents away from the nearest note" +
+                    (kg.offCents < 12.0 ? " (already close: the tune will be subtle)." : kg.offCents < 25.0 ? " (normal for a take: the tune tightens it)." : " (quite loose: the tune makes a big difference)."));
+            if (! sure)
+                r.notes.push_back ("KEY UNSURE: from this part Auto-Edit can't be sure of the key (best guess " + keyName + "), so Pitch is set to Chromatic."
+                                   "\nNEED: Optional. Chromatic works; the right key sounds tighter."
+                                   "\nSTEP: Find your beat's key (it's often in the beat's file name or listing, e.g. \"A min\")."
+                                   "\nSTEP: In the Pitch module, set Key and Scale to it.");
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------- 02 Cleanup
     {
         double hpf = 80.0;
         if (a.f0Low > 0.0) hpf = std::clamp (std::round (0.72 * a.f0Low / 5.0) * 5.0, 50.0, 150.0);
@@ -845,13 +906,12 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
 
     // ---------------------------------------------------------------------------------------- Suggestions
     r.suggestions.push_back ("Compare with A / B and MATCH on: MATCH plays both at the same loudness, so you judge the tone, not the volume.");
-    r.suggestions.push_back ("Using Auto-Tune or Melodyne? Put it BEFORE Voxology in the insert list, so the tuner hears the dry voice.");
     if (style == 0 || style == 2)
         r.suggestions.push_back ("Try Ad-libs style on your ad-lib track and Trap Lead on the main vocal: different roles, different chains.");
     if (p.reverb.mix > 0.0 || p.delay.mix > 0.0)
         r.suggestions.push_back ("Several vocal tracks? Turn Delay and Reverb off here and use one shared FX send instead: it glues the stack together and saves CPU.");
-    if (a.f0Median > 0.0)
-        r.suggestions.push_back ("Pitch heard: your voice centres around " + hz (a.f0Median) + ". Tuning (pitch correction) is planned for a later Voxology version.");
+    if (p.pitch.amount > 0.0)
+        r.suggestions.push_back ("Already using Auto-Tune or Melodyne? Turn Voxology's Pitch off (one tuner is enough).");
 
     r.summary = "Listened to " + num (a.voicedSeconds) + " s of voice (" + kStyleNames[static_cast<size_t> (style)] + ", " + kIntensityNames[static_cast<size_t> (intensity)] +
                 "). Your vocal came in at " + num (a.inputLufs) + " LUFS with peaks at " + db (a.peakDb) + ". The chain is set for a " + kStyleNames[static_cast<size_t> (style)] +

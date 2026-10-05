@@ -40,7 +40,7 @@ void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
     levelMatch.prepare (sampleRate);
     appliedMatchDb = 0.0;
     autoEdit.prepare (sampleRate);
-    setLatencySamples (vox::VocalChain::kLatency);
+    setLatencySamples (chain.latencySamples());
 }
 
 template <typename Sample>
@@ -104,6 +104,9 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     addTo (meters.satSignal, static_cast<float> (m.satSignal));
     meters.matchDb.store (static_cast<float> (chainParams.listenOriginal ? levelMatch.gainForADb() : levelMatch.gainForBDb()));
     meters.bpm.store (static_cast<float> (hostBpm.load()));
+    meters.pitchSung.store (m.pitch.voiced ? static_cast<float> (m.pitch.sungMidi) : 0.0f);
+    meters.pitchTarget.store (m.pitch.voiced ? m.pitch.targetMidi : -1);
+    meters.pitchCorr.store (static_cast<float> (m.pitch.correction));
 }
 
 void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)  { processAnyPrecision (buffer); }

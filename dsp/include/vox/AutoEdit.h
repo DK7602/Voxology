@@ -1,5 +1,6 @@
 #pragma once
 
+#include "PitchCorrector.h"
 #include "VocalChain.h"
 
 #include <array>
@@ -41,6 +42,8 @@ struct VocalAnalysis
     bool heardGaps = false;
     int clippedRuns = 0;
     double f0Median = 0.0, f0Low = 0.0;   // Hz; 0 = no pitch found
+    double pitchedShare = 0.0;         // % of singing frames with a clear pitch (sung vs rapped)
+    KeyGuess key;                      // from the sung notes
     double rumbleDb = -120.0;          // energy below 60 Hz vs the whole vocal (dB)
     std::vector<double> bandDb;        // third-octave balance vs the 500 Hz - 2 kHz average (dB)
     std::vector<double> bandHz;

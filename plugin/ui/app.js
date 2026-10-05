@@ -22,12 +22,12 @@ fit();
 
 // ---------------------------------------------------------------------------------------------
 // Parameters
-const SLIDERS = ["clLowCut", "clGateThr", "clGateRange", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
+const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "clLowCut", "clGateThr", "clGateRange", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
   "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth",
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b])];
-const TOGGLES = ["bypass", "listenA", "levelMatch", "clOn", "eqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
-const COMBOS = ["aeStyle", "aeIntensity", "rdSpeed", "saMode", "dlTime"];
+const TOGGLES = ["bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
+const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
 for (const id of TOGGLES) P[id] = Juce.getToggleState(id);
@@ -48,7 +48,7 @@ function scaledToNorm(state, v) {
 function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 
 // Latest meter frame.
-const M = { inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
+const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
@@ -66,7 +66,44 @@ const eqGain = (b) => val("eqGain" + (b + 1));
 const eqFreq = (b) => val("eqFreq" + (b + 1));
 const compNeutral = () => val("cpPeak") > -0.05 && val("cpRatio") < 1.005 && Math.abs(val("cpMakeup")) < 0.005;
 
+const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const SCALES = ["Chromatic", "Major", "Minor", "Harmonic Minor", "Minor Pentatonic", "Major Pentatonic"];
+const SCALES_SHORT = ["Chromatic", "Major", "Minor", "Harm. Minor", "Minor Penta", "Major Penta"];
+const noteName = (m) => `${NOTES[((Math.round(m) % 12) + 12) % 12]}${Math.floor(Math.round(m) / 12) - 1}`;
+
+/** Live pitch: the note you sing (with how far off, in cents) and the note it pulls to. */
+function pitchCell() {
+  const cell = document.createElement("div");
+  cell.className = "cell pitch-cell";
+  cell.innerHTML = `<span class="cell-label">Tune</span><span class="cell-sub">you sing \u2192 you get</span>
+    <div class="pitch-face"><div class="pf-row"><span class="pf-sung">\u2014</span><span class="pf-arrow">\u2192</span><span class="pf-target">\u2014</span></div>
+    <div class="pf-bar"><i class="pf-zero"></i><i class="pf-dot"></i></div><div class="pf-cents mono">listening</div></div>`;
+  const sung = cell.querySelector(".pf-sung"), tgt = cell.querySelector(".pf-target"), dot = cell.querySelector(".pf-dot"), c = cell.querySelector(".pf-cents");
+  cell.update = () => {
+    if (!M.pitchSung || M.pitchTarget < 0) { sung.textContent = "\u2014"; tgt.textContent = "\u2014"; c.textContent = "no note"; dot.style.left = "50%"; dot.classList.add("idle"); return; }
+    const off = (M.pitchSung - M.pitchTarget) * 100;
+    sung.textContent = noteName(M.pitchSung);
+    tgt.textContent = noteName(M.pitchTarget);
+    dot.classList.remove("idle");
+    dot.style.left = `${50 + clamp(off, -50, 50)}%`;
+    c.textContent = `${off >= 0 ? "+" : MINUS}${Math.abs(off).toFixed(0)}\u00A2 \u00B7 fix ${Math.abs(M.pitchCorr * 100).toFixed(0)}\u00A2`;
+  };
+  liveMeters.push(cell);
+  return cell;
+}
+
 const MODULES = [
+  { key: "pitch", name: "PITCH", onId: "ptOn", what: "auto-tune: pulls every note onto your key",
+    cells: () => [
+      knob("ptAmount", "Amount", "how much", fmtPct, 0),
+      knob("ptSpeed", "Retune", "low = robotic", fmtMs, 50),
+      knob("ptHumanize", "Humanize", "long notes live", fmtPct, 0),
+      grid("ptKey", "Key", "your beat's key", NOTES, 4),
+      grid("ptScale", "Scale", "allowed notes", SCALES_SHORT, 1),
+      pitchCell(),
+    ],
+    stat: () => (val("ptAmount") < 0.05 ? ["idle", false] : M.pitchTarget >= 0 ? [`\u2192 ${noteName(M.pitchTarget)}`, true]
+      : [`${NOTES[choice("ptKey")]} ${SCALES_SHORT[choice("ptScale")].split(" ")[0].toLowerCase()}`, true]) },
   { key: "cleanup", name: "CLEANUP", onId: "clOn", what: "low cut + gate: rumble and room noise out",
     cells: () => [
       knob("clLowCut", "Low Cut", "rumble below", (v) => (v <= 20.5 ? "Off" : fmtHz(v)), 20),
@@ -166,6 +203,7 @@ const FACES = {
   blank: { w: 223, h: 287, cx: 111, cy: 109, R: 66, outer: 105 },
 };
 function faceFor(id) {
+  if (id === "ptSpeed") return ["blank", "ms"];
   if (/Freq|LowCut|Tone/.test(id)) return ["hz", ""];
   if (id === "rvDecay") return ["blank", "s"];
   if (id === "rvPredelay") return ["blank", "ms"];
@@ -264,6 +302,14 @@ function seg(id, label, sub, labels, vertical = false) {
   return cell;
 }
 const vseg = (id, label, sub, labels) => seg(id, label, sub, labels, true);
+/** A grid of choice buttons with a set number of columns (Key: 4 x 3, Scale: one column). */
+function grid(id, label, sub, labels, cols) {
+  const cell = seg(id, label, sub, labels, true);
+  const box = cell.querySelector(".vseg");
+  box.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  box.classList.add(cols === 1 ? "list" : "keys");
+  return cell;
+}
 
 function toggle(id, label, sub, onText, offText) {
   const s = P[id];
@@ -303,12 +349,12 @@ const cellsByModule = MODULES.map((m) => m.cells());
 // Honeycomb chain
 const hive = $("hive");
 const hexes = MODULES.map((m, i) => {
-  const row = Math.floor(i / 2), col = i % 2;
+  const row = Math.floor(i / 2), col = i % 2;   // 11 cells in a honeycomb, two per row
   const h = document.createElement("div");
   h.className = "hex";
   h.style.setProperty("--tex", `linear-gradient(160deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 45%), url("assets/${["marble_blue", "marble_cream", "marble_blue2", "marble_cream2"][(i * 3 + row) % 4]}.webp") center / cover`);
-  h.style.left = `${col * 128 + (row % 2) * 64 + 8}px`;
-  h.style.top = `${row * 108 + 4}px`;
+  h.style.left = `${col * 110 + (row % 2) * 55 + 22}px`;
+  h.style.top = `${row * 92 + 2}px`;
   h.innerHTML = `<div class="rim"></div><div class="face"><span class="num">${String(i + 1).padStart(2, "0")}</span>
     <span class="name">${m.name}</span><span class="stat"></span>${m.onId ? '<button type="button" class="dot" aria-label="On / off"></button>' : ""}</div>`;
   h.addEventListener("click", () => select(i));
@@ -351,6 +397,7 @@ $("mod-power").addEventListener("click", () => {
 function select(i) {
   selected = i;
   cellsEl.dataset.cols = MODULES[i].key === "eq" ? "5" : "6";   // EQ: gains on top, frequencies below
+  cellsEl.dataset.page = MODULES[i].key;
   cellsEl.replaceChildren(...cellsByModule[i]);
   cellsByModule[i].forEach((c) => c.refresh && c.refresh());
   renderModuleHead();
@@ -497,6 +544,21 @@ function tip(title, text, kind, plan) {
 function list(items) { const ul = el("ul", "l-list"); items.forEach((t) => ul.append(el("li", "", t))); return ul; }
 
 const LEARN = {
+  pitch: {
+    does: "Pitch correction (auto-tune). It hears the note you sing, picks the nearest note of your key, and pulls you onto it. Your voice's tone stays the same (no chipmunk sound); breaths and s sounds are never touched. It's first in the chain, so everything after it hears the tuned voice.",
+    how: ["Key / Scale: set them to your beat's key (often in the beat's name, e.g. \"A min\"). Chromatic allows all 12 notes when you're not sure.",
+      "Retune: 0 - 10 ms gives the hard, robotic trap sound; 30 - 80 ms sounds tuned but natural; 100+ ms only fixes drift.",
+      "Humanize: lets long held notes keep their vibrato while short notes still snap in.",
+      "Amount: 100 % lands right on the note; lower keeps some of your own pitch.",
+      "Already using Auto-Tune or Melodyne? Turn this off: one tuner is enough."],
+    live: () => {
+      const t = [];
+      if (val("ptAmount") >= 0.05 && choice("ptScale") === 0) t.push(tip("CHROMATIC", "All 12 notes are allowed, so a wrong note can't be pulled into the key; it just gets cleaned up.", "calm",
+        { need: "Optional. It works; the right key sounds tighter.", steps: ["Set Key and Scale to your beat's key (Auto-Edit suggests one in its report)."] }));
+      if (val("ptAmount") >= 0.05 && M.pitchTarget >= 0 && Math.abs(M.pitchCorr) > 0.9) t.push(tip("BIG JUMP", `It's moving your voice ${Math.abs(M.pitchCorr * 100).toFixed(0)} cents right now. Big moves can sound warbly on held notes.`, "calm",
+        { need: "Only if it sounds off. Big moves usually mean the Key / Scale doesn't match the beat.", steps: ["Check the Key / Scale match your beat.", "Or raise Retune to 40 ms or more for a softer pull."] }));
+      return t;
+    } },
   cleanup: {
     does: "Two clean-up tools before anything else. Low Cut removes everything under the voice: rumble, AC hum, mic-stand bumps and the boom of p and b pops. The gate turns the gaps between your phrases down, so room noise and headphone bleed don't get louder when the compressor works.",
     how: ["Low Cut: raise it until the voice starts to thin, then back off 10 - 20 Hz. Deep male voices sit around 70 - 90 Hz, higher voices 100 - 150 Hz.",
