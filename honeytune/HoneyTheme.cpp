@@ -202,14 +202,20 @@ void Look::drawComboBox (Graphics& g, int w, int h, bool, int, int, int, int, Co
 void Look::drawButtonBackground (Graphics& g, Button& b, const Colour&, bool over, bool down)
 {
     const auto r = b.getLocalBounds().toFloat().reduced (0.5f);
+    // Joined edges (the Original | Tuned switch) are square, so the pair reads as one control.
+    const bool left = ! b.isConnectedOnLeft(), right = ! b.isConnectedOnRight();
     Path p;
-    p.addRoundedRectangle (r, 6.0f);
-    if (down || over || b.getToggleState())   // a toggled button (Original) stays gold
+    p.addRoundedRectangle (r.getX(), r.getY(), r.getWidth(), r.getHeight(), 6.0f, 6.0f, left, right, left, right);
+    const bool isSwitch = b.getRadioGroupId() != 0;
+    if (b.getToggleState() || (! isSwitch && (down || over)))   // the lit side of a switch stays gold
         fillGold (g, p, r);
     else
-        drawGlass (g, r, 6.0f, 0.82f);
+    {
+        g.setColour (Colours::white.withAlpha (over ? 0.95f : 0.82f));
+        g.fillPath (p);
+    }
     g.setColour (goldDeep.withAlpha (b.isEnabled() ? 0.9f : 0.4f));
-    g.drawRoundedRectangle (r, 6.0f, 1.2f);
+    g.strokePath (p, PathStrokeType (1.2f));
 }
 
 void Look::drawLinearSlider (Graphics& g, int x, int y, int w, int h, float pos, float, float, Slider::SliderStyle, Slider& s)

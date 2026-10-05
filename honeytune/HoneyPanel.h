@@ -40,7 +40,7 @@ private:
 
     juce::ComboBox key, scale;
     juce::Slider snap, drift, vibrato, noteDrift, noteVibrato;
-    juce::TextButton snapNote { "Snap note to key" }, resetNote { "Reset note" }, resetAll { "Reset all notes" }, fit { "Fit" }, original { "Original" };
+    juce::TextButton snapNote { "Snap note to key" }, resetNote { "Reset note" }, resetAll { "Reset all notes" }, fit { "Fit" }, original { "Original" }, tuned { "Tuned" };
     juce::Label keyLabel, scaleLabel, snapLabel, driftLabel, vibratoLabel, noteDriftLabel, noteVibratoLabel;
     juce::String status, noteInfo;
 };

@@ -54,14 +54,25 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     for (auto* c : { &key, &scale }) addAndMakeVisible (*c);
     for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
         l->setVisible (false);   // painted in gold by the panel
-    for (auto* b : { &snapNote, &resetNote, &resetAll, &fit, &original }) addAndMakeVisible (*b);
-    original.setClickingTogglesState (true);
-    original.setTooltip ("A / B: hear and see the clip as recorded (your edits are kept)");
-    original.onClick = [this]
+    for (auto* b : { &snapNote, &resetNote, &resetAll, &fit, &original, &tuned }) addAndMakeVisible (*b);
+    // A / B switch: the lit side is what you see and hear (your edits are kept either way).
+    original.setTooltip ("Hear and see the clip as recorded");
+    tuned.setTooltip ("Hear and see it with your edits");
+    for (auto* b : { &original, &tuned })
+    {
+        b->setClickingTogglesState (true);
+        b->setRadioGroupId (4711);
+    }
+    original.setConnectedEdges (Button::ConnectedOnRight);
+    tuned.setConnectedEdges (Button::ConnectedOnLeft);
+    tuned.setToggleState (true, dontSendNotification);
+    auto ab = [this]
     {
         if (model != nullptr) model->setOriginal (original.getToggleState());
         roll.repaint();
     };
+    original.onClick = ab;
+    tuned.onClick = ab;
 
     key.onChange = scale.onChange = [this] { applySettings(); };
     for (auto* s : { &snap, &drift, &vibrato }) s->onDragEnd = [this] { applySettings(); };
@@ -115,7 +126,7 @@ void HoneyPanel::setModel (honeyui::Model* m)
     model = m;
     if (model != nullptr)
     {
-        original.setToggleState (model->isOriginal(), dontSendNotification);
+        (model->isOriginal() ? original : tuned).setToggleState (true, dontSendNotification);
         const auto s = model->getSettings();
         key.setSelectedId (s.key + 1, dontSendNotification);
         scale.setSelectedId (s.scale + 1, dontSendNotification);
@@ -271,7 +282,7 @@ void HoneyPanel::paint (Graphics& g)
 
     // Logo, top right
     g.setOpacity (1.0f);
-    if (const auto img = logo(); img.isValid())
+    if (const auto img = logo(); img.isValid() && ! logoArea.isEmpty())
         g.drawImage (img, logoArea, RectanglePlacement::centred);
 
     // Time readout (bars . beats like the host, and the song time), synced to playback.
@@ -349,14 +360,17 @@ void HoneyPanel::resized()
     top.removeFromLeft (192.0f);
     top.removeFromLeft (6.0f);
     top = top.withSizeKeepingCentre (top.getWidth(), 54.0f);
-    logoArea = top.removeFromRight (120.0f);
+    // The logo only when there's room; the controls come first.
+    logoArea = getWidth() >= 1320 ? top.removeFromRight (120.0f) : Rectangle<float>();
     top.removeFromRight (6.0f);
     legendArea = top.removeFromRight (92.0f);
     cards.push_back (legendArea);
     top.removeFromRight (10.0f);
     fit.setBounds (top.removeFromRight (52.0f).withSizeKeepingCentre (52.0f, 28.0f).translated (0.0f, 8.0f).toNearestInt());
     top.removeFromRight (6.0f);
-    original.setBounds (top.removeFromRight (78.0f).withSizeKeepingCentre (78.0f, 28.0f).translated (0.0f, 8.0f).toNearestInt());
+    auto abArea = top.removeFromRight (148.0f).withSizeKeepingCentre (148.0f, 28.0f).translated (0.0f, 8.0f);
+    tuned.setBounds (abArea.removeFromRight (70.0f).toNearestInt());
+    original.setBounds (abArea.toNearestInt());
     top.removeFromRight (8.0f);
     auto column = [this, &top] (float width, Label& l, Component& c)
     {
