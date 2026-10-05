@@ -149,6 +149,17 @@ Playback renderer plays rendered audio (spin try-lock), returns false while not 
 status). CI: pluginval 10 on Honey Tune as insert (pass-through). USER TESTED in Cubase Artist 14: shows in Extensions,
 335 notes, detected B major 72 %, "sounds good!". Editor labels white-on-cream (fix). NEXT: step 3 honeycomb note editor, Capture mode for non-ARA hosts.
 
+Step 3 BUILT (2026-10-05): honeycomb editor. honeytune/HoneyView.h (JUCE-free: Settings, NoteEdit, applyEdits,
+Snapshot, Model), HoneyRoll (piano roll: hex cells, marble fill, gold rim, blue glow off-key, gold fill fixed,
+dashed ghost at sung pitch, pitch line inside; drag = whole notes, Alt = cents, dbl-click snap, Delete reset,
+arrows; wheel/shift/ctrl), HoneyPanel (top: key/scale/snap/drift/vibrato/Fit, bottom: per-note drift/vibrato,
+Snap note, Reset note, Reset all; cream LookAndFeel, sendLookAndFeelChange fixes white slider text).
+Plugin: per-source NoteEdits, coalesced re-render (whole clip per edit: ~0.4 s per 30 s per channel), ARA archive
+v2 ("HNY2": settings + per-source persistentID edits keyed by note start, 30 ms match; v1 still loads), editor
+follows host selection. Preview tool: -DVOX_HONEY_PREVIEW=ON, HoneyPreview raw sr out.png key scale snap
+(raw = /tmp/claude-0/A_mono.raw 44.1k, may be gone). NEXT: user test; later: render only changed notes,
+playhead, Capture mode, Auto-Edit/Learn in Honey Tune.
+
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble
 honeycomb cell on a piano-roll grid (off-key notes glow blue; pulled into key the cell "fills" gold).

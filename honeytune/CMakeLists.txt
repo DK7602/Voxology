@@ -21,7 +21,7 @@ juce_add_plugin(HoneyTune
     VST3_CATEGORIES             Fx "Pitch Shift"
     AU_MAIN_TYPE                kAudioUnitType_Effect)
 
-target_sources(HoneyTune PRIVATE HoneyTunePlugin.cpp)
+target_sources(HoneyTune PRIVATE HoneyTunePlugin.cpp HoneyRoll.cpp HoneyPanel.cpp)
 
 target_compile_definitions(HoneyTune PUBLIC
     JUCE_WEB_BROWSER=0
@@ -37,3 +37,12 @@ target_link_libraries(HoneyTune
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+# Developer tool (off by default): draws the editor with a real vocal into a PNG, no host needed.
+option(VOX_HONEY_PREVIEW "Build the Honey Tune editor preview tool" OFF)
+if(VOX_HONEY_PREVIEW)
+    juce_add_console_app(HoneyPreview PRODUCT_NAME "HoneyPreview")
+    target_sources(HoneyPreview PRIVATE preview/HoneyPreview.cpp HoneyRoll.cpp HoneyPanel.cpp)
+    target_compile_definitions(HoneyPreview PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    target_link_libraries(HoneyPreview PRIVATE vox_dsp juce::juce_gui_basics PUBLIC juce::juce_recommended_config_flags)
+endif()
