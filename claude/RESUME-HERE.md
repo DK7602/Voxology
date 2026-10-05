@@ -177,7 +177,10 @@ its drips end just above the gold trim, top bar 76 / bottom 78 px (more roll). B
 host shrank editor -> notes below view; resized() now keeps the centre pitch. Earlier: bottom bar also cream glass; Round 6: notes squished (fit at small size, host enlarged) -> defaultZoom ~6 s across, min 120 px/s, re-fit on
 resize until the user zooms (userZoomed; Fit resets), cells min 12 px wide, + / - keys zoom. Playhead: renderer stores
 playPosition/playStamp per source (audio thread atomics), editor timer 30 Hz -> roll.setPlayhead, view pages along.
-Chrome blocks the unsigned zip as dangerous: user must Keep (code signing later). drips de-haloed and drawn BEFORE the frame with tops tucked under it.
+Round 7: black note text; RED glow = will SOUND off-key (NoteView.off from target; fixed = wasOff && !off; dragged
+notes judged where they land); Original A/B button (controller playOriginal -> SourceState.playOriginal, renderer
+plays `recorded` copy; also plays the recording instead of silence while analysing); vertical fit centres on the
+duration-weighted median pitch. Chrome blocks the unsigned zip as dangerous: user must Keep (code signing later). drips de-haloed and drawn BEFORE the frame with tops tucked under it.
 
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble

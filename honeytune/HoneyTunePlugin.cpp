@@ -51,12 +51,15 @@ namespace
         std::atomic<bool> queued { false };
 
         SpinLock lock;
-        std::shared_ptr<const std::vector<std::vector<float>>> rendered;
+        std::shared_ptr<const std::vector<std::vector<float>>> rendered, recorded;
+        std::atomic<bool> playOriginal { false };   // A / B
 
-        std::shared_ptr<const std::vector<std::vector<float>>> getRendered()
+        /** What to play: the tuned clip, or the recording (Original, or while it's still being tuned). */
+        std::shared_ptr<const std::vector<std::vector<float>>> getPlayback()
         {
             const SpinLock::ScopedTryLockType sl (lock);
-            return sl.isLocked() ? rendered : nullptr;
+            if (! sl.isLocked()) return nullptr;
+            return (playOriginal || rendered == nullptr) ? recorded : rendered;
         }
 
         /** Hand edits re-attached to the notes by start time (within 30 ms). Call with dataLock held. */
@@ -137,7 +140,7 @@ public:
             auto* source = static_cast<HoneyAudioSource*> (region->getAudioModification()->getAudioSource());
             source->state->playPosition = static_cast<double> (renderRange.getStart() + offset);   // for the editor's playhead
             source->state->playStamp = Time::getMillisecondCounter();
-            auto rendered = source->state->getRendered();
+            auto rendered = source->state->getPlayback();
             if (rendered == nullptr || rendered->empty() || std::abs (source->getSampleRate() - sampleRate) > 0.5)
             {
                 ok = false;   // not ready (or a sample-rate mismatch): the host plays the clip as it is
@@ -224,12 +227,25 @@ public:
         requestRender (st);
     }
 
+    /** A / B for the whole document: play the recordings as they were (edits kept). */
+    void setOriginal (bool o)
+    {
+        playOriginal = o;
+        for (auto* src : sources())
+        {
+            src->state->playOriginal = o;
+            finished (src->state);   // tells the host the audio changed
+        }
+    }
+    bool isOriginal() const { return playOriginal; }
+
     ChangeBroadcaster changes;   // a clip finished listening / rendering (the editor listens)
 
 protected:
     ARAAudioSource* doCreateAudioSource (ARADocument* document, ARA::ARAAudioSourceHostRef hostRef) noexcept override
     {
         auto* src = new HoneyAudioSource (document, hostRef);
+        src->state->playOriginal = playOriginal.load();
         src->addListener (this);
         return src;
     }
@@ -364,6 +380,11 @@ private:
         {
             state->sampleRate = sr;
             state->original = std::move (chans);
+            {
+                auto copy = std::make_shared<const std::vector<std::vector<float>>> (state->original);
+                const SpinLock::ScopedLockType sl (state->lock);
+                state->recorded = std::move (copy);
+            }
             std::vector<float> mono (state->original.front().size(), 0.0f);
             for (const auto& ch : state->original)
                 for (size_t i = 0; i < mono.size(); ++i) mono[i] += ch[i] / static_cast<float> (state->original.size());
@@ -450,6 +471,7 @@ private:
     std::shared_ptr<std::atomic<bool>> controllerAlive = std::make_shared<std::atomic<bool>> (true);
     mutable CriticalSection settingsLock;
     Settings settings;
+    std::atomic<bool> playOriginal { false };
     ThreadPool pool { 1 };
 };
 
@@ -550,6 +572,8 @@ private:
     void setSettings (const Settings& s) override { if (dc != nullptr) dc->setSettings (s); }
     void setEdit (int i, const NoteEdit& e) override { if (dc != nullptr && state != nullptr) dc->setEdit (state, i, e); }
     void resetAllEdits() override { if (dc != nullptr && state != nullptr) dc->resetAllEdits (state); }
+    void setOriginal (bool o) override { if (dc != nullptr) dc->setOriginal (o); }
+    bool isOriginal() override { return dc != nullptr && dc->isOriginal(); }
 
     void onNewSelection (const ARAViewSelection& sel) override
     {

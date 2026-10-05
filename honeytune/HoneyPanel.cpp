@@ -54,7 +54,14 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     for (auto* c : { &key, &scale }) addAndMakeVisible (*c);
     for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
         l->setVisible (false);   // painted in gold by the panel
-    for (auto* b : { &snapNote, &resetNote, &resetAll, &fit }) addAndMakeVisible (*b);
+    for (auto* b : { &snapNote, &resetNote, &resetAll, &fit, &original }) addAndMakeVisible (*b);
+    original.setClickingTogglesState (true);
+    original.setTooltip ("A / B: hear and see the clip as recorded (your edits are kept)");
+    original.onClick = [this]
+    {
+        if (model != nullptr) model->setOriginal (original.getToggleState());
+        roll.repaint();
+    };
 
     key.onChange = scale.onChange = [this] { applySettings(); };
     for (auto* s : { &snap, &drift, &vibrato }) s->onDragEnd = [this] { applySettings(); };
@@ -102,6 +109,7 @@ void HoneyPanel::setModel (honeyui::Model* m)
     model = m;
     if (model != nullptr)
     {
+        original.setToggleState (model->isOriginal(), dontSendNotification);
         const auto s = model->getSettings();
         key.setSelectedId (s.key + 1, dontSendNotification);
         scale.setSelectedId (s.scale + 1, dontSendNotification);
@@ -117,10 +125,11 @@ void HoneyPanel::refresh()
 {
     roll.refresh();
     const auto& s = roll.getSnapshot();
-    int off = 0, fixed = 0, edited = 0;
+    int sungOff = 0, off = 0, fixed = 0, edited = 0;
     for (const auto& n : s.notes)
     {
-        off += n.wasOff ? 1 : 0;
+        sungOff += n.wasOff ? 1 : 0;
+        off += n.off ? 1 : 0;
         fixed += n.fixed ? 1 : 0;
         edited += n.edit.isDefault() ? 0 : 1;
     }
@@ -128,8 +137,8 @@ void HoneyPanel::refresh()
     {
         case 2:
             status = String (s.notes.size()) + " notes  |  key " + vox::kNoteNames[static_cast<size_t> (s.key)] + " "
-                   + vox::kScaleNames[static_cast<size_t> (s.scale)] + "  |  " + String (off) + " off-key, " + String (fixed)
-                   + " fixed  |  " + String (edited) + " changed by hand  |  heard " + vox::kNoteNames[static_cast<size_t> (s.guess.key)]
+                   + vox::kScaleNames[static_cast<size_t> (s.scale)] + "  |  sung off-key " + String (sungOff) + ", fixed " + String (fixed)
+                   + ", still off-key " + String (off) + "  |  " + String (edited) + " changed by hand  |  heard " + vox::kNoteNames[static_cast<size_t> (s.guess.key)]
                    + (s.guess.minor ? " minor" : " major") + " (" + String (roundToInt (s.guess.confidence * 100)) + " % sure)";
             break;
         case 1: status = "Listening to the clip..."; break;
@@ -173,7 +182,7 @@ void HoneyPanel::updateNoteControls()
     const double sung = n.note.pitch, now = n.note.target;
     noteInfo = "Note " + String (i + 1) + ": sung " + noteName (sung) + " " + cents (sung - std::round (sung))
              + "  ->  plays " + noteName (now) + (std::abs (now - std::round (now)) > 0.005 ? " " + cents (now - std::round (now)) : String())
-             + (n.wasOff ? (n.fixed ? "  (was off-key, fixed)" : "  (off-key)") : "  (in key)")
+             + (n.off ? "  (off-key)" : n.wasOff ? "  (was off-key, fixed)" : "  (in key)")
              + (n.edit.isDefault() ? "" : "  - changed by hand");
     repaint();
 }
@@ -234,7 +243,7 @@ void HoneyPanel::paint (Graphics& g)
             auto sw = row.removeFromLeft (24.0f).withSizeKeepingCentre (20.0f, 10.0f);
             Path p;
             p.addRoundedRectangle (sw, 3.0f);
-            if (k == 1) { g.setColour (glow.withAlpha (0.7f)); g.strokePath (p, PathStrokeType (4.0f)); }
+            if (k == 1) { g.setColour (Colour (0xffe0242c).withAlpha (0.75f)); g.strokePath (p, PathStrokeType (4.0f)); }
             if (k == 2) fillGold (g, p, sw); else fillMarble (g, p, 5, 0.3f);
             g.setColour (goldDeep);
             g.strokePath (p, PathStrokeType (1.2f));
@@ -317,6 +326,8 @@ void HoneyPanel::resized()
     cards.push_back (legendArea);
     top.removeFromRight (10.0f);
     fit.setBounds (top.removeFromRight (52.0f).withSizeKeepingCentre (52.0f, 28.0f).translated (0.0f, 8.0f).toNearestInt());
+    top.removeFromRight (6.0f);
+    original.setBounds (top.removeFromRight (78.0f).withSizeKeepingCentre (78.0f, 28.0f).translated (0.0f, 8.0f).toNearestInt());
     top.removeFromRight (8.0f);
     auto column = [this, &top] (float width, Label& l, Component& c)
     {

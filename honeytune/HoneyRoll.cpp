@@ -81,7 +81,17 @@ void HoneyRoll::fitAll()
     lo -= 2.0; hi += 2.0;
     rowHeight = jlimit (16.0, 30.0, grid.getHeight() / (hi - lo + 1.0));
     const double rows = grid.getHeight() / rowHeight;
-    topMidi = jlimit (kLowestMidi + rows, kHighestMidi, (hi + lo) / 2.0 + rows / 2.0);
+    // Centre on where most of the singing is (each note weighted by its length).
+    double centre = (hi + lo) / 2.0;
+    {
+        std::vector<std::pair<double, double>> w;
+        double total = 0.0;
+        for (const auto& n : snap.notes) { w.push_back ({ n.note.target, n.note.end - n.note.start }); total += n.note.end - n.note.start; }
+        std::sort (w.begin(), w.end());
+        double acc = 0.0;
+        for (const auto& [p, d] : w) { acc += d; if (acc >= total / 2.0) { centre = p; break; } }
+    }
+    topMidi = jlimit (kLowestMidi + rows, kHighestMidi, centre + rows / 2.0);
     updateScrollBars();
     repaint();
 }
@@ -329,10 +339,13 @@ void HoneyRoll::drawCell (Graphics& g, int index)
 {
     const auto& v = snap.notes[static_cast<size_t> (index)];
     const bool isSel = index == selected;
-    const double target = (dragging && isSel) ? dragTarget : v.note.target;
-    const bool moved = std::abs (target - v.note.pitch) > 0.04;
-    const bool off = v.wasOff && ! v.fixed && ! (dragging && isSel);
-    const bool filled = v.fixed || (dragging && isSel && v.wasOff);
+    const bool original = model != nullptr && model->isOriginal();
+    // Original (A / B): every note where it was sung, judged as sung.
+    const double target = original ? v.note.pitch : (dragging && isSel) ? dragTarget : v.note.target;
+    const bool moved = ! original && std::abs (target - v.note.pitch) > 0.04;
+    const bool off = original ? v.wasOff
+                              : std::abs (target - honeyui::keyNote (target, snap.key, snap.scale)) > 0.25;   // where it lands
+    const bool filled = ! original && v.wasOff && ! off;   // was off-key, now on a note of the key
 
     // Where it was sung (dashed ghost) when it has moved.
     if (moved)
@@ -348,9 +361,9 @@ void HoneyRoll::drawCell (Graphics& g, int index)
     const auto cell = cellPath (index, target);
     const auto b = cell.getBounds();
 
-    // A glow behind every note, like the knobs: blue when off-key, cream when in key (or fixed).
-    const Colour glowOuter = off ? Colour (0xff1e90ff) : Colour (0xfffff0c8);
-    const Colour glowInner = off ? Colour (0xff8fdcff) : Colour (0xfffffbee);
+    // A glow behind every note, like the knobs: red when it will sound off-key, cream when in key.
+    const Colour glowOuter = off ? Colour (0xffe0242c) : Colour (0xfffff0c8);   // red = off-key
+    const Colour glowInner = off ? Colour (0xffff8a80) : Colour (0xfffffbee);
     for (int k = 0; k < 2; ++k)
         DropShadow (glowOuter, 16, {}).drawForPath (g, cell);
     DropShadow (glowInner, 6, {}).drawForPath (g, cell);
@@ -424,7 +437,7 @@ void HoneyRoll::drawCell (Graphics& g, int index)
     // Note name when there's room.
     if (b.getWidth() > 34.0f && rowHeight >= 14.0)
     {
-        g.setColour (filled ? ink : Colours::white);
+        g.setColour (Colours::black);
         g.setFont (FontOptions (std::min (12.0f, static_cast<float> (rowHeight) * 0.62f), Font::bold));
         g.drawText (noteName (target), b.reduced (b.getHeight() * 0.45f, 0.0f), Justification::centredLeft, false);
     }

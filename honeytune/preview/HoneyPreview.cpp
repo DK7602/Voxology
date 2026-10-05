@@ -27,6 +27,9 @@ struct MemoryModel final : honeyui::Model
     void setSettings (const honeyui::Settings& s) override { settings = s; }
     void setEdit (int i, const honeyui::NoteEdit& e) override { edits[static_cast<size_t> (i)] = e; }
     void resetAllEdits() override { edits.assign (notes.size(), {}); }
+    bool orig = false;
+    void setOriginal (bool o) override { orig = o; }
+    bool isOriginal() override { return orig; }
 };
 
 int main (int argc, char** argv)

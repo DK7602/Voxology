@@ -70,7 +70,8 @@ struct NoteView
     vox::honey::Note note;     // target / drift / vibrato as they will sound
     NoteEdit edit;
     bool wasOff = false;       // sung more than 25 cents from the key's nearest note
-    bool fixed = false;        // ... and now it lands on one (or you placed it yourself)
+    bool off = false;          // where it will SOUND is more than 25 cents from the key's nearest note
+    bool fixed = false;        // was off-key, now lands on a note of the key
 };
 
 /** One clip, ready to draw. */
@@ -101,7 +102,8 @@ inline Snapshot makeSnapshot (std::shared_ptr<const vox::honey::Track> track, co
         v.note = sounding[i];
         v.edit = i < edits.size() ? edits[i] : NoteEdit {};
         v.wasOff = std::abs (notes[i].pitch - keyNote (notes[i].pitch, snap.key, snap.scale)) > 0.25;
-        v.fixed = v.wasOff && (v.edit.moved || std::abs (v.note.target - keyNote (v.note.target, snap.key, snap.scale)) <= 0.25);
+        v.off = std::abs (v.note.target - keyNote (v.note.target, snap.key, snap.scale)) > 0.25;
+        v.fixed = v.wasOff && ! v.off;
         snap.notes.push_back (v);
     }
     return snap;
@@ -116,6 +118,9 @@ struct Model
     virtual void setSettings (const Settings&) = 0;
     virtual void setEdit (int noteIndex, const NoteEdit& edit) = 0;
     virtual void resetAllEdits() = 0;
+    /** A / B: hear (and see) the clip as it was recorded, edits kept but bypassed. */
+    virtual void setOriginal (bool) = 0;
+    virtual bool isOriginal() = 0;
 };
 
 } // namespace honeyui

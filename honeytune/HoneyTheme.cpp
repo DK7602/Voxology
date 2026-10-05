@@ -204,7 +204,7 @@ void Look::drawButtonBackground (Graphics& g, Button& b, const Colour&, bool ove
     const auto r = b.getLocalBounds().toFloat().reduced (0.5f);
     Path p;
     p.addRoundedRectangle (r, 6.0f);
-    if (down || over)
+    if (down || over || b.getToggleState())   // a toggled button (Original) stays gold
         fillGold (g, p, r);
     else
         drawGlass (g, r, 6.0f, 0.82f);
