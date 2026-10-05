@@ -18,7 +18,7 @@ juce_add_plugin(HoneyTune
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD     FALSE
     IS_ARA_EFFECT               TRUE
-    VST3_CATEGORIES             Fx Pitch Shift
+    VST3_CATEGORIES             Fx "Pitch Shift"
     AU_MAIN_TYPE                kAudioUnitType_Effect)
 
 target_sources(HoneyTune PRIVATE HoneyTunePlugin.cpp)
