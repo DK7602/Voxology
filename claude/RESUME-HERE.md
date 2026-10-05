@@ -116,6 +116,16 @@ rasp / breath less), 4-point cubic interpolation, join timing for quieter moment
 and 20 ms retune. Next if needed: two-band tuning (shift < ~4 kHz only, drift-aligned high band with
 crossfaded joins), or accept for live tuning and do the clean version in Honey Tune (offline).
 
+## Honey Tune build plan (started 2026-10-05; user: Cubase ARTIST 14 = ARA OK; wants all big DAWs)
+Separate plug-in target "Honey Tune" (like Melodyne): ARA extension on the clip; Voxology stays the insert
+chain; shared engine. ARA SDK: github.com/Celemony/ARA_SDK tag releases/2.2.0 (Apache 2.0; JUCE 8 supports
+it: juce_set_ara_sdk_path + IS_ARA_EFFECT; JUCE example examples/Plugins/ARAPluginDemo.h). Hosts: ARA =
+Cubase Artist/Pro, Nuendo, Studio One, Logic, Reaper, Cakewalk/Sonar; Capture mode = FL Studio, Ableton,
+others; Pro Tools = AAX + Avid PACE signing (separate signup, last).
+Steps: 1 note engine (offline note segmentation + offline shifter) -> 2 ARA + Capture plug-in -> 3 honeycomb
+piano-roll editor + Auto-Edit suggestions + Learn -> 4 tests + user test in Cubase Artist 14.
+Pitch live module: user accepted the remaining minimal buzz (technique limit, not a bug).
+
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble
 honeycomb cell on a piano-roll grid (off-key notes glow blue; pulled into key the cell "fills" gold).
