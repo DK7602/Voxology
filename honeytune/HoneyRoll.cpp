@@ -483,9 +483,22 @@ void HoneyRoll::drawCell (Graphics& g, int index)
     // Note name when there's room.
     if (b.getWidth() > 34.0f && rowHeight >= 14.0)
     {
-        g.setColour (Colours::black);
         g.setFont (FontOptions (std::min (12.0f, static_cast<float> (rowHeight) * 0.62f), Font::bold));
-        g.drawText (noteName (target), b.reduced (b.getHeight() * 0.45f, 0.0f), Justification::centredLeft, false);
+        const auto textArea = b.reduced (b.getHeight() * 0.45f, 0.0f);
+        if (filled)
+        {
+            g.setColour (Colours::black);   // black on the gold (fixed) notes
+            g.drawText (noteName (target), textArea, Justification::centredLeft, false);
+        }
+        else
+        {
+            // Bright gold on the blue notes, with a thin dark edge so it reads over the white pitch line.
+            g.setColour (Colour (0xff0d1c2e).withAlpha (0.85f));
+            for (auto [dx, dy] : { std::pair { -1.0f, 0.0f }, { 1.0f, 0.0f }, { 0.0f, -1.0f }, { 0.0f, 1.0f }, { 1.0f, 1.0f } })
+                g.drawText (noteName (target), textArea.translated (dx, dy), Justification::centredLeft, false);
+            g.setColour (Colour (0xffffd56a));
+            g.drawText (noteName (target), textArea, Justification::centredLeft, false);
+        }
     }
 }
 
