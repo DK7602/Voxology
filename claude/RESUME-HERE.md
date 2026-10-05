@@ -136,6 +136,11 @@ drift 37 -> 0. User's vocal: 132 notes, analysis 0.34 s + render 0.36 s for 28 s
 65 %) left 79/132 notes > 25 cents off: likely wrong key -> ask the user's song key; demo render sent
 chromatic. NEXT: step 2 (ARA: ARA_SDK releases/2.2.0 + Capture mode), separate plug-in target "Honey Tune".
 
+User's test song (Will_BDay_2024) is in B MAJOR (their Key Compass plug-in, 98 %). Voxology Auto-Edit
+guessed B major (Rap run, 65 %) / B minor (Melodic run, unsure -> Chromatic). Sent a B major Honey Tune render.
+Idea for later: ARA hosts can pass the song key to the plug-in (ARA content: key signatures) -> Honey Tune /
+Pitch could use the DAW's key; Key Compass is the user's own earlier plug-in (separate project).
+
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble
 honeycomb cell on a piano-roll grid (off-key notes glow blue; pulled into key the cell "fills" gold).
