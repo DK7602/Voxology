@@ -129,3 +129,36 @@ TEST_CASE ("Compressor gain computers and steady-state reduction", "[modules][co
     // Sine peak -12 dBFS, 12 dB over at 4:1 -> 9 dB down.
     CHECK (rmsDb (y, 72000, 96000) - (-15.05) == Approx (-9.0).margin (0.3));
 }
+
+TEST_CASE ("De-Esser: no click when an s starts (the cut must start from the current amount)", "[modules][deess]")
+{
+    // A vowel with "s" bursts: the jump in the output at each burst onset must not be bigger
+    // than the input's own (a stale deep-cut filter used to switch in for a few samples: a click).
+    std::vector<float> x (static_cast<size_t> (kSr * 2.0));
+    std::mt19937 rng (5);
+    std::normal_distribution<double> w (0.0, 1.0);
+    Biquad hp; design::apply (hp, design::butterworth (true, 6000.0, kSr));
+    for (size_t i = 0; i < x.size(); ++i)
+    {
+        const double t = static_cast<double> (i) / kSr;
+        const bool s = std::fmod (t, 0.25) < 0.06;
+        x[i] = static_cast<float> (0.2 * std::sin (2 * std::numbers::pi * 220.0 * t) + (s ? 0.25 * hp.process (w (rng)) : hp.process (0.0)));
+    }
+    DeEsserParams p; p.amount = 100.0; p.sensitivity = 70.0; p.freqHz = 6000.0;
+    for (int block : { 64, 512 })
+    {
+        DeEsser d;
+        const auto y = run (d, p, x, block);
+        // Compare the high-passed signals: any switch-in click shows up as a spike above 12 kHz.
+        Biquad a, b; const auto c = design::butterworth (true, 12000.0, kSr); design::apply (a, c); design::apply (b, c);
+        Biquad a2, b2; design::apply (a2, c); design::apply (b2, c);
+        double peakIn = 0, peakOut = 0;
+        for (size_t i = 0; i < x.size(); ++i)
+        {
+            peakIn = std::max (peakIn, std::abs (b.process (a.process (x[i]))));
+            peakOut = std::max (peakOut, std::abs (b2.process (a2.process (y[i]))));
+        }
+        INFO ("block " << block << " peak above 12k in " << peakIn << " out " << peakOut);
+        CHECK (peakOut <= peakIn * 1.05);
+    }
+}

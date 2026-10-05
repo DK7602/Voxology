@@ -77,6 +77,19 @@ Key / Scale (Pitch page: 12-key grid, scale list, live "you sing -> you get" rea
 Bug fixed on the way: grains written before the start point came back one ring-length later.
 NEXT for pitch: test on the user's real vocals; maybe formant control, MIDI note input, a note graph.
 
+## Crackle fix (v0.2.1, 2026-10-05) - from the user's first real test (Will_BDay_2024 vocal, Rap)
+User heard a slight crackle on the soloed Voxology vocal (not on A / off). Found with the user's vocal-only
+exports (A dry, B Voxology) + leave-one-out renders, measuring >9 kHz energy rising more than 1-4 kHz per
+5 ms window: Pitch was the source (re-stitching the voice at word edges / note-breath flicker, even when the
+correction was ~0). Fixes: (1) blend grains with the untouched voice by how much correction is needed
+(0 cents = dry, >= 10 cents = all grains); (2) voicing needs 2 readings in a row to switch; (3) analysis
+offset eases back in breaths instead of snapping. Rap: worst blip 13.5 -> 9.8 dB (floor without pitch 4.6).
+Also (not the cause, cleaner anyway): compressor detectors no longer ride each cycle (peak env held 15 ms,
+level RMS 30 ms, attacks 1 / 10 ms); De-Esser shelf always runs (no switching). The user's vocal peaks +4 dBFS
+(562 samples over 0 dBFS in the dry export): fine in float, but suggest clip gain -6 dB in Cubase.
+Sent the user old vs new renders of their vocal to judge by ear. Remaining: ~3 (Rap) / 10 (hard tune)
+5-ms blips per 28 s at 8-10 dB; next step if still audible: epoch (waveform-peak) aligned pitch marks.
+
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble
 honeycomb cell on a piano-roll grid (off-key notes glow blue; pulled into key the cell "fills" gold).

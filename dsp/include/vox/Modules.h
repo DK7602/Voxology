@@ -191,8 +191,8 @@ private:
 
 // ------------------------------------------------------------------------------------------------
 /** Compressor, two stages like a classic vocal chain:
-      Peak   fast (0.5 ms attack, 60 ms release, 6:1) catches the sudden loud syllables only
-      Level  smooth, opto-style (8 ms attack, release 60 - 600 ms: longer the longer it's been
+      Peak   fast (1 ms attack, 60 ms release, 6:1, peak detector held 15 ms) catches loud syllables only
+      Level  smooth, opto-style (30 ms RMS, 10 ms attack, release 60 - 600 ms: longer the longer it's been
              compressing) evens out the performance; Threshold + Ratio
     then Makeup gain and Mix (parallel compression: 100 % = fully compressed). The detector
     ignores the lows (80 Hz high-pass) so plosives and room rumble don't pump the vocal. */
@@ -232,7 +232,7 @@ private:
     double sr = 48000.0;
     int channels = 2;
     Biquad scHp;
-    double gr1 = 0.0, gr2 = 0.0, ms2 = 0.0, sustained = 0.0;
+    double gr1 = 0.0, gr2 = 0.0, ms2 = 0.0, sustained = 0.0, pkEnv = 0.0, pkRel = 0.0;
     double a1 = 0.0, r1 = 0.0, a2 = 0.0, msC = 0.0, susC = 0.0, makeup = 1.0, mixGlide = 1.0, glide = 0.0;
     double minPeak = 0.0, minLevel = 0.0;
 };

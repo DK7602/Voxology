@@ -104,6 +104,8 @@ private:
     int note = -1;
     double corr = 0.0;                 // semitones, smoothed
     double sustain = 0.0;              // seconds on the current note
+    int voicedRun = 0;                 // + consecutive voiced readings, - consecutive unvoiced
+    double blend = 0.0, blendCoeff = 0.0;   // grains vs untouched voice (by how much needs fixing)
     Reading last;
 
     // Every analysis, stamped with the input time it describes, so each grain uses the reading for
@@ -118,6 +120,7 @@ private:
     // Synthesis.
     double synthPos = 0.0;             // next output grain centre (input time)
     double anaPos = 0.0;               // analysis mark (input time)
+    double drift = 0.0;                // anaPos - synthPos, eased back to 0 in breaths
     double gPeriod = 0.0, gRatio = 1.0;
     bool wasNeutral = true;
 };

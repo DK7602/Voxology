@@ -43,6 +43,7 @@ void PitchCorrector::prepare (double sampleRate, int numChannels)
     design::apply (aa2, lp);
     hop = std::max (32, static_cast<int> (std::lround (0.00267 * sr)));
     levelCoeff = design::onePole (0.010, sr);
+    blendCoeff = design::onePole (0.010, sr);
     reset();
 }
 
@@ -56,9 +57,10 @@ void PitchCorrector::reset() noexcept
     aa1.reset(); aa2.reset();
     now = 0; dnow = 0; decAcc = 0.0; decCount = 0; hopCount = 0;
     period = 0.0; levelMs = 0.0;
-    note = -1; corr = 0.0; sustain = 0.0;
+    note = -1; corr = 0.0; sustain = 0.0; voicedRun = 0; blend = 0.0;
     last = {};
     synthPos = anaPos = 0.0;
+    drift = 0.0;
     frameCount = 0;
     wasNeutral = true;
 }
@@ -119,7 +121,11 @@ void PitchCorrector::analyse() noexcept
     }
     const double aper = cmnd[pick];
     const double levelDb = 10.0 * std::log10 (levelMs + 1.0e-24) + 3.0103;
-    const bool voiced = pick > 1 && pick + 1 <= tauMax && aper < kVoicedAperiodicity && levelDb > kVoicedLevelDb;
+    const bool rawVoiced = pick > 1 && pick + 1 <= tauMax && aper < kVoicedAperiodicity && levelDb > kVoicedLevelDb;
+    // Two readings in a row before switching between note and breath / consonant, so a voice
+    // that flickers at a word edge doesn't make the grains jump back and forth.
+    voicedRun = rawVoiced ? std::max (1, voicedRun + 1) : std::min (-1, voicedRun - 1);
+    const bool voiced = period > 0.0 ? voicedRun > -2 : voicedRun >= 2;
     const double hopSec = hop / sr;
 
     if (voiced)
@@ -226,9 +232,16 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
             // Analysis marks stay one input period apart; use the one nearest this output grain.
             while (anaPos + 0.5 * P < synthPos) anaPos += P;
             while (anaPos - 0.5 * P > synthPos) anaPos -= P;
+            drift = anaPos - synthPos;
         }
         else
-            anaPos = synthPos;
+        {
+            // Breath / consonant: ease back in line with the output instead of snapping (a snap
+            // is a small jump in time = a tick at the end of a note).
+            drift *= 0.5;
+            if (std::abs (drift) < 0.5) drift = 0.0;
+            anaPos = synthPos + drift;
+        }
 
         const auto first = static_cast<int64_t> (std::ceil (synthPos - P));
         const auto lastJ = static_cast<int64_t> (std::floor (synthPos + P));
@@ -297,6 +310,7 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
             // Grains reach P before their centre: start one max period in, so none lands on a slot
             // that has already left (it would come back one ring-length later).
             synthPos = anaPos = static_cast<double> (t + 1) + maxP;
+            drift = 0.0;
             for (auto& v : acc) std::fill (v.begin(), v.end(), 0.0);
             std::fill (wsum.begin(), wsum.end(), 0.0);
         }
@@ -304,11 +318,20 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
 
         const auto ti = static_cast<size_t> (t & mask);
         const double ws = wsum[ti];
+        // Shift only when there's something to fix: blend the grains with the untouched voice by how
+        // much correction this moment needs (0 cents = the plain voice; 10 cents or more = all grains).
+        // Re-stitching a voice that needs no change only adds fizz at word edges.
+        const double need = std::clamp (std::abs (frameAt (static_cast<double> (t)).corr) * 10.0, 0.0, 1.0);
+        blend += (need - blend) * blendCoeff;
         for (int c = 0; c < nch; ++c)
         {
             double y = 0.0;
             if (t >= 0)
-                y = ws > 0.05 ? acc[static_cast<size_t> (c)][ti] / ws : in[static_cast<size_t> (c)][ti];
+            {
+                const double dry = in[static_cast<size_t> (c)][ti];
+                const double wet = ws > 0.05 ? acc[static_cast<size_t> (c)][ti] / ws : dry;
+                y = dry + blend * (wet - dry);
+            }
             ch[c][i] = y;
         }
         for (auto& v : acc) v[ti] = 0.0;

@@ -256,20 +256,13 @@ void DeEsser::process (double* const* ch, int nch, int n) noexcept
         if (cut < 1.0e-4 && target == 0.0) cut = 0.0;
         maxCut = std::max (maxCut, cut);
 
+        // The shelf always runs while the de-esser is on: at 0 dB it is exactly transparent, so
+        // nothing ever switches in or out (switching made a tick at the end of every "s").
         if (--countdown <= 0)
         {
             countdown = 8;
-            if (std::abs (cut - designedCut) > 0.01 || (cut == 0.0 && designedCut != 0.0))
-            {
-                if (cut == 0.0) { designedCut = 0.0; }
-                else design (cut);
-            }
-        }
-        if (designedCut == 0.0 && cut == 0.0)
-        {
-            // Not cutting: exact pass-through, filters kept quiet for a clean restart.
-            for (auto& f : shelf) f.reset();
-            continue;
+            if (std::abs (cut - designedCut) > 0.005 || (cut == 0.0 && designedCut != 0.0))
+                design (cut);
         }
         for (int c = 0; c < nch; ++c)
             ch[c][i] = shelf[static_cast<size_t> (c)].process (ch[c][i]);
@@ -336,10 +329,13 @@ void VocalCompressor::prepare (double sampleRate, int numChannels)
     sr = sampleRate;
     channels = std::clamp (numChannels, 1, kMaxChannels);
     design::apply (scHp, design::butterworth (true, 80.0, sr));
-    a1 = onePole (0.0005, sr);
+    a1 = onePole (0.001, sr);
     r1 = onePole (0.060, sr);
-    a2 = onePole (0.008, sr);
-    msC = onePole (0.005, sr);
+    a2 = onePole (0.010, sr);
+    // Detectors average over more than one cycle of the lowest voice (~12 ms at 80 Hz), so the gain
+    // follows words, not the waveform (a 5 ms detector rode each cycle: gritty "crackle").
+    msC = onePole (0.030, sr);
+    pkRel = onePole (0.015, sr);
     susC = onePole (1.0, sr);
     glide = onePole (0.020, sr);
     reset();
@@ -350,6 +346,7 @@ void VocalCompressor::reset() noexcept
     scHp.reset();
     gr1 = gr2 = 0.0;
     ms2 = 0.0;
+    pkEnv = 0.0;
     sustained = 0.0;
     makeup = fromDb (params.makeupDb);
     mixGlide = std::clamp (params.mix, 0.0, 100.0) / 100.0;
@@ -397,10 +394,13 @@ void VocalCompressor::process (double* const* ch, int nch, int n) noexcept
         mono /= nch;
         const double sc = scHp.process (mono);
 
-        // Peak stage: instantaneous level, fast smoothing of the gain reduction (in dB).
+        // Peak stage: a peak envelope that holds through each cycle (15 ms release), then fast
+        // smoothing of the gain reduction (in dB).
+        const double asc = std::abs (sc);
+        pkEnv = asc > pkEnv ? asc : pkEnv + (asc - pkEnv) * pkRel;
         double t1 = 0.0;
         if (peakOn)
-            t1 = peakGrDb (toDb (std::abs (sc) + 1.0e-12), params.peakThrDb);
+            t1 = peakGrDb (toDb (pkEnv + 1.0e-12), params.peakThrDb);
         gr1 += (t1 - gr1) * (t1 < gr1 ? a1 : r1);
 
         // Level stage: hears the output of the peak stage (5 ms RMS), program-dependent release.
@@ -408,7 +408,7 @@ void VocalCompressor::process (double* const* ch, int nch, int n) noexcept
         if (levelOn)
         {
             const double s2 = sc * fromDb (gr1);
-            ms2 += (s2 * s2 - ms2) * msC;
+            ms2 += (s2 * s2 - ms2) * msC;   // 30 ms RMS
             // RMS of the sidechain, +3 dB so a sine's RMS reads at its peak level (like the meters).
             t2 = levelGrDb (10.0 * std::log10 (ms2 + 1.0e-24) + 3.0103, params.thrDb, params.ratio);
         }
