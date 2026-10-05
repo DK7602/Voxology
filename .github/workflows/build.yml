@@ -12,6 +12,11 @@ on:
         type: boolean
         default: true
 
+# A newer push cancels the older build on the same branch (saves minutes).
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Engine tests under AddressSanitizer + UndefinedBehaviorSanitizer (Linux, no JUCE: about 2 minutes).
   # Catches out-of-bounds reads that only crash now and then on Windows.
