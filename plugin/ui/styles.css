@@ -207,3 +207,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #cells[data-cols="6"] .knob img, #cells[data-cols="6"] .knob svg { width: 112px; }
 #cells[data-cols="6"] .meter-cell .mbar { height: 112px; margin-top: 14px; }
 #cells[data-cols="6"] { padding-top: 22px; }
+
+/* The honeycomb art itself as the panel surface (Signal Chain and the module panel). */
+#chain, #module {
+  background: linear-gradient(rgba(255, 250, 240, 0.10), rgba(255, 250, 240, 0.10)) padding-box,
+              url("assets/honeycomb.webp") center / cover padding-box,
+              var(--gold-grad) border-box;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+#chain .card-head, #module .card-head { background: rgba(255, 250, 240, 0.9); }
+#module .cell-label, #module .cell-sub {
+  background: rgba(255, 250, 240, 0.92); padding: 1px 9px; border-radius: 9px; box-shadow: inset 0 0 0 1.5px var(--gold);
+}
+#module .cell-sub { color: var(--ink-soft); font-size: 11px; margin-top: 2px; }
+#module .cell { gap: 1px; }
+.chain-foot { left: 30px; right: 30px; padding: 3px 0; border-radius: 10px; background: rgba(255, 250, 240, 0.9); box-shadow: inset 0 0 0 1.5px var(--gold); }
