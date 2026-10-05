@@ -223,24 +223,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #module .cell { gap: 1px; }
 .chain-foot { left: 30px; right: 30px; padding: 3px 0; border-radius: 10px; background: rgba(255, 250, 240, 0.9); box-shadow: inset 0 0 0 1.5px var(--gold); }
 
-/* Liquid glass, cream: header, footer and Learn. Heavy frost, a warm cream body, a glossy curved
-   sheen across the top and a soft gold glow pooling at the bottom edge. */
+/* Header, footer and Learn: the same cream marble glass as the cream hive tiles (Tone EQ, Output):
+   marble_cream2 texture, the white 160deg sheen and the soft inner blue shadow, in the gold frame. */
 #header, #footer, #learn {
-  --glass: rgba(250, 243, 226, 0.58);
   background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 252, 244, 0.12) 40%, rgba(244, 232, 205, 0.28) 70%, rgba(255, 255, 255, 0.42) 100%) padding-box,
-    linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(160deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 45%) padding-box,
+    url("assets/marble_cream_panel.webp") center / cover padding-box,
     var(--gold-grad) border-box;
-  backdrop-filter: blur(18px) saturate(1.4) brightness(1.1); -webkit-backdrop-filter: blur(18px) saturate(1.4) brightness(1.1);
-  box-shadow: 0 14px 32px rgba(60, 40, 6, 0.38), inset 0 2px 1px rgba(255, 255, 255, 0.95),
-              inset 0 -12px 26px rgba(201, 151, 58, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: 0 12px 28px rgba(60, 40, 6, 0.40), inset 0 0 14px rgba(36, 97, 143, 0.35);
 }
-#header::before, #footer::before, #learn::before {
-  content: ""; position: absolute; left: 8px; right: 8px; top: 3px; height: 46%; z-index: -1; pointer-events: none;
-  border-radius: 14px 14px 50% 50% / 14px 14px 26px 26px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.08) 85%, rgba(255, 255, 255, 0));
-}
-#footer::before { height: 50%; border-radius: 10px 10px 50% 50% / 10px 10px 8px 8px; }
-#learn::before { height: 18%; }
 #learn .card-head { background: none; }
 #learn .l-item { background: rgba(255, 252, 245, 0.72); }
