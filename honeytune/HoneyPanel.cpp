@@ -41,7 +41,7 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     {
         l.setText (text, dontSendNotification);
         l.setFont (FontOptions (12.0f, Font::bold));
-        l.setColour (Label::textColourId, navy);
+        l.setColour (Label::textColourId, Colour (0xff8d641f));
         addAndMakeVisible (l);
     };
     label (keyLabel, "KEY");
@@ -199,7 +199,7 @@ void HoneyPanel::paint (Graphics& g)
 
     // Marble bars (top and bottom); the roll paints the middle.
     drawCreamGlass (g, topBar, 4.0f);
-    drawMarble (g, bottomBar, 0.0f, { 200.0f, 300.0f });
+    drawCreamGlass (g, bottomBar, 4.0f);
 
     // Glass cards behind every group of controls and text.
     for (const auto& c : cards)

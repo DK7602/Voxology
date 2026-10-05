@@ -172,7 +172,7 @@ from the user's mockup (assets/src/cutout.py removes fake checkerboards; drip_a/
 art (images/13.jpg -> assets/title.png, "by Voxology" trimmed and drawn as gold text); marble now 3D (height
 field lighting + specular + sheen in make_marble.py). Top bar 104 px, editor 1200 x 720.
 Round 4: top bar = Voxology header (marble_cream_panel + 160deg sheen + blue inner shadow, drawCreamGlass; labels
-drawCaps gold-deep + white edge); drips de-haloed and drawn BEFORE the frame with tops tucked under it.
+drawCaps gold-deep + white edge); bottom bar also cream glass; drips de-haloed and drawn BEFORE the frame with tops tucked under it.
 
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble
