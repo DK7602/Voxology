@@ -30,6 +30,8 @@ namespace
         std::atomic<bool> alive { true };
         std::atomic<int> status { 0 };   // 0 waiting, 1 listening, 2 ready, 3 couldn't read
         std::atomic<bool> samplesChanged { true };
+        std::atomic<double> playPosition { -1.0 };   // where playback is in this recording (samples), from the audio thread
+        std::atomic<uint32> playStamp { 0 };          // when that was (ms counter): stale = stopped
         std::string persistentId, name;
 
         // Background thread only
@@ -133,6 +135,8 @@ public:
                 continue;
 
             auto* source = static_cast<HoneyAudioSource*> (region->getAudioModification()->getAudioSource());
+            source->state->playPosition = static_cast<double> (renderRange.getStart() + offset);   // for the editor's playhead
+            source->state->playStamp = Time::getMillisecondCounter();
             auto rendered = source->state->getRendered();
             if (rendered == nullptr || rendered->empty() || std::abs (source->getSampleRate() - sampleRate) > 0.5)
             {
@@ -516,7 +520,7 @@ public:
             view->addListener (this);
             dc->changes.addChangeListener (this);
             pickSource (view->getViewSelection().getPlaybackRegions<ARAPlaybackRegion>());
-            startTimerHz (2);
+            startTimerHz (30);   // playhead
         }
         panel.setModel (dc != nullptr ? this : nullptr);
         setResizable (true, false);
@@ -578,13 +582,17 @@ private:
     void timerCallback() override
     {
         // While listening (or if a clip was removed), keep the status fresh.
-        if (state == nullptr || ! state->alive) { state = nullptr; pickSource ({}); panel.refresh(); }
-        else if (state->status != 2) panel.refresh();
+        if (state == nullptr || ! state->alive) { state = nullptr; pickSource ({}); panel.refresh(); return; }
+        // Playhead: where the host is playing in this clip (hidden once playback stops).
+        const bool playing = Time::getMillisecondCounter() - state->playStamp.load() < 250;
+        panel.roll.setPlayhead (playing ? state->playPosition.load() / std::max (1.0, state->sampleRate) : -1.0);
+        if (state->status != 2 && ++slowTicks % 15 == 0) panel.refresh();
     }
 
     HoneyDocumentController* dc = nullptr;
     std::shared_ptr<SourceState> state;
     HoneyPanel panel;
+    int slowTicks = 0;
 };
 
 AudioProcessorEditor* HoneyProcessor::createEditor() { return new HoneyEditor (*this); }

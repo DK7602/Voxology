@@ -174,7 +174,10 @@ field lighting + specular + sheen in make_marble.py). Top bar 104 px, editor 120
 Round 4: top bar = Voxology header (marble_cream_panel + 160deg sheen + blue inner shadow, drawCreamGlass; labels
 drawCaps gold-deep + white edge); Round 5 (user tested in Cubase lower zone): no bottom drips (kDripRoom 0), no "by Voxology", title bottom-aligned so
 its drips end just above the gold trim, top bar 76 / bottom 78 px (more roll). BUG fixed: roll fitted at full size then
-host shrank editor -> notes below view; resized() now keeps the centre pitch. Earlier: bottom bar also cream glass; drips de-haloed and drawn BEFORE the frame with tops tucked under it.
+host shrank editor -> notes below view; resized() now keeps the centre pitch. Earlier: bottom bar also cream glass; Round 6: notes squished (fit at small size, host enlarged) -> defaultZoom ~6 s across, min 120 px/s, re-fit on
+resize until the user zooms (userZoomed; Fit resets), cells min 12 px wide, + / - keys zoom. Playhead: renderer stores
+playPosition/playStamp per source (audio thread atomics), editor timer 30 Hz -> roll.setPlayhead, view pages along.
+Chrome blocks the unsigned zip as dangerous: user must Keep (code signing later). drips de-haloed and drawn BEFORE the frame with tops tucked under it.
 
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble

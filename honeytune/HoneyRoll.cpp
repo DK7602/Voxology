@@ -60,13 +60,14 @@ void HoneyRoll::setSelected (int index)
 
 void HoneyRoll::fitAll()
 {
-    // Opens on the first ~10 seconds of singing (cells big enough to grab), the clip's main range
+    userZoomed = false;
+    // Opens on the first ~6 seconds of singing (cells big enough to grab), the clip's main range
     // in height (the middle 90 % of its notes, so one stray high note doesn't shrink everything).
     const auto grid = gridArea();
     if (grid.getWidth() < 10.0f || snap.seconds <= 0.0) return;
     const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
     const double firstNote = snap.notes.empty() ? 0.0 : snap.notes.front().note.start / sr;
-    pixelsPerSecond = std::max (grid.getWidth() / std::min (snap.seconds, 10.0), 40.0);
+    pixelsPerSecond = defaultZoom();
     viewStart = std::max (0.0, firstNote - 0.5);
     std::vector<double> pitches;
     for (const auto& n : snap.notes) { pitches.push_back (n.note.pitch); pitches.push_back (n.note.target); }
@@ -83,6 +84,51 @@ void HoneyRoll::fitAll()
     topMidi = jlimit (kLowestMidi + rows, kHighestMidi, (hi + lo) / 2.0 + rows / 2.0);
     updateScrollBars();
     repaint();
+}
+
+void HoneyRoll::setPlayhead (double seconds)
+{
+    if (std::abs (seconds - playhead) < 1.0e-4) return;
+    const auto grid = gridArea();
+    auto area = [&] (double t) { return Rectangle<float> (xOf (t) - 12.0f, 0.0f, 24.0f, (float) getHeight()); };
+    if (playhead >= 0.0) repaint (area (playhead).toNearestInt());
+    playhead = seconds;
+    if (playhead < 0.0) return;
+    // Follow: page along when it reaches the right edge (or is out of view), unless you're dragging a note.
+    const double visible = grid.getWidth() / pixelsPerSecond;
+    if (! dragging && (playhead > viewStart + visible * 0.92 || playhead < viewStart))
+    {
+        viewStart = std::max (0.0, playhead - visible * 0.08);
+        updateScrollBars();
+        repaint();
+        return;
+    }
+    repaint (area (playhead).toNearestInt());
+}
+
+void HoneyRoll::drawPlayhead (Graphics& g)
+{
+    if (playhead < 0.0) return;
+    const auto grid = gridArea();
+    const float x = xOf (playhead);
+    if (x < grid.getX() || x > grid.getRight()) return;
+    // A bright line with a blue glow, and a gold marker on the ruler.
+    g.setColour (glowBlue.withAlpha (0.35f));
+    g.fillRect (x - 3.0f, grid.getY(), 6.0f, grid.getHeight());
+    g.setColour (Colours::white.withAlpha (0.95f));
+    g.fillRect (x - 0.75f, grid.getY(), 1.5f, grid.getHeight());
+    Path tri;
+    tri.addTriangle (x - 6.0f, 2.0f, x + 6.0f, 2.0f, x, (float) kRulerHeight - 2.0f);
+    g.setColour (Colours::white);
+    g.fillPath (tri);
+    g.setColour (ink);
+    g.strokePath (tri, PathStrokeType (1.0f));
+}
+
+double HoneyRoll::defaultZoom() const
+{
+    // About 6 seconds across, never so far out that sung notes turn into slivers.
+    return std::max (gridArea().getWidth() / std::min (std::max (snap.seconds, 1.0), 6.0), 120.0);
 }
 
 //==============================================================================
@@ -122,7 +168,12 @@ void HoneyRoll::resized()
     vBar.setBounds (b.getRight() - kBar, b.getY() + kRulerHeight, kBar, b.getHeight() - kRulerHeight - kBar);
     honeycomb = {};
     if (! fitted) fitAll();
-    else if (lastGridHeight > 0.0f)
+    else
+    {
+        if (! userZoomed)
+            pixelsPerSecond = defaultZoom();   // hosts open the editor small, then enlarge it
+    }
+    if (fitted && lastGridHeight > 0.0f)
     {
         // Keep the same pitch in the middle when the window changes size (hosts resize the editor).
         const double rowsBefore = lastGridHeight / rowHeight, rowsNow = gridArea().getHeight() / rowHeight;
@@ -137,7 +188,7 @@ Path HoneyRoll::cellPath (int index, double midi) const
 {
     const auto& n = snap.notes[static_cast<size_t> (index)].note;
     const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
-    const float x0 = xOf (n.start / sr), x1 = std::max (x0 + 6.0f, xOf (n.end / sr));
+    const float x0 = xOf (n.start / sr), x1 = std::max (x0 + 12.0f, xOf (n.end / sr));
     const float yc = yOf (midi), h = static_cast<float> (rowHeight) * 0.92f;
     const float tip = std::min (h * 0.5f, (x1 - x0) * 0.35f);   // the pointed ends of the hexagon
     Path p;
@@ -183,6 +234,7 @@ void HoneyRoll::paint (Graphics& g)
     }
     drawKeyboard (g);
     drawRuler (g);
+    drawPlayhead (g);
 
     if (snap.status != 2 || snap.notes.empty())
     {
@@ -503,6 +555,7 @@ void HoneyRoll::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& w)
     const auto grid = gridArea();
     if (e.mods.isCommandDown() || e.mods.isCtrlDown())
     {
+        userZoomed = true;
         const double at = secondsAt (e.position.x);
         pixelsPerSecond = jlimit (grid.getWidth() / std::max (1.0, snap.seconds * 1.2), 1500.0, pixelsPerSecond * std::pow (1.5, w.deltaY * 4.0));
         viewStart = at - (e.position.x - grid.getX()) / pixelsPerSecond;
@@ -520,6 +573,18 @@ void HoneyRoll::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& w)
 
 bool HoneyRoll::keyPressed (const KeyPress& k)
 {
+    if (k.getTextCharacter() == '+' || k.getTextCharacter() == '=' || k.getTextCharacter() == '-')
+    {
+        // Zoom in time around the middle of the view.
+        const auto grid = gridArea();
+        const double mid = secondsAt (grid.getCentreX());
+        pixelsPerSecond = jlimit (20.0, 2000.0, pixelsPerSecond * (k.getTextCharacter() == '-' ? 1.0 / 1.4 : 1.4));
+        viewStart = std::max (0.0, mid - (grid.getWidth() * 0.5) / pixelsPerSecond);
+        userZoomed = true;
+        updateScrollBars();
+        repaint();
+        return true;
+    }
     if (selected < 0 || model == nullptr) return false;
     if (k == KeyPress::deleteKey || k == KeyPress::backspaceKey)
     {

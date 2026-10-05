@@ -52,6 +52,8 @@ int main (int argc, char** argv)
     m.settings.snap = argc > 6 ? std::atof (argv[6]) : 0.0;   // show the notes as sung (glow), unless asked
 
     HoneyPanel panel;
+    panel.setSize (500, 300);   // hosts open small, then enlarge
+    panel.setModel (&m);
     panel.setSize (1200, std::getenv ("HONEY_H") ? std::atoi (std::getenv ("HONEY_H")) : 720);
     panel.setModel (&m);
     // A few hand edits so every look shows: fixed by hand, moved a whole note, and a selection.
@@ -68,6 +70,7 @@ int main (int argc, char** argv)
     }
     panel.refresh();
     panel.roll.setSelected (static_cast<int> (m.notes.size() / 3));
+    panel.roll.setPlayhead (2.5);
 
     if (std::getenv ("HONEY_DEBUG"))
         for (auto* c : panel.getChildren())

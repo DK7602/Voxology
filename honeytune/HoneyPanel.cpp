@@ -89,7 +89,7 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
         model->resetAllEdits();
         refresh();
     };
-    fit.onClick = [this] { roll.fitAll(); };
+    fit.onClick = [this] { roll.fitAll(); };   // also undoes your zoom
     roll.onSelectionChanged = [this] { updateNoteControls(); };
     updateNoteControls();
     sendLookAndFeelChange();   // the slider boxes were made before their parent had the cream look
@@ -163,7 +163,7 @@ void HoneyPanel::updateNoteControls()
         c->setEnabled (has);
     if (! has)
     {
-        noteInfo = "Click a note to select it. Drag up / down to move it (hold Alt for fine moves), double-click to snap it, Delete to reset it.";
+        noteInfo = "Click a note to select it. Drag up / down to move it (hold Alt for fine moves), double-click to snap it, Delete to reset it. Zoom: Ctrl + wheel or + / -.";
         repaint();
         return;
     }

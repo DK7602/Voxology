@@ -7,7 +7,7 @@
 /** The honeycomb note editor: every note is a gold-rimmed marble cell on a piano roll.
     Off-key notes glow blue; once fixed they fill gold. Drag a cell up / down to move it (whole notes;
     hold Alt for cents), double-click to snap it to the key, Delete to reset it.
-    Mouse wheel scrolls up / down, Shift + wheel scrolls in time, Ctrl + wheel zooms. */
+    Mouse wheel scrolls up / down, Shift + wheel scrolls in time, Ctrl + wheel (or + / -) zooms. */
 class HoneyRoll final : public juce::Component,
                         private juce::ScrollBar::Listener
 {
@@ -33,12 +33,16 @@ public:
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     bool keyPressed (const juce::KeyPress&) override;
 
+    /** Where playback is in the clip (seconds); negative = stopped. The view follows it. */
+    void setPlayhead (double seconds);
+
     /** Fit the whole clip and its notes into view. */
     void fitAll();
 
 private:
     void scrollBarMoved (juce::ScrollBar*, double) override;
     void updateScrollBars();
+    double defaultZoom() const;
     juce::Rectangle<float> gridArea() const;
     float xOf (double seconds) const;
     double secondsAt (float x) const;
@@ -55,6 +59,9 @@ private:
     honeyui::Snapshot snap;
     bool fitted = false;
     float lastGridHeight = 0.0f;
+    bool userZoomed = false;
+    double playhead = -1.0;
+    void drawPlayhead (juce::Graphics&);
 
     double viewStart = 0.0, pixelsPerSecond = 40.0;   // time axis
     double topMidi = 72.0, rowHeight = 18.0;          // pitch axis (topMidi = the row at the top edge)
