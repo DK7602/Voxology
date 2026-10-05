@@ -198,7 +198,7 @@ void HoneyPanel::paint (Graphics& g)
     const auto inner = fr.reduced (kFrame);
 
     // Marble bars (top and bottom); the roll paints the middle.
-    drawMarble (g, topBar, 0.0f, { 120.0f, 40.0f });
+    drawCreamGlass (g, topBar, 4.0f);
     drawMarble (g, bottomBar, 0.0f, { 200.0f, 300.0f });
 
     // Glass cards behind every group of controls and text.
@@ -214,16 +214,16 @@ void HoneyPanel::paint (Graphics& g)
         const auto scaled = img.rescaled (roundToInt (placed.getWidth()), roundToInt (placed.getHeight()), Graphics::highResamplingQuality);
         Graphics::ScopedSaveState save (g);
         g.addTransform (AffineTransform::translation (placed.getX(), placed.getY()));
-        DropShadow (Colour (0xff0b1726).withAlpha (0.85f), 9, { 1, 2 }).drawForImage (g, scaled.convertedToFormat (Image::ARGB));
+        DropShadow (Colour (80, 56, 14).withAlpha (0.3f), 4, { 0, 3 }).drawForImage (g, scaled.convertedToFormat (Image::ARGB));
         g.setOpacity (1.0f);
         g.drawImageAt (scaled, 0, 0);
     }
-    drawGoldText (g, "by Voxology", titleArea.withTrimmedLeft (titleArea.getWidth() * 0.42f).removeFromBottom (15.0f).translated (0.0f, 3.0f),
+    drawCaps (g, "by Voxology", titleArea.withTrimmedLeft (titleArea.getWidth() * 0.42f).removeFromBottom (15.0f).translated (0.0f, 3.0f),
                   FontOptions (12.0f, Font::bold), Justification::centredLeft);
 
     // Control labels on the marble, in embossed gold.
     for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
-        drawGoldText (g, l->getText(), l->getBounds().toFloat(), FontOptions (12.5f, Font::bold), Justification::centredLeft);
+        drawCaps (g, l->getText(), l->getBounds().toFloat(), FontOptions (12.5f, Font::bold), Justification::centredLeft);
 
     // Legend
     {
@@ -259,7 +259,8 @@ void HoneyPanel::paint (Graphics& g)
     g.setFont (FontOptions (11.5f, Font::bold));
     g.drawFittedText (status, statusArea.reduced (10.0f, 0.0f).toNearestInt(), Justification::centredLeft, 1);
 
-    // Gold: the frame and the bars between the sections.
+    // Gold: the drips, the frame and the bars between the sections.
+    drawDrips (g, fr);
     drawGoldFrame (g, fr, kFrame, 12.0f);
     for (const auto& sep : { Rectangle<float> (inner.getX(), topBar.getBottom(), inner.getWidth(), kSeparator),
                              Rectangle<float> (inner.getX(), bottomBar.getY() - kSeparator, inner.getWidth(), kSeparator) })
@@ -272,19 +273,21 @@ void HoneyPanel::paint (Graphics& g)
     }
 }
 
-void HoneyPanel::paintOverChildren (Graphics& g)
+void HoneyPanel::paintOverChildren (Graphics&) {}
+
+void HoneyPanel::drawDrips (Graphics& g, Rectangle<float> fr)
 {
-    // Honey dripping off the bottom of the frame (the drips from the mockup art).
-    const auto fr = frameArea();
+    // Honey running off the bottom of the frame (the drips from the mockup art). Drawn before the
+    // frame, with their tops tucked under it, so they flow out of it.
     g.setOpacity (1.0f);
     const float positions[] = { 0.26f, 0.61f, 0.87f };
     for (int k = 0; k < 3; ++k)
     {
         const auto img = honeytheme::drip (k);
         if (! img.isValid()) continue;
-        const float h = kDripRoom + kFrame + 6.0f, w = h * (float) img.getWidth() / (float) img.getHeight();
+        const float h = kDripRoom + kFrame + 12.0f, w = h * (float) img.getWidth() / (float) img.getHeight();
         const float x = fr.getX() + fr.getWidth() * positions[k] - (k == 2 ? w * 0.5f : 0.0f);
-        g.drawImage (img, { std::min (x, fr.getRight() - w - 4.0f), fr.getBottom() - kFrame - 3.0f, w, h }, RectanglePlacement::stretchToFit);
+        g.drawImage (img, { std::min (x, fr.getRight() - w - 4.0f), fr.getBottom() - kFrame + 0.5f, w, h }, RectanglePlacement::stretchToFit);
     }
 }
 

@@ -9,6 +9,7 @@ namespace honeytheme {
 Image marble()      { return ImageCache::getFromMemory (HoneyAssets::marble_blue_white_jpg, HoneyAssets::marble_blue_white_jpgSize); }
 Image goldTexture() { return ImageCache::getFromMemory (HoneyAssets::gold_jpg, HoneyAssets::gold_jpgSize); }
 Image logo()        { return ImageCache::getFromMemory (HoneyAssets::logo_png, HoneyAssets::logo_pngSize); }
+Image creamPanel()  { return ImageCache::getFromMemory (HoneyAssets::marble_cream_panel_jpg, HoneyAssets::marble_cream_panel_jpgSize); }
 Image title()       { return ImageCache::getFromMemory (HoneyAssets::title_png, HoneyAssets::title_pngSize); }
 Image drip (int which)
 {
@@ -85,6 +86,38 @@ void drawGoldText (Graphics& g, const String& text, Rectangle<float> r, Font fon
     g.setColour (Colour (0xff0d1c2e).withAlpha (0.75f));
     g.drawText (text, r.translated (1.0f, 1.5f), j, false);
     g.setGradientFill (ColourGradient (Colour (0xfffff0c0), 0, r.getY() + r.getHeight() * 0.2f, Colour (0xffc08a2a), 0, r.getBottom() - r.getHeight() * 0.2f, false));
+    g.drawText (text, r, j, false);
+}
+
+void drawCreamGlass (Graphics& g, Rectangle<float> r, float corner)
+{
+    Graphics::ScopedSaveState save (g);
+    Path clip;
+    clip.addRoundedRectangle (r, corner);
+    g.reduceClipRegion (clip);
+    g.setOpacity (1.0f);
+    g.drawImage (creamPanel(), r, RectanglePlacement::fillDestination);
+    // linear-gradient(160deg, rgba(255,255,255,.5), transparent 45%)
+    const auto dir = Point<float> (std::sin (degreesToRadians (160.0f)), -std::cos (degreesToRadians (160.0f)));
+    const float len = std::abs (r.getWidth() * dir.x) + std::abs (r.getHeight() * dir.y);
+    const auto start = r.getCentre() - dir * (len * 0.5f);
+    ColourGradient sheen (Colours::white.withAlpha (0.5f), start, Colours::white.withAlpha (0.0f), start + dir * (len * 0.45f), false);
+    g.setGradientFill (sheen);
+    g.fillRect (r);
+    // inset 0 0 14px rgba(36,97,143,.35)
+    for (int i = 0; i < 14; ++i)
+    {
+        g.setColour (Colour (36, 97, 143).withAlpha (0.35f * std::pow (1.0f - (float) i / 14.0f, 2.0f) * 0.35f));
+        g.drawRoundedRectangle (r.reduced ((float) i + 0.5f), std::max (0.0f, corner - (float) i), 1.0f);
+    }
+}
+
+void drawCaps (Graphics& g, const String& text, Rectangle<float> r, Font font, Justification j)
+{
+    g.setFont (font);
+    g.setColour (Colours::white.withAlpha (0.9f));
+    g.drawText (text, r.translated (0.0f, 1.0f), j, false);
+    g.setColour (Colour (0xff8d641f));
     g.drawText (text, r, j, false);
 }
 

@@ -27,6 +27,7 @@ private:
     void applyNoteEdit();
 
     juce::Rectangle<float> frameArea() const;
+    void drawDrips (juce::Graphics&, juce::Rectangle<float> frame);
 
     std::unique_ptr<honeytheme::Look> look;
     juce::Rectangle<float> topBar, bottomBar, titleArea, legendArea, logoArea, noteInfoArea, statusArea;

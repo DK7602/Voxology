@@ -12,6 +12,7 @@ juce::Image marble();   // 1600 x 1000 blue / white liquid marble
 juce::Image goldTexture();
 juce::Image logo();
 juce::Image title();
+juce::Image creamPanel();   // Voxology's header marble
 juce::Image drip (int which);   // 0..2: the honey drips from the mockup
 
 /** Marble across `area` (fills it, cropped), washed toward white by `wash` (0..1). */
@@ -24,6 +25,10 @@ void fillGold (juce::Graphics&, const juce::Path&, juce::Rectangle<float> lightA
 void drawGoldBar (juce::Graphics&, juce::Rectangle<float> r, float corner = 1.5f);
 /** Embossed gold text (dark shadow under a polished gold fill). */
 void drawGoldText (juce::Graphics&, const juce::String&, juce::Rectangle<float>, juce::Font, juce::Justification);
+/** Voxology's header look: cream marble, a white sheen from the top left, a soft blue inner shadow. */
+void drawCreamGlass (juce::Graphics&, juce::Rectangle<float> r, float corner);
+/** Voxology's caps labels: deep gold with a white edge under them. */
+void drawCaps (juce::Graphics&, const juce::String&, juce::Rectangle<float>, juce::Font, juce::Justification);
 /** A gold frame (bevelled border) of `thickness` around `r`, rounded. */
 void drawGoldFrame (juce::Graphics&, juce::Rectangle<float> r, float thickness, float corner);
 /** Honey drips hanging from the line y = `edgeY` between x0 and x1 (deterministic per seed). */
