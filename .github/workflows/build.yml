@@ -13,6 +13,20 @@ on:
         default: true
 
 jobs:
+  # Engine tests under AddressSanitizer + UndefinedBehaviorSanitizer (Linux, no JUCE: about 2 minutes).
+  # Catches out-of-bounds reads that only crash now and then on Windows.
+  sanitizers:
+    name: Engine tests (ASan + UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build-asan -DVOX_BUILD_PLUGIN=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -O1"
+      - name: Build
+        run: cmake --build build-asan --parallel 4
+      - name: Tests
+        run: ctest --test-dir build-asan --output-on-failure
+
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}

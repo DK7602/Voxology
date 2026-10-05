@@ -241,7 +241,7 @@ Sibilance sibilance (const Signal& x, double sr, const std::vector<bool>& mask, 
     s.levelDb = percentile (levels, 90.0) - voiceRmsDb;
 
     // Where the "s" sits: the loudest third-octave between 4 and 11 kHz in the sibilant frames.
-    std::vector<double> acc (1025, 0.0);
+    std::vector<double> acc (1024 / 2 + 1, 0.0);   // powerSpectrum(1024) has 513 bins
     for (size_t f = 0; f < sib.size(); ++f)
     {
         if (! sib[f]) continue;
