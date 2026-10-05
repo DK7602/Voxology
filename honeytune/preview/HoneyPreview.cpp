@@ -52,7 +52,7 @@ int main (int argc, char** argv)
     m.settings.snap = argc > 6 ? std::atof (argv[6]) : 0.0;   // show the notes as sung (glow), unless asked
 
     HoneyPanel panel;
-    panel.setSize (1200, 680);
+    panel.setSize (1200, 720);
     panel.setModel (&m);
     // A few hand edits so every look shows: fixed by hand, moved a whole note, and a selection.
     int shown = 0;

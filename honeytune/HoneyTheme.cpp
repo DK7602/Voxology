@@ -9,6 +9,16 @@ namespace honeytheme {
 Image marble()      { return ImageCache::getFromMemory (HoneyAssets::marble_blue_white_jpg, HoneyAssets::marble_blue_white_jpgSize); }
 Image goldTexture() { return ImageCache::getFromMemory (HoneyAssets::gold_jpg, HoneyAssets::gold_jpgSize); }
 Image logo()        { return ImageCache::getFromMemory (HoneyAssets::logo_png, HoneyAssets::logo_pngSize); }
+Image title()       { return ImageCache::getFromMemory (HoneyAssets::title_png, HoneyAssets::title_pngSize); }
+Image drip (int which)
+{
+    switch (which)
+    {
+        case 0:  return ImageCache::getFromMemory (HoneyAssets::drip_a_png, HoneyAssets::drip_a_pngSize);
+        case 1:  return ImageCache::getFromMemory (HoneyAssets::drip_b_png, HoneyAssets::drip_b_pngSize);
+        default: return ImageCache::getFromMemory (HoneyAssets::drip_c_png, HoneyAssets::drip_c_pngSize);
+    }
+}
 
 void drawMarble (Graphics& g, Rectangle<float> area, float wash, Point<float> offset)
 {

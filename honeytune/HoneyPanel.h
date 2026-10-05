@@ -29,9 +29,9 @@ private:
     juce::Rectangle<float> frameArea() const;
 
     std::unique_ptr<honeytheme::Look> look;
-    juce::Rectangle<float> topBar, bottomBar, legendArea, logoArea, noteInfoArea, statusArea;
+    juce::Rectangle<float> topBar, bottomBar, titleArea, legendArea, logoArea, noteInfoArea, statusArea;
     std::vector<juce::Rectangle<float>> cards;
-    static constexpr float kFrame = 9.0f, kSeparator = 6.0f, kDripRoom = 24.0f;
+    static constexpr float kFrame = 9.0f, kSeparator = 6.0f, kDripRoom = 44.0f;
     honeyui::Model* model = nullptr;
 
     juce::ComboBox key, scale;

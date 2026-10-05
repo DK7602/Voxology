@@ -167,7 +167,10 @@ sliders with marble knobs, gold scrollbars. Gotcha: Graphics::drawImage uses the
 Round 2 (user: "more like mine, more realistic, cream glow in-key / blue glow off-key like the knobs"): agate marble
 (assets/src/make_marble.py) with gold flecks, glitter gold (mirrored seamless), raised bevelled gold bars on rows
 OUTSIDE the key (black keys when chromatic) = mockup's alternating bars, gold honeycomb lines, DropShadow glows
-behind cells, embossed gold title / labels (drawGoldText). Editor 1200 x 680.
+behind cells, embossed gold title / labels (drawGoldText). Round 3: no drips on the timeline; bottom drips = cut
+from the user's mockup (assets/src/cutout.py removes fake checkerboards; drip_a/b/c.png); user's Honey Tune title
+art (images/13.jpg -> assets/title.png, "by Voxology" trimmed and drawn as gold text); marble now 3D (height
+field lighting + specular + sheen in make_marble.py). Top bar 104 px, editor 1200 x 720.
 
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble

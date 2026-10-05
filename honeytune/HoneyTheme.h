@@ -11,6 +11,8 @@ const juce::Colour gold { 0xffc9952f }, goldLight { 0xfff6d682 }, goldDeep { 0xf
 juce::Image marble();   // 1600 x 1000 blue / white liquid marble
 juce::Image goldTexture();
 juce::Image logo();
+juce::Image title();
+juce::Image drip (int which);   // 0..2: the honey drips from the mockup
 
 /** Marble across `area` (fills it, cropped), washed toward white by `wash` (0..1). */
 void drawMarble (juce::Graphics&, juce::Rectangle<float> area, float wash, juce::Point<float> offset = {});

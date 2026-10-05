@@ -205,23 +205,21 @@ void HoneyPanel::paint (Graphics& g)
     for (const auto& c : cards)
         drawGlass (g, c, 7.0f, 0.6f);
 
-    // Title: honeycomb cell + HONEY TUNE
+    // Title art
+    g.setOpacity (1.0f);
+    if (const auto img = title(); img.isValid())
     {
-        const float cx = topBar.getX() + 22.0f, cy = topBar.getCentreY() - 6.0f, rad = 12.0f;
-        Path hex;
-        for (int k = 0; k < 6; ++k)
-        {
-            const float a = MathConstants<float>::pi / 3.0f * (float) k + MathConstants<float>::pi / 6.0f;
-            const Point<float> p { cx + rad * std::cos (a), cy + rad * std::sin (a) };
-            if (k == 0) hex.startNewSubPath (p); else hex.lineTo (p);
-        }
-        hex.closeSubPath();
-        fillGold (g, hex, hex.getBounds());
-        g.setColour (goldDeep);
-        g.strokePath (hex, PathStrokeType (1.2f));
-        drawGoldText (g, "HONEY TUNE", Rectangle<float> (cx + 18.0f, cy - 14.0f, 160.0f, 28.0f), FontOptions (22.0f, Font::bold), Justification::centredLeft);
-        drawGoldText (g, "by Voxology", Rectangle<float> (cx + 19.0f, cy + 12.0f, 120.0f, 14.0f), FontOptions (11.5f, Font::bold), Justification::centredLeft);
+        // A soft dark halo first, so the marble letters stand off the marble bar.
+        const auto placed = RectanglePlacement (RectanglePlacement::centred).appliedTo (img.getBounds().toFloat(), titleArea);
+        const auto scaled = img.rescaled (roundToInt (placed.getWidth()), roundToInt (placed.getHeight()), Graphics::highResamplingQuality);
+        Graphics::ScopedSaveState save (g);
+        g.addTransform (AffineTransform::translation (placed.getX(), placed.getY()));
+        DropShadow (Colour (0xff0b1726).withAlpha (0.85f), 9, { 1, 2 }).drawForImage (g, scaled.convertedToFormat (Image::ARGB));
+        g.setOpacity (1.0f);
+        g.drawImageAt (scaled, 0, 0);
     }
+    drawGoldText (g, "by Voxology", titleArea.withTrimmedLeft (titleArea.getWidth() * 0.42f).removeFromBottom (15.0f).translated (0.0f, 3.0f),
+                  FontOptions (12.0f, Font::bold), Justification::centredLeft);
 
     // Control labels on the marble, in embossed gold.
     for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
@@ -276,13 +274,18 @@ void HoneyPanel::paint (Graphics& g)
 
 void HoneyPanel::paintOverChildren (Graphics& g)
 {
-    // Honey dripping from the top bar over the roll, and from the frame below the window.
+    // Honey dripping off the bottom of the frame (the drips from the mockup art).
     const auto fr = frameArea();
-    const float rulerBottom = (float) roll.getY() + 20.0f;   // drips hang from the gold time ruler
-    honeytheme::drawDrips (g, fr.getX() + 70.0f, fr.getX() + fr.getWidth() * 0.45f, rulerBottom, 26.0f, 4, 3);
-    honeytheme::drawDrips (g, fr.getRight() - 260.0f, fr.getRight() - 60.0f, rulerBottom, 16.0f, 2, 9);
-    honeytheme::drawDrips (g, fr.getX() + fr.getWidth() * 0.55f, fr.getRight() - 30.0f, fr.getBottom() - 1.0f, kDripRoom - 4.0f, 6, 17);
-    honeytheme::drawDrips (g, fr.getX() + 30.0f, fr.getX() + 260.0f, fr.getBottom() - 1.0f, kDripRoom - 6.0f, 3, 23);
+    g.setOpacity (1.0f);
+    const float positions[] = { 0.26f, 0.61f, 0.87f };
+    for (int k = 0; k < 3; ++k)
+    {
+        const auto img = honeytheme::drip (k);
+        if (! img.isValid()) continue;
+        const float h = kDripRoom + kFrame + 6.0f, w = h * (float) img.getWidth() / (float) img.getHeight();
+        const float x = fr.getX() + fr.getWidth() * positions[k] - (k == 2 ? w * 0.5f : 0.0f);
+        g.drawImage (img, { std::min (x, fr.getRight() - w - 4.0f), fr.getBottom() - kFrame - 3.0f, w, h }, RectanglePlacement::stretchToFit);
+    }
 }
 
 Rectangle<float> HoneyPanel::frameArea() const
@@ -294,7 +297,7 @@ void HoneyPanel::resized()
 {
     const auto inner = frameArea().reduced (kFrame);
     auto r = inner;
-    topBar = r.removeFromTop (70.0f);
+    topBar = r.removeFromTop (104.0f);
     r.removeFromTop (kSeparator);
     bottomBar = r.removeFromBottom (84.0f);
     r.removeFromBottom (kSeparator);
@@ -302,8 +305,10 @@ void HoneyPanel::resized()
     cards.clear();
 
     // Top: title | key | scale | snap | drift | vibrato | fit ... legend | logo
-    auto top = topBar.reduced (8.0f, 8.0f);
-    top.removeFromLeft (172.0f);
+    auto top = topBar.reduced (8.0f, 4.0f);
+    titleArea = top.removeFromLeft (236.0f).withTrimmedBottom (6.0f);
+    top.removeFromLeft (6.0f);
+    top = top.withSizeKeepingCentre (top.getWidth(), 56.0f);
     logoArea = top.removeFromRight (120.0f);
     top.removeFromRight (6.0f);
     legendArea = top.removeFromRight (92.0f);

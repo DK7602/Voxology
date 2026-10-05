@@ -24,6 +24,22 @@ col=lerp(col,c_white,np.clip((t-0.78)/0.14,0,1))
 col=lerp(col,c_white,np.clip(f-0.85,0,1)*3*0.6)
 col=lerp(col,c_deep*0.8,np.clip(0.1-f,0,1)*5*0.5)
 a=np.asarray(Image.fromarray(np.clip(col,0,255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.8)),dtype=np.float32)
+# 3D: a height field from the bands (pale stone raised, blue veins sunk), lit from the top left, glossy.
+from scipy.ndimage import gaussian_filter
+h=gaussian_filter(t,4.0)*1.0+gaussian_filter(f,1.5)*0.12
+gy,gx=np.gradient(h)
+nx,ny,nz=-gx*28,-gy*28,np.ones_like(h)
+nl=np.sqrt(nx*nx+ny*ny+nz*nz); nx,ny,nz=nx/nl,ny/nl,nz/nl
+L=np.array([-0.55,-0.65,0.52]); L=L/np.linalg.norm(L)
+diff=nx*L[0]+ny*L[1]+nz*L[2]
+shade=0.72+0.42*diff
+Hh=np.array([0,0,1.0])+L; Hh=Hh/np.linalg.norm(Hh)
+spec=np.clip(nx*Hh[0]+ny*Hh[1]+nz*Hh[2],0,1)**60
+a=a*shade[...,None]+255*spec[...,None]*0.55
+# broad polished sheen
+yy,xx=np.mgrid[0:H,0:W].astype(np.float32)
+sheen=np.clip(1-np.abs(((xx*0.55+yy)/H)-0.75)*2.2,0,1)**2*28
+a=a+sheen[...,None]
 r=np.random.default_rng(99)
 mask=(r.random((H,W))>0.9994)
 spk=Image.fromarray((mask*255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.6))
