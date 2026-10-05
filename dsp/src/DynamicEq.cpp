@@ -18,9 +18,6 @@ void DynamicEq::prepare (double sampleRate, int numChannels)
         band.cutAtk = onePole (info.attackS, sr);
         band.cutRel = onePole (info.releaseS, sr);
     }
-    learnFast = onePole (0.4, sr);
-    learnUp = onePole (kLearnUpSeconds, sr);
-    learnDown = onePole (kLearnDownSeconds, sr);
     freqGlide = onePole (0.020, sr / 8.0);
     voiceAvg = onePole (0.010, sr);
     voiceFall = onePole (2.0, sr);
@@ -181,11 +178,11 @@ void DynamicEq::process (double* const* ch, int nch, int n) noexcept
                 const bool on = params.enabled && params.maxCutDb[b] >= 0.05;
                 target = on && band.learnedSeconds >= kWarmUpSeconds ? std::clamp (kSlope * knee, 0.0, std::min (params.maxCutDb[b], kDynMaxCutDb)) : 0.0;
 
-                // Learn the normal from the voice itself: quick for the first moments, then it rises
-                // slowly and falls faster, so it follows how the band usually sits and the jumps
-                // themselves (even frequent ones) don't become "normal".
-                const double learn = band.learnedSeconds < 1.5 ? learnFast : ratioDb > band.normal ? learnUp : learnDown;
-                band.normal += (ratioDb - band.normal) * learn;
+                // Learn the normal from the voice itself: a running percentile (each sample nudges it
+                // up or down by a fixed step), so it settles where the band sits most of the time and
+                // neither the jumps nor the dips pull it far, however much the voice swings.
+                const double rate = (band.learnedSeconds < 1.5 ? kLearnFastDbPerS : kLearnDbPerS) / sr;
+                band.normal += ratioDb > band.normal ? rate * kNormalPercentile : -rate * (1.0 - kNormalPercentile);
                 band.learnedSeconds += 1.0 / sr;
             }
             band.cut += (target - band.cut) * (target > band.cut ? band.cutAtk : band.cutRel);

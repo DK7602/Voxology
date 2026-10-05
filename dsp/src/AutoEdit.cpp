@@ -556,7 +556,9 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         const auto& t = tunes[static_cast<size_t> (style)];
         auto& pt = p.pitch;
         const auto& kg = a.key;
-        const std::string keyName = std::string (kNoteNames[static_cast<size_t> (kg.key)]) + (kg.minor ? " minor" : " major");
+        std::string keyName = std::string (kNoteNames[static_cast<size_t> (kg.key)]) + (kg.minor ? " minor" : " major");
+        if (kg.ambiguous)
+            keyName += std::string (" or ") + kNoteNames[static_cast<size_t> (kg.altKey)] + (kg.altMinor ? " minor" : " major");
         if (a.f0Median <= 0.0 || a.pitchedShare < 15.0)
         {
             pt.amount = 0.0;
@@ -572,7 +574,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             pt.amount = std::round (amount);
             pt.speedMs = std::round (speed);
             pt.humanize = t.humanize;
-            const bool sure = kg.confidence >= 0.45;
+            const bool sure = kg.confidence >= 0.6 && ! kg.ambiguous;   // a wrong key is worse than Chromatic
             pt.key = kg.key;
             pt.scale = sure ? (kg.minor ? 2 : 1) : 0;
             if (sure)
@@ -786,17 +788,19 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                 one.freqHz[bi] = fc;
                 one.sensitivity = d.sensitivity;
                 const Run r2 = runBand (one, b);
-                if (r2.p95 > best.p95) { best = r2; bestHz = fc; }
+                if (r2.share <= 20.0 && r2.p95 > best.p95) { best = r2; bestHz = fc; }
             }
             d.freqHz[bi] = bestHz;
             const std::string name = info.name;
-            if (best.p95 < 1.5)
+            // Only clear, occasional jumps count: a spot that's over its normal much of the time is
+            // just how the voice moves (or a steady excess, Tone EQ's job), not a problem moment.
+            if (best.p95 < 2.5 || best.share > 20.0)
             {
                 reason ("dyneq", name, "Off", "Your " + std::string (b == 0 ? "low end" : b == 1 ? "low mids" : b == 2 ? "mids" : "upper mids") +
                         " (" + hz (zones[bi][0]) + " - " + hz (zones[bi][1]) + ") stay steady from word to word, so there's nothing to catch here.");
                 continue;
             }
-            d.maxCutDb[bi] = std::clamp (std::round (best.p95 * scale * 2.0) / 2.0, 2.0, 8.0);
+            d.maxCutDb[bi] = std::clamp (std::round (best.p95 * scale * 2.0) / 2.0, 2.0, 6.0);
             ++used;
             reason ("dyneq", name, "up to " + db (-d.maxCutDb[bi]) + " at " + hz (bestHz),
                     "Some words jump out around " + hz (bestHz) + ": " + sounds[bi] + ". The loudest of those moments rise about " + num (best.p95) +

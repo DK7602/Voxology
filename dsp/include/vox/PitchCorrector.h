@@ -146,7 +146,12 @@ private:
 
 /** Detects the key of a vocal from its sung pitches (fractional MIDI notes): pitch-class histogram
     vs the Krumhansl-Kessler major / minor profiles. confidence 0..1 (correlation margin). */
-struct KeyGuess { int key = 0; bool minor = true; double confidence = 0.0; double offCents = 0.0; };
+struct KeyGuess
+{
+    int key = 0; bool minor = true; double confidence = 0.0; double offCents = 0.0;
+    /** A neighbouring key (a note apart) fits about as well: the voice alone can't tell them apart. */
+    bool ambiguous = false; int altKey = 0; bool altMinor = false;
+};
 KeyGuess detectKey (const std::vector<double>& midiNotes);
 
 } // namespace vox

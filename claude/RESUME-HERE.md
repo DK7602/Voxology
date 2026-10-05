@@ -242,3 +242,19 @@ Dynamic EQ (dsp DynamicEq.h/.cpp, module 04, between Tone EQ and De-Esser; Modul
   Max Cut / Sensitivity, band selectivity, block-size invariance, Auto-Edit finds a bloom / leaves a steady voice).
 - Honest gap: tuned only on synthetic vocals. User test: run Auto-Edit on a real verse, open 04 DYNAMIC EQ, watch the
   orange cuts land on boomy / muddy / harsh words; A/B with MATCH. Retune thresholds from what they hear.
+
+## v0.3.1 fixes from the user's first Cubase test (2026-10-05)
+- Learn panel flickered: live tips (Pitch BIG JUMP, Dynamic EQ AT THE LIMIT) appeared / vanished many times a second and
+  each change rebuilt the panel. Now each tip stays >= 4 s and updates in place (app.js liveTips / stickyTips).
+- Dynamic EQ on a REAL vocal: Auto-Edit set all 4 bands to -8 dB, cutting ~72 % of the time. Cause: "normal" tracked the
+  low side of the band (rise 4 s / fall 1 s); real voices swing much more than the synthetic ones. Now "normal" is a running
+  60th percentile (fixed-step up/down, 8 dB/s, 40 dB/s for the first 1.5 s); threshold 6.5 - 0.05 x Sens (50 % = 4 dB).
+  Auto-Edit: a band only counts if P95 cut >= 2.5 dB AND it cuts > 1 dB at most 20 % of the time; Max Cut 2-6 dB.
+  On the user's dry vocal (Don_Birthday_2024, 105 s, f0 ~246 Hz, heavy rumble): Mud -4.5 @ 315 Hz, Nasal -4.5 @ 1.2 kHz,
+  Boom / Harsh off. Test audio kept only in the session scratchpad (not in the repo).
+- Key: user's key app says C major; Voxology / Honey Tune said G major. Whole song = C major; the first ~50 s are sung
+  mostly on G (11 of 19 s) with almost no C, so from the voice alone that part is genuinely G-leaning. detectKey now: among
+  close runners-up (within 0.15) with different notes, the notes only one key has decide; if those are barely sung
+  (< 4 % apart) the guess is "ambiguous" (KeyGuess.ambiguous / altKey / altMinor; confidence capped at 0.4). Auto-Edit only
+  trusts a key at >= 60 % and not ambiguous (else Chromatic + "set your beat's key"); Honey Tune shows "G major or C major".
+  Lesson: the beat decides the key; tell the user to set Key / Scale from the beat when unsure.

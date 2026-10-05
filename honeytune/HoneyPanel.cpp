@@ -156,7 +156,9 @@ void HoneyPanel::refresh()
             status = String (s.notes.size()) + " notes  |  key " + vox::kNoteNames[static_cast<size_t> (s.key)] + " "
                    + vox::kScaleNames[static_cast<size_t> (s.scale)] + "  |  sung off-key " + String (sungOff) + ", fixed " + String (fixed)
                    + ", still off-key " + String (off) + "  |  " + String (edited) + " changed by hand  |  heard " + vox::kNoteNames[static_cast<size_t> (s.guess.key)]
-                   + (s.guess.minor ? " minor" : " major") + " (" + String (roundToInt (s.guess.confidence * 100)) + " % sure)";
+                   + (s.guess.minor ? " minor" : " major")
+                   + (s.guess.ambiguous ? String (" or ") + vox::kNoteNames[static_cast<size_t> (s.guess.altKey)] + (s.guess.altMinor ? " minor" : " major") : String())
+                   + " (" + String (roundToInt (s.guess.confidence * 100)) + " % sure)";
             break;
         case 1: status = "Listening to the clip..."; break;
         case 3: status = "Couldn't read the clip's audio."; break;

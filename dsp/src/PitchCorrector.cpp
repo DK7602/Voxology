@@ -3,6 +3,7 @@
 #include "vox/FilterDesign.h"
 
 #include <algorithm>
+#include <numeric>
 #include <cmath>
 #include <numbers>
 #ifdef VOX_PITCH_DEBUG
@@ -472,15 +473,56 @@ KeyGuess detectKey (const std::vector<double>& midiNotes)
         }
         return sxy / std::sqrt (sxx * syy + 1e-30);
     };
+    std::array<std::array<double, 2>, 12> score {};
     double best = -2, second = -2;
     for (int k = 0; k < 12; ++k)
         for (int mode = 0; mode < 2; ++mode)
         {
             const double r = corrWith (mode ? minor : major, k);
+            score[static_cast<size_t> (k)][static_cast<size_t> (mode)] = r;
             if (r > best) { second = best; best = r; g.key = k; g.minor = mode == 1; }
             else if (r > second) second = r;
         }
+
+    // Keys a note apart (C major vs G major: F vs F#) score almost the same, and the profile
+    // over-trusts the note a melody rests on (a tune that sits on G looks like G major). Among the
+    // close runners-up, the notes only one key has decide; if they're barely sung, say it's a toss-up.
+    auto scaleSet = [] (int key, bool isMinor)
+    {
+        static constexpr std::array<int, 7> maj { 0, 2, 4, 5, 7, 9, 11 }, mnr { 0, 2, 3, 5, 7, 8, 10 };
+        std::array<bool, 12> in {};
+        for (int step : isMinor ? mnr : maj) in[static_cast<size_t> ((key + step) % 12)] = true;
+        return in;
+    };
+    const double total = std::accumulate (hist.begin(), hist.end(), 0.0);
+    double bestR = best;
+    for (int pass = 0; pass < 2; ++pass)
+        for (int k = 0; k < 12; ++k)
+            for (int mode = 0; mode < 2; ++mode)
+            {
+                const double r = score[static_cast<size_t> (k)][static_cast<size_t> (mode)];
+                if ((k == g.key && (mode == 1) == g.minor) || r < bestR - 0.15) continue;
+                const auto a = scaleSet (g.key, g.minor), b = scaleSet (k, mode == 1);
+                if (a == b) continue;   // relative major / minor: same notes, same tuning
+                double onlyA = 0.0, onlyB = 0.0;
+                for (size_t i = 0; i < 12; ++i)
+                {
+                    if (a[i] && ! b[i]) onlyA += hist[i];
+                    if (b[i] && ! a[i]) onlyB += hist[i];
+                }
+                if (pass == 0 && onlyB > onlyA)
+                {
+                    // The deciding notes favour the runner-up: it wins.
+                    g.key = k; g.minor = mode == 1; bestR = r;
+                }
+                else if (pass == 1 && onlyA - onlyB < 0.04 * total && ! g.ambiguous)
+                {
+                    g.ambiguous = true;
+                    g.altKey = k; g.altMinor = mode == 1;
+                }
+            }
     g.confidence = std::clamp (best * 0.7 + (best - second) * 3.0, 0.0, 1.0);
+    if (g.ambiguous) g.confidence = std::min (g.confidence, 0.4);
     const int scale = g.minor ? 2 : 1;
     double off = 0.0;
     for (double m : midiNotes)

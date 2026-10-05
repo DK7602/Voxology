@@ -13,7 +13,7 @@ constexpr double kSr = 48000.0;
 
 /** A clean voice whose "oh" vowels bloom: every 1.2 s, for 250 ms, a bell at bloomHz rises by
     bloomDb (smooth 30 ms fades). Scaled so the voice sits at levelDb RMS. */
-std::vector<float> bloomingVoice (double levelDb, double bloomHz = 350.0, double bloomDb = 12.0, double seconds = 8.0)
+std::vector<float> bloomingVoice (double levelDb, double bloomHz = 350.0, double bloomDb = 12.0, double seconds = 8.0, double period = 1.2)
 {
     auto v = testsig::vocal (kSr, seconds, -120.0, -60.0, 7, 140.0);
     // Make it continuous (no word gaps), so the bloom is the only thing that changes.
@@ -31,7 +31,7 @@ std::vector<float> bloomingVoice (double levelDb, double bloomHz = 350.0, double
     double e = 0.0;
     for (size_t i = 0; i < src.size(); ++i)
     {
-        const double t = std::fmod (static_cast<double> (i) / kSr, 1.2);
+        const double t = std::fmod (static_cast<double> (i) / kSr, period);
         double env = 0.0;
         if (t >= 0.6 && t < 0.85) env = std::min ({ 1.0, (t - 0.6) / 0.03, (0.85 - t) / 0.03 });
         const double b = bell.process (src[i]);
@@ -63,6 +63,7 @@ DynEqParams mudOnly (double maxCut = 8.0)
     DynEqParams p;
     p.maxCutDb = { 0, maxCut, 0, 0 };
     p.freqHz[1] = 350.0;
+    p.sensitivity = 75.0;   // the test bloom rises ~5 dB over the rest of the voice
     return p;
 }
 
@@ -144,7 +145,7 @@ TEST_CASE ("Dynamic EQ: a steady tone (no bloom) is left alone; Max Cut and Sens
         std::vector<std::array<double, kDynBands>> cuts;
         DynamicEq m;
         auto p = mudOnly (3.0);
-        p.sensitivity = 80.0;
+        p.sensitivity = 95.0;
         run (m, p, bloomingVoice (-20.0), block, &cuts);
         double in = 0.0, out = 0.0;
         bloomCuts (cuts, block, 1, in, out);
@@ -184,7 +185,7 @@ TEST_CASE ("Dynamic EQ: other bands don't react to a mud bloom; results don't de
 
 TEST_CASE ("Auto-Edit finds a blooming spot and sets the Dynamic EQ there; a steady voice gets none", "[dyneq][autoedit]")
 {
-    const auto bloom = autoEdit ({ bloomingVoice (-20.0, 400.0, 12.0, 14.0) }, kSr, { 0, 1, 0.0 });
+    const auto bloom = autoEdit ({ bloomingVoice (-20.0, 400.0, 18.0, 16.0, 2.4) }, kSr, { 0, 1, 0.0 });
     REQUIRE (bloom.ok);
     const auto& d = bloom.params.dynEq;
     INFO ("mud " << d.maxCutDb[1] << " dB at " << d.freqHz[1] << " Hz");
@@ -194,7 +195,7 @@ TEST_CASE ("Auto-Edit finds a blooming spot and sets the Dynamic EQ there; a ste
     CHECK (d.maxCutDb[3] == 0.0);   // nothing harsh jumps out
     CHECK_FALSE (bloom.kept[static_cast<size_t> (Module::dynEq)]);
 
-    const auto steady = autoEdit ({ bloomingVoice (-20.0, 400.0, 0.0, 14.0) }, kSr, { 0, 1, 0.0 });
+    const auto steady = autoEdit ({ bloomingVoice (-20.0, 400.0, 0.0, 16.0, 2.4) }, kSr, { 0, 1, 0.0 });
     REQUIRE (steady.ok);
     for (double c : steady.params.dynEq.maxCutDb) CHECK (c == 0.0);
     CHECK (steady.kept[static_cast<size_t> (Module::dynEq)]);

@@ -43,13 +43,14 @@ class DynamicEq
 {
 public:
     /** How far (dB) a band may rise above the voice's normal balance before it's pulled back
-        (Sensitivity 0 % = 5.5 dB, 50 % = 3 dB, 100 % = 0.5 dB). */
-    static double thresholdDb (double sensitivity) noexcept { return 5.5 - 0.05 * std::clamp (sensitivity, 0.0, 100.0); }
+        (Sensitivity 0 % = 6.5 dB, 50 % = 4 dB, 100 % = 1.5 dB). */
+    static double thresholdDb (double sensitivity) noexcept { return 6.5 - 0.05 * std::clamp (sensitivity, 0.0, 100.0); }
     static constexpr double kKneeDb = 3.0;
     /** dB of cut per dB over the threshold. Above 1 because when one slice blooms the rest of the
         voice rises a little too, so the band-vs-rest reading understates the bloom. */
     static constexpr double kSlope = 1.5;
-    static constexpr double kLearnUpSeconds = 4.0, kLearnDownSeconds = 1.0;   // how "your normal" follows the voice
+    static constexpr double kNormalPercentile = 0.6;   // "your normal" = where the band sits 60 % of the time
+    static constexpr double kLearnDbPerS = 8.0, kLearnFastDbPerS = 40.0;   // how fast it follows (first 1.5 s fast)
     static constexpr double kWarmUpSeconds = 0.05;   // voice heard before the first cut
     static constexpr double kVoiceFloorDb = -60.0;   // quieter than this (RMS dBFS) = not singing: hold
     static constexpr double kVoiceWindowDb = 24.0;   // further than this under your recent voice = a gap: hold
@@ -101,7 +102,7 @@ private:
     std::array<Biquad, 2> sibHp {};                     // above 6 kHz: tells an "s" from a harsh note
     double sibEnv = 0.0, sibEnv2 = 0.0;
     double voiceEnv = 0.0, voiceEnv2 = 0.0, voicePeak = 0.0, voiceAvg = 0.0, voiceFall = 0.0;   // recent voice level (energy)
-    double learnFast = 0.0, learnUp = 0.0, learnDown = 0.0, freqGlide = 0.0;
+    double freqGlide = 0.0;
     int countdown = 0;
     std::array<double, kDynBands> maxCut {};
 };

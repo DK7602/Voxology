@@ -823,7 +823,7 @@ function renderModuleLearn() {
   const m = MODULES[selected], L = LEARN[m.key];
   body.append(head(`${String(selected + 1).padStart(2, "0")} ${m.name}`), para(L.does));
   if (m.onId && !on(m.onId)) body.append(tip("SWITCHED OFF", "This module is off, so it doesn't change your vocal.", "calm", { need: "No.", steps: ["Click ON at the top of the module (or the dot on its cell) to use it."] }));
-  L.live().forEach((t) => body.append(t));
+  liveTips(m).forEach(([, v]) => body.append(v.el));
   body.append(head("HOW TO USE IT"), list(L.how));
   if (report && report.ok) {
     const rs = (report.reasons || []).filter((r) => r.module === m.key);
@@ -834,11 +834,31 @@ function renderModuleLearn() {
   }
 }
 
+// Live tips come and go with the meters many times a second. Each one stays at least 4 s once it
+// shows (a newer reading of the same tip just updates it in place), so the panel never flickers.
+const stickyTips = new Map();   // module + title -> { el, until }
+function liveTips(m) {
+  const now = performance.now();
+  for (const t of LEARN[m.key].live()) {
+    const id = m.key + "|" + t.querySelector(".t-title").textContent;
+    const entry = stickyTips.get(id);
+    if (!entry) { stickyTips.set(id, { el: t, until: now + 4000 }); continue; }
+    if (entry.el.textContent !== t.textContent) {
+      if (entry.el.isConnected) entry.el.replaceWith(t);   // new numbers, same place
+      entry.el = t;
+    }
+    entry.until = now + 4000;
+  }
+  for (const [id, v] of stickyTips) if (v.until < now) stickyTips.delete(id);
+  return [...stickyTips].filter(([id]) => id.startsWith(m.key + "|"));
+}
+
 let learnKey = "";
 function renderLearn(force = true) {
-  // Live tips change with the meters: rebuild only when what's shown would change.
+  // Rebuild only when which tips are shown changes (their text updates in place).
   const m = MODULES[selected];
-  const key = learnTab + selected + (learnTab === "module" ? LEARN[m.key].live().map((t) => t.textContent).join("|") + (m.onId ? on(m.onId) : "") : "") + (report ? report.time : "");
+  const tips = learnTab === "module" ? liveTips(m) : [];
+  const key = learnTab + selected + tips.map(([id]) => id).join("|") + (m.onId ? on(m.onId) : "") + (report ? report.time : "");
   if (!force && key === learnKey) return;
   learnKey = key;
   const scroll = body.scrollTop;
