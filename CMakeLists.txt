@@ -30,6 +30,16 @@ if(VOX_BUILD_PLUGIN)
         GIT_SHALLOW    TRUE)
     FetchContent_MakeAvailable(JUCE)
     add_subdirectory(plugin)
+
+    # Honey Tune (the note editor) is an ARA plug-in: Celemony's ARA SDK (Apache 2.0), a tagged release.
+    FetchContent_Declare(ara_sdk
+        GIT_REPOSITORY https://github.com/Celemony/ARA_SDK.git
+        GIT_TAG        releases/2.3.0
+        GIT_SHALLOW    TRUE
+        GIT_SUBMODULES ARA_API ARA_Library)
+    FetchContent_MakeAvailable(ara_sdk)
+    juce_set_ara_sdk_path("${ara_sdk_SOURCE_DIR}")
+    add_subdirectory(honeytune)
 endif()
 
 if(VOX_BUILD_TESTS)

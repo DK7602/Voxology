@@ -44,7 +44,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/_deps
-          key: deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt') }}
+          key: deps-ara-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt') }}
 
       - name: Fetch WebView2 SDK (Windows)
         if: runner.os == 'Windows'
@@ -73,6 +73,8 @@ jobs:
             build/plugin/Voxology_artefacts/Release/VST3
             build/plugin/Voxology_artefacts/Release/AU
             build/plugin/Voxology_artefacts/Release/Standalone
+            build/honeytune/HoneyTune_artefacts/Release/VST3
+            build/honeytune/HoneyTune_artefacts/Release/AU
           if-no-files-found: warn
 
       - name: pluginval (macOS)
@@ -131,9 +133,14 @@ jobs:
                     "--vst3validator", "`"$PWD\vst3validator\validator.exe`"", "--output-dir", "`"$PWD\pluginval-logs`"",
                     "--validate", "`"$PWD\build\plugin\Voxology_artefacts\Release\VST3\Voxology.vst3`"")
           $p = Start-Process -FilePath ".\pluginval\pluginval.exe" -ArgumentList $args -Wait -PassThru -NoNewWindow
+          Write-Host "pluginval (Voxology) exit code: $($p.ExitCode)"
+          # Honey Tune as a plain insert (it passes audio through; ARA itself needs a host).
+          $args[-1] = "`"$PWD\build\honeytune\HoneyTune_artefacts\Release\VST3\Honey Tune.vst3`""
+          $h = Start-Process -FilePath ".\pluginval\pluginval.exe" -ArgumentList $args -Wait -PassThru -NoNewWindow
+          Write-Host "pluginval (Honey Tune) exit code: $($h.ExitCode)"
           Get-ChildItem pluginval-logs -Filter *.txt | ForEach-Object { Get-Content $_.FullName | Select-String -Pattern "failed|FAILED|ERROR|Result:" }
-          Write-Host "pluginval exit code: $($p.ExitCode)"
-          exit $p.ExitCode
+          if ($p.ExitCode -ne 0) { exit $p.ExitCode }
+          exit $h.ExitCode
 
       - name: Upload validation logs
         if: always() && runner.os == 'Windows'

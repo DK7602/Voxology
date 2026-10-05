@@ -141,6 +141,14 @@ guessed B major (Rap run, 65 %) / B minor (Melodic run, unsure -> Chromatic). Se
 Idea for later: ARA hosts can pass the song key to the plug-in (ARA content: key signatures) -> Honey Tune /
 Pitch could use the DAW's key; Key Compass is the user's own earlier plug-in (separate project).
 
+Step 2 BUILT (2026-10-05, user said "B Major render is great"): honeytune/HoneyTunePlugin.cpp, target HoneyTune
+(VST3 + AU, IS_ARA_EFFECT, code Hny1). ARA_SDK must be releases/2.3.0 (JUCE 8.0.15 needs ARAChannelFormat.cpp).
+Doc controller: on sample access -> reads whole clip (message thread), ThreadPool job analyse + findNotes + detectKey,
+render per channel with document Settings (key Auto/0-11, scale, snap, drift, vibrato; saved in ARA archive).
+Playback renderer plays rendered audio (spin try-lock), returns false while not ready. Plain JUCE editor (sliders +
+status). CI: pluginval 10 on Honey Tune as insert (pass-through). NEXT: user test in Cubase Artist 14
+(event -> Audio > Extensions > Honey Tune), then step 3 honeycomb note editor, Capture mode for non-ARA hosts.
+
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble
 honeycomb cell on a piano-roll grid (off-key notes glow blue; pulled into key the cell "fills" gold).
