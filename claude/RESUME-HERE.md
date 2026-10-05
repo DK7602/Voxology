@@ -77,6 +77,16 @@ Key / Scale (Pitch page: 12-key grid, scale list, live "you sing -> you get" rea
 Bug fixed on the way: grains written before the start point came back one ring-length later.
 NEXT for pitch: test on the user's real vocals; maybe formant control, MIDI note input, a note graph.
 
+## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
+User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble
+honeycomb cell on a piano-roll grid (off-key notes glow blue; pulled into key the cell "fills" gold).
+Audio access: ARA2 (Cubase Pro/Artist, Nuendo, Studio One, Logic, Reaper, Cakewalk/Sonar, Pro Tools
+2022.12+) via JUCE's ARA support; Capture mode (play the part once) for non-ARA hosts (FL Studio,
+Ableton Live, Cubase Elements: verify FL). Features: drag notes, pitch drift / vibrato / slide
+smoothing, note length, snap-all-to-key start, Auto-Edit suggests fixes + Learn explains. Offline-quality
+shifting (no live latency limit). Live Pitch module stays. Ask user's Cubase edition (Elements = no ARA).
+Housekeeping: trademark check "Voxology" / "Honey Tune" before selling (VOX amps).
+
 ## Honest gaps vs Nectar 4 Advanced (the plan)
 1. Pitch correction: DONE in v0.2.0 (see above).
 2. Unmask vs the beat (Nectar's "Audio Lens" / unmasking): sidechain the beat, dip the beat's
