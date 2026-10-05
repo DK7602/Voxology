@@ -19,7 +19,7 @@ juce_add_plugin(Voxology
     COPY_PLUGIN_AFTER_BUILD     FALSE
     NEEDS_WEB_BROWSER           TRUE
     NEEDS_WEBVIEW2              TRUE
-    VST3_CATEGORIES             Fx Dynamics EQ
+    VST3_CATEGORIES             Fx Vocals
     AU_MAIN_TYPE                kAudioUnitType_Effect)
 
 # The web UI, embedded in the binary. File names must be unique (they are served flat).
