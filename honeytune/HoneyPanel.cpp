@@ -98,6 +98,12 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     };
     fit.onClick = [this] { roll.fitAll(); };   // also undoes your zoom
     roll.onSelectionChanged = [this] { updateNoteControls(); };
+    roll.onSeek = [this] (double t)
+    {
+        if (model != nullptr) model->seek (t);
+        lastPosition = t;   // the readout shows it straight away
+        repaint (readoutArea.toNearestInt());
+    };
     updateNoteControls();
     sendLookAndFeelChange();   // the slider boxes were made before their parent had the cream look
 }

@@ -22,6 +22,7 @@ public:
     void setSelected (int index);
     const honeyui::Snapshot& getSnapshot() const { return snap; }
     std::function<void()> onSelectionChanged;
+    std::function<void (double)> onSeek;   // clicked the ruler (clip seconds)
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -71,6 +72,7 @@ private:
     bool dragging = false;
     double dragStartTarget = 0.0, dragTarget = 0.0;
     float dragStartY = 0.0f;
+    bool seeking = false;
 
     juce::ScrollBar hBar { false }, vBar { true };
     juce::Image honeycomb;   // the faint background pattern (cached per size)

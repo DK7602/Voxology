@@ -149,6 +149,8 @@ struct Model
     /** A / B: hear (and see) the clip as it was recorded, edits kept but bypassed. */
     virtual void setOriginal (bool) = 0;
     virtual bool isOriginal() = 0;
+    /** Ask the host to move its playhead to this clip time (seconds). */
+    virtual void seek (double /*clipSeconds*/) {}
 };
 
 } // namespace honeyui

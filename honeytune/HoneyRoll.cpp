@@ -553,6 +553,13 @@ void HoneyRoll::drawRuler (Graphics& g)
 void HoneyRoll::mouseDown (const MouseEvent& e)
 {
     grabKeyboardFocus();
+    // Click (or drag) on the ruler: move the host's playhead there.
+    if (e.position.y < (float) kRulerHeight && e.position.x >= gridArea().getX())
+    {
+        seeking = true;
+        if (onSeek) onSeek (std::max (0.0, secondsAt (e.position.x)));
+        return;
+    }
     const int hit = noteAt (e.position);
     setSelected (hit);
     if (hit >= 0)
@@ -565,6 +572,11 @@ void HoneyRoll::mouseDown (const MouseEvent& e)
 
 void HoneyRoll::mouseDrag (const MouseEvent& e)
 {
+    if (seeking)
+    {
+        if (onSeek) onSeek (std::max (0.0, secondsAt (jmax (gridArea().getX(), e.position.x))));
+        return;
+    }
     if (! dragging || selected < 0) return;
     const double moved = (dragStartY - e.position.y) / rowHeight;
     dragTarget = e.mods.isAltDown() ? dragStartTarget + moved                       // free (cents)
@@ -575,6 +587,7 @@ void HoneyRoll::mouseDrag (const MouseEvent& e)
 
 void HoneyRoll::mouseUp (const MouseEvent&)
 {
+    seeking = false;
     if (! dragging) return;
     dragging = false;
     if (selected >= 0 && model != nullptr && std::abs (dragTarget - dragStartTarget) > 1.0e-6)
@@ -603,6 +616,7 @@ void HoneyRoll::mouseDoubleClick (const MouseEvent& e)
 
 void HoneyRoll::mouseMove (const MouseEvent& e)
 {
+    if (e.position.y < (float) kRulerHeight) { setMouseCursor (MouseCursor::PointingHandCursor); return; }
     const int hit = noteAt (e.position);
     if (hit != hovered) { hovered = hit; repaint(); }
     setMouseCursor (hit >= 0 ? MouseCursor::UpDownResizeCursor : MouseCursor::NormalCursor);

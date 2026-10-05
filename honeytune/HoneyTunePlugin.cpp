@@ -610,6 +610,12 @@ private:
     void resetAllEdits() override { if (dc != nullptr && state != nullptr) dc->resetAllEdits (state); }
     void setOriginal (bool o) override { if (dc != nullptr) dc->setOriginal (o); }
     bool isOriginal() override { return dc != nullptr && dc->isOriginal(); }
+    void seek (double clipSeconds) override
+    {
+        if (dc == nullptr || state == nullptr) return;
+        if (auto* playback = dc->getDocumentController()->getHostPlaybackController())
+            playback->requestSetPlaybackPosition (clipSeconds + panel.roll.getSnapshot().timeline.songOffset);
+    }
 
     void onNewSelection (const ARAViewSelection& sel) override
     {
