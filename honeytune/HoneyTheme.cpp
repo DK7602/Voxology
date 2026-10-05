@@ -56,6 +56,28 @@ void fillGold (Graphics& g, const Path& p, Rectangle<float> light)
     g.fillPath (p);
 }
 
+void drawGoldBar (Graphics& g, Rectangle<float> r, float corner)
+{
+    g.setColour (Colours::black.withAlpha (0.22f));
+    g.fillRoundedRectangle (r.translated (0.0f, 1.5f).expanded (0.5f, 0.5f), corner);
+    Path p;
+    p.addRoundedRectangle (r, corner);
+    fillGold (g, p, r);
+    g.setColour (goldLight.withAlpha (0.9f));
+    g.drawHorizontalLine (roundToInt (r.getY()), r.getX() + corner, r.getRight() - corner);
+    g.setColour (goldDeep.withAlpha (0.95f));
+    g.drawHorizontalLine (roundToInt (r.getBottom()) - 1, r.getX() + corner, r.getRight() - corner);
+}
+
+void drawGoldText (Graphics& g, const String& text, Rectangle<float> r, Font font, Justification j)
+{
+    g.setFont (font);
+    g.setColour (Colour (0xff0d1c2e).withAlpha (0.75f));
+    g.drawText (text, r.translated (1.0f, 1.5f), j, false);
+    g.setGradientFill (ColourGradient (Colour (0xfffff0c0), 0, r.getY() + r.getHeight() * 0.2f, Colour (0xffc08a2a), 0, r.getBottom() - r.getHeight() * 0.2f, false));
+    g.drawText (text, r, j, false);
+}
+
 void drawGoldFrame (Graphics& g, Rectangle<float> r, float t, float corner)
 {
     Path frame;

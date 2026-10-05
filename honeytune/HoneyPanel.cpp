@@ -52,6 +52,8 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     label (noteDriftLabel, "THIS NOTE: DRIFT");
     label (noteVibratoLabel, "THIS NOTE: VIBRATO");
     for (auto* c : { &key, &scale }) addAndMakeVisible (*c);
+    for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
+        l->setVisible (false);   // painted in gold by the panel
     for (auto* b : { &snapNote, &resetNote, &resetAll, &fit }) addAndMakeVisible (*b);
 
     key.onChange = scale.onChange = [this] { applySettings(); };
@@ -196,12 +198,12 @@ void HoneyPanel::paint (Graphics& g)
     const auto inner = fr.reduced (kFrame);
 
     // Marble bars (top and bottom); the roll paints the middle.
-    drawMarble (g, topBar, 0.05f);
+    drawMarble (g, topBar, 0.0f, { 120.0f, 40.0f });
     drawMarble (g, bottomBar, 0.0f, { 200.0f, 300.0f });
 
     // Glass cards behind every group of controls and text.
     for (const auto& c : cards)
-        drawGlass (g, c, 7.0f, 0.78f);
+        drawGlass (g, c, 7.0f, 0.6f);
 
     // Title: honeycomb cell + HONEY TUNE
     {
@@ -217,13 +219,13 @@ void HoneyPanel::paint (Graphics& g)
         fillGold (g, hex, hex.getBounds());
         g.setColour (goldDeep);
         g.strokePath (hex, PathStrokeType (1.2f));
-        g.setColour (ink);
-        g.setFont (FontOptions (20.0f, Font::bold));
-        g.drawText ("HONEY TUNE", Rectangle<float> (cx + 18.0f, cy - 14.0f, 150.0f, 26.0f), Justification::centredLeft);
-        g.setFont (FontOptions (11.0f, Font::bold));
-        g.setColour (navy);
-        g.drawText ("by Voxology", Rectangle<float> (cx + 19.0f, cy + 11.0f, 120.0f, 14.0f), Justification::centredLeft);
+        drawGoldText (g, "HONEY TUNE", Rectangle<float> (cx + 18.0f, cy - 14.0f, 160.0f, 28.0f), FontOptions (22.0f, Font::bold), Justification::centredLeft);
+        drawGoldText (g, "by Voxology", Rectangle<float> (cx + 19.0f, cy + 12.0f, 120.0f, 14.0f), FontOptions (11.5f, Font::bold), Justification::centredLeft);
     }
+
+    // Control labels on the marble, in embossed gold.
+    for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
+        drawGoldText (g, l->getText(), l->getBounds().toFloat(), FontOptions (12.5f, Font::bold), Justification::centredLeft);
 
     // Legend
     {
@@ -313,8 +315,7 @@ void HoneyPanel::resized()
     {
         auto col = top.removeFromLeft (width);
         top.removeFromLeft (8.0f);
-        cards.push_back (col);
-        col = col.reduced (8.0f, 4.0f);
+        col = col.reduced (4.0f, 4.0f);
         l.setBounds (col.removeFromTop (16.0f).toNearestInt());
         c.setBounds (col.removeFromTop (26.0f).toNearestInt());
     };

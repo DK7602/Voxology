@@ -18,6 +18,10 @@ void drawMarble (juce::Graphics&, juce::Rectangle<float> area, float wash, juce:
 void fillMarble (juce::Graphics&, const juce::Path&, int seed, float wash, float opacity = 1.0f);
 /** Fill a path with polished gold (texture + light from the top). */
 void fillGold (juce::Graphics&, const juce::Path&, juce::Rectangle<float> lightArea);
+/** A raised, bevelled gold bar (shadow under it, light top edge, dark bottom edge). */
+void drawGoldBar (juce::Graphics&, juce::Rectangle<float> r, float corner = 1.5f);
+/** Embossed gold text (dark shadow under a polished gold fill). */
+void drawGoldText (juce::Graphics&, const juce::String&, juce::Rectangle<float>, juce::Font, juce::Justification);
 /** A gold frame (bevelled border) of `thickness` around `r`, rounded. */
 void drawGoldFrame (juce::Graphics&, juce::Rectangle<float> r, float thickness, float corner);
 /** Honey drips hanging from the line y = `edgeY` between x0 and x1 (deterministic per seed). */

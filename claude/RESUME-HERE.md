@@ -164,7 +164,10 @@ Step 3b (2026-10-05): user's mockup look (blue/white liquid marble, gold frame, 
 (marble/gold/logo via juce_add_binary_data HoneyAssets: assets/marble_blue_white.jpg [procedural domain-warped],
 gold.jpg [mirrored = seamless], logo.png [from plugin/ui/assets/logo.webp]); Look = glass combos/buttons, gold
 sliders with marble knobs, gold scrollbars. Gotcha: Graphics::drawImage uses the current colour's opacity -> setOpacity(1).
-Kept thin gold row lines (mockup's thick gold bars would hide notes). Editor 1200 x 680.
+Round 2 (user: "more like mine, more realistic, cream glow in-key / blue glow off-key like the knobs"): agate marble
+(assets/src/make_marble.py) with gold flecks, glitter gold (mirrored seamless), raised bevelled gold bars on rows
+OUTSIDE the key (black keys when chromatic) = mockup's alternating bars, gold honeycomb lines, DropShadow glows
+behind cells, embossed gold title / labels (drawGoldText). Editor 1200 x 680.
 
 ## Honey Tune (decided 2026-10-05; build AFTER the user confirms v0.2 works in Cubase)
 User's name for our Melodyne-style note editor: "Honey Tune". Each note = a gold-rimmed blue-marble

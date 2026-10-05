@@ -31,7 +31,7 @@ private:
     std::unique_ptr<honeytheme::Look> look;
     juce::Rectangle<float> topBar, bottomBar, legendArea, logoArea, noteInfoArea, statusArea;
     std::vector<juce::Rectangle<float>> cards;
-    static constexpr float kFrame = 7.0f, kSeparator = 5.0f, kDripRoom = 24.0f;
+    static constexpr float kFrame = 9.0f, kSeparator = 6.0f, kDripRoom = 24.0f;
     honeyui::Model* model = nullptr;
 
     juce::ComboBox key, scale;
