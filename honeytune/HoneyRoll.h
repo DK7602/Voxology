@@ -54,6 +54,7 @@ private:
     honeyui::Model* model = nullptr;
     honeyui::Snapshot snap;
     bool fitted = false;
+    float lastGridHeight = 0.0f;
 
     double viewStart = 0.0, pixelsPerSecond = 40.0;   // time axis
     double topMidi = 72.0, rowHeight = 18.0;          // pitch axis (topMidi = the row at the top edge)

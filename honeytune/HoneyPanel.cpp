@@ -210,7 +210,7 @@ void HoneyPanel::paint (Graphics& g)
     if (const auto img = title(); img.isValid())
     {
         // A soft dark halo first, so the marble letters stand off the marble bar.
-        const auto placed = RectanglePlacement (RectanglePlacement::centred).appliedTo (img.getBounds().toFloat(), titleArea);
+        const auto placed = RectanglePlacement (RectanglePlacement::xLeft | RectanglePlacement::yBottom).appliedTo (img.getBounds().toFloat(), titleArea);
         const auto scaled = img.rescaled (roundToInt (placed.getWidth()), roundToInt (placed.getHeight()), Graphics::highResamplingQuality);
         Graphics::ScopedSaveState save (g);
         g.addTransform (AffineTransform::translation (placed.getX(), placed.getY()));
@@ -218,8 +218,6 @@ void HoneyPanel::paint (Graphics& g)
         g.setOpacity (1.0f);
         g.drawImageAt (scaled, 0, 0);
     }
-    drawCaps (g, "by Voxology", titleArea.withTrimmedLeft (titleArea.getWidth() * 0.42f).removeFromBottom (15.0f).translated (0.0f, 3.0f),
-                  FontOptions (12.0f, Font::bold), Justification::centredLeft);
 
     // Control labels on the marble, in embossed gold.
     for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
@@ -260,7 +258,6 @@ void HoneyPanel::paint (Graphics& g)
     g.drawFittedText (status, statusArea.reduced (10.0f, 0.0f).toNearestInt(), Justification::centredLeft, 1);
 
     // Gold: the drips, the frame and the bars between the sections.
-    drawDrips (g, fr);
     drawGoldFrame (g, fr, kFrame, 12.0f);
     for (const auto& sep : { Rectangle<float> (inner.getX(), topBar.getBottom(), inner.getWidth(), kSeparator),
                              Rectangle<float> (inner.getX(), bottomBar.getY() - kSeparator, inner.getWidth(), kSeparator) })
@@ -300,18 +297,20 @@ void HoneyPanel::resized()
 {
     const auto inner = frameArea().reduced (kFrame);
     auto r = inner;
-    topBar = r.removeFromTop (104.0f);
+    topBar = r.removeFromTop (76.0f);
     r.removeFromTop (kSeparator);
-    bottomBar = r.removeFromBottom (84.0f);
+    bottomBar = r.removeFromBottom (78.0f);
     r.removeFromBottom (kSeparator);
     roll.setBounds (r.toNearestInt());
     cards.clear();
 
     // Top: title | key | scale | snap | drift | vibrato | fit ... legend | logo
+    // The title's drips run down to just above the gold trim.
+    titleArea = topBar.withTrimmedLeft (10.0f).withTrimmedTop (5.0f).withTrimmedBottom (3.0f).withWidth (190.0f);
     auto top = topBar.reduced (8.0f, 4.0f);
-    titleArea = top.removeFromLeft (236.0f).withTrimmedBottom (6.0f);
+    top.removeFromLeft (192.0f);
     top.removeFromLeft (6.0f);
-    top = top.withSizeKeepingCentre (top.getWidth(), 56.0f);
+    top = top.withSizeKeepingCentre (top.getWidth(), 54.0f);
     logoArea = top.removeFromRight (120.0f);
     top.removeFromRight (6.0f);
     legendArea = top.removeFromRight (92.0f);
@@ -335,7 +334,7 @@ void HoneyPanel::resized()
     column (sliderW, vibratoLabel, vibrato);
 
     // Bottom: note info line, then per-note sliders and buttons, then the status line.
-    auto bottom = bottomBar.reduced (8.0f, 6.0f);
+    auto bottom = bottomBar.reduced (8.0f, 4.0f);
     noteInfoArea = bottom.removeFromTop (22.0f);
     statusArea = bottom.removeFromBottom (18.0f);
     cards.push_back (noteInfoArea);

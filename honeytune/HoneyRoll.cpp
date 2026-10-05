@@ -122,6 +122,13 @@ void HoneyRoll::resized()
     vBar.setBounds (b.getRight() - kBar, b.getY() + kRulerHeight, kBar, b.getHeight() - kRulerHeight - kBar);
     honeycomb = {};
     if (! fitted) fitAll();
+    else if (lastGridHeight > 0.0f)
+    {
+        // Keep the same pitch in the middle when the window changes size (hosts resize the editor).
+        const double rowsBefore = lastGridHeight / rowHeight, rowsNow = gridArea().getHeight() / rowHeight;
+        topMidi = jlimit (kLowestMidi + rowsNow, kHighestMidi, topMidi - rowsBefore / 2.0 + rowsNow / 2.0);
+    }
+    lastGridHeight = gridArea().getHeight();
     updateScrollBars();
 }
 
