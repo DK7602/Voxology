@@ -584,3 +584,4 @@ pitch). Baseline mean envelope error 5.2 dB; octave down 11-23 dB and 2 of 9 cas
 - Tests: network accuracy 100 - 523 Hz within 12 cents, conf > 0.7; resampler keeps pitch; a planted octave slip is repaired
   (30 readings back), a clean track is untouched. Partial-render click check now vs the input's own steepest step. 69 cases.
 - Live Voxology chain does NOT use it (too heavy for real time).
+- CI green: Actions run 37520640704. All six "top tier" items done; open: blind A / B vs Auto-Tune / Melodyne if the user has one.
