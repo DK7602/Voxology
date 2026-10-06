@@ -444,6 +444,7 @@ editing (timing / length, per-note formant, partial re-render). User chose 1 now
 - Tests tests/test_beatkey.cpp: Am-F-C-G loop with 808 + drums at 0 / -30 / +22 cents -> A minor notes, notes conf 1, tuning
   within 0.1 cent; C minor loop; drums only -> not sure; followBeatKey flavours; link end-to-end (detuned beat -> vocal E3
   lands 30 cents low; release clears). 62 test cases.
+- CI green: Actions run 37461483269 (v0.10.0; includes v0.9.0, whose own run was cancelled).
 - Limits to tell the user: needs a second Voxology on the beat in BEAT mode, same project (process); needs ~6 s of playback;
   key changes are followed slowly (~40 s memory); relative major / minor can't be told apart (same notes: doesn't matter for
   tuning). Honey Tune (separate plug-in binary) can't see the link - later: ARA key signatures from Cubase.
