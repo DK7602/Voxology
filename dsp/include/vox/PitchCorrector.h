@@ -153,6 +153,8 @@ private:
     int ringSize = 0, mask = 0;
     std::array<std::vector<double>, 2> in, acc;
     std::vector<double> wsum;
+    std::vector<double> wfloor;        // per output sample: where a downward-shifted grain lies, its level gain (not normalised there)
+    double synthStart = 0.0;           // where the grains began (before that the delayed input plays)
     std::vector<double> mono;          // mono input for detection
     int64_t now = 0;                   // samples written so far
 

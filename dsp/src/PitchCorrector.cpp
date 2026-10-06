@@ -45,6 +45,7 @@ void PitchCorrector::prepare (double sampleRate, int numChannels, bool lowLatenc
     const auto xo = design::butterworth (false, kSplitHz, sr);
     for (auto& chain : xover) for (auto& b : chain) design::apply (b, xo);
     wsum.assign (static_cast<size_t> (ringSize), 0.0);
+    wfloor.assign (static_cast<size_t> (ringSize), 0.0);
     mono.assign (static_cast<size_t> (ringSize), 0.0);
 
     dec = std::max (1, static_cast<int> (std::lround (sr / 12000.0)));
@@ -76,6 +77,7 @@ void PitchCorrector::reset() noexcept
     markCount = markRead = 0;
     lowD = static_cast<double> (latency); xfOld = 0.0; xfLeft = 0; xfLen = 0;
     std::fill (wsum.begin(), wsum.end(), 0.0);
+    std::fill (wfloor.begin(), wfloor.end(), 0.0);
     std::fill (mono.begin(), mono.end(), 0.0);
     std::fill (dbuf.begin(), dbuf.end(), 0.0);
     aa1.reset(); aa2.reset();
@@ -477,6 +479,11 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
         // Never past the newest input sample (only matters for very low notes with a big upward formant).
         const double fRatio = std::pow (2.0, std::clamp (fr.formant, -kMaxFormant, kMaxFormant) / 12.0);
         const double newest = static_cast<double> (now - 3);
+        // Shifting down, the grains are laid further apart than they're long: their windows don't add up
+        // to 1, and dividing by that sum would square them off (a buzz). There they're left as they are.
+        // (Half as many pulses a second carry half the power: 1 / sqrt(ratio) keeps the level.)
+        const bool sparse = voiced && ratio < 0.95;
+        const double sparseGain = sparse ? 1.0 / std::sqrt (ratio) : 0.0;
         const auto first = static_cast<int64_t> (std::ceil (synthPos - P));
         const auto lastJ = static_cast<int64_t> (std::floor (synthPos + P));
         for (int64_t j = first; j <= lastJ; ++j)
@@ -506,6 +513,7 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
                 acc[static_cast<size_t> (c)][o] += w * v;
             }
             wsum[o] += w;
+            if (sparse) wfloor[o] = sparseGain;
         }
         // Next grain: one output period later; the input moves on one full period (drift grows by
         // P - P/ratio, the pitch change).
@@ -602,6 +610,7 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
             // Grains reach P before their centre: start one max period in, so none lands on a slot
             // that has already left (it would come back one ring-length later).
             synthPos = anaPos = static_cast<double> (t + 1) + maxP;
+            synthStart = synthPos - maxP;
             drift = 0.0;
             for (auto& v : acc) std::fill (v.begin(), v.end(), 0.0);
             std::fill (wsum.begin(), wsum.end(), 0.0);
@@ -614,12 +623,17 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
         for (int c = 0; c < nch; ++c)
         {
             double y = 0.0;
+            // (Before the first grain, and only then, the delayed input fills in: once grains run, a gap
+            // between them is silence - copying the input there would splice in the voice at its old pitch.)
             if (t >= 0)
-                y = ws > 0.05 ? acc[static_cast<size_t> (c)][ti] / ws + highBand (c, t) : in[static_cast<size_t> (c)][ti];
+                y = static_cast<double> (t) < synthStart ? in[static_cast<size_t> (c)][ti]
+                  : wfloor[ti] > 0.0 ? acc[static_cast<size_t> (c)][ti] / std::max (ws, 1.0) * wfloor[ti] + highBand (c, t)
+                  : ws > 1.0e-6 ? acc[static_cast<size_t> (c)][ti] / ws + highBand (c, t) : 0.0;
             ch[c][i] = y;
         }
         for (auto& v : acc) v[ti] = 0.0;
         wsum[ti] = 0.0;
+        wfloor[ti] = 0.0;
     }
 }
 

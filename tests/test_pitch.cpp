@@ -1,5 +1,9 @@
 #include "Signals.h"
 #include "vox/PitchCorrector.h"
+#include "vox/Fft.h"
+
+#include <complex>
+#include <numeric>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -374,4 +378,70 @@ TEST_CASE ("Pitch: Record mode (low latency) tunes with ~5 ms delay and no click
     int lat = 0;
     const auto y = run (PitchParams {}, x, 256, &lat, true);
     for (size_t i = static_cast<size_t> (lat); i < x.size(); ++i) REQUIRE (y[i] == x[i - static_cast<size_t> (lat)]);
+}
+
+namespace {
+/** A source-filter vowel ("ah"): glottal pulses of a fixed shape (pulseScale: the pulse's share of a
+    period, 1 = as at 220 Hz) through four formant resonators. */
+std::vector<double> vowel (double f0, double seconds, double pulseScale = 1.0)
+{
+    const size_t n = static_cast<size_t> (seconds * kSr);
+    std::vector<double> y (n, 0.0);
+    double ph = 0.0;
+    for (size_t i = 0; i < n; ++i)
+    {
+        ph += f0 / kSr;
+        const double p = ph - std::floor (ph), po = 0.4 * pulseScale, pc = 0.56 * pulseScale;
+        y[i] = p < po ? 0.5 * (1 - std::cos (std::numbers::pi * p / po)) : p < pc ? std::cos (std::numbers::pi * (p - po) / (2 * (pc - po))) : 0.0;
+    }
+    for (size_t i = n - 1; i > 0; --i) y[i] -= y[i - 1];
+    const double F[] = { 730, 1090, 2440, 3400 }, B[] = { 90, 110, 170, 250 };
+    for (int k = 0; k < 4; ++k)
+    {
+        const double r = std::exp (-std::numbers::pi * B[k] / kSr), th = 2 * std::numbers::pi * F[k] / kSr, a1 = -2 * r * std::cos (th), a2 = r * r;
+        double y1 = 0, y2 = 0;
+        for (auto& v : y) { const double o = v * (1 + a1 + a2) - a1 * y1 - a2 * y2; y2 = y1; y1 = o; v = o; }
+    }
+    double m = 0; for (double v : y) m = std::max (m, std::abs (v));
+    for (auto& v : y) v *= 0.3 / m;
+    return y;
+}
+/** Harmonic amplitudes (dB, mean removed) of y around 0.5 s, harmonics of f0 up to 4 kHz. */
+std::vector<double> harmonicEnvelope (const std::vector<double>& y, double f0)
+{
+    const size_t N = 16384, a = 24000;
+    std::vector<std::complex<double>> b (N);
+    for (size_t i = 0; i < N; ++i) b[i] = y[a + i] * (0.5 - 0.5 * std::cos (2 * std::numbers::pi * static_cast<double> (i) / N));
+    fft (b);
+    std::vector<double> e;
+    for (int h = 1; h * f0 < 4000.0; ++h)
+    {
+        double m = 1e-30;
+        for (auto k = static_cast<size_t> ((h - 0.12) * f0 * N / kSr); k <= static_cast<size_t> ((h + 0.12) * f0 * N / kSr); ++k) m = std::max (m, std::norm (b[k]));
+        e.push_back (10 * std::log10 (m));
+    }
+    const double mean = std::accumulate (e.begin(), e.end(), 0.0) / static_cast<double> (e.size());
+    for (auto& v : e) v -= mean;
+    return e;
+}
+}
+
+TEST_CASE ("Pitch: an octave down is a clean lower voice (no bits of the original pitch)", "[pitch]")
+{
+    // The ideal: the same pulses an octave lower through the same resonances (formants kept).
+    const auto x = vowel (220.0, 1.2);
+    const auto ideal = vowel (110.0, 1.2, 0.5);
+    PitchParams p; p.transpose = -12;
+    int lat = 0;
+    auto y = run (p, x, 256, &lat);
+    y.erase (y.begin(), y.begin() + lat);
+    y.resize (x.size(), 0.0);
+    CHECK (std::abs (cents (measureHz (y, 30000), 110.0)) < 10.0);
+    const auto a = harmonicEnvelope (y, 110.0), b = harmonicEnvelope (ideal, 110.0);
+    double err = 0; for (size_t i = 0; i < a.size(); ++i) err += std::abs (a[i] - b[i]);
+    err /= static_cast<double> (a.size());
+    INFO ("tone error vs the ideal lower voice: " << err << " dB (was ~18 dB when gaps let the original through)");
+    CHECK (err < 4.0);
+    // Level kept within 2 dB.
+    CHECK (rmsDb (y, 30000, 50000) == Approx (rmsDb (x, 30000, 50000)).margin (2.0));
 }

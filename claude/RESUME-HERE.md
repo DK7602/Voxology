@@ -542,3 +542,21 @@ length (time-stretch: move notes, stretch ends), 3 per-note formant. Later: key 
   st, double-click 0); note info shows "+80 ms, 120 % long". Archive HNY3 adds shift / length / formant per edit (HNY2 / v1 load).
 - CI green: Actions run 37510226963. Sent the user a demo (Don vocal 8-16 s: note #6 stretched 1.4x, #8 moved +80 ms; no clicks, level same).
 - Limits: big stretches of noisy / breathy parts can sound smeary; a note can't be moved past its neighbours (clamped).
+
+## v0.14.0 Big shifts: octave down fixed (2026-10-06)
+User picked "4, big-shift engine". Measured first (scratch /tmp/claude-0/sc/big/eval.cpp: source-filter vowels ah / ee / oo at
+130 / 220 / 330 Hz, shifts -12 -7 -3 +4 +7 +12 and formant +-4, vs an ideal reference = the same vowel resynthesised at the new
+pitch (natural pulse) or with the same pulse length (same-pulse ref); metrics: harmonic-envelope error dB, inharmonic energy,
+pitch). Baseline mean envelope error 5.2 dB; octave down 11-23 dB and 2 of 9 cases kept the ORIGINAL pitch.
+- Cause: downward shifts lay grains further apart than they are long; (1) where the window sum fell under 0.05 the output fell
+  back to the raw delayed input -> fragments of the voice at its old pitch spliced in (the "artificial" octave down);
+  (2) dividing by the window sum squared the grains off. Fix: the delayed input only fills in before the first grain
+  (synthStart); after that a gap is silence; grains with ratio < 0.95 mark wfloor = 1 / sqrt(ratio) and those samples are
+  acc / max(ws, 1) x gain (not normalised; the gain keeps the level: half the pulses = half the power).
+- Result: octave down 16.6 -> 3.7 dB, 5th down 4.1 -> 2.9, 3rd down 3.5 -> 2.9; up-shifts and formant +4 unchanged (2-3.7);
+  wrong octave 2 -> 0; mean 5.2 -> 3.4 dB. User's Gallas acapella, transpose -12: notes landing an octave down 68 -> 86 %,
+  staying at the original pitch 22 -> 0 %; level -1 dB. All 67 old tests pass (untouched = unchanged, voices, Honey Tune).
+- Tried and reverted: longer grains for formant down (no average gain). Left: formant -4 and high "oo" vowels (F1 below f0)
+  ~6-15 dB on the synthetic test - edge cases (singers change the vowel there).
+- Test added: octave down of a source-filter vowel within 4 dB of the ideal (got 1.0), pitch within 10 cents, level within 2 dB.
+- Sent renders: Gallas acapella + its octave-down double, BEFORE (v0.13) and AFTER.
