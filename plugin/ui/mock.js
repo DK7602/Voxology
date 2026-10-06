@@ -27,7 +27,7 @@
     sliders["dqCut" + (i + 1)] = lin(0, 12, 0);
     sliders["dqFreq" + (i + 1)] = centre(lo, hi, Math.sqrt(lo * hi), def);
   });
-  const toggles = { recMode: true, ptRm0: false, ptRm1: false, ptRm2: false, ptRm3: false, ptRm4: false, ptRm5: false, ptRm6: true, ptRm7: false, ptRm8: false, ptRm9: false, ptRm10: false, ptRm11: false, bypass: false, listenA: false, levelMatch: false, ptOn: true, clOn: true, clDeclip: true, eqOn: true, dqOn: true, dsOn: true, rdOn: true, cpOn: true, saOn: true, dbOn: true, dlOn: true, dlPing: false, rvOn: true };
+  const toggles = { recMode: true, ptRm0: false, ptRm1: false, ptRm2: false, ptRm3: false, ptRm4: false, ptRm5: false, ptRm6: true, ptRm7: false, ptRm8: false, ptRm9: false, ptRm10: false, ptRm11: false, bypass: false, listenA: false, levelMatch: false, ptOn: true, clOn: true, eqOn: true, dqOn: true, dsOn: true, rdOn: true, cpOn: true, saOn: true, dbOn: true, dlOn: true, dlPing: false, rvOn: true };
   const combos = {
     aeStyle: { choices: ["Trap Lead", "Rap", "Melodic", "Ad-libs", "R&B"], value: 0 },
     aeIntensity: { choices: ["Light", "Balanced", "Strong"], value: 0.5 },
@@ -178,7 +178,7 @@
       inShort: +(-24 + 2 * Math.sin(t / 3)).toFixed(1), outShort: +(-23 + 2 * Math.sin(t / 3) + s("outGain")).toFixed(1),
       inPeak: +(level + 9).toFixed(1), outPeak: +(level + 8 + s("outGain")).toFixed(1),
       pops: active("clOn") && s("clPops") > 0 && word > 0.05 && word < 0.2 ? +(-s("clPops") / 100 * 18).toFixed(1) : 0,
-      declipNow: active("clOn") && toggles.clDeclip ? 3 : 0, declipTotal: active("clOn") && toggles.clDeclip ? 42 : 0,
+      clipNow: 2, clipTotal: 42, overNow: 0, hotPeak: 3.4,
       breath: active("clOn") && s("clBreath") > 0 && !sing ? -s("clBreath") : 0,
       gate: active("clOn") && s("clGateRange") > 0 && !sing ? -s("clGateRange") : 0,
       umDip: [0.35, 0.6, 0.85, 1, 1, 0.7].map((w) => (combos.mode.value > 0.5 && sing ? +(-w * s("umAmount") / 100 * 6 * word).toFixed(1) : 0)),

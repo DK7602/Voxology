@@ -1,6 +1,6 @@
 #pragma once
 
-#include "DeClip.h"
+#include "ClipWatch.h"
 #include "DynamicEq.h"
 #include "Modules.h"
 #include "PopBreath.h"
@@ -52,26 +52,23 @@ struct ChainMeters
     double satResidual = 0.0, satSignal = 0.0;   // saturation energies
     PitchCorrector::Reading pitch;                // what Pitch hears and does right now
     std::array<int, 2> voiceNotes { -1, -1 };     // the harmony voices' notes (MIDI, -1 = none)
-    int declipRuns = 0;                           // clipped peaks De-clip redrew
+    ClipWatch::Counts input;                      // the incoming vocal: clipped stretches, samples over full scale
 };
 
 /** Voxology's vocal chain:
-      De-clip -> Pitch -> Cleanup (low cut, gate, pops, breaths) -> Tone EQ -> Dynamic EQ -> De-Esser -> Rider -> Compressor -> Saturation      (inserts, linked)
+      Pitch -> Cleanup (low cut, gate, pops, breaths) -> Tone EQ -> Dynamic EQ -> De-Esser -> Rider -> Compressor -> Saturation      (inserts, linked)
       -> Doubler -> Delay -> Reverb (added to the vocal, stereo) -> Output gain
-    Constant latency (De-clip and Pitch look-ahead + Saturation oversampling; De-clip's is there even when it's off). Framework-free: the plug-in, Auto-Edit and the
+    Constant latency (Pitch look-ahead + Saturation oversampling). Framework-free: the plug-in, Auto-Edit and the
     tests all run this same class. prepare() allocates; process() never does (any block size). */
 class VocalChain
 {
 public:
     static constexpr int kChunk = 256;
-    /** De-clip's and Pitch's look-ahead + Saturation's oversampling; constant for a given sample rate. */
-    int latencySamples() const noexcept
-    {
-        return (pitch.isLowLatency() ? 0 : DeClip::kLookahead) + pitch.latencySamples() + Saturation::kLatency;
-    }
+    /** Pitch's look-ahead + Saturation's oversampling; constant for a given sample rate. */
+    int latencySamples() const noexcept { return pitch.latencySamples() + Saturation::kLatency; }
 
     /** lowLatency: Record mode (~6 ms instead of ~33): Pitch's low-latency shifter; harmony voices and
-        Formant are off (they need the normal look-ahead), and so is De-clip. */
+        Formant are off (they need the normal look-ahead). */
     void prepare (double sampleRate, int numChannels, bool lowLatency = false);
     void reset() noexcept;
     void setParams (const ChainParams& p) noexcept;
@@ -107,7 +104,7 @@ private:
     ChainParams params;
     double sr = 48000.0;
     int chanCount = 2;
-    DeClip declip;
+    ClipWatch clipWatch;   // watches the input (read-only)
     PitchCorrector pitch;
     Cleanup cleanup;
     PopRemover pops;

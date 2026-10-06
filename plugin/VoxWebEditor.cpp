@@ -234,13 +234,21 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("pops", roundTo (popHold, 0.1f));
     frame->setProperty ("breath", roundTo (breathHold, 0.1f));
     {
-        // De-clip: peaks redrawn in about the last second, and since the editor opened.
-        const int total = m.declipRuns.load();
-        if (declipSeen < 0) declipSeen = total;
-        declipRecent = declipRecent * 0.97f + static_cast<float> (total - declipSeen);
-        declipSeen = total;
-        frame->setProperty ("declipNow", roundTo (declipRecent, 0.1f));
-        frame->setProperty ("declipTotal", total);
+        // The incoming vocal: clipped stretches and overs lately (~1 s), clipped stretches since the editor opened,
+        // and its loudest peak lately (falls 1 dB / s after 10 s).
+        const int runs = m.clipRuns.load(), ov = m.overs.load();
+        if (clipSeen < 0) { clipSeen = runs; overSeen = ov; }
+        clipRecent = clipRecent * 0.97f + static_cast<float> (runs - clipSeen);
+        overRecent = overRecent * 0.97f + static_cast<float> (ov - overSeen);
+        clipSinceOpen += runs - clipSeen;
+        clipSeen = runs; overSeen = ov;
+        if (inPk > hotPeakDb) { hotPeakDb = inPk; hotHold = 300; }
+        else if (hotHold > 0) --hotHold;
+        else hotPeakDb = juce::jmax (-100.0f, hotPeakDb - 1.0f / 30.0f);
+        frame->setProperty ("clipNow", roundTo (clipRecent, 0.1f));
+        frame->setProperty ("clipTotal", clipSinceOpen);
+        frame->setProperty ("overNow", roundTo (overRecent, 0.1f));
+        frame->setProperty ("hotPeak", roundTo (hotPeakDb, 0.1f));
     }
     frame->setProperty ("deEss", roundTo (essHold, 0.1f));
     frame->setProperty ("dyn", dyn);

@@ -605,3 +605,20 @@ pitch). Baseline mean envelope error 5.2 dB; octave down 11-23 dB and 2 of 9 cas
   latency there). CleanupParams.declip (default on); ChainMeters.declipRuns. Plug-in: "clDeclip" toggle (Auto-Edit sets it on),
   meters.declipRuns (running total) -> editor declipNow (decaying ~1 s) / declipTotal. UI: Cleanup page 7 cells (100 px, nowrap
   subs), De-clip ON / OFF first, header stat "de-clip N", Learn text + tip CLIPPED RECORDING. 71 test cases.
+
+## v0.16.1 De-clip repair REMOVED -> Clip watch (warnings only) (2026-10-06)
+- Why: user's "master chain off" export of the Honey-Tune-only track: no flat tops at all (crest 22 dB) but the vocal peaks
+  +3..+7 dBFS everywhere and +14 dB at 9-11 s (the punch-in). Their Stereo Out limiter (ceiling -1.05 dB) was squashing
+  4-8 dB, ~15 dB at the punch-in -> THAT is the crackle. De-clip on the master-on file: 550 redraws, no measurable HF
+  change, peaks to +2 dBFS. Told the user: lower punch-in clip gain 6-7 dB, vocal ~8-10 dB, limiter should shave 1-3 dB.
+  User agreed to remove the repair and keep detection.
+- dsp ClipWatch.h / .cpp (replaces DeClip): read-only, no latency. runs = 3+ equal loud samples (> 0.01, > 25 % of
+  recent peak, within 1e-6) at ANY level; overs = samples |x| > 1. VocalChain runs it on the input (also in Record
+  mode and bypass); ChainMeters.input {runs, overs}. Latency back to Pitch + Saturation. CleanupParams.declip gone.
+- Auto-Edit: clippedRuns now from ClipWatch (old rule only caught >= 0.989, missed the -1.05 dB limiter); new TOO HOT note
+  when the clip peaks over 0 dBFS.
+- Plug-in: clDeclip param gone. meters.clipRuns / overs (running totals); editor sends clipNow / overNow (~1 s decay),
+  clipTotal (since editor opened), hotPeak (input peak, held 10 s then falls 1 dB / s). UI: Cleanup back to 6 cells;
+  hex stat "clipped in!" / "too hot in!"; inputTips() (CLIPPED RECORDING, TOO HOT) on Cleanup and Output Learn pages.
+- On the user's files: master-on 1070 clipped stretches / 0 overs; master-off 0 / 58,214 overs; raw punch 277 / 0.
+  71 test cases.

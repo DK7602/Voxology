@@ -15,7 +15,7 @@ add_library(vox_dsp STATIC
     src/PitchCorrector.cpp
     src/HoneyTune.cpp
     src/BeatKey.cpp
-    src/DeClip.cpp
+    src/ClipWatch.cpp
     src/Crepe.cpp
     src/CrepeWeights.cpp)
 

@@ -30,7 +30,6 @@ struct CleanupParams
     double gateRangeDb = 0.0;   // how far the gaps are turned down; 0 = gate off
     double popAmount = 0.0;     // plosive remover, 0..100 % (PopRemover); 0 = off
     double breathDb = 0.0;      // breath control: how far breaths go down, 0..24 dB (BreathControl); 0 = off
-    bool declip = true;         // De-clip: redraws the recording's flattened (clipped) peaks, first in the chain (DeClip)
 };
 
 class Cleanup

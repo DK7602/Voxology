@@ -31,7 +31,7 @@ const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", 
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
 const PT_RM = NOTES_C.map((_, k) => "ptRm" + k);
-const TOGGLES = [...PT_RM, "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "clDeclip", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
+const TOGGLES = [...PT_RM, "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
 const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
@@ -59,7 +59,7 @@ function scaledToNorm(state, v) {
 function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 
 // Latest meter frame.
-const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, declipNow: 0, declipTotal: 0, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
+const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, clipNow: 0, clipTotal: 0, overNow: 0, hotPeak: -100, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1],
   bkState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, midiNotes: 0, notesUsed: 0xFFF, recMode: 0, latencyMs: 33, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
@@ -260,19 +260,19 @@ const MODULES = [
     cells: pitchCells,
     stat: () => (val("ptAmount") < 0.05 ? ["idle", false] : M.pitchTarget >= 0 ? [`\u2192 ${noteName(M.pitchTarget)}`, true]
       : [`${NOTES[M.keyUsed]} ${SCALES_SHORT[M.scaleUsed].split(" ")[0].toLowerCase()} · ${PITCH_MODES[choice("ptMode")].toLowerCase()}`, true]) },
-  { key: "cleanup", name: "CLEANUP", onId: "clOn", what: "de-clip, low cut, pops, breaths and gate: the recording cleaned up",
+  { key: "cleanup", name: "CLEANUP", onId: "clOn", what: "low cut, pops, breaths and gate: the recording cleaned up",
     cells: () => [
-      toggle("clDeclip", "De-clip", "clipped peaks", "ON", "OFF"),
       knob("clLowCut", "Low Cut", "rumble below", (v) => (v <= 20.5 ? "Off" : fmtHz(v)), 20),
       knob("clPops", "Pops", "p & b thumps", (v) => (v < 0.05 ? "Off" : fmtPct(v)), 0),
       knob("clBreath", "Breaths", "turned down", (v) => (v < 0.05 ? "Off" : `${MINUS}${v.toFixed(1)} dB`), 0),
       knob("clGateThr", "Gate", "opens above", fmtDb, -60),
-      knob("clGateRange", "Gate Range", "gaps down", (v) => (v < 0.05 ? "Off" : fmtDb(v)), 0),
+      knob("clGateRange", "Gate Range", "gaps turned down", (v) => (v < 0.05 ? "Off" : fmtDb(v)), 0),
       multiMeter("Working", "right now", [["P", () => M.pops, 24, () => val("clPops") >= 0.05], ["B", () => M.breath, 24, () => val("clBreath") >= 0.05],
         ["G", () => M.gate, 30, () => val("clGateRange") >= 0.05]]),
     ],
     stat: () => {
-      if (on("clDeclip") && M.declipNow >= 1) return [`de-clip ${fmtNum(M.declipNow, 0)}`, true];
+      if (M.clipNow >= 1) return ["clipped in!", true];
+      if (M.overNow >= 1) return ["too hot in!", true];
       if (M.pops < -3) return [`pop ${fmtNum(M.pops, 0)} dB`, true];
       if (M.breath < -1) return [`breath ${fmtNum(M.breath, 0)} dB`, true];
       if (M.gate < -0.5) return [`gate ${fmtNum(M.gate, 0)} dB`, true];
@@ -945,6 +945,17 @@ function tip(title, text, kind, plan) {
 }
 function list(items) { const ul = el("ul", "l-list"); items.forEach((t) => ul.append(el("li", "", t))); return ul; }
 
+/** The incoming vocal: clipped or over full scale (Cleanup and Output pages). */
+function inputTips() {
+  const t = [];
+  if (M.clipTotal > 0) t.push(tip("CLIPPED RECORDING", `The vocal arrives with flat-topped (clipped) peaks: ${M.clipTotal} so far. That's distortion baked in before Voxology, and it can crackle once the vocal is brightened and compressed.`, "warn",
+    { need: "Yes if you hear crackle on loud words.", steps: ["Zoom in on the audio event in Cubase: flat tops mean it was recorded too hot. Re-record with the loudest words peaking around -10 dB.",
+      "No flat tops in the event? Then something before Voxology on this track clips it (a plug-in above Voxology, or a bounce made through a limiter)."] }));
+  if (M.hotPeak > 0.05) t.push(tip("TOO HOT", `The vocal reaches +${fmtNum(M.hotPeak, 1)} dB coming in: over the top of the meter. Cubase doesn't clip inside the mix, but a limiter later (like one on the Stereo Out) has to squash it hard, and that crackles.`, "warn",
+    { need: "Yes. Leave room for the rest of the chain.", steps: ["Lower the vocal event's clip gain (or the plug-in above Voxology) until the loudest words peak around -6 dB here.", "Check your Stereo Out limiter only shaves 1 - 3 dB."] }));
+  return t;
+}
+
 const LEARN = {
   pitch: {
     does: "Pitch correction (auto-tune). It hears the note you sing, picks the nearest note of your key, and pulls you onto it. Your voice's tone stays the same (no chipmunk sound); breaths and s sounds are never touched. Three modes: Natural (your voice, just in tune), Classic (the familiar auto-tune glide) and Robot (the hard, stepped trap effect). It's first in the chain, so everything after it hears the tuned voice.",
@@ -979,17 +990,15 @@ const LEARN = {
       return t;
     } },
   cleanup: {
-    does: "Cleans up the recording before anything else. De-clip finds peaks that were flattened because the take was recorded or exported too hot, and redraws their shape from the voice around them (it runs first, before Pitch, and leaves clean audio exactly as it is). Low Cut removes rumble, hum and mic-stand bumps under the voice. Pops catches the low thump of \"p\" and \"b\" hitting the mic and cuts it for just those few hundredths of a second. Breaths turns your breaths down (they get louder later, when the compressor works) without touching the words. The gate turns the gaps between phrases down, so room noise and headphone bleed don't creep up.",
-    how: ["De-clip: leave it ON. It only acts on clipped peaks. It softens the harsh edge clipping adds but can't fully restore a badly clipped take: record with peaks around -10 dB to stay safe.",
-      "Low Cut: raise it until the voice starts to thin, then back off 10 - 20 Hz. Deep voices sit around 70 - 90 Hz, higher voices 100 - 150 Hz.",
+    does: "Cleans up the recording before anything else. It also watches the vocal coming in and warns you if it arrives clipped or too hot. Low Cut removes rumble, hum and mic-stand bumps under the voice. Pops catches the low thump of \"p\" and \"b\" hitting the mic and cuts it for just those few hundredths of a second. Breaths turns your breaths down (they get louder later, when the compressor works) without touching the words. The gate turns the gaps between phrases down, so room noise and headphone bleed don't creep up.",
+    how: ["Low Cut: raise it until the voice starts to thin, then back off 10 - 20 Hz. Deep voices sit around 70 - 90 Hz, higher voices 100 - 150 Hz.",
       "Pops: 60 - 100 % catches them. It only acts on a pop, so a high setting is safe.",
       "Breaths: 4 - 8 dB keeps them natural, 10 - 15 dB is the clean, tight rap sound. Off keeps every breath as recorded.",
       "Gate: set it between the noise in your gaps and your quietest words. Gate Range 10 - 15 dB sounds natural.",
       "The Working meter shows P (pop cut), B (breath turn-down) and G (gate) live."],
     live: () => {
       const t = [];
-      if (on("clDeclip") && !M.recMode && M.declipTotal > 0) t.push(tip("CLIPPED RECORDING", `This vocal has flattened (clipped) peaks: De-clip has redrawn ${M.declipTotal} so far. It was recorded or exported too hot.`, "warn",
-        { need: "De-clip handles it. A clean take is still better.", steps: ["Next time, lower the mic preamp or input gain so the loudest words peak around -10 dB.", "If the vocal was bounced or exported, check nothing on that path (a limiter or clip gain) pushed it to the top."] }));
+      t.push(...inputTips());
       if (val("clGateRange") >= 20) t.push(tip("DEEP GATE", `The gaps go down ${fmtNum(val("clGateRange"), 0)} dB. Breaths vanish completely, which can sound robotic.`, "calm",
         { need: "Optional. Fine if you like it dead-quiet between lines.", steps: ["Lower Gate Range to about 12 dB, and use Breaths at 8 - 10 dB instead for a cleaner but natural sound."] }));
       if (val("clBreath") >= 16) t.push(tip("NO AIR", `Breaths go down ${fmtNum(val("clBreath"), 0)} dB, so they're almost gone. Some breath keeps a vocal human, especially on sung parts.`, "calm",
@@ -1115,7 +1124,7 @@ const LEARN = {
     how: ["Use A / B with MATCH on to hear what Voxology does at equal loudness.",
       "Keep Out Peak below about -1 dB on the vocal track."],
     live: () => {
-      const t = [];
+      const t = inputTips();
       if (M.outPeak > -0.5) t.push(tip("CLIPPING RISK", `The output peaks at ${fmtDb(M.outPeak)}, right at the top.`, "warn",
         { need: "Yes, if the track meter in Cubase turns red.", steps: ["Lower Output 3 dB.", "Or lower Compressor Makeup."] }));
       return t;

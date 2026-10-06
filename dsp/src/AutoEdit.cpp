@@ -1,4 +1,5 @@
 #include "vox/AutoEdit.h"
+#include "vox/ClipWatch.h"
 
 #include "vox/DynamicEq.h"
 #include "vox/Fft.h"
@@ -560,15 +561,17 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
         for (float v : ch) a.peakDb = std::max (a.peakDb, v != 0.0f ? 20.0 * std::log10 (std::abs (static_cast<double> (v))) : -120.0);
     a.inputLufs = integratedLufs (raw, sr);
 
-    // Clipping: runs of 3+ samples stuck at the very top.
-    for (const auto& ch : audio)
+    // Clipping: runs of 3+ samples stuck at the same loud value, at any level (ClipWatch).
     {
-        int run = 0;
-        for (float v : ch)
-        {
-            if (std::abs (v) >= 0.989f) { if (++run == 3) ++a.clippedRuns; }
-            else run = 0;
-        }
+        ClipWatch w;
+        w.prepare (static_cast<int> (audio.size()));
+        std::vector<std::vector<double>> d (audio.size());
+        std::vector<const double*> ptr (audio.size());
+        for (size_t c = 0; c < audio.size(); ++c) { d[c].assign (audio[c].begin(), audio[c].end()); ptr[c] = d[c].data(); }
+        size_t n = audio.empty() ? 0 : audio.front().size();
+        for (const auto& ch : audio) n = std::min (n, ch.size());
+        if (n > 0) w.process (ptr.data(), static_cast<int> (audio.size()), static_cast<int> (n));
+        a.clippedRuns = w.take().runs;
     }
     if (audio.size() >= 2)
     {
@@ -705,6 +708,12 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                            "\nNEED: Yes if you hear crackle on loud words. If it sounds fine to you, it's optional."
                            "\nSTEP: Next take, turn the gain knob on your audio interface down until your loudest words peak around -10 dB on Cubase's meter."
                            "\nSTEP: For this take, re-record the clipped lines if you can, or repair them with a declipper (Cubase Pro: SpectraLayers, or iZotope RX De-clip).");
+    if (a.peakDb > 0.0)
+        r.notes.push_back ("TOO HOT: the vocal reaches +" + db (a.peakDb) + ", over the top of the meter, before Voxology. Cubase doesn't clip inside a mix, "
+                           "but anything that limits later (like a limiter on the Stereo Out) has to squash it hard, which crackles."
+                           "\nNEED: Yes if you hear crackle or the master limiter works hard."
+                           "\nSTEP: Lower the vocal's clip gain (or the fader of whatever feeds it) until the loudest words peak around -6 dB."
+                           "\nSTEP: Check your master limiter only shaves 1 - 3 dB.");
     if (a.peakDb < -24.0)
         r.notes.push_back ("QUIET RECORDING: your loudest words only reach " + db (a.peakDb) + ". It works, but the noise of your room and interface sits closer to your voice."
                            "\nNEED: No. Auto-Edit adds the level back."

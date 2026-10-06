@@ -303,9 +303,6 @@ body.beat #beat-banner { display: flex; flex-direction: column; gap: 4px; margin
 .pf-dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 6px rgba(93, 159, 211, 0.9); transition: left 0.08s; }
 .pf-dot.idle { opacity: 0.3; }
 .pf-cents { font-size: 10.5px; color: var(--ink-soft); }
-#cells[data-page="cleanup"] { padding-left: 4px; padding-right: 4px; gap: 4px 2px; }
-#cells[data-page="cleanup"] .cell { width: 100px; }
-#cells[data-page="cleanup"] .cell-sub { white-space: nowrap; }
 #cells[data-page="pitch"] { padding-left: 4px; padding-right: 4px; gap: 4px 2px; }
 #cells[data-page="pitch"] { padding-top: 8px; padding-bottom: 4px; row-gap: 0; }
 #cells[data-page="pitch"] .cell { width: 102px; height: 172px; }
