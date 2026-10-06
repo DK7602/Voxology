@@ -520,4 +520,5 @@ length (time-stretch: move notes, stretch ends), 3 per-note formant. Later: key 
   renderedTrack). Don vocal (105 s, 363 notes): full render 1.84 s per channel, one-note edit 64 ms (region 2.9 s).
 - Test: edit note 1 of a 4-phrase line -> region covers it, < 60 % of the clip, outside bit-identical to the old render, notes'
   pitches = full render within 3 cents, level within 1.5 dB (PSOLA level varies +-1 dB with the shifter's start), no clicks.
+- CI green: Actions run 37499282269 (v0.12.1, includes v0.12.0).
 - Syntax-check Honey Tune locally: ARA SDK cloned at /tmp/claude-0/sc/ara (releases/2.3.0) + JucePlugin_* stub defines.
