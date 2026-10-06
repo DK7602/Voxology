@@ -312,3 +312,31 @@ User's effort plan: high for breath/plosive, medium for Reference Match, high fo
 - Tests: tests/test_reference.cpp (brighter / thinner reference pulls EQ that way and lands >= 20 % closer; full song warns +
   report note; too-short refused). 46 test cases pass; pluginval 10 SUCCESS locally.
 - User plan: find an acapella of a vocal they love ("<song> acapella"), load it with + REFERENCE, run Auto-Edit, A/B with MATCH.
+
+## v0.6.0 Unmask (2026-10-06): BEAT mode
+- New param "mode" (Vocal / Beat), "umAmount" (0-100 %, default 50), "umFocus" (Centre / Full). Same latency in both modes
+  (BEAT runs the chain bypassed = its delayed dry path), so a Voxology on the beat lines up with the one on the vocal.
+- Link, no routing: dsp Unmask.h/.cpp. UnmaskLink = process-wide registry (static in the binary; every Voxology instance in
+  the host shares it): 16 slots, each a ring of 4096 frames {song position, 6 band levels}, seqlock per frame, lock-free on
+  the audio side; names (track name via updateTrackProperties) behind a mutex. Every instance claims a slot; VOCAL mode
+  publishes its PROCESSED output's band levels (BandAnalyser: octave band-passes at 200/400/800/1.6k/3.15k/6.3k, Q 1.4,
+  ~20 ms) every 128 samples, tagged songPos + i - latency (kNoPosition when stopped). BEAT reads, per 128-sample hop, the frame
+  at or before its own songPos + s - latency (within 0.25 s; newest when no position; nothing if stale -> dips let go).
+  Several vocals: per-band max ("All vocals"), or one chosen by name (saved as "umSource", resolved by a 1 Hz timer as
+  instances appear). Live = published in the last second (wall clock).
+- Unmask (beat side): bells at the six bands (dip Q 1.9), each up to Amount x 6 dB x weight (0.35, 0.6, 0.85, 1, 1, 0.7) x
+  vocal presence (vs its own recent per-band peak: from 24 dB under it, full at 6 dB under; peak falls 6 dB/s) x beat present
+  (> -70 dBFS). 15 ms in, 100 ms out. Centre focus = mid / side, only the mid dipped. A (listen original) and bypass = no dips.
+  Fader-independent by design (follows when / where the vocal sings, not level vs the beat).
+- UI: VOCAL / BEAT switch in the chain card head. BEAT: hive hidden, big UNMASK hex with link status, header shows BEAT
+  MODE (Style / Intensity / Auto-Edit / Undo hidden), Unmask page (Amount, Focus, "Make room for" list from
+  getUnmaskSources / setUnmaskSource, 6-bar Dipping meter), BEAT SPECTRUM with live dip curve + vocal band dots, Learn text +
+  NO VOCAL HEARD (after 2 s) / DEEP DIPS tips. Frame fields umDip, umVocal, umLink (BEAT only).
+- Tests: tests/test_unmask.cpp (link by position / stale / release; off = untouched, no vocal = no dip; middle dips 2-6.6 dB
+  at 1.6 kHz while singing, < 0.5 dB in gaps, sides untouched; through the link with the vocal a block late).
+  tools/linkcheck (cmake -DVOX_BUILD_LINKCHECK=ON, local only): two REAL processors, beat processed first each block:
+  dips 4.6 - 5.3 dB while singing, <= 0.3 dB in gaps, PASS. Found + fixed: BEAT used getSampleRate() (0 if a host never
+  calls setRateAndBufferSizeDetails) -> now the prepared rate.
+- Caveats for the user: both in the same project / process (plug-in sandboxing breaks the link); Cubase "suspend VST3
+  processing when no audio" just means no dips while the vocal is silent (correct). Cubase ASIO-Guard prefetch is why frames
+  are matched by song position, not by arrival.

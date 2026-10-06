@@ -23,14 +23,14 @@ namespace VoxParams
         ids.addArray ({ "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
                         "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix",
                         "dbAmount", "dbWidth", "dlFeedback", "dlMix", "dlTone", "dlDuck",
-                        "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain" });
+                        "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount" });
         return ids;
     }
     inline juce::StringArray toggleIds()
     {
         return { "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
     }
-    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime" }; }
+    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime", "mode", "umFocus" }; }
 
     inline void addTo (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
     {
@@ -48,6 +48,11 @@ namespace VoxParams
         };
         auto choice = [&] (const char* id, const char* name, const StringArray& items, int def)
         { layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id, 1 }, name, items, def)); };
+
+        // VOCAL: the vocal chain. BEAT: Voxology sits on the beat and makes room for the vocal (Unmask).
+        choice ("mode", "Mode", { "Vocal", "Beat" }, 0);
+        slider ("umAmount", "Unmask Amount", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f, "%", pctText);
+        choice ("umFocus", "Unmask Focus", { "Centre", "Full" }, 0);
 
         toggle ("bypass", "Bypass", false);
         toggle ("listenA", "Listen to Original (A)", false);

@@ -4,6 +4,7 @@
 
 #include "vox/LevelMatch.h"
 #include "vox/LoudnessMeter.h"
+#include "vox/Unmask.h"
 #include "vox/VocalChain.h"
 #include "AutoEditController.h"
 #include "Params.h"
@@ -14,11 +15,19 @@
 /** Voxology: an all-in-one vocal chain (Cleanup -> Tone EQ -> De-Esser -> Rider -> Compressor ->
     Saturation -> Doubler -> Delay -> Reverb -> Output) with Auto-Edit, which listens to the vocal,
     sets every module and explains why. */
-class VoxologyAudioProcessor final : public juce::AudioProcessor
+class VoxologyAudioProcessor final : public juce::AudioProcessor, private juce::Timer
 {
 public:
     VoxologyAudioProcessor();
-    ~VoxologyAudioProcessor() override = default;
+    ~VoxologyAudioProcessor() override;
+    void updateTrackProperties (const TrackProperties& properties) override;
+
+    /** Unmask (BEAT mode): which vocal to make room for. -1 = every Voxology vocal in the project. */
+    std::atomic<int> unmaskSource { -1 };
+    int getLinkSlot() const noexcept { return linkSlot; }
+    void setUnmaskSourceByName (const juce::String& name);   // "" = every vocal (message thread)
+    juce::String getUnmaskSourceName() const { return unmaskSourceName; }
+    bool isBeatMode() const noexcept { return modeParam != nullptr && modeParam->load() > 0.5f; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -62,6 +71,9 @@ public:
         std::atomic<float> pitchSung { 0.0f };      // fractional MIDI note heard, 0 = none
         std::atomic<int> pitchTarget { -1 };        // the note it pulls to, -1 = none
         std::atomic<float> pitchCorr { 0.0f };      // semitones applied
+        std::array<std::atomic<float>, vox::kUnmaskBands> umDip {};     // BEAT: deepest dip per band, dB, held until read
+        std::array<std::atomic<float>, vox::kUnmaskBands> umVocal {};   // BEAT: the linked vocal's band levels, dB
+        std::atomic<int> umLink { 0 };              // BEAT: vocals heard this block (0 = none)
     };
     Meters meters;
 
@@ -90,6 +102,20 @@ private:
     vox::LevelMatch levelMatch;
     double appliedMatchDb = 0.0;
     std::atomic<float>* levelMatchParam = nullptr;
+    std::atomic<float>* modeParam = nullptr;
+    std::atomic<float>* umAmountParam = nullptr;
+    std::atomic<float>* umFocusParam = nullptr;
+
+    // Unmask: every instance has a link slot; VOCAL mode publishes its processed vocal's bands there.
+    static constexpr int kHop = 128;
+    double preparedRate = 48000.0;
+    int linkSlot = -1;
+    juce::String unmaskSourceName, pendingSourceName;   // message thread
+    void resolveUnmaskSource();
+    void timerCallback() override;
+    vox::BandAnalyser vocalBands;
+    int hopCount = 0;
+    vox::Unmask unmask;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VoxologyAudioProcessor)
 };

@@ -15,7 +15,7 @@
     saDrive: lin(0, 18, 0), saMix: lin(0, 100, 50), dbAmount: lin(0, 100, 0), dbWidth: lin(0, 100, 70),
     dlFeedback: lin(0, 90, 25), dlMix: lin(0, 100, 0), dlTone: centre(1000, 16000, 4000, 6000, 10), dlDuck: lin(0, 100, 50),
     rvDecay: centre(0.3, 8, 1.5, 1.6, 0.01), rvPredelay: lin(0, 200, 20, 1), rvMix: lin(0, 100, 0), rvTone: centre(2000, 16000, 6000, 7000, 10),
-    rvDuck: lin(0, 100, 30), outGain: lin(-24, 24, 0),
+    rvDuck: lin(0, 100, 30), outGain: lin(-24, 24, 0), umAmount: lin(0, 100, 50),
   };
   [[80, 400, 180], [150, 800, 300], [500, 2000, 900], [2000, 8000, 4000], [6000, 18000, 12000]].forEach(([lo, hi, def], i) => {
     sliders["eqGain" + (i + 1)] = lin(-12, 12, 0);
@@ -35,6 +35,8 @@
     rdSpeed: { choices: ["Slow", "Medium", "Fast"], value: 0.5 },
     saMode: { choices: ["Tape", "Tube", "Clip"], value: 0 },
     dlTime: { choices: ["1/4", "1/8", "1/8 dot", "1/4 dot", "1/16", "1/2"], value: 0 },
+    mode: { choices: ["Vocal", "Beat"], value: location.hash === "#beat" ? 1 : 0 },
+    umFocus: { choices: ["Centre", "Full"], value: 0 },
   };
 
   const send = (id, obj) => setTimeout(() => window.__JUCE__.backend && window.__JUCE__.backend.emitByBackend(id, JSON.stringify(obj)), 0);
@@ -44,6 +46,7 @@
 
   // Simulated Auto-Edit (listening runs 3x faster than the real 12 s). Values from the engine's own
   // report on the synthetic test vocal (tools/report.cpp).
+  const um = { selected: "" };
   const ref = { json: JSON.stringify({ state: "none" }), version: 0 };
   const ae = { state: 0, progress: 0, undo: false, version: 0, report: "", snapshot: null };
   function aeFinish() {
@@ -101,7 +104,7 @@
 
   window.__JUCE__ = {
     initialisationData: {
-      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "chooseReference", "clearReference", "getReference"],
+      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "chooseReference", "clearReference", "getReference", "getUnmaskSources", "setUnmaskSource"],
       __juce__registeredGlobalEventIds: [], __juce__sliders: Object.keys(sliders), __juce__toggles: Object.keys(toggles), __juce__comboBoxes: Object.keys(combos),
     },
     postMessage(message) {
@@ -131,6 +134,8 @@
           setTimeout(() => { ref.json = JSON.stringify({ state: "ok", name: "Favorite Artist - Hook (Acapella)", seconds: 41, problem: "", warning: "" }); ref.version++; }, 1200); }
         if (payload.name === "clearReference") { ref.json = JSON.stringify({ state: "none" }); ref.version++; }
         if (payload.name === "getReference") result = ref.json;
+        if (payload.name === "getUnmaskSources") result = JSON.stringify({ sources: [{ name: "Lead Vocal" }, { name: "Ad-libs" }], selected: um.selected });
+        if (payload.name === "setUnmaskSource") um.selected = (payload.params && payload.params[0]) || "";
         if (payload.name === "undoAutoEdit") {
           result = ae.undo;
           if (ae.snapshot) {
@@ -169,6 +174,9 @@
       pops: active("clOn") && s("clPops") > 0 && word > 0.05 && word < 0.2 ? +(-s("clPops") / 100 * 18).toFixed(1) : 0,
       breath: active("clOn") && s("clBreath") > 0 && !sing ? -s("clBreath") : 0,
       gate: active("clOn") && s("clGateRange") > 0 && !sing ? -s("clGateRange") : 0,
+      umDip: [0.35, 0.6, 0.85, 1, 1, 0.7].map((w) => (combos.mode.value > 0.5 && sing ? +(-w * s("umAmount") / 100 * 6 * word).toFixed(1) : 0)),
+      umVocal: [-38, -30, -26, -24, -28, -36].map((v) => (sing ? v + 6 * word : -120)),
+      umLink: combos.mode.value > 0.5 ? 2 : 0,
       dyn: [0, 1, 2, 3].map((b) => (active("dqOn") && s("dqCut" + (b + 1)) > 0 && sing ? +(-Math.min(s("dqCut" + (b + 1)), s("dqCut" + (b + 1)) * Math.max(0, Math.sin(t * (2.1 + b * 0.7) + b)) ** 3)).toFixed(1) : 0)),
       deEss: active("dsOn") && s("dsAmount") > 0 && word > 0.9 ? +(-s("dsAmount") / 100 * 7).toFixed(1) : 0,
       rider: active("rdOn") && s("rdRange") > 0 ? +(s("rdRange") * Math.sin(t / 2)).toFixed(1) : 0,

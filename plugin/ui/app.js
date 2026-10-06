@@ -24,10 +24,10 @@ fit();
 // Parameters
 const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
   "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth",
-  "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain",
+  "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
 const TOGGLES = ["bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
-const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime"];
+const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime", "mode", "umFocus"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
 for (const id of TOGGLES) P[id] = Juce.getToggleState(id);
@@ -43,6 +43,8 @@ const aeGetReport = Juce.getNativeFunction("getAutoEditReport");
 const refChoose = Juce.getNativeFunction("chooseReference");
 const refClear = Juce.getNativeFunction("clearReference");
 const refGet = Juce.getNativeFunction("getReference");
+const umGetSources = Juce.getNativeFunction("getUnmaskSources");
+const umSetSource = Juce.getNativeFunction("setUnmaskSource");
 let refInfo = { state: "none" };   // Reference Match: none / loading / ok / problem
 
 function scaledToNorm(state, v) {
@@ -53,7 +55,7 @@ function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 
 // Latest meter frame.
 const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
-  satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, in: null, out: null };
+  satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
 
@@ -423,6 +425,78 @@ function dynMeter() {
 const cellsByModule = MODULES.map((m) => m.cells());
 
 // ---------------------------------------------------------------------------------------------
+// BEAT mode: Unmask (its own page; the vocal chain's hive is hidden)
+const UM_BANDS = [{ hz: 200, n: "200" }, { hz: 400, n: "400" }, { hz: 800, n: "800" }, { hz: 1600, n: "1.6k" }, { hz: 3150, n: "3.2k" }, { hz: 6300, n: "6.3k" }];
+let umSources = { sources: [], selected: "" };
+function sourceCell() {
+  const cell = document.createElement("div");
+  cell.className = "cell src";
+  cell.innerHTML = `<span class="cell-label">Make room for</span><span class="cell-sub">which vocal</span><div class="src-list"></div>`;
+  const box = cell.querySelector(".src-list");
+  const make = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; e.textContent = text; return e; };
+  cell.refresh = () => {
+    const list = umSources.sources || [];
+    box.replaceChildren();
+    if (!list.length) { box.append(make("div", "none", "No vocal found yet. Put Voxology on your vocal (VOCAL mode) and press play.")); return; }
+    const mk = (label, name) => {
+      const b = make("button", (umSources.selected || "") === name ? "sel" : "", label);
+      b.type = "button";
+      b.addEventListener("click", async () => { await umSetSource(name); umSources.selected = name; cell.refresh(); });
+      box.append(b);
+    };
+    mk(list.length > 1 ? `All vocals (${list.length})` : "All vocals", "");
+    list.forEach((x) => mk(x.name, x.name));
+  };
+  cell.refresh();
+  return cell;
+}
+const UNMASK = { key: "unmask", name: "UNMASK", onId: null, what: "the beat steps back where your vocal sings",
+  cells: () => [
+    knob("umAmount", "Amount", "how far back", fmtPct, 50),
+    seg("umFocus", "Focus", "where it dips", ["Centre", "Full"]),
+    sourceCell(),
+    Object.assign(multiMeter("Dipping", "right now", UM_BANDS.map((b, i) => [b.n, () => (M.umDip ? M.umDip[i] : 0), 6, () => val("umAmount") >= 0.05])), { className: "cell meter-cell dyn-meter um-meter" }),
+  ],
+  stat: () => [M.umLink > 0 ? "hearing vocal" : "no vocal", M.umLink > 0] };
+const unmaskCells = UNMASK.cells();
+let beat = false;
+let lastLinkSeen = performance.now();   // the "no vocal" warning waits 2 s (the link needs a moment after loading)
+const cur = () => (beat ? UNMASK : MODULES[selected]);
+
+async function fetchSources() {
+  try { umSources = JSON.parse((await umGetSources()) || "{}"); } catch { umSources = { sources: [], selected: "" }; }
+  if (!umSources.sources) umSources.sources = [];
+  unmaskCells.forEach((c) => c.classList.contains("src") && c.refresh());
+}
+setInterval(() => { if (beat) fetchSources(); }, 1000);
+
+function applyMode() {
+  const b = choice("mode") === 1;
+  document.querySelectorAll("#mode button").forEach((x) => x.classList.toggle("sel", Number(x.dataset.m) === (b ? 1 : 0)));
+  if (b === beat && cellsEl.dataset.page) return;
+  beat = b;
+  document.body.classList.toggle("beat", beat);
+  $("chain-title").textContent = beat ? "BEAT" : "SIGNAL CHAIN";
+  document.querySelector("#visual .caps").textContent = beat ? "BEAT SPECTRUM" : "VOCAL SPECTRUM";
+  document.querySelector("#visual .legend").innerHTML = beat
+    ? '<i class="sw in"></i>your beat <i class="sw out"></i>after Unmask <i class="sw dyn"></i>making room <i class="sw eq"></i>your vocal'
+    : '<i class="sw in"></i>your vocal <i class="sw out"></i>after Voxology <i class="sw eq"></i>Tone EQ <i class="sw dyn"></i>Dynamic EQ';
+  if (beat) {
+    cellsEl.dataset.cols = "6";
+    cellsEl.dataset.page = "unmask";
+    cellsEl.replaceChildren(...unmaskCells);
+    unmaskCells.forEach((c) => c.refresh && c.refresh());
+    renderModuleHead();
+    learnTab = "module";
+    renderLearn();
+    fetchSources();
+  } else select(selected);
+}
+document.querySelectorAll("#mode button").forEach((x) => x.addEventListener("click", () => { P.mode.setChoiceIndex(Number(x.dataset.m)); applyMode(); }));
+P.mode.valueChangedEvent.addListener(applyMode);
+P.mode.propertiesChangedEvent.addListener(applyMode);
+
+// ---------------------------------------------------------------------------------------------
 // Honeycomb chain
 const hive = $("hive");
 const hexes = MODULES.map((m, i) => {
@@ -456,14 +530,14 @@ function refreshHive() {
 // Module panel
 const cellsEl = $("cells");
 function renderModuleHead() {
-  const m = MODULES[selected];
-  $("mod-num").textContent = String(selected + 1).padStart(2, "0");
+  const m = cur();
+  $("mod-num").textContent = beat ? "BEAT" : String(selected + 1).padStart(2, "0");
   $("mod-name").textContent = m.name;
   $("mod-what").textContent = m.what;
   const pw = $("mod-power");
   pw.hidden = !m.onId;
   if (m.onId) { pw.textContent = on(m.onId) ? "ON" : "OFF"; pw.classList.toggle("on", on(m.onId)); }
-  $("mod-kept").hidden = !(report && report.ok && report.kept && report.kept[selected]);
+  $("mod-kept").hidden = beat || !(report && report.ok && report.kept && report.kept[selected]);
 }
 $("mod-power").addEventListener("click", () => {
   const m = MODULES[selected];
@@ -473,6 +547,7 @@ $("mod-power").addEventListener("click", () => {
 });
 function select(i) {
   selected = i;
+  if (beat) return;
   cellsEl.dataset.cols = MODULES[i].key === "eq" || MODULES[i].key === "dyneq" ? "5" : "6";   // EQs: amounts on top, frequencies below
   cellsEl.dataset.page = MODULES[i].key;
   cellsEl.replaceChildren(...cellsByModule[i]);
@@ -615,6 +690,35 @@ function draw() {
   ctx.strokeStyle = "rgba(36,97,143,0.25)"; ctx.beginPath(); ctx.moveTo(0, yEq(0) + 0.5); ctx.lineTo(PW, yEq(0) + 0.5); ctx.stroke();
   drawSpectrum(M.in, null, "rgba(157,182,201,0.45)");
   drawSpectrum(M.out, "#c9973a", null);
+  if (beat) {
+    // The dips Unmask is making right now (orange), and where the vocal is (dots on the 0 dB line).
+    const dips = (M.umDip || []).map((d) => -d);
+    if (dips.some((c) => c >= 0.1)) {
+      const sr = M.sr || 48000;
+      ctx.beginPath();
+      ctx.moveTo(0, yEq(0));
+      for (let x = 0; x <= PW; x += 3) {
+        const f = fFor(x);
+        let db = 0;
+        UM_BANDS.forEach((b, i) => { if (dips[i] > 1e-3) db += magDb(coeffs(1, b.hz, -dips[i], 1.9, sr), f, sr); });
+        ctx.lineTo(x, yEq(db));
+      }
+      ctx.lineTo(PW, yEq(0)); ctx.closePath();
+      ctx.fillStyle = "rgba(214,120,60,0.30)"; ctx.fill();
+      ctx.strokeStyle = "#c8642c"; ctx.lineWidth = 2; ctx.stroke();
+    }
+    const peak = Math.max(...(M.umVocal || [-120]));
+    UM_BANDS.forEach((b, i) => {
+      const v = (M.umVocal || [])[i] ?? -120;
+      const a = M.umLink > 0 ? clamp((v - (peak - 30)) / 30, 0, 1) : 0;
+      if (a <= 0) return;
+      ctx.beginPath(); ctx.arc(xFor(b.hz), yEq(0), 4 + 7 * a, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(36,97,143,${0.25 + 0.55 * a})`; ctx.fill();
+    });
+    nodes.forEach((n) => (n.hidden = true));
+    dynNodes.forEach((n) => (n.hidden = true));
+    return;
+  }
   // Dynamic EQ: the most each band may cut (dashed, on its page) and what it cuts right now (filled).
   const dynOn = on("dqOn") && !on("bypass");
   const page = dynPage();
@@ -724,6 +828,22 @@ const LEARN = {
       const big = [0, 1, 2, 3, 4].filter((b) => Math.abs(eqGain(b)) > 8);
       if (big.length) t.push(tip("BIG EQ MOVE", `${big.map((b) => EQ_BANDS[b].name).join(", ")} ${big.length > 1 ? "are" : "is"} moved more than 8 dB. That usually means the recording itself needs a fix.`, "calm",
         { need: "Optional. Use your ears: if it sounds good, it is good.", steps: ["Try halving the move and compare with A / B.", "Next take: check mic distance (a fist away) and room echo."] }));
+      return t;
+    } },
+  unmask: {
+    does: "This Voxology is on your BEAT. It listens to the Voxology on your vocal, and while you sing it turns the beat down a few dB only in the frequencies your voice is using right then. By default only the middle of the beat dips (where the vocal sits), so its width stays. Between your lines the beat comes straight back. Your vocal cuts through without turning it up.",
+    how: ["Setup: Voxology on the vocal track (VOCAL mode, as usual) and another Voxology on the beat track (or the beat's group), switched to BEAT. Nothing to route: they find each other.",
+      "Press play: \"Make room for\" lists the vocals it hears. All vocals is right for most songs; pick one to make room for the lead only.",
+      "Amount: 30 - 60 % is felt more than heard; 100 % dips up to about 6 dB where words are understood (1.6 - 3 kHz).",
+      "Focus: Centre dips only the middle of the beat (keeps it wide); Full dips the whole beat.",
+      "Compare with A / B: A is your beat untouched, B is with the room made."],
+    live: () => {
+      const t = [];
+      if (beat && performance.now() - lastLinkSeen > 2000 && !on("bypass")) t.push(tip("NO VOCAL HEARD", "This Voxology doesn't hear a Voxology on a vocal right now, so the beat isn't changed.", "warn",
+        { need: "Yes, for Unmask to do anything.", steps: ["Put Voxology on your vocal track in VOCAL mode (the normal mode).", "Press play: both tracks need to be playing (a vocal Voxology on a muted or silent track sends nothing).",
+          "Both must be in the same project. If your DAW runs plug-ins in separate processes (plug-in sandboxing), turn that off for Voxology."] }));
+      if (beat && val("umAmount") >= 85) t.push(tip("DEEP DIPS", `Amount is ${fmtPct(val("umAmount"))}: the beat dips up to about ${fmtNum(val("umAmount") * 0.06, 1)} dB under the words. On busy beats you may hear it breathe.`, "calm",
+        { need: "Optional. Fine if the beat still feels steady.", steps: ["Try 40 - 60 % and compare with A / B."] }));
       return t;
     } },
   dyneq: {
@@ -878,12 +998,12 @@ function renderReport() {
 }
 
 function renderModuleLearn() {
-  const m = MODULES[selected], L = LEARN[m.key];
-  body.append(head(`${String(selected + 1).padStart(2, "0")} ${m.name}`), para(L.does));
+  const m = cur(), L = LEARN[m.key];
+  body.append(head(beat ? "UNMASK (BEAT MODE)" : `${String(selected + 1).padStart(2, "0")} ${m.name}`), para(L.does));
   if (m.onId && !on(m.onId)) body.append(tip("SWITCHED OFF", "This module is off, so it doesn't change your vocal.", "calm", { need: "No.", steps: ["Click ON at the top of the module (or the dot on its cell) to use it."] }));
   liveTips(m).forEach(([, v]) => body.append(v.el));
   body.append(head("HOW TO USE IT"), list(L.how));
-  if (report && report.ok) {
+  if (report && report.ok && !beat) {
     const rs = (report.reasons || []).filter((r) => r.module === m.key);
     if (rs.length) {
       body.append(head(report.kept && report.kept[selected] ? "AUTO-EDIT LOOKED · KEPT" : "WHAT AUTO-EDIT DID HERE"));
@@ -914,9 +1034,9 @@ function liveTips(m) {
 let learnKey = "";
 function renderLearn(force = true) {
   // Rebuild only when which tips are shown changes (their text updates in place).
-  const m = MODULES[selected];
+  const m = cur();
   const tips = learnTab === "module" ? liveTips(m) : [];
-  const key = learnTab + selected + tips.map(([id]) => id).join("|") + (m.onId ? on(m.onId) : "") + (report ? report.time : "");
+  const key = learnTab + (beat ? "beat" : selected) + tips.map(([id]) => id).join("|") + (m.onId ? on(m.onId) : "") + (report ? report.time : "");
   if (!force && key === learnKey) return;
   learnKey = key;
   const scroll = body.scrollTop;
@@ -1025,6 +1145,12 @@ window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
   liveMeters.forEach((c) => c.update());
   refreshAutoEdit();
   refreshHive();
+  if (M.umLink > 0 || !beat) lastLinkSeen = performance.now();
+  if (beat) {
+    $("beat-stat").textContent = M.umLink > 0 ? `hearing ${M.umLink > 1 ? M.umLink + " vocals" : "your vocal"}` : "no vocal yet";
+    $("beat-text").textContent = M.umLink > 0 ? "Your vocal is linked. While you sing, the beat steps back where your voice is (orange on the spectrum)."
+      : "Put Voxology on your vocal track too (VOCAL mode) and press play. They find each other: nothing to route.";
+  }
   if (M.refVersion !== refVersionSeen) { refVersionSeen = M.refVersion; fetchReference(); }
   if (M.aeReport !== reportVersion) { const first = reportVersion === -1; reportVersion = M.aeReport; fetchReport(!first); }
   const match = on("levelMatch") ? ` · MATCH ${fmtSigned(M.matchDb)}` : "";
@@ -1036,5 +1162,5 @@ window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
 // Refresh everything once the parameter values have arrived.
 for (const id of [...SLIDERS, ...TOGGLES, ...COMBOS]) P[id].valueChangedEvent.addListener(() => { refreshHive(); });
 select(0);
-setTimeout(refreshAll, 100);
+setTimeout(() => { refreshAll(); applyMode(); }, 100);
 draw();

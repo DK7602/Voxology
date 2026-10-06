@@ -17,7 +17,7 @@
   <header id="header" class="card">
     <img class="logo" id="logo" src="assets/logo.webp" alt="Voxology logo">
     <img class="title" src="assets/title.webp" alt="Voxology">
-    <div class="h-group">
+    <div class="h-group g-style">
       <span class="h-label">STYLE</span>
       <div class="picker" title="What finished should sound like: Auto-Edit aims for this">
         <button type="button" id="style-prev" aria-label="Previous style">&#8249;</button>
@@ -29,7 +29,7 @@
         <button type="button" id="ref-clear" class="ref-x" title="Remove the reference (back to the style's target)" hidden>&#10005;</button>
       </div>
     </div>
-    <div class="h-group">
+    <div class="h-group g-int">
       <span class="h-label">INTENSITY</span>
       <div class="seg" id="intensity"></div>
     </div>
@@ -38,6 +38,7 @@
       <span class="ae-text" id="ae-text">AUTO-EDIT</span>
       <span class="ae-sub" id="ae-sub">listens, then sets everything</span>
     </button>
+    <div id="beat-banner"><span class="bb-title">BEAT MODE</span><span class="bb-sub">this Voxology makes room in the beat for your vocal</span></div>
     <button type="button" id="undo" class="chip" disabled title="Put back the settings from before Auto-Edit">UNDO</button>
     <div class="h-group">
       <span class="h-label">COMPARE</span>
@@ -54,8 +55,14 @@
 
   <!-- SIGNAL CHAIN (honeycomb) -->
   <nav id="chain" class="card" aria-label="Signal chain">
-    <div class="card-head"><span class="caps">SIGNAL CHAIN</span><span class="mono dim">12 MODULES</span></div>
+    <div class="card-head"><span class="caps" id="chain-title">SIGNAL CHAIN</span>
+      <div class="seg mode" id="mode" title="VOCAL: Voxology on your vocal. BEAT: Voxology on your beat, making room for the vocal (Unmask).">
+        <button type="button" data-m="0">VOCAL</button><button type="button" data-m="1">BEAT</button></div></div>
     <div id="hive"></div>
+    <div id="beat-card">
+      <div class="hex big"><div class="rim"></div><div class="face"><span class="num">BEAT</span><span class="name">UNMASK</span><span class="stat" id="beat-stat">no vocal</span></div></div>
+      <p class="beat-text" id="beat-text">Makes room in your beat for the vocal.</p>
+    </div>
     <div class="chain-foot mono dim">click a cell to open · dot = on / off</div>
   </nav>
 
@@ -104,7 +111,7 @@
     <div class="meter"><span class="m-label">OUT</span><div class="bar"><i id="out-bar"></i></div><span class="mono" id="out-text">−inf</span></div>
     <span class="grow"></span>
     <span class="mono dim" id="status"></span>
-    <span class="mono dim">VOXOLOGY v0.5.0</span>
+    <span class="mono dim">VOXOLOGY v0.6.0</span>
   </footer>
 </div>
 </div>

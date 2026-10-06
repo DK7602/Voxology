@@ -80,6 +80,7 @@ private:
     float gateHold = 0.0f, essHold = 0.0f, peakHold = 0.0f, levelHold = 0.0f, inPkHold = -100.0f, outPkHold = -100.0f;
     double satResHold = 0.0, satSigHold = 0.0;
     std::array<float, vox::kDynBands> dynHold {};
+    std::array<float, vox::kUnmaskBands> umHold {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VoxWebEditor)
 };

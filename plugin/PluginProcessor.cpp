@@ -9,6 +9,48 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
 {
     reader.attach (parameters);
     levelMatchParam = parameters.getRawParameterValue ("levelMatch");
+    modeParam = parameters.getRawParameterValue ("mode");
+    umAmountParam = parameters.getRawParameterValue ("umAmount");
+    umFocusParam = parameters.getRawParameterValue ("umFocus");
+    linkSlot = vox::UnmaskLink::instance().claim();
+    startTimerHz (1);
+}
+
+VoxologyAudioProcessor::~VoxologyAudioProcessor()
+{
+    stopTimer();
+    vox::UnmaskLink::instance().release (linkSlot);
+}
+
+void VoxologyAudioProcessor::setUnmaskSourceByName (const juce::String& name)
+{
+    unmaskSourceName = name;
+    pendingSourceName = name;
+    if (name.isEmpty()) unmaskSource.store (-1);
+    resolveUnmaskSource();
+}
+
+void VoxologyAudioProcessor::resolveUnmaskSource()
+{
+    if (pendingSourceName.isEmpty()) return;
+    for (const auto& s : vox::UnmaskLink::instance().sources())
+        if (s.slot != linkSlot && juce::String (s.name) == pendingSourceName)
+        {
+            unmaskSource.store (s.slot);
+            pendingSourceName.clear();
+            return;
+        }
+}
+
+void VoxologyAudioProcessor::timerCallback()
+{
+    resolveUnmaskSource();   // a saved choice: wait for that vocal's Voxology to appear (project loading)
+}
+
+void VoxologyAudioProcessor::updateTrackProperties (const TrackProperties& properties)
+{
+    if (properties.name.has_value() && properties.name->isNotEmpty())
+        vox::UnmaskLink::instance().setName (linkSlot, properties.name->toStdString());
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout VoxologyAudioProcessor::createParameterLayout()
@@ -40,7 +82,11 @@ void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
     levelMatch.prepare (sampleRate);
     appliedMatchDb = 0.0;
     autoEdit.prepare (sampleRate);
-    setLatencySamples (chain.latencySamples());
+    preparedRate = sampleRate;
+    vocalBands.prepare (sampleRate);
+    hopCount = 0;
+    unmask.prepare (sampleRate, juce::jmin (channels, vox::kMaxChannels));
+    setLatencySamples (chain.latencySamples());   // the same in both modes, so beat and vocal stay lined up
 }
 
 template <typename Sample>
@@ -60,15 +106,23 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     if (nch <= 0)
         return;
 
+    int64_t songPos = vox::UnmaskLink::kNoPosition;
     if (auto* hostPlayHead = getPlayHead())
         if (auto position = hostPlayHead->getPosition())
+        {
             if (auto bpm = position->getBpm())
                 hostBpm.store (*bpm);
+            if (position->getIsPlaying())
+                if (auto t = position->getTimeInSamples())
+                    songPos = *t;
+        }
+    const bool beatMode = isBeatMode();
 
     double inputPeak = 0.0;
     for (int c = 0; c < juce::jmin (numIn, buffer.getNumChannels()); ++c)
         inputPeak = juce::jmax (inputPeak, static_cast<double> (buffer.getMagnitude (c, 0, n)));
-    autoEdit.capture (buffer, numIn);
+    if (! beatMode)
+        autoEdit.capture (buffer, numIn);
     inputTap.push (buffer.getArrayOfReadPointers(), juce::jmin (numIn, buffer.getNumChannels()), n);
     inMeter.process (buffer.getArrayOfReadPointers(), juce::jmin (numIn, buffer.getNumChannels()), n);
 
@@ -81,8 +135,72 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     chainParams.gainProcessedDb = matching ? levelMatch.gainForBDb() : 0.0;
     chainParams.gainOriginalDb = matching ? levelMatch.gainForADb() : 0.0;
     appliedMatchDb = chainParams.gainProcessedDb;
+    const bool wantUnmask = ! chainParams.bypass && ! chainParams.listenOriginal;   // A / B and bypass hear the beat untouched
+    if (beatMode)
+    {
+        // BEAT: the vocal chain stays out (its delayed dry path keeps the latency the same in both modes).
+        chainParams.bypass = true;
+        chainParams.listenOriginal = false;
+    }
     chain.setParams (chainParams);
     chain.process (buffer.getArrayOfWritePointers(), nch, n);
+
+    // Positions of what comes out of this block (both modes have the same latency, so they line up).
+    const int lat = chain.latencySamples();
+    auto& link = vox::UnmaskLink::instance();
+    if (! beatMode)
+    {
+        // VOCAL: publish the processed vocal's band levels every 128 samples.
+        for (int i = 0; i < n; ++i)
+        {
+            double m = 0.0;
+            for (int c = 0; c < nch; ++c) m += static_cast<double> (buffer.getReadPointer (c)[i]);
+            vocalBands.process (m / nch);
+            if (++hopCount >= kHop)
+            {
+                hopCount = 0;
+                link.publish (linkSlot, songPos == vox::UnmaskLink::kNoPosition ? songPos : songPos + i - lat, vocalBands.levelsDb());
+            }
+        }
+    }
+    else
+    {
+        // BEAT: dip where the vocal sings, read for the same song position, a hop at a time.
+        unmask.setParams ({ wantUnmask ? static_cast<double> (umAmountParam->load()) : 0.0, umFocusParam->load() < 0.5f });
+        const int chosen = unmaskSource.load();
+        const auto maxAge = static_cast<int64_t> (0.25 * preparedRate);   // (a quarter second of song: older is stale)
+        int heard = 0;
+        std::array<float, vox::kUnmaskBands> db {}, one {};
+        std::array<std::array<double, kHop>, vox::kMaxChannels> tmp {};
+        for (int s = 0; s < n; s += kHop)
+        {
+            const int len = juce::jmin (kHop, n - s);
+            const int64_t pos = songPos == vox::UnmaskLink::kNoPosition ? songPos : songPos + s - lat;
+            db.fill (static_cast<float> (vox::kUnmaskSilentDb));
+            int found = 0;
+            for (int slot = 0; slot < vox::UnmaskLink::kSlots; ++slot)
+            {
+                if (slot == linkSlot || (chosen >= 0 && slot != chosen)) continue;
+                if (! link.read (slot, pos, maxAge, one)) continue;
+                ++found;
+                for (size_t b = 0; b < db.size(); ++b) db[b] = juce::jmax (db[b], one[b]);   // every vocal: the loudest
+            }
+            heard = juce::jmax (heard, found);
+            std::array<double*, vox::kMaxChannels> ptr {};
+            for (int c = 0; c < nch; ++c)
+            {
+                ptr[static_cast<size_t> (c)] = tmp[static_cast<size_t> (c)].data();
+                for (int i = 0; i < len; ++i) tmp[static_cast<size_t> (c)][static_cast<size_t> (i)] = static_cast<double> (buffer.getReadPointer (c)[s + i]);
+            }
+            unmask.process (ptr.data(), nch, len, found > 0 ? db.data() : nullptr);
+            for (int c = 0; c < nch; ++c)
+                for (int i = 0; i < len; ++i) buffer.getWritePointer (c)[s + i] = static_cast<Sample> (tmp[static_cast<size_t> (c)][static_cast<size_t> (i)]);
+        }
+        meters.umLink.store (heard);
+        for (size_t b = 0; b < db.size(); ++b) meters.umVocal[b].store (db[b]);
+        const auto dips = unmask.takeDipDb();
+        for (size_t b = 0; b < dips.size(); ++b) holdMin (meters.umDip[b], static_cast<float> (dips[b]));
+    }
 
     outMeter.process (buffer.getArrayOfReadPointers(), nch, n);
     outputTap.push (buffer.getArrayOfReadPointers(), nch, n);
@@ -121,6 +239,7 @@ void VoxologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     {
         xml->setAttribute ("aeReport", autoEdit.getReportForSaving());
         xml->setAttribute ("aeReference", autoEdit.getReferenceForSaving());
+        xml->setAttribute ("umSource", unmaskSourceName);
         copyXmlToBinary (*xml, destData);
     }
 }
@@ -135,6 +254,8 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
             xml->removeAttribute ("aeReport");
             xml->removeAttribute ("aeReference");
             autoEdit.restoreReference (savedReference);
+            setUnmaskSourceByName (xml->getStringAttribute ("umSource"));
+            xml->removeAttribute ("umSource");
             parameters.replaceState (juce::ValueTree::fromXml (*xml));
             autoEdit.onStateRestored (savedReport);
         }

@@ -78,6 +78,26 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
             complete (true);
         })
         .withNativeFunction ("clearReference", [this] (const juce::Array<juce::var>&, auto complete) { audioProcessor.autoEdit.clearReference(); complete (true); })
+        .withNativeFunction ("getUnmaskSources", [this] (const juce::Array<juce::var>&, auto complete)
+        {
+            juce::Array<juce::var> list;
+            for (const auto& s : vox::UnmaskLink::instance().sources())
+            {
+                if (s.slot == audioProcessor.getLinkSlot() || ! s.live) continue;   // live = a Voxology in VOCAL mode, running
+                auto* o = new juce::DynamicObject();
+                o->setProperty ("name", juce::String (s.name));
+                list.add (juce::var (o));
+            }
+            auto* r = new juce::DynamicObject();
+            r->setProperty ("sources", list);
+            r->setProperty ("selected", audioProcessor.getUnmaskSourceName());
+            complete (juce::JSON::toString (juce::var (r), true));
+        })
+        .withNativeFunction ("setUnmaskSource", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            audioProcessor.setUnmaskSourceByName (args.isEmpty() ? juce::String() : args[0].toString());
+            complete (true);
+        })
         .withNativeFunction ("getReference", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getReferenceJson()); })
         .withResourceProvider ([] (const auto& url) { return getResource (url); });
 }
@@ -232,6 +252,19 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("aeUndo", ae.canUndo());
     frame->setProperty ("aeReport", ae.getReportVersion());
     frame->setProperty ("refVersion", ae.getReferenceVersion());
+    if (audioProcessor.isBeatMode())
+    {
+        juce::Array<juce::var> dips, vocal;
+        for (size_t b = 0; b < umHold.size(); ++b)
+        {
+            holdDown (umHold[b], m.umDip[b].exchange (0.0f));
+            dips.add (roundTo (umHold[b], 0.1f));
+            vocal.add (roundTo (m.umVocal[b].load(), 0.1f));
+        }
+        frame->setProperty ("umDip", dips);
+        frame->setProperty ("umVocal", vocal);
+        frame->setProperty ("umLink", m.umLink.load());
+    }
     frame->setProperty ("in", makeSpectrum (audioProcessor.inputTap, inAnalyser));
     frame->setProperty ("out", makeSpectrum (audioProcessor.outputTap, outAnalyser));
     webView.emitEventIfBrowserIsVisible ("voxMeters", juce::var (frame));

@@ -255,6 +255,29 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #cells[data-cols="5"] .knob { height: 96px; margin-top: 4px; }
 #cells[data-cols="5"] .cell-value { margin-top: 4px; }
 
+/* VOCAL / BEAT switch and BEAT mode. */
+.seg.mode { margin-left: auto; }
+.seg.mode button { height: 26px; padding: 0 10px; font-size: 11px; }
+#beat-card, #beat-banner { display: none; }
+body.beat #hive, body.beat .chain-foot, body.beat .g-style, body.beat .g-int, body.beat #auto-edit, body.beat #undo { display: none; }
+body.beat #beat-card { display: flex; flex-direction: column; align-items: center; gap: 18px; padding-top: 40px; }
+body.beat #beat-banner { display: flex; flex-direction: column; gap: 4px; margin-left: 10px; margin-right: auto; }
+.bb-title { font-weight: 700; font-size: 26px; letter-spacing: 0.14em; color: var(--gold-deep); text-shadow: 0 0 6px #fff; }
+.bb-sub { font-size: 14px; color: var(--ink-soft); text-shadow: 0 0 4px #fff; }
+#beat-card .hex.big { position: relative; width: 200px; height: 230px; }
+#beat-card .hex.big .name { font-size: 22px; }
+#beat-card .hex.big .num, #beat-card .hex.big .stat { font-size: 13px; }
+#beat-card .hex.big .face { background: linear-gradient(160deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 45%), url("assets/marble_blue.webp") center / cover; }
+.beat-text { margin: 0 22px; font-size: 14px; line-height: 1.45; color: var(--ink); text-align: center; background: rgba(255, 250, 240, 0.86); padding: 10px 12px; border-radius: 12px; box-shadow: inset 0 0 0 1.5px var(--gold); }
+.src-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; width: 176px; max-height: 150px; overflow-y: auto; }
+.src-list button { height: 28px; border: 0; border-radius: 14px; font-size: 12px; font-weight: 700; background: var(--ivory); color: var(--ink-soft); box-shadow: inset 0 0 0 1.5px var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 10px; }
+.src-list button.sel { background: var(--marble); color: var(--blue-deep); box-shadow: inset 0 0 0 2px var(--gold); }
+.src-list .none { font-size: 12px; color: var(--warn); text-align: center; padding: 6px; }
+#cells[data-page="unmask"] .cell.src { width: 186px; }
+#cells[data-page="unmask"] .cell.um-meter { width: 252px; }
+#cells[data-page="unmask"] .um-meter .dyn-bars { gap: 9px; }
+#cells[data-page="unmask"] .um-meter .dyn-name { font-size: 10.5px; }
+
 /* Signal chain: 12 cells. */
 .hex { width: 108px; height: 124px; }
 .hex .name { font-size: 12.5px; padding: 0 8px; }

@@ -10,6 +10,7 @@ add_executable(vox_tests
     test_dyneq.cpp
     test_popbreath.cpp
     test_reference.cpp
+    test_unmask.cpp
     test_space.cpp
     test_chain.cpp
     test_autoedit.cpp
