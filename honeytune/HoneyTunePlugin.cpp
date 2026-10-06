@@ -39,6 +39,8 @@ namespace
         // Background thread only
         double sampleRate = 48000.0;
         std::vector<std::vector<float>> original;   // per channel
+        std::vector<vox::honey::Note> renderedNotes;      // what the current render was made from
+        const vox::honey::Track* renderedTrack = nullptr;
 
         // Shared (dataLock)
         CriticalSection dataLock;
@@ -65,8 +67,39 @@ namespace
         }
 
         /** Hand edits re-attached to the notes by start time (within 30 ms). Call with dataLock held. */
+        // Undo / redo (dataLock): whole edit lists. One step per gesture: edits of the same note less than
+        // 0.7 s apart (a drag) count as one.
+        std::vector<std::vector<NoteEdit>> undoStack, redoStack;
+        uint32 lastPushMs = 0;
+        int lastPushIndex = -1;
+        void pushUndo (int index, bool force = false)
+        {
+            const auto now = Time::getMillisecondCounter();
+            if (force || index != lastPushIndex || now - lastPushMs > 700)
+            {
+                undoStack.push_back (edits);
+                if (undoStack.size() > 100) undoStack.erase (undoStack.begin());
+                redoStack.clear();
+            }
+            lastPushMs = now;
+            lastPushIndex = force ? -1 : index;
+        }
+        bool step (bool back)
+        {
+            auto& from = back ? undoStack : redoStack;
+            auto& to = back ? redoStack : undoStack;
+            if (from.empty() || from.back().size() != edits.size()) return false;
+            to.push_back (edits);
+            edits = from.back();
+            from.pop_back();
+            lastPushIndex = -1;
+            return true;
+        }
+
         void attach (const std::vector<SavedEdit>& saved)
         {
+            undoStack.clear();
+            redoStack.clear();
             edits.assign (notes.size(), {});
             const double tolerance = 0.03 * (track != nullptr ? track->sampleRate : 48000.0);
             for (const auto& s : saved)
@@ -215,6 +248,7 @@ public:
         {
             const ScopedLock sl (st->dataLock);
             if (index < 0 || index >= static_cast<int> (st->edits.size())) return;
+            st->pushUndo (index);
             st->edits[static_cast<size_t> (index)] = e;
         }
         requestRender (st);
@@ -224,9 +258,20 @@ public:
     {
         {
             const ScopedLock sl (st->dataLock);
+            st->pushUndo (-1, true);
             st->edits.assign (st->notes.size(), {});
         }
         requestRender (st);
+    }
+
+    bool undoRedo (const std::shared_ptr<SourceState>& st, bool back)
+    {
+        {
+            const ScopedLock sl (st->dataLock);
+            if (! st->step (back)) return false;
+        }
+        requestRender (st);
+        return true;
     }
 
     /** A / B for the whole document: play the recordings as they were (edits kept). */
@@ -441,9 +486,31 @@ private:
             track = st.track;
             notes = honeyui::applyEdits (st.notes, st.edits, s, key, scale);
         }
+        // An edit to a few notes: re-render only around them (from the gap before to the gap after),
+        // on top of the current render. A new analysis, the key / settings moving most notes: all of it.
+        std::shared_ptr<const std::vector<std::vector<float>>> current;
+        {
+            const SpinLock::ScopedLockType sl (st.lock);
+            current = st.rendered;
+        }
+        const double clip = st.original.empty() ? 0.0 : static_cast<double> (st.original.front().size());
+        double from = 0.0, to = 0.0;
+        const bool part = current != nullptr && current->size() == st.original.size() && st.renderedTrack == track.get()
+                          && vox::honey::changedRegion (st.renderedNotes, notes, clip, st.sampleRate, from, to) && to - from < 0.6 * clip;
+        if (part && to <= from) { st.status = 2; return true; }   // nothing changed
         auto out = std::make_shared<std::vector<std::vector<float>>>();
-        for (const auto& ch : st.original)
-            out->push_back (vox::honey::render (ch, st.sampleRate, *track, notes));
+        for (size_t c = 0; c < st.original.size(); ++c)
+        {
+            if (part)
+            {
+                out->push_back ((*current)[c]);
+                vox::honey::renderPart (st.original[c], st.sampleRate, *track, notes, out->back(), from, to);
+            }
+            else
+                out->push_back (vox::honey::render (st.original[c], st.sampleRate, *track, notes));
+        }
+        st.renderedNotes = notes;
+        st.renderedTrack = track.get();
         {
             const SpinLock::ScopedLockType sl (st.lock);
             st.rendered = std::move (out);
@@ -620,6 +687,8 @@ private:
     void setSettings (const Settings& s) override { if (dc != nullptr) dc->setSettings (s); }
     void setEdit (int i, const NoteEdit& e) override { if (dc != nullptr && state != nullptr) dc->setEdit (state, i, e); }
     void resetAllEdits() override { if (dc != nullptr && state != nullptr) dc->resetAllEdits (state); }
+    bool undo() override { return dc != nullptr && state != nullptr && dc->undoRedo (state, true); }
+    bool redo() override { return dc != nullptr && state != nullptr && dc->undoRedo (state, false); }
     void setOriginal (bool o) override { if (dc != nullptr) dc->setOriginal (o); }
     bool isOriginal() override { return dc != nullptr && dc->isOriginal(); }
     void seek (double clipSeconds) override

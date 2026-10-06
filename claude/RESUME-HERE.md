@@ -506,3 +506,18 @@ editing (timing / length, per-note formant, partial re-render). User chose 1 now
 - Plug-in: toggle "recMode" (Record Mode); two VocalChains (chain + recChain, both prepared); switching resets the new one and
   sets latency via AsyncUpdater (wantedLatency). BEAT mode always normal. Meters recMode, latencyMs10. UI: header REC chip (red
   dot), status "REC 6.1 ms", Pitch tip RECORD MODE, Learn line. Header tightened (gap 11, Auto-Edit 226 px) to fit.
+
+## v0.12.1 Honey Tune: Undo / Redo + fast edits (2026-10-06)
+Honey Tune upgrade plan (user: "move forward with Honey Tune upgrades"): 1 fast edits + undo / redo (DONE), 2 note timing &
+length (time-stretch: move notes, stretch ends), 3 per-note formant. Later: key from Cubase (ARA key signatures?), Capture mode.
+- Undo / Redo: SourceState.undoStack / redoStack (whole edit lists, 100 deep); pushUndo on setEdit (one step per gesture: same
+  note within 0.7 s = one step), forced on Reset all; cleared on re-analysis (attach). Model::undo() / redo() (defaults false).
+  Panel buttons Undo / Redo (left of Snap note; pair sliders min 230 px), Ctrl + Z / Ctrl + Y / Ctrl + Shift + Z in the roll.
+- Partial re-render: honey::changedRegion(before, after, clip, sr, from, to) = middle of the gap before the first changed note
+  to the middle of the gap after the last (neighbours < 0.15 s apart join in); renderPart() re-runs the shifter from 0.3 s
+  before (Plan got a start offset: the shifter's time 0 = clip sample `from`) and S-crossfades 10 ms into the old render.
+  renderNow uses it when the track is the same, note count equal and the region < 60 % of the clip (SourceState.renderedNotes /
+  renderedTrack). Don vocal (105 s, 363 notes): full render 1.84 s per channel, one-note edit 64 ms (region 2.9 s).
+- Test: edit note 1 of a 4-phrase line -> region covers it, < 60 % of the clip, outside bit-identical to the old render, notes'
+  pitches = full render within 3 cents, level within 1.5 dB (PSOLA level varies +-1 dB with the shifter's start), no clicks.
+- Syntax-check Honey Tune locally: ARA SDK cloned at /tmp/claude-0/sc/ara (releases/2.3.0) + JucePlugin_* stub defines.

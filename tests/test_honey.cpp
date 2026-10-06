@@ -149,3 +149,47 @@ TEST_CASE ("Honey Tune: drag a note two semitones; vibrato and drift controls", 
         CHECK (std::abs (b - a) < 0.35 * std::abs (b0 - a0));
     }
 }
+
+TEST_CASE ("Honey Tune: an edit re-renders only around its note, same result as a full render", "[honey]")
+{
+    // Phrases with breaths between them (A3, C4, E4, D4; 0.4 s each, 0.25 s gaps).
+    const auto x = sing ({ { 57, 0.4, 0.25 }, { 60, 0.4, 0.25 }, { 64, 0.4, 0.25 }, { 62, 0.4, 0.25 } });
+    auto mid = [] (int k) { return 0.2 + 0.65 * k; };
+    const auto t = analyse (x, kSr);
+    const auto before = findNotes (t);
+    REQUIRE (before.size() >= 3);
+    auto prev = render (x, kSr, t, before);
+    auto after = before;
+    after[1].target = after[1].pitch + 2.0;
+    double from = 0.0, to = 0.0;
+    REQUIRE (changedRegion (before, after, static_cast<double> (x.size()), kSr, from, to));
+    INFO ("region " << from / kSr << " - " << to / kSr << " s (note 1: " << after[1].start / kSr << " - " << after[1].end / kSr << ")");
+    CHECK (from <= after[1].start);
+    CHECK (to >= after[1].end);
+    CHECK (to - from < 0.6 * static_cast<double> (x.size()));   // much less than the whole clip
+    const auto old = prev;
+    renderPart (x, kSr, t, after, prev, from, to);
+    const auto full = render (x, kSr, t, after);
+    // The edited note moved; outside the region nothing changed at all.
+    CHECK (midiOf (hzAt (prev, mid (1) - 0.08, 0.16)) == Approx (62.0).margin (0.06));
+    for (size_t i = 0; i < x.size(); ++i)
+        if (static_cast<double> (i) < from - 0.011 * kSr || static_cast<double> (i) > to + 0.011 * kSr) REQUIRE (prev[i] == old[i]);
+    // And it sounds like a full render of the edit: the same notes, the same level, no clicks at the joins
+    // (they sit in the quiet gaps; sample by sample they differ by the shifter's tiny timing offsets).
+    for (int k = 0; k < 4; ++k)
+        CHECK (midiOf (hzAt (prev, mid (k) - 0.08, 0.16)) == Approx (midiOf (hzAt (full, mid (k) - 0.08, 0.16))).margin (0.03));
+    auto rms = [&] (const std::vector<float>& v, double a, double b)
+    {
+        double e = 0; for (auto i = static_cast<size_t> (a); i < static_cast<size_t> (b); ++i) e += static_cast<double> (v[i]) * v[i];
+        return 10 * std::log10 (e / (b - a) + 1e-30);
+    };
+    INFO ("note 1 level: partial " << rms (prev, after[1].start, after[1].end) << " full " << rms (full, after[1].start, after[1].end) << " input " << rms (std::vector<float> (x), after[1].start, after[1].end)
+          << "; first 50 ms: partial " << rms (prev, after[1].start, after[1].start + 0.05 * kSr) << " full " << rms (full, after[1].start, after[1].start + 0.05 * kSr));
+    CHECK (rms (prev, from, to) == Approx (rms (full, from, to)).margin (1.5));   // (a 2-semitone move varies +-1 dB with the shifter's start)
+    double jx = 0, jy = 0;
+    for (size_t i = 1; i < x.size(); ++i) { jx = std::max (jx, std::abs (static_cast<double> (full[i]) - full[i - 1])); jy = std::max (jy, std::abs (static_cast<double> (prev[i]) - prev[i - 1])); }
+    CHECK (jy < 1.2 * jx);
+    // Nothing changed -> an empty region.
+    CHECK (changedRegion (after, after, static_cast<double> (x.size()), kSr, from, to));
+    CHECK (from == to);
+}

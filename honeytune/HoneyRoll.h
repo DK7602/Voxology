@@ -23,6 +23,7 @@ public:
     const honeyui::Snapshot& getSnapshot() const { return snap; }
     std::function<void()> onSelectionChanged;
     std::function<void (double)> onSeek;   // clicked the ruler (clip seconds)
+    std::function<void (bool)> onUndo;     // Ctrl + Z (true) / Ctrl + Y or Ctrl + Shift + Z (false)
 
     void paint (juce::Graphics&) override;
     void resized() override;

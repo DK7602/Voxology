@@ -54,7 +54,12 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     for (auto* c : { &key, &scale }) addAndMakeVisible (*c);
     for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
         l->setVisible (false);   // painted in gold by the panel
-    for (auto* b : { &snapNote, &resetNote, &resetAll, &fit, &original, &tuned }) addAndMakeVisible (*b);
+    for (auto* b : { &snapNote, &resetNote, &resetAll, &fit, &original, &tuned, &undoBtn, &redoBtn }) addAndMakeVisible (*b);
+    undoBtn.setTooltip ("Undo the last edit (Ctrl + Z)");
+    redoBtn.setTooltip ("Redo (Ctrl + Y)");
+    undoBtn.onClick = [this] { if (model != nullptr && model->undo()) { roll.refresh(); refresh(); } };
+    redoBtn.onClick = [this] { if (model != nullptr && model->redo()) { roll.refresh(); refresh(); } };
+    roll.onUndo = [this] (bool back) { if (back) undoBtn.onClick(); else redoBtn.onClick(); };
     // A / B switch: the lit side is what you see and hear (your edits are kept either way).
     original.setTooltip ("Hear and see the clip as recorded");
     tuned.setTooltip ("Hear and see it with your edits");
@@ -407,7 +412,7 @@ void HoneyPanel::resized()
         l.setBounds (c.removeFromLeft (128.0f).toNearestInt());
         s.setBounds (c.toNearestInt());
     };
-    const float pairW = jlimit (250.0f, 360.0f, (row.getWidth() - 380.0f) / 2.0f);
+    const float pairW = jlimit (230.0f, 360.0f, (row.getWidth() - 520.0f) / 2.0f);
     pair (pairW, noteDriftLabel, noteDrift);
     pair (pairW, noteVibratoLabel, noteVibrato);
     resetAll.setBounds (row.removeFromRight (116.0f).toNearestInt());
@@ -415,4 +420,8 @@ void HoneyPanel::resized()
     resetNote.setBounds (row.removeFromRight (96.0f).toNearestInt());
     row.removeFromRight (6.0f);
     snapNote.setBounds (row.removeFromRight (130.0f).toNearestInt());
+    row.removeFromRight (10.0f);
+    redoBtn.setBounds (row.removeFromRight (62.0f).toNearestInt());
+    row.removeFromRight (6.0f);
+    undoBtn.setBounds (row.removeFromRight (62.0f).toNearestInt());
 }

@@ -146,6 +146,9 @@ struct Model
     virtual void setSettings (const Settings&) = 0;
     virtual void setEdit (int noteIndex, const NoteEdit& edit) = 0;
     virtual void resetAllEdits() = 0;
+    /** Undo / redo the last edit (false: nothing to undo / redo). */
+    virtual bool undo() { return false; }
+    virtual bool redo() { return false; }
     /** A / B: hear (and see) the clip as it was recorded, edits kept but bypassed. */
     virtual void setOriginal (bool) = 0;
     virtual bool isOriginal() = 0;

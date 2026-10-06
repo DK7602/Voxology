@@ -683,6 +683,12 @@ void HoneyRoll::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& w)
 
 bool HoneyRoll::keyPressed (const KeyPress& k)
 {
+    if (k.getModifiers().isCommandDown() && onUndo != nullptr)
+    {
+        const auto c = CharacterFunctions::toLowerCase (static_cast<juce_wchar> (k.getKeyCode()));
+        if (c == 'z') { onUndo (! k.getModifiers().isShiftDown()); return true; }
+        if (c == 'y') { onUndo (false); return true; }
+    }
     if (k.getTextCharacter() == '+' || k.getTextCharacter() == '=' || k.getTextCharacter() == '-')
     {
         // Zoom in time around the middle of the view.

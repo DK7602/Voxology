@@ -46,4 +46,13 @@ double centsOff (const Note& n, int key, int scale);
 std::vector<float> render (const std::vector<float>& mono, double sampleRate, const Track& track,
                            const std::vector<Note>& notes, double transitionMs = 25.0);
 
+/** After an edit: the stretch to re-render, from the middle of the gap before the first changed note to
+    the middle of the gap after the last (neighbours sung in one breath come along). false = the notes
+    don't line up (re-analysed: render it all); from == to = nothing changed. Samples. */
+bool changedRegion (const std::vector<Note>& before, const std::vector<Note>& after, double clipSamples, double sampleRate,
+                    double& from, double& to);
+/** Re-renders only [from, to) of `previous` (the clip's earlier render), crossfading 10 ms at each join. */
+void renderPart (const std::vector<float>& mono, double sampleRate, const Track& track, const std::vector<Note>& notes,
+                 std::vector<float>& previous, double from, double to, double transitionMs = 25.0);
+
 } // namespace vox::honey
