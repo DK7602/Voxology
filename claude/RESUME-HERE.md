@@ -471,3 +471,19 @@ editing (timing / length, per-note formant, partial re-render). User chose 1 now
   mixolydian, Schaf F# dorian (D / D# open). UI Beat Key shows "D / D# open". Test added (63 cases).
 - CI green: Actions run 37470452372 (v0.10.1 with the Schaf fix). Test clips' peaks over 0 dB are intact (float in MP3, not
   flattened): scale them down when mixing / exporting renders.
+
+## v0.11.0 MIDI + note control (2026-10-06)
+- UI fix from the user's Cubase screenshot: Scale list sat on the window frame -> Pitch row 1 172 px (was 178), scale buttons
+  19 px, margin 3 (rows ~15 px higher).
+- PitchParams: onlyNotes (bitmask; when set ONLY these pitch classes, any octave), removedNotes (never these), transpose (-12..12
+  st, added after tuning, not glided; harmony voices ignore it). targetNote(..., extra, only, removed) searches +-6 st;
+  allowedMask() (all removed -> all 12). Two-band split only for |transpose| <= 2. Reading.targetMidi includes transpose.
+- Plug-in: NEEDS_MIDI_INPUT TRUE, acceptsMidi true, AU type MusicEffect (Mac: AU identity changes - fine, no Mac users yet).
+  Params ptMidi {Off, Notes, Learn}, ptTranspose, ptRm0..11 (Pitch Remove C..B). Notes mode: onlyNotes = pitch classes held
+  now (none held = key as usual). Learn: notes played after letting go of everything start a new learned set (atomic, saved in
+  state XML "midiLearned"). Meters midiNotes (held / learned), notesUsed (allowedMask). BEAT mode ignores MIDI.
+- UI: Notes cell (row 2, right): 12 note buttons (lit = may be used, struck red = off, blue glow = MIDI), MIDI OFF | NOTES |
+  LEARN, transpose - / +. Learn text + tip LEARN IS WAITING.
+- Tests: MIDI-only target (A3 -> C4 with a C held), removed notes, all-off fallback, transpose +3 after Robot, -12 at Amount 0
+  (an octave down, untuned). 64 cases.
+- Cubase how-to for the user: MIDI track -> output = Voxology (insert on the vocal track); "Notes" = play / draw the melody.

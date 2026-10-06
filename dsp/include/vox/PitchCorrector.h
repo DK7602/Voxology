@@ -50,6 +50,9 @@ struct PitchParams
     double vibrato = 0.0;     // % (Natural): -100 = flat, 0 = as sung, +100 = twice as deep
     double tuneCents = 0.0;   // the notes' tuning vs A = 440 Hz (-50 .. +50; from the beat)
     int extraNotes = 0;       // bit n (0 = C .. 11 = B): also allowed besides the scale (a note the beat leaves open)
+    int onlyNotes = 0;        // bit n: when not 0, ONLY these notes (MIDI: the notes you hold / taught it), any octave
+    int removedNotes = 0;     // bit n: never pulled to these (you switched them off)
+    int transpose = 0;        // semitones, -12 .. +12: the whole voice moved (formants kept)
 };
 
 /** Harmony intervals: scale steps when a key / scale is set (they stay in key), semitones with Chromatic. */
@@ -91,7 +94,7 @@ public:
     void setParams (const PitchParams& p) noexcept { params = p; }
     static bool isNeutral (const PitchParams& p) noexcept
     {
-        return ! p.enabled || (p.amount < 0.05 && std::abs (p.formant) < 0.01 && p.harmony == 0);
+        return ! p.enabled || (p.amount < 0.05 && std::abs (p.formant) < 0.01 && p.harmony == 0 && p.transpose == 0);
     }
     /** A harmony voice's note: `note` (a note of the key / scale) moved by the interval, in key. */
     static int harmonyNote (int note, int harmony, int key, int scale) noexcept;
@@ -101,7 +104,9 @@ public:
 
     /** The note to aim for: nearest allowed note to `midi` (fractional), keeping `current` while the
         sung pitch stays within its +/- 0.5 semitone plus a little hysteresis. */
-    static int targetNote (double midi, int key, int scale, int current, int extraNotes = 0) noexcept;
+    static int targetNote (double midi, int key, int scale, int current, int extraNotes = 0, int onlyNotes = 0, int removedNotes = 0) noexcept;
+    /** The 12 notes (bit n = C .. B) targetNote may pick with these settings. */
+    static int allowedMask (int key, int scale, int extraNotes, int onlyNotes, int removedNotes) noexcept;
 
     struct Reading
     {

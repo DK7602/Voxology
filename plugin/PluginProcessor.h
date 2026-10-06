@@ -41,7 +41,7 @@ public:
     bool hasEditor() const override { return true; }
 
     const juce::String getName() const override { return JucePlugin_Name; }
-    bool acceptsMidi() const override { return false; }
+    bool acceptsMidi() const override { return true; }   // Pitch: MIDI notes / Learn
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 8.0; }   // delay + reverb tails
@@ -78,6 +78,7 @@ public:
         // Key from the beat. VOCAL: 0 manual, 1 following the beat, 2 no beat found, 3 beat still listening / unsure.
         // BEAT: this beat's own reading (bkState 4 = listening, 5 = has a key).
         std::atomic<int> bkState { 0 }, bkKey { 0 }, bkMode { 0 }, bkSet { 0 }, bkUnclear { 0 }, bkOpen { -1 }, keyUsed { 0 }, scaleUsed { 0 };
+        std::atomic<int> midiNotes { 0 }, notesUsed { 0 };   // pitch classes (bits): MIDI held / learned, and what Pitch may aim for
         std::atomic<float> bkConf { 0.0f }, bkTune { 0.0f }, bkHeard { 0.0f };
     };
     Meters meters;
@@ -98,7 +99,12 @@ public:
 
 private:
     template <typename Sample>
-    void processAnyPrecision (juce::AudioBuffer<Sample>& buffer);
+    void processAnyPrecision (juce::AudioBuffer<Sample>& buffer, const juce::MidiBuffer& midi);
+    void handleMidi (const juce::MidiBuffer& midi) noexcept;
+    std::atomic<float>* midiParam = nullptr;
+    std::array<int, 128> midiHeld {};   // per note: how many times held (several channels)
+    int midiHeldCount = 0;
+    std::atomic<int> midiLearned { 0 };   // Learn: the scale taught by MIDI (saved with the project)
 
     vox::VocalChain chain;
     vox::ChainParams chainParams;

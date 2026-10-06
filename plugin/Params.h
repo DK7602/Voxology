@@ -16,7 +16,7 @@ namespace VoxParams
 
     inline juce::StringArray sliderIds()
     {
-        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath" };
+        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath" };
         for (int b = 0; b < vox::kEqBands; ++b) { ids.add (n ("eqGain", b)); ids.add (n ("eqFreq", b)); }
         ids.add ("dqSens");
         for (int b = 0; b < vox::kDynBands; ++b) { ids.add (n ("dqCut", b)); ids.add (n ("dqFreq", b)); }
@@ -28,9 +28,11 @@ namespace VoxParams
     }
     inline juce::StringArray toggleIds()
     {
-        return { "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
+        juce::StringArray ids { "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
+        for (int k = 0; k < 12; ++k) ids.add ("ptRm" + juce::String (k));   // Pitch: notes switched off (C .. B)
+        return ids;
     }
-    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2" }; }
+    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2" }; }
 
     inline void addTo (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
     {
@@ -82,6 +84,12 @@ namespace VoxParams
         choice ("ptMode", "Pitch Mode", modes, vox::kPitchNatural);
         // Key from the beat (a Voxology on the beat in BEAT mode hears it); Key / Scale are the fallback.
         choice ("ptKeySrc", "Pitch Key Source", { "From Beat", "Manual" }, 0);
+        // MIDI into Voxology: Notes = the voice goes to the notes you hold; Learn = the notes you play become the scale.
+        choice ("ptMidi", "Pitch MIDI", { "Off", "Notes", "Learn" }, 0);
+        slider ("ptTranspose", "Pitch Transpose", NormalisableRange<float> (-12.0f, 12.0f, 1.0f), 0.0f, "st",
+                [] (float v, int) { const int t = roundToInt (v); return t == 0 ? String ("0 st") : (t > 0 ? "+" : "") + String (t) + " st"; });
+        for (int k = 0; k < 12; ++k)
+            layout.add (std::make_unique<AudioParameterBool> (ParameterID { "ptRm" + String (k), 1 }, String ("Pitch Remove ") + vox::kNoteNames[static_cast<size_t> (k)], false));
         slider ("ptVibrato", "Pitch Vibrato", NormalisableRange<float> (-100.0f, 100.0f, 1.0f), 0.0f, "%",
                 [] (float v, int) { return std::abs (v) < 0.5f ? String ("As sung") : v <= -99.5f ? String ("Flat") : (v > 0 ? "+" : "") + String (roundToInt (v)) + " %"; });
 
@@ -263,6 +271,10 @@ namespace VoxParams
             p.listenOriginal = on ("listenA");
             p.pitch = { on ("ptOn"), d ("ptAmount"), idx ("ptKey", 11), idx ("ptScale", vox::kScales - 1), d ("ptSpeed"), d ("ptHumanize"), d ("ptFormant"), 0,
                         idx ("ptMode", vox::kPitchModes - 1), d ("ptVibrato") };
+            p.pitch.transpose = juce::roundToInt (v ("ptTranspose"));
+            p.pitch.removedNotes = 0;
+            for (int k = 0; k < 12; ++k)
+                if (removed[static_cast<size_t> (k)]->load() > 0.5f) p.pitch.removedNotes |= 1 << k;
             p.voices.interval = { idx ("hv1", vox::kHarmonies - 1), idx ("hv2", vox::kHarmonies - 1) };
             p.voices.level = d ("hvLevel");
             p.voices.formant = d ("hvFormant");
@@ -310,6 +322,8 @@ namespace VoxParams
                 if (id == n ("dqCut", b)) dqCut[static_cast<size_t> (b)] = a;
                 if (id == n ("dqFreq", b)) dqFreq[static_cast<size_t> (b)] = a;
             }
+            for (int k = 0; k < 12; ++k)
+                if (id == "ptRm" + juce::String (k)) removed[static_cast<size_t> (k)] = a;
         }
         float v (const char* id) const noexcept
         {
@@ -323,5 +337,6 @@ namespace VoxParams
         std::vector<std::pair<juce::String, std::atomic<float>*>> values;
         std::array<std::atomic<float>*, vox::kEqBands> eqGain {}, eqFreq {};
         std::array<std::atomic<float>*, vox::kDynBands> dqCut {}, dqFreq {};
+        std::array<std::atomic<float>*, 12> removed {};
     };
 }

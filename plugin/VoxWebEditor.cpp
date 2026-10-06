@@ -260,6 +260,8 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("bkTune", roundTo (m.bkTune.load(), 0.1f));
     frame->setProperty ("bkHeard", roundTo (m.bkHeard.load(), 0.1f));
     frame->setProperty ("keyUsed", m.keyUsed.load());
+    frame->setProperty ("midiNotes", m.midiNotes.load());
+    frame->setProperty ("notesUsed", m.notesUsed.load());
     frame->setProperty ("scaleUsed", m.scaleUsed.load());
     frame->setProperty ("sr", audioProcessor.getSampleRate());
     auto& ae = audioProcessor.autoEdit;

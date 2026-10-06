@@ -13,6 +13,7 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
     umAmountParam = parameters.getRawParameterValue ("umAmount");
     umFocusParam = parameters.getRawParameterValue ("umFocus");
     keySrcParam = parameters.getRawParameterValue ("ptKeySrc");
+    midiParam = parameters.getRawParameterValue ("ptMidi");
     linkSlot = vox::UnmaskLink::instance().claim();
     startTimerHz (1);
 }
@@ -104,7 +105,7 @@ void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
 }
 
 template <typename Sample>
-void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buffer)
+void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buffer, const juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
     const int numIn = getTotalNumInputChannels();
@@ -192,6 +193,15 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
         }
         followingBeat = state == 1;
         meters.bkState.store (state);
+        // MIDI: Notes = only the notes held right now (none held: the key as usual); Learn = the last notes played.
+        handleMidi (midi);
+        int held = 0;
+        for (int k = 0; k < 128; ++k) if (midiHeld[static_cast<size_t> (k)] > 0) held |= 1 << (k % 12);
+        const int midiMode = juce::roundToInt (midiParam->load());
+        chainParams.pitch.onlyNotes = midiMode == 1 ? held : midiMode == 2 ? midiLearned.load() : 0;
+        meters.midiNotes.store (midiMode == 2 ? midiLearned.load() : held);
+        const auto& pp = chainParams.pitch;
+        meters.notesUsed.store (vox::PitchCorrector::allowedMask (pp.key, pp.scale, pp.extraNotes, pp.onlyNotes, pp.removedNotes));
         meters.keyUsed.store (chainParams.pitch.key);
         meters.scaleUsed.store (chainParams.pitch.scale);
     }
@@ -291,8 +301,34 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     meters.hvNotes[1].store (m.voiceNotes[1]);
 }
 
-void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)  { processAnyPrecision (buffer); }
-void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer&) { processAnyPrecision (buffer); }
+void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)  { processAnyPrecision (buffer, midi); }
+void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midi) { processAnyPrecision (buffer, midi); }
+
+void VoxologyAudioProcessor::handleMidi (const juce::MidiBuffer& midi) noexcept
+{
+    for (const auto meta : midi)
+    {
+        const auto m = meta.getMessage();
+        if (m.isNoteOn())
+        {
+            // Learn: a new chord / phrase (played after letting go of everything) starts a new scale.
+            const int prev = midiHeldCount == 0 ? 0 : midiLearned.load();
+            midiLearned.store (prev | (1 << (m.getNoteNumber() % 12)));
+            ++midiHeld[static_cast<size_t> (m.getNoteNumber())];
+            ++midiHeldCount;
+        }
+        else if (m.isNoteOff() && midiHeld[static_cast<size_t> (m.getNoteNumber())] > 0)
+        {
+            --midiHeld[static_cast<size_t> (m.getNoteNumber())];
+            --midiHeldCount;
+        }
+        else if (m.isAllNotesOff() || m.isAllSoundOff())
+        {
+            midiHeld.fill (0);
+            midiHeldCount = 0;
+        }
+    }
+}
 
 void VoxologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
@@ -301,6 +337,7 @@ void VoxologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
         xml->setAttribute ("aeReport", autoEdit.getReportForSaving());
         xml->setAttribute ("aeReference", autoEdit.getReferenceForSaving());
         xml->setAttribute ("umSource", unmaskSourceName);
+        xml->setAttribute ("midiLearned", midiLearned.load());
         copyXmlToBinary (*xml, destData);
     }
 }
@@ -316,7 +353,9 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
             xml->removeAttribute ("aeReference");
             autoEdit.restoreReference (savedReference);
             setUnmaskSourceByName (xml->getStringAttribute ("umSource"));
+            midiLearned.store (xml->getIntAttribute ("midiLearned", 0) & 0xFFF);
             xml->removeAttribute ("umSource");
+            xml->removeAttribute ("midiLearned");
             parameters.replaceState (juce::ValueTree::fromXml (*xml));
             autoEdit.onStateRestored (savedReport);
         }

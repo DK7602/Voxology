@@ -326,3 +326,25 @@ TEST_CASE ("Pitch: breath and rasp in a note don't turn into a buzz", "[pitch]")
         CHECK (pulse (y, target) < 0.03);   // was ~0.15 with the noise inside the grains
     }
 }
+
+TEST_CASE ("Pitch: MIDI notes, removed notes and transpose", "[pitch]")
+{
+    // Only / removed notes pick the target (any octave).
+    CHECK (PitchCorrector::targetNote (57.3, 0, 0, -1, 0, 1 << 0, 0) == 60);            // MIDI holds a C: A3 -> C4
+    CHECK (PitchCorrector::targetNote (57.3, 0, 0, -1, 0, (1 << 0) | (1 << 7), 0) == 55); // C or G held: G3 is nearer
+    CHECK (PitchCorrector::targetNote (57.3, 0, 0, -1, 0, 0, 1 << 9) == 58);            // A switched off: A#
+    CHECK (PitchCorrector::targetNote (57.3, 9, 2, -1, 0, 0, 1 << 9) == 59);            // A minor without A: B
+    CHECK (PitchCorrector::targetNote (57.3, 0, 0, -1, 0, 0, 0xFFF) == 57);             // all off: nearest anyway
+
+    const double a3 = 220.0 * std::pow (2.0, 30.0 / 1200.0);
+    const auto x = voiceCurve ([&] (double) { return a3; }, 1.4);
+    PitchParams p; p.mode = kPitchRobot; p.amount = 100.0;
+    p.onlyNotes = 1 << 0;   // a MIDI C held
+    CHECK (std::abs (cents (measureHz (run (p, x), 40000), 261.63)) < 5.0);
+    p.onlyNotes = 0; p.transpose = 3;   // A3 + 3 = C4, transposed after tuning
+    CHECK (std::abs (cents (measureHz (run (p, x), 40000), 261.63)) < 5.0);
+    PitchParams t; t.transpose = -12; t.mode = kPitchNatural;   // Amount 0: just an octave down, untuned
+    const auto y = run (t, x);
+    CHECK (std::abs (cents (measureHz (y, 40000), a3 / 2.0)) < 6.0);
+    CHECK (! PitchCorrector::isNeutral (t));
+}

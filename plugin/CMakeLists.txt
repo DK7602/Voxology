@@ -12,7 +12,7 @@ juce_add_plugin(Voxology
     PLUGIN_CODE                 Vox1
     FORMATS                     ${VOX_FORMATS}
     IS_SYNTH                    FALSE
-    NEEDS_MIDI_INPUT            FALSE
+    NEEDS_MIDI_INPUT            TRUE
     NEEDS_MIDI_OUTPUT           FALSE
     IS_MIDI_EFFECT              FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
@@ -20,7 +20,7 @@ juce_add_plugin(Voxology
     NEEDS_WEB_BROWSER           TRUE
     NEEDS_WEBVIEW2              TRUE
     VST3_CATEGORIES             Fx Vocals
-    AU_MAIN_TYPE                kAudioUnitType_Effect)
+    AU_MAIN_TYPE                kAudioUnitType_MusicEffect)   # an effect that takes MIDI (Pitch: MIDI notes)
 
 # The web UI, embedded in the binary. File names must be unique (they are served flat).
 file(GLOB VOX_UI_FILES CONFIGURE_DEPENDS

@@ -25,12 +25,14 @@ fit();
 
 // ---------------------------------------------------------------------------------------------
 // Parameters
-const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
+const NOTES_C = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
   "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth",
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
-const TOGGLES = ["bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
-const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2"];
+const PT_RM = NOTES_C.map((_, k) => "ptRm" + k);
+const TOGGLES = [...PT_RM, "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
+const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
 for (const id of TOGGLES) P[id] = Juce.getToggleState(id);
@@ -59,7 +61,7 @@ function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 // Latest meter frame.
 const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1],
-  bkState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, in: null, out: null };
+  bkState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, midiNotes: 0, notesUsed: 0xFFF, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
 
@@ -132,6 +134,51 @@ function keyCell() {
   return cell;
 }
 
+/** Notes: the 12 notes (lit = Pitch may aim for it; click = switch it off), MIDI (Off / Notes / Learn)
+    and Transpose. MIDI notes glow blue. */
+function notesCell() {
+  const cell = document.createElement("div");
+  cell.className = "cell pt-notes";
+  cell.innerHTML = `<span class="cell-label">Notes</span><span class="cell-sub">click = off</span><div class="note-grid"></div>
+    <div class="key-src midi-src"></div><div class="tp"><button type="button" class="tp-dn">\u2212</button><span class="tp-v mono"></span><button type="button" class="tp-up">+</button></div>`;
+  const grid = cell.querySelector(".note-grid");
+  const notes = NOTES.map((t, k) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = t;
+    b.title = `Switch ${t} off / on`;
+    b.addEventListener("click", () => { const id = PT_RM[k]; P[id].setValue(!on(id)); cell.update(); anyEdited(); });
+    grid.appendChild(b);
+    return b;
+  });
+  const midiBox = cell.querySelector(".midi-src");
+  const midiBtns = ["MIDI off", "Notes", "Learn"].map((t, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = t;
+    b.addEventListener("click", () => { P.ptMidi.setChoiceIndex(i); cell.update(); anyEdited(); });
+    midiBox.appendChild(b);
+    return b;
+  });
+  const tpv = cell.querySelector(".tp-v");
+  const step = (d) => { setScaled("ptTranspose", clamp(Math.round(val("ptTranspose")) + d, -12, 12)); cell.update(); anyEdited(); };
+  cell.querySelector(".tp-dn").addEventListener("click", () => step(-1));
+  cell.querySelector(".tp-up").addEventListener("click", () => step(1));
+  cell.update = () => {
+    const midi = choice("ptMidi");
+    notes.forEach((b, k) => {
+      const off = on(PT_RM[k]);
+      b.classList.toggle("off", off);
+      b.classList.toggle("in", !off && ((M.notesUsed >> k) & 1) === 1);
+      b.classList.toggle("midi", midi > 0 && ((M.midiNotes >> k) & 1) === 1);
+    });
+    midiBtns.forEach((b, i) => b.classList.toggle("sel", i === midi));
+    const t = Math.round(val("ptTranspose"));
+    tpv.textContent = t === 0 ? "transpose 0" : `transpose ${t > 0 ? "+" : MINUS}${Math.abs(t)}`;
+  };
+  liveMeters.push(cell);
+  [...PT_RM, "ptMidi", "ptTranspose"].forEach((id) => P[id].valueChangedEvent.addListener(cell.update));
+  return cell;
+}
+
 /** BEAT mode: what this beat's key and tuning are (sent to the vocals for Pitch). */
 function beatKeyCell() {
   const cell = document.createElement("div");
@@ -162,6 +209,7 @@ function pitchCells() {
     keyCell(),
     tag(grid("ptScale", "Scale", "allowed notes", SCALES_SHORT, 2), "pt-scale"),
     tag(pitchCell(), "pt-tune"),
+    notesCell(),
   ];
   const [, , speed, vib, human, , , scaleCell] = cells;
   // Following the beat: the scale in use (your choice, or the beat's Major / Minor for Chromatic) glows gold.
@@ -903,10 +951,15 @@ const LEARN = {
       "Retune: how fast a note is pulled in. Natural: 10 - 40 ms (your vibrato stays at any speed). Classic: 0 - 10 ms is hard and robotic, 30 - 80 ms tuned but natural, 100+ ms only fixes drift.",
       "Vibrato (Natural): 0 keeps it as you sang it; turn it down to calm a wobbly note (all the way = flat), up to make it deeper.",
       "Humanize: lets long held notes keep their life while short notes still snap in.",
+      "Notes: lit notes are the ones Pitch may pull you to. Click one to switch it off (it's never used), click again to bring it back.",
+      "MIDI: in Cubase, make a MIDI track and set its output to Voxology. Notes = while you hold notes, your voice goes to those notes (play or draw the melody for the hard robot effect); nothing held = the key as usual. Learn = play the beat's notes or chords once and they become the scale (kept with the project).",
+      "Transpose: moves the whole voice up or down in semitones (your tone stays the same). Small moves sound natural; an octave sounds like an effect.",
       "Amount: 100 % lands right on the note; lower keeps some of your own pitch.",
       "Already using Auto-Tune or Melodyne? Turn this off: one tuner is enough."],
     live: () => {
       const t = [];
+      if (choice("ptMidi") === 2 && M.midiNotes === 0) t.push(tip("LEARN IS WAITING", "MIDI is on Learn, but no notes have been played yet, so Pitch uses the key as usual.", "calm",
+        { need: "Only if you want the MIDI scale.", steps: ["Route a MIDI track's output to Voxology (Cubase: the track's output menu).", "Play the beat's notes or chords once: they light up blue in Notes."] }));
       if (val("ptAmount") >= 0.05 && choice("ptKeySrc") === 0 && M.bkState === 2) t.push(tip("NO BEAT LINKED", "Key is set to follow the beat, but there's no Voxology on a beat in this project, so Pitch uses the Key / Scale below.", "calm",
         { need: "Optional, but it's the easy way to always be in the beat's key.", steps: ["Insert Voxology on your beat track (or the beat's group).", "Click BEAT in its Signal Chain card.", "Press play: after about 6 s the key shows up here."] }));
       if (val("ptAmount") >= 0.05 && M.bkState === 1 && Math.abs(M.bkTune) >= 10) t.push(tip("BEAT DETUNED", `Your beat is tuned ${fmtTune(M.bkTune)} away from standard (A = 440 Hz). Pitch tunes your notes to the beat's tuning, so they sit with it.`, "calm",

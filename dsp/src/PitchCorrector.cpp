@@ -81,14 +81,28 @@ void PitchCorrector::reset() noexcept
     wasNeutral = true;
 }
 
-int PitchCorrector::targetNote (double midi, int key, int scale, int current, int extraNotes) noexcept
+int PitchCorrector::allowedMask (int key, int scale, int extraNotes, int onlyNotes, int removedNotes) noexcept
 {
-    const auto& m = kScaleMasks[static_cast<size_t> (std::clamp (scale, 0, kScales - 1))];
-    auto allowed = [&] (int n) { return m[static_cast<size_t> (((n - key) % 12 + 12) % 12)] || ((extraNotes >> ((n % 12 + 12) % 12)) & 1) != 0; };
+    int mask = onlyNotes & 0xFFF;
+    if (mask == 0)
+    {
+        const auto& m = kScaleMasks[static_cast<size_t> (std::clamp (scale, 0, kScales - 1))];
+        for (int n = 0; n < 12; ++n)
+            if (m[static_cast<size_t> (((n - key) % 12 + 12) % 12)]) mask |= 1 << n;
+        mask |= extraNotes & 0xFFF;
+    }
+    mask &= ~removedNotes;
+    return mask != 0 ? mask : 0xFFF;   // every note switched off: nothing to aim for but the nearest
+}
+
+int PitchCorrector::targetNote (double midi, int key, int scale, int current, int extraNotes, int onlyNotes, int removedNotes) noexcept
+{
+    const int mask = allowedMask (key, scale, extraNotes, onlyNotes, removedNotes);
+    auto allowed = [mask] (int n) { return ((mask >> ((n % 12 + 12) % 12)) & 1) != 0; };
     const int centre = static_cast<int> (std::lround (midi));
     int best = centre;
     double bestDist = 1.0e9;
-    for (int n = centre - 4; n <= centre + 4; ++n)
+    for (int n = centre - 6; n <= centre + 6; ++n)   // (one held MIDI note can be up to a tritone away)
         if (allowed (n) && std::abs (n - midi) < bestDist) { bestDist = std::abs (n - midi); best = n; }
     // Hysteresis: stay on the current note until another is clearly (0.3 semitone) closer.
     if (current >= 0 && current != best && allowed (current) && std::abs (current - midi) <= bestDist + 0.3)
@@ -244,7 +258,7 @@ void PitchCorrector::analyse() noexcept
         const double ca = 1.0 - std::exp (-hopSec / 0.08);
         centreA += (midi - centreA) * ca;
         centreB += (centreA - centreB) * ca;
-        note = targetNote (mode == kPitchNatural ? centreB : midi, params.key, params.scale, note, params.extraNotes);
+        note = targetNote (mode == kPitchNatural ? centreB : midi, params.key, params.scale, note, params.extraNotes, params.onlyNotes, params.removedNotes);
         sustain = note == prevNote ? sustain + hopSec : 0.0;
         noteAge = note == prevNote && ! fresh ? noteAge + hopSec : 0.0;
 
@@ -288,8 +302,10 @@ void PitchCorrector::analyse() noexcept
         clarityS += (clarity - clarityS) * 0.5;
         // (A harmony voice always takes its whole interval: half of it would just be out of tune. Robot
         // tunes everything: the grit is part of that sound.)
-        const double applied = harmonyVoice || mode == kPitchRobot ? corr : (corr + extra) * clarityS;
+        const double applied = (harmonyVoice || mode == kPitchRobot ? corr : (corr + extra) * clarityS)
+                               + (harmonyVoice ? 0 : std::clamp (params.transpose, -12, 12));
         last.correction = applied;
+        if (! harmonyVoice) last.targetMidi = note + std::clamp (params.transpose, -12, 12);   // what comes out
         last.period = period;
         last.clarity = clarityS;
         last.time = static_cast<double> (now - 1) - 0.5 * (len + p);
@@ -424,7 +440,7 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
         anaPos = synthPos + drift;
         // Two bands only when the grains just correct the voice: harmony voices and formant moves need
         // the whole voice in the grains (the high band would keep its old pitch / formants).
-        const bool split = params.harmony == 0 && std::abs (params.formant) < 0.01;
+        const bool split = params.harmony == 0 && std::abs (params.formant) < 0.01 && std::abs (params.transpose) <= 2;
         marks[static_cast<size_t> (markCount % kMarks)] = { synthPos, drift, preDrift, std::abs (drift - preDrift) > 0.25 * P, split };
         ++markCount;
         // Big downward shifts (octave down): each grain must hold ONE glottal pulse, or the two-period
