@@ -349,7 +349,8 @@ body.beat #beat-banner { display: flex; flex-direction: column; gap: 4px; margin
 .cell-sub.lit { color: var(--gold-deep); font-weight: 700; }
 .cell.following .vseg button.sel { background: var(--ivory); color: var(--ink-soft); box-shadow: inset 0 0 0 1.5px var(--gold); }
 .cell .vseg button.beat, .cell.following .vseg button.beat { background: linear-gradient(180deg, #fff3c4, #e7bd55); color: #4a3208; box-shadow: inset 0 0 0 2px var(--gold-deep), 0 0 8px rgba(231, 189, 85, 0.9); }
-.bk-cell .pf-target { font-size: 22px; }
+.bk-cell .pf-target { font-size: 22px; white-space: nowrap; }
+.bk-cell .pf-row { justify-content: center; width: 100%; }
 
 /* Pitch: Notes (switch notes off, MIDI, transpose). */
 #cells[data-page="pitch"] .cell.pt-notes { width: 178px; height: 146px; }

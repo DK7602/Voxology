@@ -189,6 +189,7 @@ function beatKeyCell() {
   cell.update = () => {
     if (M.bkState !== 5) { name.textContent = "\u2026"; info.textContent = M.bkHeard > 0 ? `listening ${Math.round(M.bkHeard)} / 6 s` : "press play"; return; }
     name.textContent = beatKeyName(false);
+    name.style.fontSize = name.textContent.length > 9 ? "15px" : name.textContent.length > 7 ? "18px" : "22px";
     const open = M.bkOpen >= 0 ? ` \u00B7 ${NOTES[(M.bkOpen + 11) % 12]} / ${NOTES[M.bkOpen]} open` : "";
     info.textContent = `${Math.round(M.bkConf * 100)} % sure \u00B7 tuned ${Math.abs(M.bkTune) < 3 ? "A440" : fmtTune(M.bkTune)}${open}`;
   };

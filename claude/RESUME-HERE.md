@@ -488,3 +488,5 @@ editing (timing / length, per-note formant, partial re-render). User chose 1 now
   (an octave down, untuned). 64 cases.
 - CI green: Actions run 37477442784.
 - Cubase how-to for the user: MIDI track -> output = Voxology (insert on the vocal track); "Notes" = play / draw the melody.
+- v0.11.1: user tested v0.11.0 in Cubase (BEAT on "Acoustic- Main" read G mixolydian 100 %, vocal followed "beat: G mix";
+  Classic 5 ms). UI fix: Beat Key name was too big for "G mixolydian" -> font 22 / 18 / 15 px by length, nowrap, centred.
