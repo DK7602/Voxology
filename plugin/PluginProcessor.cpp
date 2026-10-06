@@ -228,6 +228,8 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     meters.pitchSung.store (m.pitch.voiced ? static_cast<float> (m.pitch.sungMidi) : 0.0f);
     meters.pitchTarget.store (m.pitch.voiced ? m.pitch.targetMidi : -1);
     meters.pitchCorr.store (static_cast<float> (m.pitch.correction));
+    meters.hvNotes[0].store (m.voiceNotes[0]);
+    meters.hvNotes[1].store (m.voiceNotes[1]);
 }
 
 void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)  { processAnyPrecision (buffer); }

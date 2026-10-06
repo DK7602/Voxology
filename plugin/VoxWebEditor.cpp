@@ -244,6 +244,12 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("pitchSung", roundTo (m.pitchSung.load(), 0.01f));
     frame->setProperty ("pitchTarget", m.pitchTarget.load());
     frame->setProperty ("pitchCorr", roundTo (m.pitchCorr.load(), 0.01f));
+    {
+        juce::Array<juce::var> hv;
+        hv.add (m.hvNotes[0].load());
+        hv.add (m.hvNotes[1].load());
+        frame->setProperty ("hvNotes", hv);
+    }
     frame->setProperty ("sr", audioProcessor.getSampleRate());
     auto& ae = audioProcessor.autoEdit;
     frame->setProperty ("aeState", static_cast<int> (ae.getState()));

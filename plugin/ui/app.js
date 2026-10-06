@@ -12,6 +12,9 @@ const fmtSigned = (v, d = 1) => `${v >= 0.05 ? "+" : ""}${fmtNum(v, d)} dB`;
 const fmtHz = (f) => (f >= 1000 ? `${(f / 1000).toFixed(1)} kHz` : `${Math.round(f)} Hz`);
 const fmtPct = (v) => `${Math.round(v)} %`;
 const fmtMs = (v) => `${Math.round(v)} ms`;
+const fmtSt = (v) => (Math.abs(v) < 0.05 ? "0 st" : `${v > 0 ? "+" : MINUS}${Math.abs(v).toFixed(1)} st`);
+const INTERVALS = ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down"];
+const INTERVALS_SHORT = ["Off", "3rd \u2191", "5th \u2191", "8ve \u2191", "3rd \u2193", "4th \u2193", "5th \u2193", "8ve \u2193"];
 
 // ---------------------------------------------------------------------------------------------
 // Scale the fixed 1600x900 design to the window.
@@ -22,12 +25,12 @@ fit();
 
 // ---------------------------------------------------------------------------------------------
 // Parameters
-const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
+const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
   "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth",
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
 const TOGGLES = ["bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
-const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime", "mode", "umFocus"];
+const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
 for (const id of TOGGLES) P[id] = Juce.getToggleState(id);
@@ -55,7 +58,7 @@ function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 
 // Latest meter frame.
 const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
-  satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, in: null, out: null };
+  satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1], in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
 
@@ -112,6 +115,7 @@ const MODULES = [
       knob("ptAmount", "Amount", "how much", fmtPct, 0),
       knob("ptSpeed", "Retune", "low = robotic", fmtMs, 50),
       knob("ptHumanize", "Humanize", "long notes live", fmtPct, 0),
+      knob("ptFormant", "Formant", "deeper / thinner", fmtSt, 0, true),
       grid("ptKey", "Key", "your beat's key", NOTES, 4),
       grid("ptScale", "Scale", "allowed notes", SCALES_SHORT, 1),
       pitchCell(),
@@ -188,9 +192,22 @@ const MODULES = [
       meter("Harmonics", "added now", () => M.satHarm, 60, true, (v) => (v <= -99 ? "none" : fmtDb(v)), -70),
     ],
     stat: () => (val("saDrive") < 0.05 || val("saMix") < 0.05 ? ["idle", false] : [["Tape", "Tube", "Clip"][choice("saMode")] + ` ${fmtNum(val("saDrive"), 0)} dB`, true]) },
-  { key: "double", name: "DOUBLER", onId: "dbOn", what: "a stacked double take, left and right",
-    cells: () => [knob("dbAmount", "Amount", "how loud", fmtPct, 0), knob("dbWidth", "Width", "how far apart", fmtPct, 70)],
-    stat: () => (val("dbAmount") < 0.05 ? ["idle", false] : [fmtPct(val("dbAmount")), true]) },
+  { key: "double", name: "VOICES", onId: "dbOn", what: "doubles and harmonies: stacked takes and backing voices in key",
+    cells: () => [
+      knob("dbAmount", "Double", "stacked take", fmtPct, 0),
+      knob("dbWidth", "Width", "how far apart", fmtPct, 70),
+      grid("hv1", "Voice 1", "harmony (left)", INTERVALS_SHORT, 2),
+      grid("hv2", "Voice 2", "harmony (right)", INTERVALS_SHORT, 2),
+      knob("hvLevel", "Level", "voices vs lead", fmtPct, 50),
+      knob("hvFormant", "Formant", "voices' tone", fmtSt, 0, true),
+    ],
+    stat: () => {
+      const notes = (M.hvNotes || []).filter((n) => n >= 0).map(noteName);
+      if (notes.length) return [notes.join(" \u00B7 "), true];
+      const h = [choice("hv1"), choice("hv2")].filter((i) => i > 0).map((i) => INTERVALS_SHORT[i]);
+      if (h.length) return [h.join(" + "), true];
+      return val("dbAmount") < 0.05 ? ["idle", false] : [`double ${fmtPct(val("dbAmount"))}`, true];
+    } },
   { key: "delay", name: "DELAY", onId: "dlOn", what: "echoes locked to your song's tempo",
     cells: () => [
       vseg("dlTime", "Time", "on the beat", DELAYS),
@@ -903,10 +920,18 @@ const LEARN = {
       return t;
     } },
   double: {
-    does: "Makes the vocal sound stacked: two slightly late, slowly drifting copies, one left and one right, like a second take. The lead stays in the centre.",
-    how: ["Amount: how loud the copies are. 20 - 35 % for a lead, more for ad-libs and hooks.",
-      "Width: how far apart. Lower it if the vocal sounds hollow in mono (phone speaker)."],
-    live: () => [] },
+    does: "Backing vocals from your own voice. Double stacks two slightly late copies left and right, like a second take. Voice 1 and Voice 2 sing harmonies with you, a 3rd, 5th or octave away, always in the key and scale set in the Pitch module, so they never clash. They get your lead's EQ and de-essing, follow its level, and go into the delay and reverb too.",
+    how: ["Set Key and Scale in the Pitch module first (your beat's key): the harmonies use it. Chromatic gives plain intervals that can clash.",
+      "Voice 1 / Voice 2: a 3rd up is the classic harmony; add a 5th down or an octave down for a full stack. Octave down is the deep ad-lib voice.",
+      "Level: 30 - 50 % keeps them behind you. Width spreads Voice 1 left and Voice 2 right (and the double).",
+      "Formant: - makes the voices deeper and darker (a different singer behind you), + thinner and brighter.",
+      "Use harmonies on hooks and ad-libs rather than whole verses: automate the module's ON button in Cubase."],
+    live: () => {
+      const t = [];
+      if ((choice("hv1") > 0 || choice("hv2") > 0) && choice("ptScale") === 0) t.push(tip("CHROMATIC KEY", "The Pitch module's scale is Chromatic, so the harmonies use plain intervals (a major 3rd), which can clash with a minor beat.", "warn",
+        { need: "Yes, if the harmonies sound sour.", steps: ["Open 01 PITCH and set Key and Scale to your beat's key.", "Run Auto-Edit on a sung part: it suggests a key in its report."] }));
+      return t;
+    } },
   delay: {
     does: "Echoes locked to your song's tempo, so they groove with the beat. Duck turns the echoes down while you're rapping and lets them come up in the gaps, so words stay clear.",
     how: ["Time: 1/4 and 1/8 are classic; 1/8 dot gives a bouncy feel.",

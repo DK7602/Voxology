@@ -20,6 +20,7 @@ void VocalChain::prepare (double sampleRate, int numChannels)
     rider.prepare (sr, chanCount);
     comp.prepare (sr, chanCount);
     saturation.prepare (sr, chanCount);
+    voices.prepare (sr);
     doubler.prepare (sr);
     delay.prepare (sr);
     reverb.prepare (sr);
@@ -44,6 +45,7 @@ void VocalChain::reset() noexcept
     rider.reset();
     comp.reset();
     saturation.reset();
+    voices.reset();
     doubler.reset();
     delay.reset();
     reverb.reset();
@@ -69,6 +71,11 @@ void VocalChain::setParams (const ChainParams& p) noexcept
     rider.setParams (p.rider);
     comp.setParams (p.comp);
     saturation.setParams (p.saturation);
+    {
+        VoicesParams v = p.voices;
+        if (! p.doubler.enabled) v.interval = { 0, 0 };
+        voices.setParams (v, p.pitch, p.cleanup.enabled ? p.cleanup.lowCutHz : 20.0, p.eq, p.deEsser);
+    }
     doubler.setParams (p.doubler);
     delay.setParams (p.delay);
     reverb.setParams (p.reverb);
@@ -87,6 +94,7 @@ ChainMeters VocalChain::takeMeters() noexcept
     m.levelGrDb = comp.takeLevelGrDb();
     saturation.takeEnergies (m.satResidual, m.satSignal);
     m.pitch = pitch.reading();
+    m.voiceNotes = voices.currentNotes();
     meters = {};
     return m;
 }
@@ -143,6 +151,9 @@ void VocalChain::processChunk (int nch, int len) noexcept
             for (int c = 0; c < nch; ++c) s += ch[static_cast<size_t> (c)][i];
             mono[static_cast<size_t> (i)] = s / nch;
         }
+        // Harmonies: from the input (ahead by Pitch's latency, which they add back), into the lead and the
+        // mono feed, so the doubler, delay and reverb carry them too.
+        voices.process (side.data(), ch.data(), nch, mono.data(), len);
         doubler.process (mono.data(), ch.data(), nch, len);
         delay.process (mono.data(), ch.data(), nch, len);
         reverb.process (mono.data(), ch.data(), nch, len);

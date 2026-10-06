@@ -300,13 +300,21 @@ body.beat #beat-banner { display: flex; flex-direction: column; gap: 4px; margin
 .pf-dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 6px rgba(93, 159, 211, 0.9); transition: left 0.08s; }
 .pf-dot.idle { opacity: 0.3; }
 .pf-cents { font-size: 10.5px; color: var(--ink-soft); }
-#cells[data-page="pitch"] { padding-left: 6px; padding-right: 6px; }
-#cells[data-page="pitch"] .cell { width: 104px; }
-#cells[data-page="pitch"] .knob, #cells[data-page="pitch"] .knob img, #cells[data-page="pitch"] .knob svg { width: 104px; }
-#cells[data-page="pitch"] .knob { height: 126px; }
-#cells[data-page="pitch"] .cell:nth-child(4) { width: 168px; }
-#cells[data-page="pitch"] .cell:nth-child(5), #cells[data-page="pitch"] .cell:nth-child(6) { width: 116px; }
-#cells[data-page="pitch"] .vseg.keys { width: 160px; gap: 4px; }
+#cells[data-page="pitch"] { padding-left: 4px; padding-right: 4px; gap: 4px 2px; }
+#cells[data-page="pitch"] .cell { width: 82px; }
+#cells[data-page="pitch"] .knob, #cells[data-page="pitch"] .knob img, #cells[data-page="pitch"] .knob svg { width: 82px; }
+#cells[data-page="pitch"] .knob { height: 100px; }
+#cells[data-page="pitch"] .cell-sub { font-size: 10px; white-space: nowrap; }
+#cells[data-page="pitch"] .cell:nth-child(5) { width: 158px; }
+#cells[data-page="pitch"] .cell:nth-child(6), #cells[data-page="pitch"] .cell:nth-child(7) { width: 112px; }
+#cells[data-page="pitch"] .vseg.keys { width: 156px; gap: 4px; }
+#cells[data-page="double"] .cell:nth-child(3), #cells[data-page="double"] .cell:nth-child(4) { width: 132px; }
+#cells[data-page="double"] .vseg.keys { width: 128px; gap: 4px; }
+#cells[data-page="double"] .vseg.keys button { height: 30px; font-size: 12px; }
+#cells[data-page="double"] { padding-left: 6px; padding-right: 6px; }
+#cells[data-page="double"] .cell { width: 102px; }
+#cells[data-page="double"] .knob, #cells[data-page="double"] .knob img, #cells[data-page="double"] .knob svg { width: 102px; }
+#cells[data-page="double"] .knob { height: 122px; }
 #cells[data-page="pitch"] .vseg.keys button { height: 32px; font-size: 13px; }
 
 /* Dynamic EQ page: four live cut bars in one cell. */

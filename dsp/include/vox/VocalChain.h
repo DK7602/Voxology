@@ -6,6 +6,7 @@
 #include "PitchCorrector.h"
 #include "Saturation.h"
 #include "Space.h"
+#include "Voices.h"
 
 #include <array>
 #include <vector>
@@ -24,6 +25,7 @@ struct ChainParams
     CompParams comp;
     SaturationParams saturation;
     DoublerParams doubler;
+    VoicesParams voices;      // harmonies (the VOICES module = doubler + harmonies; doubler.enabled switches both)
     DelayParams delay;
     ReverbParams reverb;
     double outputDb = 0.0;
@@ -48,6 +50,7 @@ struct ChainMeters
     double peakGrDb = 0.0, levelGrDb = 0.0;   // compressor stages (<= 0)
     double satResidual = 0.0, satSignal = 0.0;   // saturation energies
     PitchCorrector::Reading pitch;                // what Pitch hears and does right now
+    std::array<int, 2> voiceNotes { -1, -1 };     // the harmony voices' notes (MIDI, -1 = none)
 };
 
 /** Voxology's vocal chain:
@@ -107,6 +110,7 @@ private:
     Rider rider;
     VocalCompressor comp;
     Saturation saturation;
+    HarmonyVoices voices;
     Doubler doubler;
     EchoDelay delay;
     Reverb reverb;

@@ -340,3 +340,27 @@ User's effort plan: high for breath/plosive, medium for Reference Match, high fo
 - Caveats for the user: both in the same project / process (plug-in sandboxing breaks the link); Cubase "suspend VST3
   processing when no audio" just means no dips while the vocal is silent (correct). Cubase ASIO-Guard prefetch is why frames
   are matched by song position, not by arrival.
+
+## v0.7.0 Harmony voices + formant (2026-10-06)
+- PitchCorrector: PitchParams.formant (semitones, +-kMaxFormant 6) = each PSOLA grain read at 2^(st/12) speed (resonances
+  move, pitch doesn't; reads clamped to the newest input). PitchParams.harmony (index into kHarmonyIntervals: Off, 3rd/5th/
+  octave up, 3rd/4th/5th/octave down; scale steps in a key/scale, semitones in Chromatic, octaves always 12): full shift to
+  harmonyNote(snapped note), corr jumps to target at note starts (no scoop), no clarity scaling. Big down shifts (ratio < 0.6,
+  octave down) read each grain centred on the pulse peak within +-P/2 (else 2-period grains at 2P spacing keep the original
+  pitch). Measured on a sung A3 in C major: 3rd up C4 261.8, 5th up E4 329.8, 3rd down F3, 4th down E3, 5th down D3 146.8,
+  octave down 110 with odd harmonics present (true octave), octave up 440.5; formant +-4 st moves the centroid 707 -> 914 /
+  484 Hz with the pitch unchanged. Existing pitch / Honey Tune tests unchanged.
+- dsp Voices.h/.cpp HarmonyVoices: 2 PitchCorrectors (harmony mode, lead's key/scale, retune <= 40 ms, formant = hvFormant)
+  fed from the chain's input "side" buffer (Pitch's latency ahead, which they add back) -> per-voice low cut (cleanup's, >= 60
+  Hz) -> pan (voice 1 left, 2 right by dbWidth; one voice = centre) -> lead's VocalEQ + DeEsser (stereo bus) -> Saturation's
+  latency (55) -> level follows the finished lead's (30 ms RMS ratio, max +24 dB, HELD in gaps 40 dB under the lead's recent
+  peak) x hvLevel -> added to ch and to mono (so doubler / delay / reverb carry them). In the chain after Saturation, before
+  the Doubler. doubler.enabled (dbOn) switches the whole VOICES module.
+- Params: ptFormant, hv1, hv2 (choices), hvLevel (50 %), hvFormant; Auto-Edit never writes them (musical choices). Meter
+  hvNotes. UI: Pitch page gets Formant (7 cells, narrower); module 09 renamed VOICES: Double, Width, Voice 1 / Voice 2 (2-col
+  interval grids), Level, Formant; hive stat shows the voices' notes; Learn + CHROMATIC KEY warning.
+- Tests tests/test_voices.cpp (notes in key incl. octave down, level ~-7.5 dB in mono at 50 %, onset within 15 ms of the
+  lead, < -70 dB in gaps, formant moves centroid > 15 % with pitch unchanged). 53 test cases; ASan clean; CPU: full chain 3.2 %
+  -> 6.8 % of a core with 2 voices + formant (mono). On the user's dry vocal: voices -7.7 dB under the lead, finite.
+- Honest limits: harmonies follow the sung melody note by note (a "smart" harmonizer, not chord-aware); fast rap gets choppy
+  harmonies (meant for hooks / ad-libs); octave down is the most artificial-sounding.

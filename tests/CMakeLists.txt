@@ -11,6 +11,7 @@ add_executable(vox_tests
     test_popbreath.cpp
     test_reference.cpp
     test_unmask.cpp
+    test_voices.cpp
     test_space.cpp
     test_chain.cpp
     test_autoedit.cpp

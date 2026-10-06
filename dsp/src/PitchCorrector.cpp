@@ -85,6 +85,22 @@ int PitchCorrector::targetNote (double midi, int key, int scale, int current) no
     return best;
 }
 
+int PitchCorrector::harmonyNote (int note, int harmony, int key, int scale) noexcept
+{
+    const auto& iv = kHarmonyIntervals[static_cast<size_t> (std::clamp (harmony, 0, kHarmonies - 1))];
+    if (iv.steps == 0) return note;
+    const int sc = std::clamp (scale, 0, kScales - 1);
+    if (sc == 0) return note + iv.semis;   // Chromatic: plain intervals
+    const auto& m = kScaleMasks[static_cast<size_t> (sc)];
+    auto allowed = [&] (int n) { return m[static_cast<size_t> (((n - key) % 12 + 12) % 12)]; };
+    // Pentatonic scales have 5 notes: an octave is 5 steps there, not 7 (count notes, not steps, for octaves).
+    if (std::abs (iv.semis) == 12) return note + iv.semis;
+    int n = note, left = std::abs (iv.steps);
+    const int dir = iv.steps > 0 ? 1 : -1;
+    while (left > 0) { n += dir; if (allowed (n)) --left; }
+    return n;
+}
+
 void PitchCorrector::analyse() noexcept
 {
     const auto tauMax = diff.size() - 1;
@@ -199,9 +215,13 @@ void PitchCorrector::analyse() noexcept
 
         const double midi = 69.0 + 12.0 * std::log2 (sr / period / 440.0);
         const int prevNote = note;
+        const bool startOfNote = voicedRun <= 2 || note < 0;
         note = targetNote (midi, params.key, params.scale, note);
         sustain = note == prevNote ? sustain + hopSec : 0.0;
-        const double desired = (note - midi) * std::clamp (params.amount, 0.0, 100.0) / 100.0;
+        const bool harmonyVoice = params.harmony > 0;
+        const double desired = harmonyVoice ? harmonyNote (note, params.harmony, params.key, params.scale) - midi
+                                            : (note - midi) * std::clamp (params.amount, 0.0, 100.0) / 100.0;
+        if (harmonyVoice && startOfNote) corr = desired;   // a backing voice starts on its note (no scoop)
         const double tau = params.speedMs / 1000.0 * (1.0 + 3.0 * std::clamp (params.humanize, 0.0, 100.0) / 100.0 * std::clamp (sustain / 0.6, 0.0, 1.0));
         corr += (desired - corr) * (tau <= 1.0e-4 ? 1.0 : 1.0 - std::exp (-hopSec / tau));
         last = { true, midi, note, corr, 0.0, 0.0, 0.0 };
@@ -211,12 +231,14 @@ void PitchCorrector::analyse() noexcept
         const double clarity = std::min (std::clamp ((kVoicedAperiodicity - aper) / 0.15, 0.0, 1.0),
                                          std::clamp ((bestR - 0.75) / 0.17, 0.0, 1.0));
         clarityS += (clarity - clarityS) * 0.5;
-        last.correction = corr * clarityS;
+        // (A harmony voice always takes its whole interval: half of it would just be out of tune.)
+        const double applied = harmonyVoice ? corr : corr * clarityS;
+        last.correction = applied;
         last.period = period;
         last.clarity = clarityS;
         last.time = static_cast<double> (now - 1) - 0.5 * (len + p);
         if (guide == nullptr)
-            pushFrame (last.time, period, corr * clarityS);
+            pushFrame (last.time, period, applied);
     }
     else
     {
@@ -343,11 +365,30 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
         // In breaths / consonants the offset just holds: a constant offset joins seamlessly (any
         // change in it misaligns two overlapping grains = a tick at the end of a note).
         anaPos = synthPos + drift;
+        // Big downward shifts (octave down): each grain must hold ONE glottal pulse, or the two-period
+        // grains laid twice as far apart keep the original pitch. Read it centred on the pulse nearest
+        // the analysis point (the waveform's peak within half a period). Smaller shifts don't need it.
+        double readPos = anaPos;
+        if (voiced && ratio < 0.6)
+        {
+            const auto from = static_cast<int64_t> (std::floor (anaPos - 0.5 * P));
+            const auto to = std::min (static_cast<int64_t> (std::ceil (anaPos + 0.5 * P)), now - 3);
+            double best = -1.0e30;
+            for (int64_t j = from; j <= to; ++j)
+            {
+                const double v = mono[static_cast<size_t> (j & mask)];
+                if (v > best) { best = v; readPos = static_cast<double> (j); }
+            }
+        }
 
 #ifdef VOX_PITCH_DEBUG
         if (synthPos > dbgFrom && synthPos < dbgTo)
             std::fprintf (stderr, "grain s=%.1f a=%.1f P=%.2f ratio=%.5f voiced=%d drift=%.1f\n", synthPos, anaPos, P, ratio, voiced ? 1 : 0, drift);
 #endif
+        // Formant: read the grain at fRatio x speed (its resonances move by fRatio, the pitch doesn't).
+        // Never past the newest input sample (only matters for very low notes with a big upward formant).
+        const double fRatio = std::pow (2.0, std::clamp (params.formant, -kMaxFormant, kMaxFormant) / 12.0);
+        const double newest = static_cast<double> (now - 3);
         const auto first = static_cast<int64_t> (std::ceil (synthPos - P));
         const auto lastJ = static_cast<int64_t> (std::floor (synthPos + P));
         for (int64_t j = first; j <= lastJ; ++j)
@@ -355,7 +396,7 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
             const double u = static_cast<double> (j) - synthPos;
             const double w = 0.5 + 0.5 * std::cos (std::numbers::pi * u / P);
             if (w <= 0.0) continue;
-            const double src = anaPos + u;
+            const double src = std::min (readPos + u * fRatio, newest);
             const auto s0 = static_cast<int64_t> (std::floor (src));
             const double f = src - static_cast<double> (s0);
             const auto o = static_cast<size_t> (j & mask);

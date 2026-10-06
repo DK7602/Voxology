@@ -74,6 +74,7 @@ public:
         std::array<std::atomic<float>, vox::kUnmaskBands> umDip {};     // BEAT: deepest dip per band, dB, held until read
         std::array<std::atomic<float>, vox::kUnmaskBands> umVocal {};   // BEAT: the linked vocal's band levels, dB
         std::atomic<int> umLink { 0 };              // BEAT: vocals heard this block (0 = none)
+        std::array<std::atomic<int>, 2> hvNotes { -1, -1 };   // the harmony voices' notes (MIDI, -1 = none)
     };
     Meters meters;
 

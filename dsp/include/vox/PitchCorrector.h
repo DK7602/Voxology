@@ -2,7 +2,9 @@
 
 #include "Biquad.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -29,7 +31,18 @@ struct PitchParams
     int scale = 0;            // index into kScaleNames
     double speedMs = 50.0;    // retune speed: 0 = instant (the hard trap effect) ... 400 = slow, natural
     double humanize = 0.0;    // %: long notes get a slower retune so they keep their life
+    double formant = 0.0;     // semitones (-kMaxFormant .. +kMaxFormant): + thinner / younger, - deeper; 0 = your own
+    int harmony = 0;          // 0 = correct the voice; else a harmony voice at kHarmonies[harmony] (see below)
 };
+
+/** Harmony intervals: scale steps when a key / scale is set (they stay in key), semitones with Chromatic. */
+struct HarmonyInterval { const char* name; int steps; int semis; };
+inline constexpr int kHarmonies = 8;
+inline constexpr std::array<HarmonyInterval, kHarmonies> kHarmonyIntervals {{
+    { "Off", 0, 0 }, { "3rd up", 2, 4 }, { "5th up", 4, 7 }, { "Octave up", 7, 12 },
+    { "3rd down", -2, -3 }, { "4th down", -3, -5 }, { "5th down", -4, -7 }, { "Octave down", -7, -12 },
+}};
+inline constexpr double kMaxFormant = 6.0;
 
 /** Pitch correction ("auto-tune") for a single voice.
 
@@ -39,6 +52,10 @@ struct PitchParams
     Decision: the nearest note of the key / scale, with hysteresis so a note doesn't flicker at the
     boundary. The correction (in semitones) glides to its target with the Retune Speed time constant,
     so slow speeds keep vibrato and only fix drift; Humanize slows it further on sustained notes.
+    Harmony (params.harmony): the voice is pulled fully onto the note a chosen interval from the note
+    you sing (in key), with no scoop at note starts: a backing voice. Formant (params.formant): each
+    grain is read faster or slower than it's laid down, which moves the voice's resonances (deeper /
+    thinner) without changing the notes.
     Shifting: TD-PSOLA. Two-period Hann grains are taken one input period apart and laid down one
     output period apart (period / shift ratio), then normalised by the window sum. The voice's
     formants stay put (no chipmunk), and with no correction the grains line up exactly, so the
@@ -55,7 +72,12 @@ public:
     void prepare (double sampleRate, int numChannels);
     void reset() noexcept;
     void setParams (const PitchParams& p) noexcept { params = p; }
-    static bool isNeutral (const PitchParams& p) noexcept { return ! p.enabled || p.amount < 0.05; }
+    static bool isNeutral (const PitchParams& p) noexcept
+    {
+        return ! p.enabled || (p.amount < 0.05 && std::abs (p.formant) < 0.01 && p.harmony == 0);
+    }
+    /** A harmony voice's note: `note` (a note of the key / scale) moved by the interval, in key. */
+    static int harmonyNote (int note, int harmony, int key, int scale) noexcept;
     int latencySamples() const noexcept { return latency; }
 
     void process (double* const* ch, int nch, int n) noexcept;

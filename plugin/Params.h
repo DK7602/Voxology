@@ -16,7 +16,7 @@ namespace VoxParams
 
     inline juce::StringArray sliderIds()
     {
-        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath" };
+        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath" };
         for (int b = 0; b < vox::kEqBands; ++b) { ids.add (n ("eqGain", b)); ids.add (n ("eqFreq", b)); }
         ids.add ("dqSens");
         for (int b = 0; b < vox::kDynBands; ++b) { ids.add (n ("dqCut", b)); ids.add (n ("dqFreq", b)); }
@@ -30,7 +30,7 @@ namespace VoxParams
     {
         return { "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
     }
-    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime", "mode", "umFocus" }; }
+    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2" }; }
 
     inline void addTo (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
     {
@@ -74,6 +74,17 @@ namespace VoxParams
         choice ("ptScale", "Pitch Scale", scales, 0);
         slider ("ptSpeed", "Pitch Retune Speed", skewed (0.0f, 400.0f, 1.0f, 60.0f), 50.0f, "ms", msText);
         slider ("ptHumanize", "Pitch Humanize", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
+        auto stText = [] (float v, int) { return std::abs (v) < 0.05f ? String ("0 st") : (v > 0 ? "+" : "") + String (v, 1) + " st"; };
+        const auto fm = static_cast<float> (vox::kMaxFormant);
+        slider ("ptFormant", "Pitch Formant", NormalisableRange<float> (-fm, fm, 0.1f), 0.0f, "st", stText);
+
+        // Voices (the doubler's module): two harmony voices in the Pitch key / scale.
+        StringArray intervals;
+        for (const auto& iv : vox::kHarmonyIntervals) intervals.add (iv.name);
+        choice ("hv1", "Voice 1", intervals, 0);
+        choice ("hv2", "Voice 2", intervals, 0);
+        slider ("hvLevel", "Voices Level", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f, "%", pctText);
+        slider ("hvFormant", "Voices Formant", NormalisableRange<float> (-fm, fm, 0.1f), 0.0f, "st", stText);
 
         toggle ("clOn", "Cleanup On", true);
         slider ("clLowCut", "Low Cut", skewed (20.0f, 400.0f, 1.0f, 80.0f), 20.0f, "Hz",
@@ -241,7 +252,11 @@ namespace VoxParams
 
             p.bypass = on ("bypass");
             p.listenOriginal = on ("listenA");
-            p.pitch = { on ("ptOn"), d ("ptAmount"), idx ("ptKey", 11), idx ("ptScale", vox::kScales - 1), d ("ptSpeed"), d ("ptHumanize") };
+            p.pitch = { on ("ptOn"), d ("ptAmount"), idx ("ptKey", 11), idx ("ptScale", vox::kScales - 1), d ("ptSpeed"), d ("ptHumanize"), d ("ptFormant"), 0 };
+            p.voices.interval = { idx ("hv1", vox::kHarmonies - 1), idx ("hv2", vox::kHarmonies - 1) };
+            p.voices.level = d ("hvLevel");
+            p.voices.formant = d ("hvFormant");
+            p.voices.width = d ("dbWidth");
             p.cleanup = { on ("clOn"), d ("clLowCut"), d ("clGateThr"), d ("clGateRange"), d ("clPops"), d ("clBreath") };
             p.eq.enabled = on ("eqOn");
             for (size_t b = 0; b < static_cast<size_t> (vox::kEqBands); ++b)
