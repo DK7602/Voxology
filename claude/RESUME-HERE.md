@@ -622,3 +622,4 @@ pitch). Baseline mean envelope error 5.2 dB; octave down 11-23 dB and 2 of 9 cas
   hex stat "clipped in!" / "too hot in!"; inputTips() (CLIPPED RECORDING, TOO HOT) on Cleanup and Output Learn pages.
 - On the user's files: master-on 1070 clipped stretches / 0 overs; master-off 0 / 58,214 overs; raw punch 277 / 0.
   71 test cases.
+- CI green: Actions run 37529268173 (v0.16.0 run 37526831096 was green too, superseded).
