@@ -233,6 +233,15 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("gate", roundTo (gateHold, 0.1f));
     frame->setProperty ("pops", roundTo (popHold, 0.1f));
     frame->setProperty ("breath", roundTo (breathHold, 0.1f));
+    {
+        // De-clip: peaks redrawn in about the last second, and since the editor opened.
+        const int total = m.declipRuns.load();
+        if (declipSeen < 0) declipSeen = total;
+        declipRecent = declipRecent * 0.97f + static_cast<float> (total - declipSeen);
+        declipSeen = total;
+        frame->setProperty ("declipNow", roundTo (declipRecent, 0.1f));
+        frame->setProperty ("declipTotal", total);
+    }
     frame->setProperty ("deEss", roundTo (essHold, 0.1f));
     frame->setProperty ("dyn", dyn);
     frame->setProperty ("rider", roundTo (m.rider.load(), 0.1f));

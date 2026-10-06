@@ -585,3 +585,23 @@ pitch). Baseline mean envelope error 5.2 dB; octave down 11-23 dB and 2 of 9 cas
   (30 readings back), a clean track is untouched. Partial-render click check now vs the input's own steepest step. 69 cases.
 - Live Voxology chain does NOT use it (too heavy for real time).
 - CI green: Actions run 37520640704. All six "top tier" items done; open: blind A / B vs Auto-Tune / Melodyne if the user has one.
+
+## v0.16.0 De-clip (Cleanup) (2026-10-06)
+- Why: user's Gallas punch-in crackled after Voxology. Their raw AND processed exports both hard-clip at exactly
+  +-0.8861352 (-1.05 dB), so something AFTER Voxology (Stereo Out limiter / clipper at ~-1 dB, or the export) clips both.
+  The raw even has MORE clipped samples (1018+131 per ch) than the processed (124+320), yet the user hears no crackle on
+  it -> clipping is probably NOT the crackle. My render's crackle candidates (1.851 / 5.391 / 7.182 / 8.277 s raw time,
+  "PITCH-ONLY bursts") have 0-3 clipped samples nearby, and De-clip doesn't change them. OPEN: ask the user the exact second
+  of the crackle in their file + what's on their Stereo Out; then re-check Pitch there.
+- dsp DeClip.h / .cpp: runs of >= 3 equal loud samples (within 0.01 %, > 0.01 and > 25 % of the recent peak, run <= 64)
+  are redrawn by Janssen least squares: order-32 all-pole model from 512 samples each side (Hann-tapered autocorrelation,
+  Levinson), Toeplitz Rc normal equations, Cholesky; result held to [clip, 4 x clip] with the clip's sign. kLookahead 640
+  (13 ms at 48 kHz), constant even when off; bit-exact delayed pass-through on clean audio. 128-sample context made it WORSE
+  (-8 dB): shorter than one voice cycle. Tried in Python and dropped: Hermite, constrained active set (tiny gain), AR + pitch
+  predictor, a frame-wise sparse (IHT) approach (worse, and far too heavy for real time).
+- Measured: synthetic vowel clipped at 70 % of peak: error in the clipped stretches 7.1 dB smaller, added top end 4.0 dB less.
+  Real vocal (Don) in Python: ~3 dB / ~3.5 dB. CPU: 20 s clipped hard at -6 dB, 2796 runs, 0.8 % of one core.
+- Chain: first (before Pitch; the pops / breaths side-chain now hears the de-clipped input); off in Record mode (no added
+  latency there). CleanupParams.declip (default on); ChainMeters.declipRuns. Plug-in: "clDeclip" toggle (Auto-Edit sets it on),
+  meters.declipRuns (running total) -> editor declipNow (decaying ~1 s) / declipTotal. UI: Cleanup page 7 cells (100 px, nowrap
+  subs), De-clip ON / OFF first, header stat "de-clip N", Learn text + tip CLIPPED RECORDING. 71 test cases.

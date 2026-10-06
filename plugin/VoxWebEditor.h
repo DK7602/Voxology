@@ -77,6 +77,8 @@ private:
     std::array<float, 2 * kFftSize> fftBuffer {};
     Analyser inAnalyser, outAnalyser;
     float popHold = 0.0f, breathHold = 0.0f;
+    float declipRecent = 0.0f;
+    int declipSeen = -1;   // -1 = not read yet
     float gateHold = 0.0f, essHold = 0.0f, peakHold = 0.0f, levelHold = 0.0f, inPkHold = -100.0f, outPkHold = -100.0f;
     double satResHold = 0.0, satSigHold = 0.0;
     std::array<float, vox::kDynBands> dynHold {};

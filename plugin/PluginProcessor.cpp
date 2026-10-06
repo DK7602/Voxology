@@ -303,6 +303,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     holdMin (meters.gate, static_cast<float> (m.gateDb));
     holdMin (meters.pops, static_cast<float> (m.popDb));
     holdMin (meters.breath, static_cast<float> (m.breathDb));
+    meters.declipRuns.fetch_add (m.declipRuns);
     holdMin (meters.deEss, static_cast<float> (m.deEssDb));
     for (size_t b = 0; b < meters.dynEq.size(); ++b) holdMin (meters.dynEq[b], static_cast<float> (m.dynEqDb[b]));
     meters.rider.store (static_cast<float> (m.riderDb));

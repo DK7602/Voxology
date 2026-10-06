@@ -17,7 +17,8 @@ add_executable(vox_tests
     test_autoedit.cpp
     test_pitch.cpp
     test_honey.cpp
-    test_beatkey.cpp)
+    test_beatkey.cpp
+    test_declip.cpp)
 
 target_link_libraries(vox_tests PRIVATE vox_dsp Catch2::Catch2WithMain)
 set_target_properties(vox_tests PROPERTIES FOLDER "Voxology")

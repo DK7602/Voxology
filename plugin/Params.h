@@ -28,7 +28,7 @@ namespace VoxParams
     }
     inline juce::StringArray toggleIds()
     {
-        juce::StringArray ids { "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
+        juce::StringArray ids { "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "clDeclip", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
         for (int k = 0; k < 12; ++k) ids.add ("ptRm" + juce::String (k));   // Pitch: notes switched off (C .. B)
         return ids;
     }
@@ -103,6 +103,7 @@ namespace VoxParams
         slider ("hvFormant", "Voices Formant", NormalisableRange<float> (-fm, fm, 0.1f), 0.0f, "st", stText);
 
         toggle ("clOn", "Cleanup On", true);
+        toggle ("clDeclip", "De-clip", true);
         slider ("clLowCut", "Low Cut", skewed (20.0f, 400.0f, 1.0f, 80.0f), 20.0f, "Hz",
                 [] (float v, int) { return v <= static_cast<float> (vox::Cleanup::kLowCutOffHz) ? String ("Off") : String (roundToInt (v)) + " Hz"; });
         slider ("clGateThr", "Gate Threshold", NormalisableRange<float> (-80.0f, -20.0f, 0.1f), -60.0f, "dB", dbText);
@@ -201,6 +202,7 @@ namespace VoxParams
         set ("clGateRange", static_cast<float> (p.cleanup.gateRangeDb));
         set ("clPops", static_cast<float> (p.cleanup.popAmount));
         set ("clBreath", static_cast<float> (p.cleanup.breathDb));
+        set ("clDeclip", p.cleanup.declip ? 1.0f : 0.0f);
         set ("eqOn", 1.0f);
         for (int b = 0; b < vox::kEqBands; ++b)
         {
@@ -280,7 +282,7 @@ namespace VoxParams
             p.voices.level = d ("hvLevel");
             p.voices.formant = d ("hvFormant");
             p.voices.width = d ("dbWidth");
-            p.cleanup = { on ("clOn"), d ("clLowCut"), d ("clGateThr"), d ("clGateRange"), d ("clPops"), d ("clBreath") };
+            p.cleanup = { on ("clOn"), d ("clLowCut"), d ("clGateThr"), d ("clGateRange"), d ("clPops"), d ("clBreath"), on ("clDeclip") };
             p.eq.enabled = on ("eqOn");
             for (size_t b = 0; b < static_cast<size_t> (vox::kEqBands); ++b)
             {

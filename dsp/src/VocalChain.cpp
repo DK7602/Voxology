@@ -8,6 +8,7 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
 {
     sr = sampleRate;
     chanCount = std::clamp (numChannels, 1, kMaxChannels);
+    declip.prepare (chanCount);
     pitch.prepare (sr, chanCount, lowLatency);
     cleanup.prepare (sr, chanCount);
     // Pops and breaths listen to the chain's input, which is Pitch's latency ahead of them: free look-ahead.
@@ -35,6 +36,7 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
 
 void VocalChain::reset() noexcept
 {
+    declip.reset();
     pitch.reset();
     cleanup.reset();
     pops.reset();
@@ -61,6 +63,7 @@ void VocalChain::reset() noexcept
 void VocalChain::setParams (const ChainParams& p) noexcept
 {
     params = p;
+    declip.setEnabled (p.cleanup.enabled && p.cleanup.declip);
     pitch.setParams (p.pitch);
     cleanup.setParams (p.cleanup);
     pops.setParams ({ p.cleanup.enabled ? p.cleanup.popAmount : 0.0 });
@@ -95,6 +98,7 @@ ChainMeters VocalChain::takeMeters() noexcept
     saturation.takeEnergies (m.satResidual, m.satSignal);
     m.pitch = pitch.reading();
     m.voiceNotes = voices.currentNotes();
+    m.declipRuns = declip.takeRepairs();
     meters = {};
     return m;
 }
@@ -120,19 +124,22 @@ void VocalChain::processChunk (int nch, int len) noexcept
         if (++dryPos >= dlen) dryPos = 0;
     }
 
-    // The mono input, before Pitch delays it: the pops / breaths side-chain.
-    for (int i = 0; i < len; ++i)
-    {
-        double m = 0.0;
-        for (int c = 0; c < nch; ++c) m += ch[static_cast<size_t> (c)][i];
-        side[static_cast<size_t> (i)] = m / nch;
-    }
-
     const bool wantB = ! (params.bypass || params.listenOriginal);
     const bool fullyA = ! wantB && mixB == 0.0;
     if (! fullyA || ! params.bypass)
     {
         // Inserts (the chain keeps running while you listen to A, so B comes back without a jump).
+        // De-clip first: once Pitch reshapes the voice, the flat peaks can't be found any more.
+        if (! pitch.isLowLatency()) declip.process (ch.data(), nch, len);
+
+        // The mono (de-clipped) input, before Pitch delays it: the pops / breaths side-chain.
+        for (int i = 0; i < len; ++i)
+        {
+            double m = 0.0;
+            for (int c = 0; c < nch; ++c) m += ch[static_cast<size_t> (c)][i];
+            side[static_cast<size_t> (i)] = m / nch;
+        }
+
         pitch.process (ch.data(), nch, len);
         cleanup.process (ch.data(), nch, len);
         pops.process (ch.data(), nch, len, side.data());

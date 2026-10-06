@@ -63,6 +63,7 @@ public:
         std::atomic<float> inPeak { -100.0f }, outPeak { -100.0f };       // dBFS, held until read
         std::atomic<float> gate { 0.0f }, deEss { 0.0f }, rider { 0.0f };  // dB
         std::atomic<float> pops { 0.0f }, breath { 0.0f };                 // dB, held until read
+        std::atomic<int> declipRuns { 0 };                                 // clipped peaks De-clip redrew (running total)
         std::array<std::atomic<float>, vox::kDynBands> dynEq {};            // dB per band, held until read
         std::atomic<float> peakGr { 0.0f }, levelGr { 0.0f };             // dB, held until read
         std::atomic<float> satResidual { 0.0f }, satSignal { 0.0f };      // energies, drained by the editor
