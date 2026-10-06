@@ -39,9 +39,9 @@ private:
     honeyui::Model* model = nullptr;
 
     juce::ComboBox key, scale;
-    juce::Slider snap, drift, vibrato, noteDrift, noteVibrato;
+    juce::Slider snap, drift, vibrato, noteDrift, noteVibrato, noteFormant;
     juce::TextButton snapNote { "Snap note to key" }, resetNote { "Reset note" }, resetAll { "Reset all notes" }, fit { "Fit" }, original { "Original" }, tuned { "Tuned" },
                      undoBtn { "Undo" }, redoBtn { "Redo" };
-    juce::Label keyLabel, scaleLabel, snapLabel, driftLabel, vibratoLabel, noteDriftLabel, noteVibratoLabel;
+    juce::Label keyLabel, scaleLabel, snapLabel, driftLabel, vibratoLabel, noteDriftLabel, noteVibratoLabel, noteFormantLabel;
     juce::String status, noteInfo;
 };

@@ -194,11 +194,34 @@ void HoneyRoll::resized()
 }
 
 //==============================================================================
-Path HoneyRoll::cellPath (int index, double midi) const
+std::pair<double, double> HoneyRoll::span (int index) const
 {
     const auto& n = snap.notes[static_cast<size_t> (index)].note;
     const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
-    const float x0 = xOf (n.start / sr), x1 = std::max (x0 + 12.0f, xOf (n.end / sr));
+    if (model != nullptr && model->isOriginal()) return { n.start / sr, n.end / sr };
+    double a = n.soundStart() / sr, b = n.soundEnd() / sr;
+    if (dragging && index == selected)
+    {
+        if (dragMode == Drag::time) { a += dragSeconds; b += dragSeconds; }
+        if (dragMode == Drag::leftEdge) a = std::min (a + dragSeconds, b - 0.03);
+        if (dragMode == Drag::rightEdge) b = std::max (b + dragSeconds, a + 0.03);
+    }
+    return { a, b };
+}
+
+double HoneyRoll::shownTime (int index, double sung) const
+{
+    const auto& n = snap.notes[static_cast<size_t> (index)].note;
+    const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
+    const auto [a, b] = span (index);
+    const double s0 = n.start / sr, s1 = n.end / sr;
+    return a + (sung - s0) * (b - a) / std::max (1.0e-6, s1 - s0);
+}
+
+Path HoneyRoll::cellPath (int index, double midi) const
+{
+    const auto [t0, t1] = span (index);
+    const float x0 = xOf (t0), x1 = std::max (x0 + 12.0f, xOf (t1));
     const float yc = yOf (midi), h = static_cast<float> (rowHeight) * 0.92f;
     const float tip = std::min (h * 0.5f, (x1 - x0) * 0.35f);   // the pointed ends of the hexagon
     Path p;
@@ -233,7 +256,6 @@ void HoneyRoll::paint (Graphics& g)
         Graphics::ScopedSaveState save (g);
         g.reduceClipRegion (grid.toNearestInt());
         const auto vis = g.getClipBounds().toFloat();
-        const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
         // Phrase connectors: a black line from each note's end to the next note's start when they're sung
         // in one breath (gap under 0.2 s); a longer gap (a pause) leaves a space.
         {
@@ -246,9 +268,7 @@ void HoneyRoll::paint (Graphics& g)
             Path links;
             for (int i = 0; i + 1 < static_cast<int> (snap.notes.size()); ++i)
             {
-                const auto& a = snap.notes[static_cast<size_t> (i)].note;
-                const auto& b = snap.notes[static_cast<size_t> (i + 1)].note;
-                if ((b.start - a.end) / sr > 0.2) continue;
+                if (span (i + 1).first - span (i).second > 0.2) continue;
                 const auto pa = cellPath (i, shown (i)).getBounds(), pb = cellPath (i + 1, shown (i + 1)).getBounds();
                 if (pa.getRight() < vis.getX() - 50.0f || pb.getX() > vis.getRight() + 50.0f) continue;
                 links.startNewSubPath (pa.getRight(), pa.getCentreY());
@@ -261,8 +281,8 @@ void HoneyRoll::paint (Graphics& g)
         }
         for (int i = 0; i < static_cast<int> (snap.notes.size()); ++i)
         {
-            const auto& n = snap.notes[static_cast<size_t> (i)].note;
-            if (xOf (n.end / sr) < vis.getX() || xOf (n.start / sr) > vis.getRight()) continue;
+            const auto [t0, t1] = span (i);
+            if (xOf (t1) < vis.getX() || xOf (t0) > vis.getRight()) continue;
             if (i != selected) drawCell (g, i);
         }
         if (selected >= 0) drawCell (g, selected);   // on top
@@ -446,7 +466,7 @@ void HoneyRoll::drawCell (Graphics& g, int index)
             {
                 const double m = t.midi[static_cast<size_t> (r)];
                 if (m <= 0.0) { started = false; continue; }
-                const Point<float> p { xOf (t.time[static_cast<size_t> (r)] / t.sampleRate), yOf (m + shift) };
+                const Point<float> p { xOf (shownTime (index, t.time[static_cast<size_t> (r)] / t.sampleRate)), yOf (m + shift) };
                 if (! started) { line.startNewSubPath (p); started = true; } else line.lineTo (p);
             }
             g.setColour (filled ? goldDeep.darker (0.5f).withAlpha (0.8f) : Colours::white.withAlpha (0.9f));
@@ -605,6 +625,11 @@ void HoneyRoll::mouseDown (const MouseEvent& e)
         dragging = true;
         dragStartTarget = dragTarget = snap.notes[static_cast<size_t> (hit)].note.target;
         dragStartY = e.position.y;
+        dragStartX = e.position.x;
+        dragSeconds = 0.0;
+        const auto b = cellPath (hit, dragTarget).getBounds();
+        const float grab = std::min (7.0f, b.getWidth() * 0.2f);
+        dragMode = e.position.x < b.getX() + grab ? Drag::leftEdge : e.position.x > b.getRight() - grab ? Drag::rightEdge : Drag::undecided;
     }
 }
 
@@ -616,10 +641,18 @@ void HoneyRoll::mouseDrag (const MouseEvent& e)
         return;
     }
     if (! dragging || selected < 0) return;
-    const double moved = (dragStartY - e.position.y) / rowHeight;
-    dragTarget = e.mods.isAltDown() ? dragStartTarget + moved                       // free (cents)
-                                    : std::round (dragStartTarget + moved);          // whole notes
-    dragTarget = jlimit (kLowestMidi, kHighestMidi, dragTarget);
+    const float dx = e.position.x - dragStartX, dy = e.position.y - dragStartY;
+    if (dragMode == Drag::undecided && std::max (std::abs (dx), std::abs (dy)) > 6.0f)
+        dragMode = std::abs (dx) > std::abs (dy) ? Drag::time : Drag::pitch;
+    if (dragMode == Drag::pitch)
+    {
+        const double moved = -dy / rowHeight;
+        dragTarget = e.mods.isAltDown() ? dragStartTarget + moved                       // free (cents)
+                                        : std::round (dragStartTarget + moved);          // whole notes
+        dragTarget = jlimit (kLowestMidi, kHighestMidi, dragTarget);
+    }
+    else if (dragMode != Drag::undecided)
+        dragSeconds = dx / pixelsPerSecond;   // time / ends: free (hold nothing), in seconds
     repaint();
 }
 
@@ -627,16 +660,36 @@ void HoneyRoll::mouseUp (const MouseEvent&)
 {
     seeking = false;
     if (! dragging) return;
+    const auto [a, b] = selected >= 0 ? span (selected) : std::pair<double, double> { 0.0, 0.0 };   // (with the drag)
     dragging = false;
-    if (selected >= 0 && model != nullptr && std::abs (dragTarget - dragStartTarget) > 1.0e-6)
+    if (selected >= 0 && model != nullptr)
     {
         auto edit = snap.notes[static_cast<size_t> (selected)].edit;
-        edit.moved = true;
-        edit.target = dragTarget;
-        model->setEdit (selected, edit);
-        refresh();
-        if (onSelectionChanged) onSelectionChanged();
+        bool changed = false;
+        if (dragMode == Drag::pitch && std::abs (dragTarget - dragStartTarget) > 1.0e-6)
+        {
+            edit.moved = true;
+            edit.target = dragTarget;
+            changed = true;
+        }
+        else if ((dragMode == Drag::time || dragMode == Drag::leftEdge || dragMode == Drag::rightEdge) && std::abs (dragSeconds) > 0.002)
+        {
+            // Back to a shift (from where it was sung) and a length (vs as sung).
+            const auto& n = snap.notes[static_cast<size_t> (selected)].note;
+            const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
+            edit.shift = a - n.start / sr;
+            edit.length = (b - a) / std::max (1.0e-6, (n.end - n.start) / sr);
+            changed = true;
+        }
+        if (changed)
+        {
+            model->setEdit (selected, edit);
+            refresh();
+            if (onSelectionChanged) onSelectionChanged();
+        }
     }
+    dragMode = Drag::undecided;
+    dragSeconds = 0.0;
     repaint();
 }
 
@@ -657,7 +710,11 @@ void HoneyRoll::mouseMove (const MouseEvent& e)
     if (e.position.y < (float) kRulerHeight) { setMouseCursor (MouseCursor::PointingHandCursor); return; }
     const int hit = noteAt (e.position);
     if (hit != hovered) { hovered = hit; repaint(); }
-    setMouseCursor (hit >= 0 ? MouseCursor::UpDownResizeCursor : MouseCursor::NormalCursor);
+    if (hit < 0) { setMouseCursor (MouseCursor::NormalCursor); return; }
+    const auto b = cellPath (hit, snap.notes[static_cast<size_t> (hit)].note.target).getBounds();
+    const float grab = std::min (7.0f, b.getWidth() * 0.2f);
+    const bool edge = e.position.x < b.getX() + grab || e.position.x > b.getRight() - grab;
+    setMouseCursor (edge ? MouseCursor::LeftRightResizeCursor : MouseCursor::UpDownLeftRightResizeCursor);
 }
 
 void HoneyRoll::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& w)

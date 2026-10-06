@@ -522,3 +522,22 @@ length (time-stretch: move notes, stretch ends), 3 per-note formant. Later: key 
   pitches = full render within 3 cents, level within 1.5 dB (PSOLA level varies +-1 dB with the shifter's start), no clicks.
 - CI green: Actions run 37499282269 (v0.12.1, includes v0.12.0).
 - Syntax-check Honey Tune locally: ARA SDK cloned at /tmp/claude-0/sc/ara (releases/2.3.0) + JucePlugin_* stub defines.
+
+## v0.13.0 Honey Tune: move notes in time, stretch / shorten them, per-note formant (2026-10-06)
+- Repo: user made DK7602/Voxology PUBLIC (chose to leave test-audio public). Reminder scheduled: send_later trigger
+  trig_01KYSkur9ifims1G57npJ9Qw fires 2026-11-01 15:00 UTC into this session -> tell them to make it private again.
+- Engine (dsp HoneyTune): Note.outStart / outEnd (samples; < 0 = as sung), soundStart() / soundEnd() / timeMoved(), Note.formant.
+  TimeMap (knots: each note's start / end input -> output; gaps stretch / squeeze; clip keeps its length; min gap 5 ms, min
+  note 30 ms; order kept) with inAt / outAt. warp(): pitch-synchronous OLA, grains one period apart in the output read where the
+  map says plus a smooth drift (a period repeated / skipped at a matching point past P/2, like the shifter); unvoiced: 5 ms
+  grains at the mapped spot. render(): no timing edits -> as before; else retime (warped audio + readings at their new times +
+  notes at their new places) then the usual shifter pass. Per-note formant: Guide::formantAt (Plan from planFormant: the note's
+  value faded over 20 ms), Frame.formant (live frames carry params.formant), shifter reads fr.formant (split off when non-zero).
+  changedRegion compares timing / formant too; a timing edit takes its neighbours along; renderPart retimes just its segment.
+- Tests: move +100 ms -> sound starts / ends +0.09 / +0.10 s, pitch kept, others untouched; stretch 1.5x -> 1.46x; formant +4
+  on one note -> its centroid +10 %, the others unchanged; timing edit partial == full (edges within 11 ms). 67 cases.
+- UI: NoteEdit.shift (s), length (ratio), formant (st); applyEdits(..., sampleRate). Roll: drag decides by the first 6 px:
+  up / down = pitch, sideways = time; grabbing a note's end (7 px) stretches from that end; cursor shows it; cells, links and
+  the pitch line are drawn where the note sounds (Original: as sung). Panel: NOTE DRIFT / NOTE VIBRATO / NOTE FORMANT (-6..+6
+  st, double-click 0); note info shows "+80 ms, 120 % long". Archive HNY3 adds shift / length / formant per edit (HNY2 / v1 load).
+- Limits: big stretches of noisy / breathy parts can sound smeary; a note can't be moved past its neighbours (clamped).

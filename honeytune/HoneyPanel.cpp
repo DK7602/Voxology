@@ -49,8 +49,16 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     label (snapLabel, "SNAP TO NOTE");
     label (driftLabel, "KEEP DRIFT");
     label (vibratoLabel, "KEEP VIBRATO");
-    label (noteDriftLabel, "THIS NOTE: DRIFT");
-    label (noteVibratoLabel, "THIS NOTE: VIBRATO");
+    label (noteDriftLabel, "NOTE DRIFT");
+    label (noteVibratoLabel, "NOTE VIBRATO");
+    label (noteFormantLabel, "NOTE FORMANT");
+    noteFormant.setRange (-6.0, 6.0, 0.1);
+    noteFormant.setTextValueSuffix (" st");
+    noteFormant.setSliderStyle (Slider::LinearHorizontal);
+    noteFormant.setTextBoxStyle (Slider::TextBoxRight, false, 52, 20);
+    noteFormant.setDoubleClickReturnValue (true, 0.0);
+    noteFormant.setTooltip ("This note's tone: + thinner / younger, - deeper (the pitch stays). Double-click: back to 0.");
+    addAndMakeVisible (noteFormant);
     for (auto* c : { &key, &scale }) addAndMakeVisible (*c);
     for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
         l->setVisible (false);   // painted in gold by the panel
@@ -83,7 +91,7 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     for (auto* s : { &snap, &drift, &vibrato }) s->onDragEnd = [this] { applySettings(); };
     for (auto* s : { &snap, &drift, &vibrato })
         s->onValueChange = [this, s] { if (! s->isMouseButtonDown()) applySettings(); };   // typed values
-    for (auto* s : { &noteDrift, &noteVibrato })
+    for (auto* s : { &noteDrift, &noteVibrato, &noteFormant })
     {
         s->onDragEnd = [this] { applyNoteEdit(); };
         s->onValueChange = [this, s] { if (! s->isMouseButtonDown()) applyNoteEdit(); };
@@ -202,21 +210,25 @@ void HoneyPanel::updateNoteControls()
     const int i = roll.getSelected();
     const auto& s = roll.getSnapshot();
     const bool has = i >= 0 && i < static_cast<int> (s.notes.size());
-    for (Component* c : { (Component*) &noteDrift, (Component*) &noteVibrato, (Component*) &snapNote, (Component*) &resetNote })
+    for (Component* c : { (Component*) &noteDrift, (Component*) &noteVibrato, (Component*) &noteFormant, (Component*) &snapNote, (Component*) &resetNote })
         c->setEnabled (has);
     if (! has)
     {
-        noteInfo = "Click a note to select it. Drag up / down to move it (hold Alt for fine moves), double-click to snap it, Delete to reset it. Zoom: Ctrl + wheel or + / -.";
+        noteInfo = "Click a note. Drag up / down = pitch (Alt: fine), sideways = earlier / later, its ends = longer / shorter. Double-click = snap, Delete = reset, Ctrl + Z = undo.";
         repaint();
         return;
     }
     const auto& n = s.notes[static_cast<size_t> (i)];
     noteDrift.setValue (n.note.drift * 100.0, dontSendNotification);
     noteVibrato.setValue (n.note.vibrato * 100.0, dontSendNotification);
+    noteFormant.setValue (n.edit.formant, dontSendNotification);
     const double sung = n.note.pitch, now = n.note.target;
     noteInfo = "Note " + String (i + 1) + ": sung " + noteName (sung) + " " + cents (sung - std::round (sung))
              + "  ->  plays " + noteName (now) + (std::abs (now - std::round (now)) > 0.005 ? " " + cents (now - std::round (now)) : String())
              + (n.off ? "  (off-key)" : n.wasOff ? "  (was off-key, fixed)" : "  (in key)")
+             + (n.edit.timed() ? "  |  " + (std::abs (n.edit.shift) > 0.0005 ? String (n.edit.shift >= 0 ? "+" : "") + String (roundToInt (n.edit.shift * 1000.0)) + " ms" : String())
+                                       + (std::abs (n.edit.length - 1.0) > 0.005 ? String (std::abs (n.edit.shift) > 0.0005 ? ", " : "") + String (roundToInt (n.edit.length * 100.0)) + " % long" : String())
+                                     : String())
              + (n.edit.isDefault() ? "" : "  - changed by hand");
     repaint();
 }
@@ -228,6 +240,7 @@ void HoneyPanel::applyNoteEdit()
     auto e = roll.getSnapshot().notes[static_cast<size_t> (i)].edit;
     e.drift = noteDrift.getValue() / 100.0;
     e.vibrato = noteVibrato.getValue() / 100.0;
+    e.formant = noteFormant.getValue();
     model->setEdit (i, e);
     refresh();
 }
@@ -409,12 +422,13 @@ void HoneyPanel::resized()
         row.removeFromLeft (8.0f);
         cards.push_back (c);
         c = c.reduced (8.0f, 2.0f);
-        l.setBounds (c.removeFromLeft (128.0f).toNearestInt());
+        l.setBounds (c.removeFromLeft (100.0f).toNearestInt());
         s.setBounds (c.toNearestInt());
     };
-    const float pairW = jlimit (230.0f, 360.0f, (row.getWidth() - 520.0f) / 2.0f);
+    const float pairW = jlimit (200.0f, 300.0f, (row.getWidth() - 530.0f) / 3.0f);
     pair (pairW, noteDriftLabel, noteDrift);
     pair (pairW, noteVibratoLabel, noteVibrato);
+    pair (pairW, noteFormantLabel, noteFormant);
     resetAll.setBounds (row.removeFromRight (116.0f).toNearestInt());
     row.removeFromRight (6.0f);
     resetNote.setBounds (row.removeFromRight (96.0f).toNearestInt());

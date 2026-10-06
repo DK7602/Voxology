@@ -319,7 +319,7 @@ void PitchCorrector::analyse() noexcept
         last.clarity = clarityS;
         last.time = static_cast<double> (now - 1) - 0.5 * (len + p);
         if (guide == nullptr)
-            pushFrame (last.time, period, applied);
+            pushFrame (last.time, period, applied, params.formant);
     }
     else
     {
@@ -331,7 +331,7 @@ void PitchCorrector::analyse() noexcept
         if (sustain > 0.2) note = -1;   // a real gap: the next phrase picks its note afresh
         last = { false, 0.0, -1, corr, 0.0, 0.0, static_cast<double> (now - 1) - 0.25 * sr / kMinHz };
         if (guide == nullptr)
-            pushFrame (last.time, 0.0, corr);
+            pushFrame (last.time, 0.0, corr, params.formant);
     }
 }
 
@@ -341,15 +341,15 @@ void PitchCorrector::guideFrame() noexcept
     const double t = static_cast<double> (now - 1) - std::ceil (sr / kMinHz);
     double p = 0.0, sh = 0.0;
     guide->at (t, p, sh);
-    pushFrame (t, p, sh);
+    pushFrame (t, p, sh, guide->formantAt (t));
 }
 
-void PitchCorrector::pushFrame (double time, double p, double c) noexcept
+void PitchCorrector::pushFrame (double time, double p, double c, double formant) noexcept
 {
     // Keep the readings in time order (an unvoiced reading is stamped a little later than a voiced one).
     if (frameCount > 0)
         time = std::max (time, frames[static_cast<size_t> ((frameCount - 1) % kFrames)].time + 1.0);
-    frames[static_cast<size_t> (frameCount++ % kFrames)] = { time, p, c };
+    frames[static_cast<size_t> (frameCount++ % kFrames)] = { time, p, c, formant };
 }
 
 PitchCorrector::Frame PitchCorrector::frameAt (double t) const noexcept
@@ -368,6 +368,7 @@ PitchCorrector::Frame PitchCorrector::frameAt (double t) const noexcept
             Frame r;
             r.time = t;
             r.corr = f.corr + (after->corr - f.corr) * x;
+            r.formant = f.formant + (after->formant - f.formant) * x;
             if (f.period > 0.0 && after->period > 0.0) r.period = f.period + (after->period - f.period) * x;
             else r.period = x < 0.5 ? f.period : after->period;
             return r;
@@ -449,7 +450,7 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
         anaPos = synthPos + drift;
         // Two bands only when the grains just correct the voice: harmony voices and formant moves need
         // the whole voice in the grains (the high band would keep its old pitch / formants).
-        const bool split = params.harmony == 0 && std::abs (params.formant) < 0.01 && std::abs (params.transpose) <= 2;
+        const bool split = params.harmony == 0 && std::abs (fr.formant) < 0.01 && std::abs (params.transpose) <= 2;
         marks[static_cast<size_t> (markCount % kMarks)] = { synthPos, drift, preDrift, std::abs (drift - preDrift) > 0.25 * P, split };
         ++markCount;
         // Big downward shifts (octave down): each grain must hold ONE glottal pulse, or the two-period
@@ -474,7 +475,7 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
 #endif
         // Formant: read the grain at fRatio x speed (its resonances move by fRatio, the pitch doesn't).
         // Never past the newest input sample (only matters for very low notes with a big upward formant).
-        const double fRatio = std::pow (2.0, std::clamp (params.formant, -kMaxFormant, kMaxFormant) / 12.0);
+        const double fRatio = std::pow (2.0, std::clamp (fr.formant, -kMaxFormant, kMaxFormant) / 12.0);
         const double newest = static_cast<double> (now - 3);
         const auto first = static_cast<int64_t> (std::ceil (synthPos - P));
         const auto lastJ = static_cast<int64_t> (std::floor (synthPos + P));

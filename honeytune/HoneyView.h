@@ -34,7 +34,11 @@ struct NoteEdit
     bool moved = false;        // target set by hand
     double target = 0.0;       // MIDI (when moved)
     double drift = -1.0, vibrato = -1.0;
-    bool isDefault() const { return ! moved && drift < 0.0 && vibrato < 0.0; }
+    double shift = 0.0;        // seconds: moved earlier (-) / later (+)
+    double length = 1.0;       // stretched (> 1) / shortened (< 1)
+    double formant = 0.0;      // semitones: + thinner, - deeper
+    bool timed() const { return std::abs (shift) > 1.0e-6 || std::abs (length - 1.0) > 1.0e-6; }
+    bool isDefault() const { return ! moved && drift < 0.0 && vibrato < 0.0 && ! timed() && std::abs (formant) < 1.0e-6; }
 };
 
 /** The key and scale actually used: "Auto" takes the detected key (and its scale when sure enough). */
@@ -52,7 +56,7 @@ inline double keyNote (double pitch, int key, int scale)
 
 /** The notes as they will sound: hand edits first, then the settings. */
 inline std::vector<vox::honey::Note> applyEdits (std::vector<vox::honey::Note> notes, const std::vector<NoteEdit>& edits,
-                                                 const Settings& s, int key, int scale)
+                                                 const Settings& s, int key, int scale, double sampleRate = 48000.0)
 {
     for (size_t i = 0; i < notes.size(); ++i)
     {
@@ -61,6 +65,12 @@ inline std::vector<vox::honey::Note> applyEdits (std::vector<vox::honey::Note> n
         n.target = e.moved ? e.target : n.pitch + (keyNote (n.pitch, key, scale) - n.pitch) * s.snap;
         n.drift = e.drift >= 0.0 ? e.drift : s.drift;
         n.vibrato = e.vibrato >= 0.0 ? e.vibrato : s.vibrato;
+        n.formant = e.formant;
+        if (e.timed())
+        {
+            n.outStart = n.start + e.shift * sampleRate;
+            n.outEnd = n.outStart + (n.end - n.start) * std::max (0.1, e.length);
+        }
         n.edited = true;
     }
     return notes;
@@ -123,7 +133,7 @@ inline Snapshot makeSnapshot (std::shared_ptr<const vox::honey::Track> track, co
     resolveKey (s, guess, snap.key, snap.scale);
     if (track != nullptr && ! track->time.empty())
         snap.seconds = track->time.back() / track->sampleRate;
-    const auto sounding = applyEdits (notes, edits, s, snap.key, snap.scale);
+    const auto sounding = applyEdits (notes, edits, s, snap.key, snap.scale, track != nullptr ? track->sampleRate : 48000.0);
     for (size_t i = 0; i < notes.size(); ++i)
     {
         NoteView v;

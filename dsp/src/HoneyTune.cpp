@@ -21,7 +21,17 @@ class Plan final : public PitchCorrector::Guide
 {
 public:
     /** offset: the clip sample the shifter's first input sample is (a re-render that starts mid-clip). */
-    Plan (const Track& t, const std::vector<double>& shifts, double offset = 0.0) : track (t), shift (shifts), start (offset) {}
+    Plan (const Track& t, const std::vector<double>& shifts, double offset = 0.0, const std::vector<double>* formants = nullptr)
+        : track (t), shift (shifts), start (offset), formant (formants) {}
+
+    double formantAt (double shifterTime) const override
+    {
+        if (formant == nullptr || track.time.empty()) return 0.0;
+        const double time = shifterTime + start;
+        const auto it = std::lower_bound (track.time.begin(), track.time.end(), time);
+        const auto i = static_cast<size_t> (std::clamp<long> (it - track.time.begin(), 0, static_cast<long> (track.time.size()) - 1));
+        return (*formant)[i];
+    }
 
     void at (double shifterTime, double& period, double& shiftSemis) const override
     {
@@ -53,6 +63,7 @@ private:
     const Track& track;
     const std::vector<double>& shift;
     double start = 0.0;
+    const std::vector<double>* formant = nullptr;
 };
 
 } // namespace
@@ -255,11 +266,29 @@ std::vector<double> planShift (const Track& t, const std::vector<Note>& notes, d
     return shift;
 }
 
+/** Each reading's formant move: the note's, faded in / out over 20 ms at its edges. */
+std::vector<double> planFormant (const Track& t, const std::vector<Note>& notes)
+{
+    std::vector<double> f (t.midi.size(), 0.0);
+    const double edge = 0.02 * t.sampleRate;
+    for (const auto& note : notes)
+    {
+        if (std::abs (note.formant) < 0.01) continue;
+        for (auto i = static_cast<size_t> (std::max (0, note.firstReading)); i <= static_cast<size_t> (note.lastReading) && i < f.size(); ++i)
+        {
+            const double tm = t.time[i];
+            f[i] = note.formant * std::clamp (std::min (tm - note.start, note.end - tm) / edge, 0.0, 1.0);
+        }
+    }
+    return f;
+}
+
 /** Runs the shifter over input [from, to) (plus its latency) and hands each output sample to put(index, value). */
 template <typename Put>
-void runShifter (const std::vector<float>& mono, double sr, const Track& t, const std::vector<double>& shift, size_t from, size_t to, Put&& put)
+void runShifter (const std::vector<float>& mono, double sr, const Track& t, const std::vector<double>& shift,
+                 const std::vector<double>& formant, size_t from, size_t to, Put&& put)
 {
-    Plan plan (t, shift, static_cast<double> (from));
+    Plan plan (t, shift, static_cast<double> (from), &formant);
     PitchCorrector pc;
     PitchParams p;
     p.amount = 100.0;
@@ -279,12 +308,163 @@ void runShifter (const std::vector<float>& mono, double sr, const Track& t, cons
             if (s + i >= from + lat && s + i - lat < end) put (s + i - lat, buf[i]);
     }
 }
+
+/** The clip as heard after moves / stretches: warped audio, the readings at their new times, the notes at
+    their new places (only when something moved). */
+struct Retimed
+{
+    std::vector<float> audio;
+    Track track;
+    std::vector<Note> notes;
+};
+Retimed retime (const std::vector<float>& mono, double sr, const Track& t, const std::vector<Note>& notes, const TimeMap& map, size_t from, size_t to)
+{
+    Retimed r;
+    r.audio = warp (mono, sr, t, map, from, to);
+    r.track = t;
+    for (auto& tm : r.track.time) tm = map.outAt (tm);
+    r.notes = notes;
+    for (auto& n : r.notes) { n.start = n.soundStart(); n.end = n.soundEnd(); n.outStart = n.outEnd = -1.0; }
+    return r;
+}
+}
+
+// ------------------------------------------------------------------------------------------------
+// Moving and stretching notes in time.
+namespace {
+double mapThrough (const std::vector<double>& from, const std::vector<double>& to, double v)
+{
+    if (from.size() < 2) return v;
+    const auto it = std::upper_bound (from.begin(), from.end(), v);
+    const auto k = static_cast<size_t> (std::clamp<long> (it - from.begin(), 1, static_cast<long> (from.size()) - 1));
+    const double a = from[k - 1], b = from[k];
+    if (v < from.front() || v > from.back()) return v + (v < from.front() ? to.front() - from.front() : to.back() - from.back());
+    return to[k - 1] + (to[k] - to[k - 1]) * (b > a ? (v - a) / (b - a) : 0.0);
+}
+}
+
+double TimeMap::inAt (double tOut) const { return identity ? tOut : mapThrough (out, in, tOut); }
+double TimeMap::outAt (double tIn) const { return identity ? tIn : mapThrough (in, out, tIn); }
+
+TimeMap timeMap (const std::vector<Note>& notes, double clip, double sr)
+{
+    TimeMap m;
+    m.in = { 0.0 };
+    m.out = { 0.0 };
+    const double minGap = 0.005 * sr, minLen = 0.03 * sr;
+    double lastIn = 0.0, lastOut = 0.0;
+    for (const auto& n : notes)
+    {
+        if (n.start <= lastIn + 1.0 || n.end > clip - 1.0) continue;
+        if (n.timeMoved()) m.identity = false;
+        // Keep the order: never before the last note's end, never past the clip's end.
+        const double sOut = std::clamp (n.soundStart(), lastOut + minGap, clip - minGap - minLen);
+        const double eOut = std::clamp (n.soundEnd(), sOut + minLen, clip - minGap);
+        m.in.push_back (n.start); m.out.push_back (sOut);
+        m.in.push_back (n.end); m.out.push_back (eOut);
+        lastIn = n.end; lastOut = eOut;
+    }
+    m.in.push_back (clip); m.out.push_back (clip);
+    return m;
+}
+
+std::vector<float> warp (const std::vector<float>& x, double sr, const Track& t, const TimeMap& map, size_t from, size_t to)
+{
+    std::vector<float> y (x.size(), 0.0f);
+    to = std::min (to, x.size());
+    if (from >= to) return y;
+    if (map.identity) { std::copy (x.begin() + static_cast<long> (from), x.begin() + static_cast<long> (to), y.begin() + static_cast<long> (from)); return y; }
+
+    const double uvP = 0.005 * sr, maxP = sr / PitchCorrector::kMinHz;
+    const auto lo = static_cast<size_t> (std::max (0.0, static_cast<double> (from) - 3.0 * maxP));
+    const auto hi = std::min (x.size(), to + static_cast<size_t> (3.0 * maxP));
+    std::vector<double> acc (hi - lo, 0.0), ws (hi - lo, 0.0);
+    auto at = [&x] (double pos)
+    {
+        pos = std::clamp (pos, 1.0, static_cast<double> (x.size()) - 3.0);
+        const auto i = static_cast<size_t> (pos);
+        const double f = pos - static_cast<double> (i);
+        const double ym1 = x[i - 1], y0 = x[i], y1 = x[i + 1], y2 = x[i + 2];
+        const double c1 = 0.5 * (y1 - ym1), c2 = ym1 - 2.5 * y0 + 2.0 * y1 - 0.5 * y2, c3 = 0.5 * (y2 - ym1) + 1.5 * (y0 - y1);
+        return ((c3 * f + c2) * f + c1) * f + y0;
+    };
+    auto periodAt = [&] (double tin)
+    {
+        const auto& tm = t.time;
+        if (tm.empty()) return 0.0;
+        const auto it = std::lower_bound (tm.begin(), tm.end(), tin);
+        auto i = static_cast<size_t> (std::clamp<long> (it - tm.begin(), 0, static_cast<long> (tm.size()) - 1));
+        if (i > 0 && std::abs (tm[i - 1] - tin) < std::abs (tm[i] - tin)) --i;
+        const double m = t.midi[i];
+        return m > 0.0 ? sr / (440.0 * std::pow (2.0, (m - 69.0) / 12.0)) : 0.0;
+    };
+    // Where near `cand` the waveform best continues the one at `ana` (+-15 % of a period).
+    auto align = [&] (double ana, double cand, double P)
+    {
+        const int len = static_cast<int> (P), reach = std::max (2, static_cast<int> (0.15 * P));
+        double best = -2.0; int bestK = 0;
+        for (int k = -reach; k <= reach; ++k)
+        {
+            double xy = 0.0, xx = 0.0, yy = 0.0;
+            for (int j = 0; j < len; j += 2)
+            {
+                const double a = at (ana + j), b = at (cand + k + j);
+                xy += a * b; xx += a * a; yy += b * b;
+            }
+            const double r = xy / std::sqrt (xx * yy + 1.0e-30);
+            if (r > best) { best = r; bestK = k; }
+        }
+        return cand + bestK;
+    };
+
+    // Grains laid one period apart in the output, each read where the map says that moment comes from,
+    // plus a drift that only changes smoothly (a period repeated / skipped at a matching point when it
+    // passes half a period), exactly like the pitch shifter's.
+    double tOut = static_cast<double> (lo), drift = 0.0;
+    while (tOut < static_cast<double> (hi))
+    {
+        const double tin = map.inAt (tOut);
+        const double P = periodAt (tin);
+        double ana = tin + drift;
+        if (P > 0.0 && std::abs (drift) > 0.5 * P)
+        {
+            ana = align (ana, ana - (drift > 0.0 ? P : -P), P);
+            drift = ana - tin;
+        }
+        if (P <= 0.0) { drift = 0.0; ana = tin; }   // breath / consonant: read where the map says
+        const double half = P > 0.0 ? P : uvP;
+        for (auto j = static_cast<long> (std::ceil (tOut - half)); j <= static_cast<long> (std::floor (tOut + half)); ++j)
+        {
+            if (j < static_cast<long> (lo) || j >= static_cast<long> (hi)) continue;
+            const double u = static_cast<double> (j) - tOut;
+            const double w = 0.5 + 0.5 * std::cos (std::numbers::pi * u / half);
+            acc[static_cast<size_t> (j) - lo] += w * at (ana + u);
+            ws[static_cast<size_t> (j) - lo] += w;
+        }
+        const double step = half;
+        drift += step - (map.inAt (tOut + step) - tin);
+        tOut += step;
+    }
+    for (size_t j = from; j < to; ++j)
+    {
+        const double w = ws[j - lo];
+        y[j] = static_cast<float> (w > 0.05 ? acc[j - lo] / w : at (map.inAt (static_cast<double> (j))));
+    }
+    return y;
 }
 
 std::vector<float> render (const std::vector<float>& mono, double sr, const Track& t, const std::vector<Note>& notes, double transitionMs)
 {
     std::vector<float> out (mono.size(), 0.0f);
-    runShifter (mono, sr, t, planShift (t, notes, transitionMs), 0, mono.size(), [&out] (size_t o, double v) { out[o] = static_cast<float> (v); });
+    auto put = [&out] (size_t o, double v) { out[o] = static_cast<float> (v); };
+    const auto map = timeMap (notes, static_cast<double> (mono.size()), sr);
+    if (map.identity)
+    {
+        runShifter (mono, sr, t, planShift (t, notes, transitionMs), planFormant (t, notes), 0, mono.size(), put);
+        return out;
+    }
+    const auto r = retime (mono, sr, t, notes, map, 0, mono.size());
+    runShifter (r.audio, sr, r.track, planShift (r.track, r.notes, transitionMs), planFormant (r.track, r.notes), 0, mono.size(), put);
     return out;
 }
 
@@ -294,19 +474,36 @@ bool changedRegion (const std::vector<Note>& before, const std::vector<Note>& af
     auto same = [] (const Note& a, const Note& b)
     {
         return a.start == b.start && a.end == b.end && std::abs (a.target - b.target) < 1.0e-9
-               && std::abs (a.drift - b.drift) < 1.0e-9 && std::abs (a.vibrato - b.vibrato) < 1.0e-9;
+               && std::abs (a.drift - b.drift) < 1.0e-9 && std::abs (a.vibrato - b.vibrato) < 1.0e-9
+               && std::abs (a.formant - b.formant) < 1.0e-9 && std::abs (a.soundStart() - b.soundStart()) < 0.5
+               && std::abs (a.soundEnd() - b.soundEnd()) < 0.5;
     };
     int first = -1, last = -1;
+    bool timing = false;
     for (size_t i = 0; i < after.size(); ++i)
-        if (! same (before[i], after[i])) { if (first < 0) first = static_cast<int> (i); last = static_cast<int> (i); }
+        if (! same (before[i], after[i]))
+        {
+            if (first < 0) first = static_cast<int> (i);
+            last = static_cast<int> (i);
+            timing = timing || std::abs (before[i].soundStart() - after[i].soundStart()) >= 0.5 || std::abs (before[i].soundEnd() - after[i].soundEnd()) >= 0.5;
+        }
     if (first < 0) { from = to = 0.0; return true; }   // nothing changed
+    // A move / stretch re-times the gaps up to the neighbouring notes: they come along.
+    if (timing) { first = std::max (0, first - 1); last = std::min (static_cast<int> (after.size()) - 1, last + 1); }
     // Grow over neighbours sung in one breath (gaps under 0.15 s: the note moves are smoothed across them).
     const double tight = 0.15 * sr;
-    while (first > 0 && after[static_cast<size_t> (first)].start - after[static_cast<size_t> (first - 1)].end < tight) --first;
-    while (last + 1 < static_cast<int> (after.size()) && after[static_cast<size_t> (last + 1)].start - after[static_cast<size_t> (last)].end < tight) ++last;
-    // From / to: the middle of the gaps around them (quiet: the old and new render join there).
-    from = first > 0 ? 0.5 * (after[static_cast<size_t> (first - 1)].end + after[static_cast<size_t> (first)].start) : 0.0;
-    to = last + 1 < static_cast<int> (after.size()) ? 0.5 * (after[static_cast<size_t> (last)].end + after[static_cast<size_t> (last + 1)].start) : clipSamples;
+    auto gapBefore = [&] (int i) { return std::min (after[static_cast<size_t> (i)].soundStart() - after[static_cast<size_t> (i - 1)].soundEnd(),
+                                                    after[static_cast<size_t> (i)].start - after[static_cast<size_t> (i - 1)].end); };
+    while (first > 0 && gapBefore (first) < tight) --first;
+    while (last + 1 < static_cast<int> (after.size()) && gapBefore (last + 1) < tight) ++last;
+    // From / to: the middle of the gaps around them (quiet: the old and new render join there). Outside
+    // [first, last] nothing moved, so these output times are also the input times there.
+    from = first > 0 ? 0.5 * (after[static_cast<size_t> (first - 1)].soundEnd() + after[static_cast<size_t> (first)].soundStart()) : 0.0;
+    to = last + 1 < static_cast<int> (after.size()) ? 0.5 * (after[static_cast<size_t> (last)].soundEnd() + after[static_cast<size_t> (last + 1)].soundStart()) : clipSamples;
+    if (timing && first > 0)
+        from = std::min (from, 0.5 * (after[static_cast<size_t> (first - 1)].end + after[static_cast<size_t> (first)].start));
+    if (timing && last + 1 < static_cast<int> (after.size()))
+        to = std::max (to, 0.5 * (after[static_cast<size_t> (last)].end + after[static_cast<size_t> (last + 1)].start));
     return true;
 }
 
@@ -318,7 +515,13 @@ void renderPart (const std::vector<float>& mono, double sr, const Track& t, cons
     const double xf = 0.01 * sr;
     const auto a = static_cast<size_t> (std::max (0.0, from - xf - 0.3 * sr));
     const auto b = static_cast<size_t> (std::min (static_cast<double> (mono.size()), to + xf + 1.0));
-    runShifter (mono, sr, t, planShift (t, notes, transitionMs), a, b, [&] (size_t o, double v)
+    const auto map = timeMap (notes, static_cast<double> (mono.size()), sr);
+    Retimed r;
+    if (! map.identity) r = retime (mono, sr, t, notes, map, a, b);
+    const auto& src = map.identity ? mono : r.audio;
+    const auto& trk = map.identity ? t : r.track;
+    const auto& nts = map.identity ? notes : r.notes;
+    runShifter (src, sr, trk, planShift (trk, nts, transitionMs), planFormant (trk, nts), a, b, [&] (size_t o, double v)
     {
         const double x = static_cast<double> (o);
         const double w = from <= 0.0 && x < from + 1.0 ? 1.0 : std::clamp (std::min ((x - (from - xf)) / xf, ((to + xf) - x) / xf), 0.0, 1.0);

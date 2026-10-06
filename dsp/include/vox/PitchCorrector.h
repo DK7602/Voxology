@@ -131,6 +131,8 @@ public:
     {
         virtual ~Guide() = default;
         virtual void at (double time, double& period, double& shiftSemis) const = 0;
+        /** Formant move (semitones) at that time (Honey Tune: per note). */
+        virtual double formantAt (double /*time*/) const { return 0.0; }
     };
     void setGuide (const Guide* g) noexcept { guide = g; }
 
@@ -181,12 +183,12 @@ private:
 
     // Every analysis, stamped with the input time it describes, so each grain uses the reading for
     // its own moment (the pitch is measured ~10 ms after the audio the grain is cut from).
-    struct Frame { double time = 0.0, period = 0.0, corr = 0.0; };
+    struct Frame { double time = 0.0, period = 0.0, corr = 0.0, formant = 0.0; };
     static constexpr int kFrames = 64;
     std::array<Frame, kFrames> frames {};
     int frameCount = 0;
     Frame frameAt (double t) const noexcept;
-    void pushFrame (double time, double p, double c) noexcept;
+    void pushFrame (double time, double p, double c, double formant) noexcept;
 
     // Two bands (correcting a single voice): the grains carry only the low band (the notes); the airy
     // high band (breath, rasp, "s" in a note) is read smoothly at the grains' moving offset instead of

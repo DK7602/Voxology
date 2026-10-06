@@ -72,7 +72,15 @@ private:
     int selected = -1, hovered = -1;
     bool dragging = false;
     double dragStartTarget = 0.0, dragTarget = 0.0;
-    float dragStartY = 0.0f;
+    float dragStartY = 0.0f, dragStartX = 0.0f;
+    // What a drag does: up / down = pitch; sideways = move in time (decided by the first 6 px);
+    // grabbing a note's left / right end stretches it from that end.
+    enum class Drag { undecided, pitch, time, leftEdge, rightEdge } dragMode = Drag::undecided;
+    double dragSeconds = 0.0;   // how far the time / edge has moved
+    /** Where a note is shown in time (seconds): as sung in Original, else as it will sound (with the drag). */
+    std::pair<double, double> span (int index) const;
+    /** A moment of the note as sung (seconds) -> where it's shown. */
+    double shownTime (int index, double sungSeconds) const;
     bool seeking = false;
 
     juce::ScrollBar hBar { false }, vBar { true };

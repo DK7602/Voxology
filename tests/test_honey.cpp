@@ -193,3 +193,105 @@ TEST_CASE ("Honey Tune: an edit re-renders only around its note, same result as 
     CHECK (changedRegion (after, after, static_cast<double> (x.size()), kSr, from, to));
     CHECK (from == to);
 }
+
+namespace {
+/** Where the sound is: the 10 ms-window RMS envelope above -40 dB (relative to the loudest) in [a, b) seconds. */
+std::pair<double, double> soundSpan (const std::vector<float>& y, double a, double b)
+{
+    const auto w = static_cast<size_t> (0.01 * kSr);
+    std::vector<double> e;
+    for (auto s = static_cast<size_t> (a * kSr); s + w < static_cast<size_t> (b * kSr); s += w)
+    {
+        double q = 0; for (size_t i = s; i < s + w; ++i) q += static_cast<double> (y[i]) * y[i];
+        e.push_back (q / static_cast<double> (w));
+    }
+    const double peak = *std::max_element (e.begin(), e.end());
+    double first = -1, last = -1;
+    for (size_t k = 0; k < e.size(); ++k)
+        if (e[k] > peak * 1e-4) { if (first < 0) first = a + 0.01 * static_cast<double> (k); last = a + 0.01 * static_cast<double> (k + 1); }
+    return { first, last };
+}
+double centroid (const std::vector<float>& y, double a, double len)
+{
+    // Spectral centroid by a direct DFT of a Hann-windowed frame (coarse but fine for a comparison).
+    const auto n = static_cast<size_t> (len * kSr), s0 = static_cast<size_t> (a * kSr);
+    double num = 0, den = 0;
+    for (int k = 2; k < 400; k += 2)
+    {
+        const double f = k * kSr / static_cast<double> (n);
+        if (f > 6000.0) break;
+        double re = 0, im = 0;
+        for (size_t i = 0; i < n; ++i)
+        {
+            const double w = 0.5 - 0.5 * std::cos (2 * std::numbers::pi * static_cast<double> (i) / static_cast<double> (n));
+            const double ph = 2 * std::numbers::pi * k * static_cast<double> (i) / static_cast<double> (n);
+            re += w * y[s0 + i] * std::cos (ph); im -= w * y[s0 + i] * std::sin (ph);
+        }
+        const double m = std::sqrt (re * re + im * im);
+        num += f * m; den += m;
+    }
+    return num / (den + 1e-30);
+}
+}
+
+TEST_CASE ("Honey Tune: move a note later, stretch a note, per-note formant", "[honey]")
+{
+    // A3, C4, E4: 0.4 s each with 0.3 s breaths.
+    const auto x = sing ({ { 57, 0.4, 0.3 }, { 60, 0.4, 0.3 }, { 64, 0.4, 0.3 } });
+    const auto t = analyse (x, kSr);
+    const auto notes = findNotes (t);
+    REQUIRE (notes.size() == 3);
+    const auto in = soundSpan (x, 0.55, 1.25);   // note 2 as sung (~0.7 - 1.1 s)
+
+    SECTION ("move 100 ms later: same pitch, starts and ends 100 ms later")
+    {
+        auto n = notes;
+        n[1].outStart = n[1].start + 0.1 * kSr;
+        n[1].outEnd = n[1].end + 0.1 * kSr;
+        const auto y = render (x, kSr, t, n);
+        const auto out = soundSpan (y, 0.55, 1.35);
+        INFO ("sung " << in.first << " - " << in.second << " s, moved " << out.first << " - " << out.second << " s");
+        CHECK (out.first - in.first == Approx (0.1).margin (0.025));
+        CHECK (out.second - in.second == Approx (0.1).margin (0.025));
+        CHECK (midiOf (hzAt (y, 0.95, 0.12)) == Approx (60.0).margin (0.05));
+        CHECK (midiOf (hzAt (y, 0.15, 0.12)) == Approx (57.0).margin (0.05));   // the others untouched
+        CHECK (midiOf (hzAt (y, 1.55, 0.12)) == Approx (64.0).margin (0.05));
+    }
+    SECTION ("stretch to 1.5x: lasts 50 % longer, same pitch")
+    {
+        auto n = notes;
+        n[1].outStart = n[1].start;
+        n[1].outEnd = n[1].start + 1.5 * (n[1].end - n[1].start);
+        const auto y = render (x, kSr, t, n);
+        const auto out = soundSpan (y, 0.55, 1.35);
+        INFO ("sung " << in.second - in.first << " s, stretched " << out.second - out.first << " s");
+        CHECK ((out.second - out.first) / (in.second - in.first) == Approx (1.5).margin (0.12));
+        CHECK (midiOf (hzAt (y, 1.0, 0.15)) == Approx (60.0).margin (0.05));
+    }
+    SECTION ("formant +4 on the middle note only: brighter there, notes unchanged")
+    {
+        auto n = notes;
+        n[1].formant = 4.0;
+        const auto y = render (x, kSr, t, n);
+        const double cIn = centroid (x, 0.8, 0.1), cOut = centroid (y, 0.8, 0.1);
+        INFO ("centroid of the middle note " << cIn << " -> " << cOut << " Hz; first note " << centroid (x, 0.1, 0.1) << " -> " << centroid (y, 0.1, 0.1));
+        CHECK (cOut > 1.07 * cIn);   // (this coarse centroid moves ~10 % for +4 st on this test voice)
+        CHECK (midiOf (hzAt (y, 0.8, 0.12)) == Approx (60.0).margin (0.05));
+        CHECK (centroid (y, 0.1, 0.1) == Approx (centroid (x, 0.1, 0.1)).epsilon (0.03));
+    }
+    SECTION ("a timing edit re-renders only around it, like a full render")
+    {
+        auto prev = render (x, kSr, t, notes);
+        auto n = notes;
+        n[1].outStart = n[1].start + 0.08 * kSr;
+        n[1].outEnd = n[1].end + 0.08 * kSr;
+        double from = 0, to = 0;
+        REQUIRE (changedRegion (notes, n, static_cast<double> (x.size()), kSr, from, to));
+        renderPart (x, kSr, t, n, prev, from, to);
+        const auto full = render (x, kSr, t, n);
+        const auto a = soundSpan (prev, 0.55, 1.35), b = soundSpan (full, 0.55, 1.35);
+        CHECK (a.first == Approx (b.first).margin (0.011));
+        CHECK (a.second == Approx (b.second).margin (0.011));
+        CHECK (midiOf (hzAt (prev, 0.95, 0.12)) == Approx (60.0).margin (0.05));
+    }
+}

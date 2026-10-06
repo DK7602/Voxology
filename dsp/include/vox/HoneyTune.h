@@ -2,6 +2,7 @@
 
 #include "PitchCorrector.h"
 
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -32,7 +33,29 @@ struct Note
     double vibrato = 1.0;            // how much of its vibrato to keep
     bool edited = false;
     int firstReading = 0, lastReading = 0;
+    double outStart = -1.0, outEnd = -1.0;   // where it sounds in time (samples); < 0 = where it was sung
+    double formant = 0.0;                    // semitones: + thinner / younger, - deeper (the note only)
+    double soundStart() const { return outStart >= 0.0 ? outStart : start; }
+    double soundEnd() const { return outEnd >= 0.0 ? outEnd : end; }
+    bool timeMoved() const { return std::abs (soundStart() - start) > 0.5 || std::abs (soundEnd() - end) > 0.5; }
 };
+
+/** Where every moment of the clip sounds after notes were moved / stretched: a piecewise-straight map
+    between the input and output times of the notes' starts and ends (the gaps around a moved note
+    stretch or squeeze to make room; the clip keeps its length). */
+struct TimeMap
+{
+    std::vector<double> in, out;   // knots, both rising, from 0 to the clip length (samples)
+    bool identity = true;
+    double inAt (double tOut) const;    // the input moment heard at output time tOut
+    double outAt (double tIn) const;
+};
+TimeMap timeMap (const std::vector<Note>& notes, double clipSamples, double sampleRate);
+
+/** The clip re-timed by the map (pitch and tone kept: pitch-synchronous grains, a period repeated or
+    skipped where it's stretched / squeezed), output samples [from, to) filled (rest 0). */
+std::vector<float> warp (const std::vector<float>& mono, double sampleRate, const Track& track, const TimeMap& map,
+                         size_t from, size_t to);
 
 Track analyse (const std::vector<float>& mono, double sampleRate);
 std::vector<Note> findNotes (const Track& track);
@@ -46,7 +69,8 @@ double centsOff (const Note& n, int key, int scale);
 std::vector<float> render (const std::vector<float>& mono, double sampleRate, const Track& track,
                            const std::vector<Note>& notes, double transitionMs = 25.0);
 
-/** After an edit: the stretch to re-render, from the middle of the gap before the first changed note to
+/** After an edit: the stretch to re-render (moved / stretched notes take their neighbours along: the
+    gaps between them change), from the middle of the gap before the first changed note to
     the middle of the gap after the last (neighbours sung in one breath come along). false = the notes
     don't line up (re-analysed: render it all); from == to = nothing changed. Samples. */
 bool changedRegion (const std::vector<Note>& before, const std::vector<Note>& after, double clipSamples, double sampleRate,

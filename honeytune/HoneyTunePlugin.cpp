@@ -21,6 +21,7 @@ using honeyui::NoteEdit;
 namespace
 {
     constexpr int64 kArchiveV2 = 0x484e5932;   // "HNY2"
+    constexpr int64 kArchiveV3 = 0x484e5933;   // "HNY3": edits also hold timing, length and formant
 
     /** A hand edit as saved: tied to the note's start, so it finds its note again after re-analysis. */
     struct SavedEdit { double start = 0.0; NoteEdit edit; };
@@ -323,7 +324,8 @@ protected:
     bool doRestoreObjectsFromStream (ARAInputStream& input, const ARARestoreObjectsFilter* filter) noexcept override
     {
         const auto first = input.readInt64();
-        const bool v2 = first == kArchiveV2;
+        const bool v3 = first == kArchiveV3;
+        const bool v2 = first == kArchiveV2 || v3;
         Settings s;
         s.key = static_cast<int> (v2 ? input.readInt64() : first);
         s.scale = static_cast<int> (input.readInt64());
@@ -353,6 +355,12 @@ protected:
                 se.edit.target = input.readDouble();
                 se.edit.drift = input.readDouble();
                 se.edit.vibrato = input.readDouble();
+                if (v3)
+                {
+                    se.edit.shift = input.readDouble();
+                    se.edit.length = input.readDouble();
+                    se.edit.formant = input.readDouble();
+                }
                 saved.push_back (se);
             }
             HoneyAudioSource* target = nullptr;
@@ -377,7 +385,7 @@ protected:
     bool doStoreObjectsToStream (ARAOutputStream& output, const ARAStoreObjectsFilter* filter) noexcept override
     {
         const auto s = getSettings();
-        bool ok = output.writeInt64 (kArchiveV2) && output.writeInt64 (s.key) && output.writeInt64 (s.scale)
+        bool ok = output.writeInt64 (kArchiveV3) && output.writeInt64 (s.key) && output.writeInt64 (s.scale)
                && output.writeDouble (s.snap) && output.writeDouble (s.drift) && output.writeDouble (s.vibrato);
         std::vector<const HoneyAudioSource*> toStore;
         if (filter != nullptr)
@@ -395,7 +403,8 @@ protected:
             ok = ok && output.writeString (String (src->getPersistentID())) && output.writeInt64 (static_cast<int64> (saved.size()));
             for (const auto& se : saved)
                 ok = ok && output.writeDouble (se.start) && output.writeBool (se.edit.moved) && output.writeDouble (se.edit.target)
-                        && output.writeDouble (se.edit.drift) && output.writeDouble (se.edit.vibrato);
+                        && output.writeDouble (se.edit.drift) && output.writeDouble (se.edit.vibrato)
+                        && output.writeDouble (se.edit.shift) && output.writeDouble (se.edit.length) && output.writeDouble (se.edit.formant);
         }
         return ok;
     }
@@ -484,7 +493,7 @@ private:
             int key = 0, scale = 0;
             honeyui::resolveKey (s, st.guess, key, scale);
             track = st.track;
-            notes = honeyui::applyEdits (st.notes, st.edits, s, key, scale);
+            notes = honeyui::applyEdits (st.notes, st.edits, s, key, scale, st.sampleRate);
         }
         // An edit to a few notes: re-render only around them (from the gap before to the gap after),
         // on top of the current render. A new analysis, the key / settings moving most notes: all of it.
