@@ -559,4 +559,4 @@ pitch). Baseline mean envelope error 5.2 dB; octave down 11-23 dB and 2 of 9 cas
 - Tried and reverted: longer grains for formant down (no average gain). Left: formant -4 and high "oo" vowels (F1 below f0)
   ~6-15 dB on the synthetic test - edge cases (singers change the vowel there).
 - Test added: octave down of a source-filter vowel within 4 dB of the ideal (got 1.0), pitch within 10 cents, level within 2 dB.
-- Sent renders: Gallas acapella + its octave-down double, BEFORE (v0.13) and AFTER.
+- Sent renders: Gallas acapella + its octave-down double, BEFORE (v0.13) and AFTER. CI green: Actions run 37514662285.
