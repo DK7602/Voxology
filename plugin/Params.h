@@ -28,7 +28,7 @@ namespace VoxParams
     }
     inline juce::StringArray toggleIds()
     {
-        juce::StringArray ids { "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
+        juce::StringArray ids { "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
         for (int k = 0; k < 12; ++k) ids.add ("ptRm" + juce::String (k));   // Pitch: notes switched off (C .. B)
         return ids;
     }
@@ -57,6 +57,7 @@ namespace VoxParams
         choice ("umFocus", "Unmask Focus", { "Centre", "Full" }, 0);
 
         toggle ("bypass", "Bypass", false);
+        toggle ("recMode", "Record Mode (low latency)", false);
         toggle ("listenA", "Listen to Original (A)", false);
         toggle ("levelMatch", "Match Loudness", false);
         StringArray styles, intensities, delays;

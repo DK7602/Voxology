@@ -65,7 +65,9 @@ public:
     /** Pitch's look-ahead + Saturation's oversampling; constant for a given sample rate. */
     int latencySamples() const noexcept { return pitch.latencySamples() + Saturation::kLatency; }
 
-    void prepare (double sampleRate, int numChannels);
+    /** lowLatency: Record mode (~6 ms instead of ~33): Pitch's low-latency shifter; harmony voices and
+        Formant are off (they need the normal look-ahead). */
+    void prepare (double sampleRate, int numChannels, bool lowLatency = false);
     void reset() noexcept;
     void setParams (const ChainParams& p) noexcept;
     const ChainParams& getParams() const noexcept { return params; }

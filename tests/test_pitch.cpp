@@ -10,11 +10,11 @@ using Catch::Approx;
 namespace {
 constexpr double kSr = 48000.0;
 
-std::vector<double> run (const PitchParams& p, const std::vector<double>& x, int block = 256, int* latency = nullptr)
+std::vector<double> run (const PitchParams& p, const std::vector<double>& x, int block = 256, int* latency = nullptr, bool lowLatency = false)
 {
     PitchCorrector pc;
     pc.setParams (p);
-    pc.prepare (kSr, 1);
+    pc.prepare (kSr, 1, lowLatency);
     if (latency) *latency = pc.latencySamples();
     std::vector<double> y = x;
     for (size_t s = 0; s < y.size(); s += static_cast<size_t> (block))
@@ -347,4 +347,31 @@ TEST_CASE ("Pitch: MIDI notes, removed notes and transpose", "[pitch]")
     const auto y = run (t, x);
     CHECK (std::abs (cents (measureHz (y, 40000), a3 / 2.0)) < 6.0);
     CHECK (! PitchCorrector::isNeutral (t));
+}
+
+TEST_CASE ("Pitch: Record mode (low latency) tunes with ~5 ms delay and no clicks", "[pitch]")
+{
+    // Off-key notes with a +-15 cent vibrato (staying on one side of the halfway point, so Robot doesn't warble).
+    for (double f : { 110.0 * std::pow (2.0, 0.3 / 12), 246.94 * std::pow (2.0, -0.3 / 12), 440.0 * std::pow (2.0, 0.3 / 12) })
+    {
+        const auto x = voiceCurve ([&] (double t) { return f * std::pow (2.0, 15.0 * std::sin (2 * std::numbers::pi * 5.5 * t) / 1200.0); }, 1.5);
+        PitchParams p; p.mode = kPitchRobot; p.amount = 100.0;
+        int lat = 0;
+        const auto y = run (p, x, 256, &lat, true);
+        const double target = 440.0 * std::pow (2.0, std::round (12.0 * std::log2 (f / 440.0)) / 12.0);
+        const auto tr = track (y, target, 30000, 66000);
+        INFO ("in " << f << " Hz: latency " << lat << " samples, mean " << tr.first << " cents, spread " << tr.second);
+        CHECK (lat <= static_cast<int> (0.0055 * kSr));
+        CHECK (std::abs (tr.first) < 6.0);
+        CHECK (tr.second < 20.0);
+        double jx = 0, jy = 0;
+        for (size_t i = 1; i < x.size(); ++i) { jx = std::max (jx, std::abs (x[i] - x[i - 1])); jy = std::max (jy, std::abs (y[i] - y[i - 1])); }
+        CHECK (jy < 1.6 * jx);
+        CHECK (rmsDb (y, 30000, 60000) == Approx (rmsDb (x, 30000, 60000)).margin (1.0));
+    }
+    // Off: the input, delayed by the reported latency.
+    const auto x = voice (220.0, 230.0, 0.5);
+    int lat = 0;
+    const auto y = run (PitchParams {}, x, 256, &lat, true);
+    for (size_t i = static_cast<size_t> (lat); i < x.size(); ++i) REQUIRE (y[i] == x[i - static_cast<size_t> (lat)]);
 }

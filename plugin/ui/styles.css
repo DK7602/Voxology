@@ -57,7 +57,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .caps { color: var(--gold-deep); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9); }
 
 /* ---------------------------------------------------------------- header */
-#header { --glass: rgba(255, 250, 240, 0.45); left: 16px; top: 14px; width: 1568px; height: 120px; display: flex; align-items: center; gap: 18px; padding: 0 18px 0 8px; }
+#header { --glass: rgba(255, 250, 240, 0.45); left: 16px; top: 14px; width: 1568px; height: 120px; display: flex; align-items: center; gap: 11px; padding: 0 16px 0 8px; }
 #header .logo { height: 104px; cursor: pointer; filter: drop-shadow(0 3px 4px rgba(80, 56, 14, 0.3)); }
 #header .title { height: 84px; margin-left: -18px; margin-right: 6px; filter: drop-shadow(0 3px 4px rgba(80, 56, 14, 0.3)); }
 .h-group { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
@@ -85,7 +85,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: inset 0 0 0 2px var(--gold), 0 2px 5px rgba(80, 56, 14, 0.25); display: grid; place-items: center; }
 .power.off { background: var(--marble-cream); color: var(--warn); }
 
-.auto-edit { position: relative; overflow: hidden; width: 272px; height: 76px; border: 0; border-radius: 38px; padding: 0 18px;
+.auto-edit { position: relative; overflow: hidden; flex-shrink: 0; width: 226px; height: 76px; border: 0; border-radius: 38px; padding: 0 18px;
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 40%), var(--gold-grad); color: #3b2a07; box-shadow: 0 0 0 2px #8d641f, 0 6px 14px rgba(80, 56, 14, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.55);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; margin-left: 8px; }
 .auto-edit .ae-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, rgba(93, 159, 211, 0.55), rgba(220, 235, 246, 0.75)); transition: width 0.15s; }
@@ -364,3 +364,11 @@ body.beat #beat-banner { display: flex; flex-direction: column; gap: 4px; margin
 .tp { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
 .tp button { width: 20px; height: 18px; padding: 0; border: 0; border-radius: 9px; font-weight: 700; background: var(--ivory); color: var(--blue-deep); box-shadow: inset 0 0 0 1.5px var(--gold); }
 .tp-v { font-size: 11px; color: var(--ink-soft); min-width: 84px; text-align: center; }
+
+/* Record mode (header REC). */
+#rec { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; flex-shrink: 0; }
+#match, #undo { padding: 0 12px; flex-shrink: 0; }
+#rec .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: #c9b8a0; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2); }
+#rec.on { color: #9b2c1f; }
+#rec.on .rec-dot { background: #e0402c; box-shadow: 0 0 6px rgba(224, 64, 44, 0.9); }
+body.beat #rec { display: none; }

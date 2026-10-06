@@ -4,11 +4,11 @@
 
 namespace vox {
 
-void VocalChain::prepare (double sampleRate, int numChannels)
+void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
 {
     sr = sampleRate;
     chanCount = std::clamp (numChannels, 1, kMaxChannels);
-    pitch.prepare (sr, chanCount);
+    pitch.prepare (sr, chanCount, lowLatency);
     cleanup.prepare (sr, chanCount);
     // Pops and breaths listen to the chain's input, which is Pitch's latency ahead of them: free look-ahead.
     pops.prepare (sr, chanCount, pitch.latencySamples());
@@ -153,7 +153,8 @@ void VocalChain::processChunk (int nch, int len) noexcept
         }
         // Harmonies: from the input (ahead by Pitch's latency, which they add back), into the lead and the
         // mono feed, so the doubler, delay and reverb carry them too.
-        voices.process (side.data(), ch.data(), nch, mono.data(), len);
+        if (! pitch.isLowLatency())   // (Record mode: the harmonies need the normal look-ahead)
+            voices.process (side.data(), ch.data(), nch, mono.data(), len);
         doubler.process (mono.data(), ch.data(), nch, len);
         delay.process (mono.data(), ch.data(), nch, len);
         reverb.process (mono.data(), ch.data(), nch, len);

@@ -490,3 +490,19 @@ editing (timing / length, per-note formant, partial re-render). User chose 1 now
 - Cubase how-to for the user: MIDI track -> output = Voxology (insert on the vocal track); "Notes" = play / draw the melody.
 - v0.11.1: user tested v0.11.0 in Cubase (BEAT on "Acoustic- Main" read G mixolydian 100 %, vocal followed "beat: G mix";
   Classic 5 ms). UI fix: Beat Key name was too big for "G mixolydian" -> font 22 / 18 / 15 px by length, nowrap, centred.
+
+## v0.12.0 Record mode (low latency) + Honey Tune playhead fix (2026-10-06)
+- User: Honey Tune playhead missing in Cubase (ruler click seeks fine, no playhead / auto-scroll while playing). The editor relied
+  only on the playback renderer's stamp (SourceState.playPosition / playStamp). Now HoneyProcessor::processBlock records the host
+  song position (songSeconds / songStamp atomics) and the editor maps it into the clip (song - timeline.songOffset), falling
+  back to the renderer stamp; stale after 400 ms. NOT verified in Cubase yet (no ARA host here) - ask the user.
+- Record mode: PitchCorrector::prepare(sr, ch, lowLatency). Low: latency 5 ms (240 @ 48k); delay-line shifter (processLow):
+  read point lowD behind the newest input moves by 1 - ratio per sample; kept in [lowMin 2.5 ms, lowMin + P]; splices +-P at a
+  matching waveform point (spliceTarget: NCC over one past period, +-15 % P) with a Hann crossfade over P/2; unvoiced / off ->
+  back to the reported latency (exact delayed pass-through when off). Detection unchanged (uses the newest frame). Formant and
+  harmony voices need normal mode (VocalChain skips voices when pitch.isLowLatency()). Tests: 3 pitches within 0.2 cents,
+  latency 240, no clicks, level kept, off = exact delay. On the user's Don vocal (Natural 25 ms): note centres 12.2 cents off
+  (normal 13.5), Robot 4.3; no buzz windows.
+- Plug-in: toggle "recMode" (Record Mode); two VocalChains (chain + recChain, both prepared); switching resets the new one and
+  sets latency via AsyncUpdater (wantedLatency). BEAT mode always normal. Meters recMode, latencyMs10. UI: header REC chip (red
+  dot), status "REC 6.1 ms", Pitch tip RECORD MODE, Learn line. Header tightened (gap 11, Auto-Edit 226 px) to fit.

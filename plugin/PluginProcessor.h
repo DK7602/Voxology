@@ -15,7 +15,7 @@
 /** Voxology: an all-in-one vocal chain (Cleanup -> Tone EQ -> De-Esser -> Rider -> Compressor ->
     Saturation -> Doubler -> Delay -> Reverb -> Output) with Auto-Edit, which listens to the vocal,
     sets every module and explains why. */
-class VoxologyAudioProcessor final : public juce::AudioProcessor, private juce::Timer
+class VoxologyAudioProcessor final : public juce::AudioProcessor, private juce::Timer, private juce::AsyncUpdater
 {
 public:
     VoxologyAudioProcessor();
@@ -78,7 +78,8 @@ public:
         // Key from the beat. VOCAL: 0 manual, 1 following the beat, 2 no beat found, 3 beat still listening / unsure.
         // BEAT: this beat's own reading (bkState 4 = listening, 5 = has a key).
         std::atomic<int> bkState { 0 }, bkKey { 0 }, bkMode { 0 }, bkSet { 0 }, bkUnclear { 0 }, bkOpen { -1 }, keyUsed { 0 }, scaleUsed { 0 };
-        std::atomic<int> midiNotes { 0 }, notesUsed { 0 };   // pitch classes (bits): MIDI held / learned, and what Pitch may aim for
+        std::atomic<int> midiNotes { 0 }, notesUsed { 0 };
+        std::atomic<int> recMode { 0 }, latencyMs10 { 0 };   // Record mode on; the chain's latency (0.1 ms)   // pitch classes (bits): MIDI held / learned, and what Pitch may aim for
         std::atomic<float> bkConf { 0.0f }, bkTune { 0.0f }, bkHeard { 0.0f };
     };
     Meters meters;
@@ -106,7 +107,12 @@ private:
     int midiHeldCount = 0;
     std::atomic<int> midiLearned { 0 };   // Learn: the scale taught by MIDI (saved with the project)
 
-    vox::VocalChain chain;
+    vox::VocalChain chain, recChain;    // recChain: Record mode (low latency), prepared alongside
+    bool usingRec = false;
+    std::atomic<float>* recParam = nullptr;
+    std::atomic<int> wantedLatency { 0 };
+    vox::VocalChain& active() noexcept { return usingRec ? recChain : chain; }
+    void handleAsyncUpdate() override { setLatencySamples (wantedLatency.load()); }
     vox::ChainParams chainParams;
     VoxParams::Reader reader;
     vox::LoudnessMeter inMeter, outMeter;

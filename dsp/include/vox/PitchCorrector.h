@@ -89,7 +89,12 @@ public:
     static constexpr double kMinHz = 75.0, kMaxHz = 1000.0;
     static constexpr double kLatencySeconds = 0.032;
 
-    void prepare (double sampleRate, int numChannels);
+    /** lowLatency: Record mode (~5 ms instead of ~32): a delay-line shifter (the voice is read a little
+        faster or slower and splices a period back / ahead at matching waveform points) instead of grains.
+        Rougher on big moves, and Formant / harmony need the normal mode. */
+    void prepare (double sampleRate, int numChannels, bool lowLatency = false);
+    static constexpr double kLowLatencySeconds = 0.005;
+    bool isLowLatency() const noexcept { return low; }
     void reset() noexcept;
     void setParams (const PitchParams& p) noexcept { params = p; }
     static bool isNeutral (const PitchParams& p) noexcept
@@ -196,6 +201,15 @@ private:
     double highAt (int c, double t) const noexcept;
     double highBand (int c, int64_t t) noexcept;
     static double cubicAt (const std::vector<double>& buf, int mask, double src) noexcept;
+
+    // Record mode (low latency): output = input read lowD samples back (with a crossfade while a splice
+    // moves the read point one period).
+    bool low = false;
+    double lowD = 0.0, lowMin = 0.0, xfOld = 0.0;
+    int xfLeft = 0, xfLen = 0;
+    double readAt (int c, double pos) const noexcept { return cubicAt (in[static_cast<size_t> (c)], mask, pos); }
+    double spliceTarget (double fromD, double toD, double P) const noexcept;
+    void processLow (double* const* ch, int nch, int i, bool neutral) noexcept;
 
     // Synthesis.
     double synthPos = 0.0;             // next output grain centre (input time)

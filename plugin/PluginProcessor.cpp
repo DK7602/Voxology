@@ -14,6 +14,7 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
     umFocusParam = parameters.getRawParameterValue ("umFocus");
     keySrcParam = parameters.getRawParameterValue ("ptKeySrc");
     midiParam = parameters.getRawParameterValue ("ptMidi");
+    recParam = parameters.getRawParameterValue ("recMode");
     linkSlot = vox::UnmaskLink::instance().claim();
     startTimerHz (1);
 }
@@ -21,6 +22,7 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
 VoxologyAudioProcessor::~VoxologyAudioProcessor()
 {
     stopTimer();
+    cancelPendingUpdate();
     vox::UnmaskLink::instance().release (linkSlot);
 }
 
@@ -91,6 +93,9 @@ void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
     reader.read (chainParams, hostBpm.load());
     chain.setParams (chainParams);
     chain.prepare (sampleRate, juce::jmin (channels, vox::kMaxChannels));
+    recChain.setParams (chainParams);
+    recChain.prepare (sampleRate, juce::jmin (channels, vox::kMaxChannels), true);
+    usingRec = recParam->load() > 0.5f && ! isBeatMode();
     inMeter.prepare (sampleRate, juce::jmax (1, getTotalNumInputChannels()));
     outMeter.prepare (sampleRate, channels);
     levelMatch.prepare (sampleRate);
@@ -101,7 +106,9 @@ void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
     hopCount = 0;
     unmask.prepare (sampleRate, juce::jmin (channels, vox::kMaxChannels));
     beatKey.prepare (sampleRate);
-    setLatencySamples (chain.latencySamples());   // the same in both modes, so beat and vocal stay lined up
+    // The same in VOCAL and BEAT, so beat and vocal stay lined up (Record mode: much less, while recording).
+    wantedLatency = active().latencySamples();
+    setLatencySamples (wantedLatency.load());
 }
 
 template <typename Sample>
@@ -212,11 +219,22 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
         chainParams.bypass = true;
         chainParams.listenOriginal = false;
     }
-    chain.setParams (chainParams);
-    chain.process (buffer.getArrayOfWritePointers(), nch, n);
+    // Record mode: the low-latency chain (switching starts it fresh; the host hears of the new latency).
+    if (const bool rec = recParam->load() > 0.5f && ! beatMode; rec != usingRec)
+    {
+        usingRec = rec;
+        active().reset();
+        wantedLatency = active().latencySamples();
+        triggerAsyncUpdate();
+    }
+    meters.recMode.store (usingRec ? 1 : 0);
+    meters.latencyMs10.store (juce::roundToInt (10000.0 * active().latencySamples() / juce::jmax (1.0, preparedRate)));
+    auto& live = active();
+    live.setParams (chainParams);
+    live.process (buffer.getArrayOfWritePointers(), nch, n);
 
     // Positions of what comes out of this block (both modes have the same latency, so they line up).
-    const int lat = chain.latencySamples();
+    const int lat = live.latencySamples();
     if (! beatMode)
     {
         // VOCAL: publish the processed vocal's band levels every 128 samples.
@@ -281,7 +299,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     double outPeak = 0.0;
     for (int c = 0; c < nch; ++c) outPeak = juce::jmax (outPeak, static_cast<double> (buffer.getMagnitude (c, 0, n)));
     holdMax (meters.outPeak, clampDb (outPeak > 0.0 ? 20.0 * std::log10 (outPeak) : -100.0));
-    const auto m = chain.takeMeters();
+    const auto m = live.takeMeters();
     holdMin (meters.gate, static_cast<float> (m.gateDb));
     holdMin (meters.pops, static_cast<float> (m.popDb));
     holdMin (meters.breath, static_cast<float> (m.breathDb));

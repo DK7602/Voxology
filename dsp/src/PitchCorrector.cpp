@@ -22,14 +22,22 @@ constexpr double kUnvoicedGrainSeconds = 0.005;
 int nextPow2 (int v) { int p = 1; while (p < v) p <<= 1; return p; }
 }
 
-void PitchCorrector::prepare (double sampleRate, int numChannels)
+void PitchCorrector::prepare (double sampleRate, int numChannels, bool lowLatency)
 {
     sr = sampleRate;
     channels = std::clamp (numChannels, 1, 2);
+    low = lowLatency;
     const double maxP = std::ceil (sr / kMinHz);
     // Room for a grain to be fully laid down before its samples leave (see synthesiseUpTo).
     latency = std::max (static_cast<int> (std::lround (kLatencySeconds * sr)), static_cast<int> (std::ceil (2.5 * maxP)) + 16);
     ringSize = nextPow2 (4 * latency + 4 * static_cast<int> (maxP));
+    if (low)
+    {
+        // The read point stays between lowMin and lowMin + one period behind the input (on average about
+        // the reported latency); a splice's crossfade never reads ahead of the newest sample.
+        latency = static_cast<int> (std::lround (kLowLatencySeconds * sr));
+        lowMin = std::round (0.0025 * sr);
+    }
     mask = ringSize - 1;
     for (auto& v : in) v.assign (static_cast<size_t> (ringSize), 0.0);
     for (auto& v : acc) v.assign (static_cast<size_t> (ringSize), 0.0);
@@ -66,6 +74,7 @@ void PitchCorrector::reset() noexcept
     for (auto& v : loBand) std::fill (v.begin(), v.end(), 0.0);
     for (auto& chain : xover) for (auto& b : chain) b.reset();
     markCount = markRead = 0;
+    lowD = static_cast<double> (latency); xfOld = 0.0; xfLeft = 0; xfLen = 0;
     std::fill (wsum.begin(), wsum.end(), 0.0);
     std::fill (mono.begin(), mono.end(), 0.0);
     std::fill (dbuf.begin(), dbuf.end(), 0.0);
@@ -574,6 +583,7 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
         ++now;
         if (++hopCount >= hop) { hopCount = 0; analyse(); if (guide != nullptr) guideFrame(); }
 
+        if (low) { processLow (ch, nch, i, neutral); continue; }
         const int64_t t = now - 1 - latency;   // the sample leaving now
         if (neutral)
         {
@@ -610,6 +620,69 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
         for (auto& v : acc) v[ti] = 0.0;
         wsum[ti] = 0.0;
     }
+}
+
+double PitchCorrector::spliceTarget (double fromD, double toD, double P) const noexcept
+{
+    // Where, near toD, the waveform best matches the one at fromD (normalised cross-correlation over one
+    // period of the past, within +-15 % of a period): the splice joins matching shapes, no tick.
+    const auto newest = static_cast<double> (now - 1);
+    const int len = std::max (8, static_cast<int> (P));
+    const int reach = std::max (2, static_cast<int> (0.15 * P));
+    double best = -2.0; int bestK = 0;
+    for (int k = -reach; k <= reach; ++k)
+    {
+        const double cand = toD + k;
+        if (cand < lowMin * 0.5 || cand + len > static_cast<double> (mask) / 2.0) continue;
+        double xy = 0.0, xx = 0.0, yy = 0.0;
+        for (int j = 0; j < len; j += 2)
+        {
+            const double a = mono[static_cast<size_t> (static_cast<int64_t> (newest - fromD - j) & mask)];
+            const double b = mono[static_cast<size_t> (static_cast<int64_t> (newest - cand - j) & mask)];
+            xy += a * b; xx += a * a; yy += b * b;
+        }
+        const double r = xy / std::sqrt (xx * yy + 1.0e-30);
+        if (r > best) { best = r; bestK = k; }
+    }
+    return toD + bestK;
+}
+
+void PitchCorrector::processLow (double* const* ch, int nch, int i, bool neutral) noexcept
+{
+    // Record mode. The read point lowD (samples behind the newest input) moves by 1 - ratio a sample, so
+    // the voice plays ratio x faster (higher) or slower (lower). It's kept between lowMin and lowMin + P:
+    // when it gets too close (shifting up) it splices one period back, too far (down) one period ahead,
+    // at a matching waveform point, with a crossfade over half a period.
+    const Frame fr = frameAt (static_cast<double> (now - 1));
+    const bool voiced = ! neutral && fr.period > 0.0;
+    const double P = voiced ? fr.period : 0.0;
+    const double ratio = voiced && std::abs (fr.corr) >= 0.03 ? std::pow (2.0, fr.corr / 12.0) : 1.0;
+    const double step = 1.0 - ratio;
+    lowD += step;
+    if (xfLeft > 0) xfOld += step;
+    if (xfLeft == 0)
+    {
+        double to = -1.0;
+        if (voiced && lowD < lowMin) to = spliceTarget (lowD, lowD + P, P);
+        else if (voiced && lowD > lowMin + P + 8.0) to = spliceTarget (lowD, lowD - P, P);
+        else if (! voiced && std::abs (lowD - latency) > 0.5)
+            to = static_cast<double> (latency);   // a breath / gap (or switched off): back to the usual delay
+        if (to >= 3.0)
+        {
+            xfOld = lowD;
+            lowD = to;
+            xfLen = xfLeft = std::max (16, static_cast<int> (voiced ? 0.5 * P : 0.004 * sr));
+        }
+    }
+    const double newest = static_cast<double> (now - 1);
+    const double w = xfLeft > 0 ? 0.5 - 0.5 * std::cos (std::numbers::pi * (1.0 - static_cast<double> (xfLeft) / xfLen)) : 1.0;
+    for (int c = 0; c < nch; ++c)
+    {
+        double y = readAt (c, newest - std::max (3.0, lowD));
+        if (xfLeft > 0) y = w * y + (1.0 - w) * readAt (c, newest - std::max (3.0, xfOld));
+        ch[c][i] = now - 1 >= static_cast<int64_t> (lowD) ? y : 0.0;
+    }
+    if (xfLeft > 0) --xfLeft;
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -31,7 +31,7 @@ const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", 
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
 const PT_RM = NOTES_C.map((_, k) => "ptRm" + k);
-const TOGGLES = [...PT_RM, "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
+const TOGGLES = [...PT_RM, "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
 const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
@@ -61,7 +61,7 @@ function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 // Latest meter frame.
 const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1],
-  bkState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, midiNotes: 0, notesUsed: 0xFFF, in: null, out: null };
+  bkState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, midiNotes: 0, notesUsed: 0xFFF, recMode: 0, latencyMs: 33, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
 
@@ -954,11 +954,14 @@ const LEARN = {
       "Humanize: lets long held notes keep their life while short notes still snap in.",
       "Notes: lit notes are the ones Pitch may pull you to. Click one to switch it off (it's never used), click again to bring it back.",
       "MIDI: in Cubase, make a MIDI track and set its output to Voxology. Notes = while you hold notes, your voice goes to those notes (play or draw the melody for the hard robot effect); nothing held = the key as usual. Learn = play the beat's notes or chords once and they become the scale (kept with the project).",
+      "REC (header): Record mode for tracking. You hear yourself tuned with about 6 ms delay instead of 33. Slightly rougher; Voices and Formant are off until you switch it off.",
       "Transpose: moves the whole voice up or down in semitones (your tone stays the same). Small moves sound natural; an octave sounds like an effect.",
       "Amount: 100 % lands right on the note; lower keeps some of your own pitch.",
       "Already using Auto-Tune or Melodyne? Turn this off: one tuner is enough."],
     live: () => {
       const t = [];
+      if (M.recMode) t.push(tip("RECORD MODE", `Voxology is in Record mode: about ${M.latencyMs.toFixed(0)} ms, so you can hear yourself tuned while you record. Pitch uses a faster, slightly rougher method; Voices and Formant are off.`, "calm",
+        { need: "Switch it off when you're done recording.", steps: ["Click REC in the header to go back to full quality for mixing (Cubase adjusts the timing for you)."] }));
       if (choice("ptMidi") === 2 && M.midiNotes === 0) t.push(tip("LEARN IS WAITING", "MIDI is on Learn, but no notes have been played yet, so Pitch uses the key as usual.", "calm",
         { need: "Only if you want the MIDI scale.", steps: ["Route a MIDI track's output to Voxology (Cubase: the track's output menu).", "Play the beat's notes or chords once: they light up blue in Notes."] }));
       if (val("ptAmount") >= 0.05 && choice("ptKeySrc") === 0 && M.bkState === 2) t.push(tip("NO BEAT LINKED", "Key is set to follow the beat, but there's no Voxology on a beat in this project, so Pitch uses the Key / Scale below.", "calm",
@@ -1248,12 +1251,15 @@ const abBtns = document.querySelectorAll("#ab button");
 function refreshAB() {
   abBtns.forEach((b) => b.classList.toggle("sel", (b.dataset.ab === "a") === on("listenA")));
   $("match").classList.toggle("on", on("levelMatch"));
+  $("rec").classList.toggle("on", on("recMode"));
+  document.body.classList.toggle("rec", on("recMode"));
   $("bypass").classList.toggle("off", on("bypass"));
 }
 abBtns.forEach((b) => b.addEventListener("click", () => { P.listenA.setValue(b.dataset.ab === "a"); refreshAB(); }));
 $("match").addEventListener("click", () => { P.levelMatch.setValue(!on("levelMatch")); refreshAB(); });
+$("rec").addEventListener("click", () => { P.recMode.setValue(!on("recMode")); refreshAB(); });
 $("bypass").addEventListener("click", () => { P.bypass.setValue(!on("bypass")); refreshAB(); });
-for (const id of ["listenA", "levelMatch", "bypass"]) P[id].valueChangedEvent.addListener(refreshAB);
+for (const id of ["listenA", "levelMatch", "bypass", "recMode"]) P[id].valueChangedEvent.addListener(refreshAB);
 
 $("auto-edit").addEventListener("click", async () => {
   if (M.aeState === 1) { await aeCancel(); return; }
@@ -1331,7 +1337,7 @@ window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
   }
   if (M.refVersion !== refVersionSeen) { refVersionSeen = M.refVersion; fetchReference(); }
   if (M.aeReport !== reportVersion) { const first = reportVersion === -1; reportVersion = M.aeReport; fetchReport(!first); }
-  const match = on("levelMatch") ? ` · MATCH ${fmtSigned(M.matchDb)}` : "";
+  const match = (on("levelMatch") ? ` · MATCH ${fmtSigned(M.matchDb)}` : "") + (M.recMode ? ` · REC ${M.latencyMs.toFixed(1)} ms` : "");
   $("status").textContent = `${on("bypass") ? "BYPASSED" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY"}${match}${M.bpm > 0 ? ` · ${M.bpm.toFixed(0)} BPM` : ""}`;
   draw();
   if (learnTab === "module") renderLearn(false);
