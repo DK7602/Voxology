@@ -676,8 +676,10 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         }
         else
         {
-            p.cleanup.popAmount = 0.0;
-            reason ("cleanup", "Pops", "Off", "No \"p\" or \"b\" pops hit the mic in this part, so the plosive remover stays off.");
+            // It only acts on a real pop, so a light setting is a free safety net for the rest of the song.
+            p.cleanup.popAmount = 60.0;
+            reason ("cleanup", "Pops", "60 %", "No \"p\" or \"b\" pops hit the mic in the part Auto-Edit heard, but other parts of the song may have them. "
+                    "The remover only acts when a pop actually hits, so it stays on at a light 60 % as a safety net and does nothing the rest of the time.");
         }
 
         int breathCount = 0;

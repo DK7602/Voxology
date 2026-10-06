@@ -233,7 +233,8 @@ TEST_CASE ("Auto-Edit finds pops and breaths, and leaves them off on a clean tak
 
     const auto clean = autoEdit ({ line (16.0, -16.0, 6.0, false, false).x }, kSr, { 1, 1, 0.0 });
     REQUIRE (clean.ok);
-    CHECK (clean.params.cleanup.popAmount == 0.0);
+    CHECK (clean.params.cleanup.popAmount == 60.0);   // safety net: only acts on a real pop
+    CHECK (dirty.params.cleanup.popAmount >= clean.params.cleanup.popAmount);
     CHECK (clean.params.cleanup.breathDb == 0.0);
 }
 
