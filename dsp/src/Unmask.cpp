@@ -91,7 +91,7 @@ void UnmaskLink::publishKey (int slot, const BeatKeyInfo& k) noexcept
     s.keySeq.fetch_add (1);
     const auto& b = k.beat;
     s.keyPresent.store (k.present); s.keyReady.store (b.ready); s.keyUnclear.store (b.unclear);
-    s.keySet.store (b.setRoot); s.keyTonic.store (b.tonicOffset);
+    s.keySet.store (b.setRoot); s.keyTonic.store (b.tonicOffset); s.keyOpen.store (b.openNote);
     s.keyConf.store (b.confidence); s.keyTune.store (b.tuneCents); s.keyHeard.store (b.heardSeconds);
     s.keySeq.fetch_add (1);
 }
@@ -117,7 +117,7 @@ UnmaskLink::BeatKeyInfo UnmaskLink::readBeatKey (int skipSlot) const noexcept
             if (a & 1u) continue;
             auto& b = k.beat;
             k.present = s.keyPresent.load(); b.ready = s.keyReady.load(); b.unclear = s.keyUnclear.load();
-            b.setRoot = s.keySet.load(); b.tonicOffset = s.keyTonic.load();
+            b.setRoot = s.keySet.load(); b.tonicOffset = s.keyTonic.load(); b.openNote = s.keyOpen.load();
             b.confidence = s.keyConf.load(); b.tuneCents = s.keyTune.load(); b.heardSeconds = s.keyHeard.load();
             if (s.keySeq.load() == a) break;
             k = {};

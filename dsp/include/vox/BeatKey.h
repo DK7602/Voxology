@@ -18,7 +18,8 @@ namespace vox {
     fades slowly (~40 s), so a whole song section decides.
 
     What tuning needs is the beat's NOTES: the 7-note (major-scale) set that holds most of the
-    histogram (a new set must beat the current one clearly, so it doesn't flip). The home note
+    histogram (after its first 15 s a new set must beat the current one by 3 % of everything, so it doesn't flip); a note the
+    beat barely plays either way (D vs D#) is reported as open. The home note
     (tonic) is the set's note the beat leans on most (its level plus a quarter of its fifth's): that
     names the key (B minor, E mixolydian ...), but never changes the notes.
 
@@ -41,7 +42,8 @@ public:
         int tonicOffset = 0;      // the home note, semitones above setRoot: 0 major, 2 dorian, 4 phrygian,
                                   // 5 lydian, 7 mixolydian, 9 minor, 11 locrian
         double confidence = 0.0;  // 0..1: how much of what's played fits those 7 notes
-        bool unclear = false;     // the one note telling it from a neighbouring set is barely played
+        bool unclear = false;     // the one note telling it from a neighbouring set is barely played ...
+        int openNote = -1;        // ... and that set's note in its place (e.g. D# for D): both may be sung
         double tuneCents = 0.0;   // vs A = 440 Hz (-50 .. +50)
         double heardSeconds = 0.0;
         int tonic() const noexcept { return (setRoot + tonicOffset) % 12; }
@@ -71,8 +73,11 @@ private:
     ...); pentatonics are those notes' major / minor pentatonic; Harmonic Minor and Blues sit on the
     minor home; Chromatic becomes the beat's own key (its tonic and mode). */
 inline constexpr std::array<int, kScales> kScaleHomeOffset { -1, 0, 9, 9, 9, 0, 2, 4, 7, 9 };
-inline void followBeatKey (const BeatKey::Result& beat, int userScale, int& key, int& scale) noexcept
+inline void followBeatKey (const BeatKey::Result& beat, int userScale, int& key, int& scale, int* extraNotes = nullptr) noexcept
 {
+    // A note the beat leaves open (it plays neither, say, D nor D#): with a 7-note scale both are allowed.
+    const bool sevenNotes = userScale <= 0 || userScale >= kScales || userScale == 1 || userScale == 2 || (userScale >= 6 && userScale <= 8);
+    if (extraNotes != nullptr) *extraNotes = beat.unclear && beat.openNote >= 0 && sevenNotes ? 1 << beat.openNote : 0;
     if (userScale > 0 && userScale < kScales)
     {
         scale = userScale;

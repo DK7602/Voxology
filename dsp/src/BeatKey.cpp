@@ -113,7 +113,9 @@ void BeatKey::analyse() noexcept
     int best = 0, second = -1;
     for (int r = 1; r < 12; ++r) if (held[static_cast<size_t> (r)] > held[static_cast<size_t> (best)]) best = r;
     for (int r = 0; r < 12; ++r) if (r != best && (second < 0 || held[static_cast<size_t> (r)] > held[static_cast<size_t> (second)])) second = r;
-    if (currentSet < 0 || held[static_cast<size_t> (best)] > held[static_cast<size_t> (currentSet)] + 0.01 * sum) currentSet = best;
+    // Free to change its mind while it's still learning (first 15 s), firm after that.
+    const double margin = res.heardSeconds < 15.0 ? 0.0 : 0.03;
+    if (currentSet < 0 || held[static_cast<size_t> (best)] > held[static_cast<size_t> (currentSet)] + margin * sum) currentSet = best;
     const int set = currentSet;
     const double share = held[static_cast<size_t> (set)] / sum;
 
@@ -132,6 +134,15 @@ void BeatKey::analyse() noexcept
     res.confidence = std::clamp ((share - 0.70) / 0.15, 0.0, 1.0);
     const int other = set == best ? second : best;
     res.unclear = (held[static_cast<size_t> (set)] - held[static_cast<size_t> (other)]) < 0.03 * sum;
+    // The runner-up's note that ours doesn't have (neighbouring sets differ by one note).
+    res.openNote = -1;
+    if (res.unclear)
+    {
+        auto in = [] (int root, int n) { for (int step : major) if ((root + step) % 12 == n) return true; return false; };
+        int count = 0, found = -1;
+        for (int n = 0; n < 12; ++n) if (in (other, n) && ! in (set, n)) { ++count; found = n; }
+        if (count == 1) res.openNote = found;
+    }
     res.tuneCents = 100.0 * std::atan2 (tuneIm, tuneRe) / (2.0 * std::numbers::pi);
 }
 

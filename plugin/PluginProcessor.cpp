@@ -29,6 +29,7 @@ void VoxologyAudioProcessor::storeBeatMeters (const vox::BeatKey::Result& r) noe
     meters.bkMode.store (r.tonicOffset);
     meters.bkSet.store (r.setRoot);
     meters.bkUnclear.store (r.unclear ? 1 : 0);
+    meters.bkOpen.store (r.unclear ? r.openNote : -1);
     meters.bkConf.store (static_cast<float> (r.confidence));
     meters.bkTune.store (static_cast<float> (r.tuneCents));
     meters.bkHeard.store (static_cast<float> (r.heardSeconds));
@@ -184,7 +185,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
             state = ! bk.present ? 2 : (! bk.beat.ready || bk.beat.confidence < need) ? 3 : 1;
             if (state == 1)
             {
-                vox::followBeatKey (bk.beat, chainParams.pitch.scale, chainParams.pitch.key, chainParams.pitch.scale);
+                vox::followBeatKey (bk.beat, chainParams.pitch.scale, chainParams.pitch.key, chainParams.pitch.scale, &chainParams.pitch.extraNotes);
                 chainParams.pitch.tuneCents = bk.beat.tuneCents;
             }
             if (bk.present) storeBeatMeters (bk.beat);

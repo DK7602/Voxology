@@ -77,7 +77,7 @@ public:
         std::array<std::atomic<int>, 2> hvNotes { -1, -1 };   // the harmony voices' notes (MIDI, -1 = none)
         // Key from the beat. VOCAL: 0 manual, 1 following the beat, 2 no beat found, 3 beat still listening / unsure.
         // BEAT: this beat's own reading (bkState 4 = listening, 5 = has a key).
-        std::atomic<int> bkState { 0 }, bkKey { 0 }, bkMode { 0 }, bkSet { 0 }, bkUnclear { 0 }, keyUsed { 0 }, scaleUsed { 0 };
+        std::atomic<int> bkState { 0 }, bkKey { 0 }, bkMode { 0 }, bkSet { 0 }, bkUnclear { 0 }, bkOpen { -1 }, keyUsed { 0 }, scaleUsed { 0 };
         std::atomic<float> bkConf { 0.0f }, bkTune { 0.0f }, bkHeard { 0.0f };
     };
     Meters meters;

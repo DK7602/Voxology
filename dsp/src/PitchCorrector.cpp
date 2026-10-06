@@ -81,10 +81,10 @@ void PitchCorrector::reset() noexcept
     wasNeutral = true;
 }
 
-int PitchCorrector::targetNote (double midi, int key, int scale, int current) noexcept
+int PitchCorrector::targetNote (double midi, int key, int scale, int current, int extraNotes) noexcept
 {
     const auto& m = kScaleMasks[static_cast<size_t> (std::clamp (scale, 0, kScales - 1))];
-    auto allowed = [&] (int n) { return m[static_cast<size_t> (((n - key) % 12 + 12) % 12)]; };
+    auto allowed = [&] (int n) { return m[static_cast<size_t> (((n - key) % 12 + 12) % 12)] || ((extraNotes >> ((n % 12 + 12) % 12)) & 1) != 0; };
     const int centre = static_cast<int> (std::lround (midi));
     int best = centre;
     double bestDist = 1.0e9;
@@ -244,7 +244,7 @@ void PitchCorrector::analyse() noexcept
         const double ca = 1.0 - std::exp (-hopSec / 0.08);
         centreA += (midi - centreA) * ca;
         centreB += (centreA - centreB) * ca;
-        note = targetNote (mode == kPitchNatural ? centreB : midi, params.key, params.scale, note);
+        note = targetNote (mode == kPitchNatural ? centreB : midi, params.key, params.scale, note, params.extraNotes);
         sustain = note == prevNote ? sustain + hopSec : 0.0;
         noteAge = note == prevNote && ! fresh ? noteAge + hopSec : 0.0;
 

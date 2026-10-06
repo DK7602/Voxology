@@ -164,3 +164,24 @@ TEST_CASE ("Beat key: through the link, a detuned beat tunes the vocal to it", "
     CHECK (! link.readBeatKey (vocalSlot).present);
     link.release (vocalSlot);
 }
+
+TEST_CASE ("Beat key: a note the beat leaves open is allowed both ways", "[beatkey]")
+{
+    // F#m - E - A - E: notes F# G# A B C# E, never D or D# (like the user's Schaf beat).
+    const std::vector<std::pair<int, bool>> prog { { 42, true }, { 40, false }, { 45, false }, { 40, false } };
+    const auto r = listen (beat (prog, 2.0, 3, 0.0));
+    INFO ("notes of " << kNoteNames[static_cast<size_t> (r.setRoot)] << " major, home " << kNoteNames[static_cast<size_t> (r.tonic())]
+          << " " << modeName (r.tonicOffset) << ", unclear " << r.unclear << ", open " << r.openNote);
+    REQUIRE (r.ready);
+    CHECK ((r.setRoot == 9 || r.setRoot == 4));   // A major's notes (D) or E major's (D#)
+    CHECK (r.unclear);
+    CHECK ((r.openNote == 2 || r.openNote == 3));
+    int key = 0, scale = 0, extra = 0;
+    followBeatKey (r, 2, key, scale, &extra);
+    CHECK (extra == ((1 << 2) | (1 << 3)) - (1 << (r.setRoot == 9 ? 2 : 3)));   // the other one of D / D#
+    // Both D and D# are kept as sung (each is its own nearest allowed note).
+    CHECK (PitchCorrector::targetNote (62.1, key, scale, -1, extra) == 62);
+    CHECK (PitchCorrector::targetNote (62.9, key, scale, -1, extra) == 63);
+    followBeatKey (r, 4, key, scale, &extra);   // pentatonic: no open note added
+    CHECK (extra == 0);
+}

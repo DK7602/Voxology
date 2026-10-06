@@ -59,7 +59,7 @@ function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 // Latest meter frame.
 const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1],
-  bkState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, in: null, out: null };
+  bkState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
 
@@ -142,7 +142,8 @@ function beatKeyCell() {
   cell.update = () => {
     if (M.bkState !== 5) { name.textContent = "\u2026"; info.textContent = M.bkHeard > 0 ? `listening ${Math.round(M.bkHeard)} / 6 s` : "press play"; return; }
     name.textContent = beatKeyName(false);
-    info.textContent = `${Math.round(M.bkConf * 100)} % sure \u00B7 tuned ${Math.abs(M.bkTune) < 3 ? "A440" : fmtTune(M.bkTune)}`;
+    const open = M.bkOpen >= 0 ? ` \u00B7 ${NOTES[(M.bkOpen + 11) % 12]} / ${NOTES[M.bkOpen]} open` : "";
+    info.textContent = `${Math.round(M.bkConf * 100)} % sure \u00B7 tuned ${Math.abs(M.bkTune) < 3 ? "A440" : fmtTune(M.bkTune)}${open}`;
   };
   liveMeters.push(cell);
   return cell;

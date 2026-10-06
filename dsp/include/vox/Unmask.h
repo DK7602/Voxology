@@ -113,7 +113,7 @@ private:
         // Beat key (seqlock: odd = being written).
         std::atomic<uint32_t> keySeq { 0 };
         std::atomic<bool> keyPresent { false }, keyReady { false }, keyUnclear { false };
-        std::atomic<int> keySet { 0 }, keyTonic { 0 };
+        std::atomic<int> keySet { 0 }, keyTonic { 0 }, keyOpen { -1 };
         std::atomic<double> keyConf { 0.0 }, keyTune { 0.0 }, keyHeard { 0.0 };
     };
     static int64_t nowMs() noexcept;

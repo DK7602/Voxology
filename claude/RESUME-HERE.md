@@ -464,3 +464,8 @@ editing (timing / length, per-note formant, partial re-render). User chose 1 now
   notes) conf 1, tune +4. Natural 25 ms in those keys: Gallas note centres 28 -> 21 cents (lots of rap), Don & Lysette 23 -> 14.
   Sent the user both mixes (tuned vocal + beat).
 - Test: synthetic E - D - A - E loop -> A major notes, home E (mixolydian); vi-IV-I-V accepts A or C home (same notes).
+- Schaf clips added (test-audio). Its beat plays neither D nor D# (F# home): sets A major / E major are a toss-up and flipped
+  at 35 s. Fix: set hysteresis 0 for the first 15 s of listening, then 3 % of all (was 1 %); Result.openNote = the runner-up
+  set's note when unclear; followBeatKey(..., &extraNotes) allows it too with 7-note scales (PitchParams.extraNotes bitmask,
+  targetNote(..., extraNotes)). All 3 real beats now hold one answer for the whole clip: Gallas B minor, Don & Lysette E
+  mixolydian, Schaf F# dorian (D / D# open). UI Beat Key shows "D / D# open". Test added (63 cases).

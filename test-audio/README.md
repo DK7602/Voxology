@@ -14,4 +14,9 @@ Do not share or publish. All MP3, 44.1 kHz stereo.
 | Don_Lysette_Clip_Instrumental.mp3 | acoustic guitar | BeatKey: E mixolydian (notes of A major), tuned +4 cents |
 | Don_Lysette_Clip_Music_Vox.mp3 | vocal + guitar | the user's mix |
 
+| Schaf_2026_Clip_Acapella.mp3 | vocal, 43 s | peaks +2 dB over full scale (float) |
+| Schaf_2026_Clip_Instrumental.mp3 | beat, 43 s | BeatKey: F# (dorian / minor: plays neither D nor D#, so that note is left open), in tune |
+| Schaf_2026_Clip_Music_Vox_Unmastered.mp3 | vocal + beat | the user's raw mix, not mastered |
+| Schaf_2026_Clip_Mastered.mp3 | mastered | the user's own master |
+
 Decode for the engine: `ffmpeg -i X.mp3 -ac 1 -ar 48000 -f f64le x.f64` (raw doubles, mono 48 kHz).

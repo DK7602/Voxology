@@ -49,6 +49,7 @@ struct PitchParams
     int mode = kPitchClassic; // PitchMode
     double vibrato = 0.0;     // % (Natural): -100 = flat, 0 = as sung, +100 = twice as deep
     double tuneCents = 0.0;   // the notes' tuning vs A = 440 Hz (-50 .. +50; from the beat)
+    int extraNotes = 0;       // bit n (0 = C .. 11 = B): also allowed besides the scale (a note the beat leaves open)
 };
 
 /** Harmony intervals: scale steps when a key / scale is set (they stay in key), semitones with Chromatic. */
@@ -100,7 +101,7 @@ public:
 
     /** The note to aim for: nearest allowed note to `midi` (fractional), keeping `current` while the
         sung pitch stays within its +/- 0.5 semitone plus a little hysteresis. */
-    static int targetNote (double midi, int key, int scale, int current) noexcept;
+    static int targetNote (double midi, int key, int scale, int current, int extraNotes = 0) noexcept;
 
     struct Reading
     {
