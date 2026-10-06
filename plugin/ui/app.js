@@ -30,7 +30,7 @@ const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", 
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
 const TOGGLES = ["bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
-const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2"];
+const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
 for (const id of TOGGLES) P[id] = Juce.getToggleState(id);
@@ -58,7 +58,8 @@ function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 
 // Latest meter frame.
 const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
-  satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1], in: null, out: null };
+  satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1],
+  bkState: 0, bkKey: 0, bkMinor: 0, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
 
@@ -89,6 +90,64 @@ const SCALES_SHORT = ["Chromatic", "Major", "Minor", "Harm. Minor", "Minor Penta
 const PITCH_MODES = ["Natural", "Classic", "Robot"];
 const fmtVib = (v) => (Math.abs(v) < 0.5 ? "as sung" : v <= -99.5 ? "flat" : `${v > 0 ? "+" : MINUS}${Math.abs(Math.round(v))} %`);
 
+/** The beat's key, both names: "C major / A minor" (same notes). */
+function beatKeyName(short = false) {
+  const k = M.bkKey, minor = !!M.bkMinor, rel = minor ? (k + 3) % 12 : (k + 9) % 12;
+  const a = `${NOTES[k]} ${minor ? "minor" : "major"}`, b = `${NOTES[rel]} ${minor ? "major" : "minor"}`;
+  return short ? `${NOTES[k]}${minor ? "m" : ""} / ${NOTES[rel]}${minor ? "" : "m"}` : `${a} / ${b}`;
+}
+const fmtTune = (c) => `${c >= 0 ? "+" : MINUS}${Math.abs(c).toFixed(0)}\u00A2`;
+
+/** Key cell: BEAT | MANUAL source switch, the status line and the 12 keys. Following the beat, the
+    keys show the one in use (gold); clicking a key switches to Manual. */
+function keyCell() {
+  const cell = grid("ptKey", "Key", "", NOTES, 4);
+  cell.classList.add("pt-key");
+  const sub = cell.querySelector(".cell-sub");
+  const sw = document.createElement("div");
+  sw.className = "key-src";
+  const btns = ["Beat", "Manual"].map((t, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = t;
+    b.addEventListener("click", () => { P.ptKeySrc.setChoiceIndex(i); cell.update(); anyEdited(); });
+    sw.appendChild(b);
+    return b;
+  });
+  sub.after(sw);
+  const keys = [...cell.querySelectorAll(".vseg button")];
+  keys.forEach((b) => b.addEventListener("click", () => { if (choice("ptKeySrc") === 0 && M.bkState === 1) P.ptKeySrc.setChoiceIndex(1); }, true));
+  cell.update = () => {
+    const src = choice("ptKeySrc");
+    btns.forEach((b, i) => b.classList.toggle("sel", i === src));
+    const following = M.bkState === 1;
+    cell.classList.toggle("following", following);
+    keys.forEach((b, i) => b.classList.toggle("beat", following && i === M.keyUsed));
+    sub.textContent = src === 1 ? "you set it" : following ? `beat: ${beatKeyName(true)}`
+      : M.bkState === 3 ? "beat: listening\u2026" : "no beat linked";
+    sub.classList.toggle("lit", following);
+  };
+  liveMeters.push(cell);
+  P.ptKeySrc.valueChangedEvent.addListener(cell.update);
+  P.ptKeySrc.propertiesChangedEvent.addListener(cell.update);
+  return cell;
+}
+
+/** BEAT mode: what this beat's key and tuning are (sent to the vocals for Pitch). */
+function beatKeyCell() {
+  const cell = document.createElement("div");
+  cell.className = "cell pitch-cell bk-cell";
+  cell.innerHTML = `<span class="cell-label">Beat Key</span><span class="cell-sub">sent to Pitch</span>
+    <div class="pitch-face"><div class="pf-row"><span class="pf-target bk-name">\u2014</span></div><div class="pf-cents mono bk-info">listening</div></div>`;
+  const name = cell.querySelector(".bk-name"), info = cell.querySelector(".bk-info");
+  cell.update = () => {
+    if (M.bkState !== 5) { name.textContent = "\u2026"; info.textContent = M.bkHeard > 0 ? `listening ${Math.round(M.bkHeard)} / 6 s` : "press play"; return; }
+    name.textContent = beatKeyName(true);
+    info.textContent = `${Math.round(M.bkConf * 100)} % sure \u00B7 tuned ${Math.abs(M.bkTune) < 3 ? "A440" : fmtTune(M.bkTune)}`;
+  };
+  liveMeters.push(cell);
+  return cell;
+}
+
 /** Pitch page: dims the knobs the chosen mode ignores (Robot: Retune / Humanize / Vibrato; Classic: Vibrato). */
 function pitchCells() {
   const tag = (cell, cls) => { cell.classList.add(cls); return cell; };
@@ -99,11 +158,19 @@ function pitchCells() {
     knob("ptVibrato", "Vibrato", "flat ↔ deeper", fmtVib, 0, true),
     knob("ptHumanize", "Humanize", "long notes live", fmtPct, 0),
     knob("ptFormant", "Formant", "deeper / thinner", fmtSt, 0, true),
-    tag(grid("ptKey", "Key", "your beat's key", NOTES, 4), "pt-key"),
+    keyCell(),
     tag(grid("ptScale", "Scale", "allowed notes", SCALES_SHORT, 2), "pt-scale"),
     tag(pitchCell(), "pt-tune"),
   ];
-  const [, , speed, vib, human] = cells;
+  const [, , speed, vib, human, , , scaleCell] = cells;
+  // Following the beat: the scale in use (your choice, or the beat's Major / Minor for Chromatic) glows gold.
+  const scaleBtns = [...scaleCell.querySelectorAll(".vseg button")];
+  scaleCell.update = () => {
+    const following = M.bkState === 1;
+    scaleCell.classList.toggle("following", following && M.scaleUsed !== choice("ptScale"));
+    scaleBtns.forEach((b, i) => b.classList.toggle("beat", following && M.scaleUsed !== choice("ptScale") && i === M.scaleUsed));
+  };
+  liveMeters.push(scaleCell);
   const refresh = () => {
     const m = choice("ptMode");
     speed.classList.toggle("inactive", m === 2);
@@ -142,7 +209,7 @@ const MODULES = [
   { key: "pitch", name: "PITCH", onId: "ptOn", what: "auto-tune: natural tuning to the full robot effect",
     cells: pitchCells,
     stat: () => (val("ptAmount") < 0.05 ? ["idle", false] : M.pitchTarget >= 0 ? [`\u2192 ${noteName(M.pitchTarget)}`, true]
-      : [`${NOTES[choice("ptKey")]} ${SCALES_SHORT[choice("ptScale")].split(" ")[0].toLowerCase()} · ${PITCH_MODES[choice("ptMode")].toLowerCase()}`, true]) },
+      : [`${NOTES[M.keyUsed]} ${SCALES_SHORT[M.scaleUsed].split(" ")[0].toLowerCase()} · ${PITCH_MODES[choice("ptMode")].toLowerCase()}`, true]) },
   { key: "cleanup", name: "CLEANUP", onId: "clOn", what: "low cut, pops, breaths and gate: the recording cleaned up",
     cells: () => [
       knob("clLowCut", "Low Cut", "rumble below", (v) => (v <= 20.5 ? "Off" : fmtHz(v)), 20),
@@ -493,6 +560,7 @@ const UNMASK = { key: "unmask", name: "UNMASK", onId: null, what: "the beat step
     knob("umAmount", "Amount", "how far back", fmtPct, 50),
     seg("umFocus", "Focus", "where it dips", ["Centre", "Full"]),
     sourceCell(),
+    beatKeyCell(),
     Object.assign(multiMeter("Dipping", "right now", UM_BANDS.map((b, i) => [b.n, () => (M.umDip ? M.umDip[i] : 0), 6, () => val("umAmount") >= 0.05])), { className: "cell meter-cell dyn-meter um-meter" }),
   ],
   stat: () => [M.umLink > 0 ? "hearing vocal" : "no vocal", M.umLink > 0] };
@@ -829,7 +897,8 @@ const LEARN = {
   pitch: {
     does: "Pitch correction (auto-tune). It hears the note you sing, picks the nearest note of your key, and pulls you onto it. Your voice's tone stays the same (no chipmunk sound); breaths and s sounds are never touched. Three modes: Natural (your voice, just in tune), Classic (the familiar auto-tune glide) and Robot (the hard, stepped trap effect). It's first in the chain, so everything after it hears the tuned voice.",
     how: ["Mode: Natural for a human-sounding lead (notes land on pitch; your vibrato and the start of a scoop stay). Robot for the T-Pain / melodic-trap effect: instant, flat, stepped notes whatever Retune says. Classic is in between and follows Retune.",
-      "Key / Scale: set them to your beat's key (often in the beat's name, e.g. \"A min\"). Chromatic allows all 12 notes when you're not sure.",
+      "Key, Beat (the default): put a second Voxology on your beat track and switch it to BEAT. It hears the beat's key and tuning and Pitch follows them; your Scale choice keeps its flavour (e.g. Minor Penta on the beat's minor key). Key / Scale are the fallback.",
+      "Key, Manual: set Key / Scale to your beat's key (often in the beat's name, e.g. \"A min\"). Chromatic allows all 12 notes when you're not sure.",
       "Retune: how fast a note is pulled in. Natural: 10 - 40 ms (your vibrato stays at any speed). Classic: 0 - 10 ms is hard and robotic, 30 - 80 ms tuned but natural, 100+ ms only fixes drift.",
       "Vibrato (Natural): 0 keeps it as you sang it; turn it down to calm a wobbly note (all the way = flat), up to make it deeper.",
       "Humanize: lets long held notes keep their life while short notes still snap in.",
@@ -837,12 +906,16 @@ const LEARN = {
       "Already using Auto-Tune or Melodyne? Turn this off: one tuner is enough."],
     live: () => {
       const t = [];
-      if (val("ptAmount") >= 0.05 && choice("ptScale") === 0) t.push(tip("CHROMATIC", "All 12 notes are allowed, so a wrong note can't be pulled into the key; it just gets cleaned up.", "calm",
+      if (val("ptAmount") >= 0.05 && choice("ptKeySrc") === 0 && M.bkState === 2) t.push(tip("NO BEAT LINKED", "Key is set to follow the beat, but there's no Voxology on a beat in this project, so Pitch uses the Key / Scale below.", "calm",
+        { need: "Optional, but it's the easy way to always be in the beat's key.", steps: ["Insert Voxology on your beat track (or the beat's group).", "Click BEAT in its Signal Chain card.", "Press play: after about 6 s the key shows up here."] }));
+      if (val("ptAmount") >= 0.05 && M.bkState === 1 && Math.abs(M.bkTune) >= 10) t.push(tip("BEAT DETUNED", `Your beat is tuned ${fmtTune(M.bkTune)} away from standard (A = 440 Hz). Pitch tunes your notes to the beat's tuning, so they sit with it.`, "calm",
+        { need: "No. It's handled.", steps: ["Nothing to do. (If you also use another tuner, set its reference to match.)"] }));
+      if (val("ptAmount") >= 0.05 && M.bkState !== 1 && M.scaleUsed === 0) t.push(tip("CHROMATIC", "All 12 notes are allowed, so a wrong note can't be pulled into the key; it just gets cleaned up.", "calm",
         { need: "Optional. It works; the right key sounds tighter.", steps: ["Set Key and Scale to your beat's key (Auto-Edit suggests one in its report)."] }));
       if (val("ptAmount") >= 0.05 && M.pitchTarget >= 0 && Math.abs(M.pitchCorr) > 0.9) t.push(tip("BIG JUMP", `It's moving your voice ${Math.abs(M.pitchCorr * 100).toFixed(0)} cents right now. Big moves can sound warbly on held notes.`, "calm",
         { need: "Only if it sounds off. Big moves usually mean the Key / Scale doesn't match the beat.", steps: ["Check the Key / Scale match your beat.", "Or raise Retune to 40 ms or more for a softer pull (not in Robot mode)."] }));
-      if (val("ptAmount") >= 0.05 && choice("ptMode") === 2 && choice("ptScale") === 0) t.push(tip("ROBOT + CHROMATIC", "Robot snaps to the nearest of all 12 notes, so in-between notes can land on notes outside your beat's key.", "warn",
-        { need: "Yes for the classic effect: it needs the key.", steps: ["Set Key and Scale to your beat's key."] }));
+      if (val("ptAmount") >= 0.05 && choice("ptMode") === 2 && M.scaleUsed === 0) t.push(tip("ROBOT + CHROMATIC", "Robot snaps to the nearest of all 12 notes, so in-between notes can land on notes outside your beat's key.", "warn",
+        { need: "Yes for the classic effect: it needs the key.", steps: ["Put Voxology on your beat in BEAT mode (Key: Beat), or set Key and Scale to your beat's key."] }));
       return t;
     } },
   cleanup: {

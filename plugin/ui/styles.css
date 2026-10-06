@@ -273,9 +273,12 @@ body.beat #beat-banner { display: flex; flex-direction: column; gap: 4px; margin
 .src-list button { height: 28px; border: 0; border-radius: 14px; font-size: 12px; font-weight: 700; background: var(--ivory); color: var(--ink-soft); box-shadow: inset 0 0 0 1.5px var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 10px; }
 .src-list button.sel { background: var(--marble); color: var(--blue-deep); box-shadow: inset 0 0 0 2px var(--gold); }
 .src-list .none { font-size: 12px; color: var(--warn); text-align: center; padding: 6px; }
-#cells[data-page="unmask"] .cell.src { width: 186px; }
-#cells[data-page="unmask"] .cell.um-meter { width: 252px; }
-#cells[data-page="unmask"] .um-meter .dyn-bars { gap: 9px; }
+#cells[data-page="unmask"] .cell { width: 104px; }
+#cells[data-page="unmask"] .cell.src { width: 172px; }
+#cells[data-page="unmask"] .src-list { width: 166px; }
+#cells[data-page="unmask"] .cell.bk-cell { width: 120px; }
+#cells[data-page="unmask"] .cell.um-meter { width: 196px; }
+#cells[data-page="unmask"] .um-meter .dyn-bars { gap: 6px; }
 #cells[data-page="unmask"] .um-meter .dyn-name { font-size: 10.5px; }
 
 /* Signal chain: 12 cells. */
@@ -314,8 +317,8 @@ body.beat #beat-banner { display: flex; flex-direction: column; gap: 4px; margin
 #cells[data-page="pitch"] .cell.pt-scale { width: 210px; }
 #cells[data-page="pitch"] .cell.pt-scale .vseg.keys { width: 206px; grid-template-columns: 1fr 1fr; gap: 3px 4px; margin-top: 6px; }
 #cells[data-page="pitch"] .cell.pt-scale .vseg.keys button { height: 20px; font-size: 11px; }
-#cells[data-page="pitch"] .cell.pt-key .vseg.keys button { height: 27px; }
-#cells[data-page="pitch"] .cell.pt-key .vseg.keys { margin-top: 6px; }
+#cells[data-page="pitch"] .cell.pt-key .vseg.keys button { height: 25px; }
+#cells[data-page="pitch"] .cell.pt-key .vseg.keys { margin-top: 4px; }
 #cells[data-page="pitch"] .cell.pt-tune .pitch-face { margin-top: 6px; width: 124px; }
 #cells[data-page="pitch"] .cell.pt-tune { width: 130px; }
 #cells[data-page="pitch"] .vseg.keys { width: 156px; gap: 4px; }
@@ -337,3 +340,12 @@ body.beat #beat-banner { display: flex; flex-direction: column; gap: 4px; margin
 .dyn-meter .dyn-col.off { opacity: 0.4; }
 .dyn-meter .dyn-name { font-size: 12px; font-weight: 700; color: var(--ink); text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
 #cells[data-cols="5"] .dyn-meter .cell-value { margin-top: 2px; }
+
+/* Key source (Pitch page) and the beat's key. */
+.key-src { display: flex; margin-top: 2px; border-radius: 10px; box-shadow: inset 0 0 0 1.5px var(--gold); background: var(--ivory); }
+.key-src button { height: 18px; border: 0; padding: 0 10px; border-radius: 9px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; background: transparent; color: var(--ink-soft); }
+.key-src button.sel { background: var(--marble); color: var(--blue-deep); box-shadow: inset 0 0 0 1.5px var(--gold); }
+.cell-sub.lit { color: var(--gold-deep); font-weight: 700; }
+.cell.following .vseg button.sel { background: var(--ivory); color: var(--ink-soft); box-shadow: inset 0 0 0 1.5px var(--gold); }
+.cell .vseg button.beat, .cell.following .vseg button.beat { background: linear-gradient(180deg, #fff3c4, #e7bd55); color: #4a3208; box-shadow: inset 0 0 0 2px var(--gold-deep), 0 0 8px rgba(231, 189, 85, 0.9); }
+.bk-cell .pf-target { font-size: 22px; }

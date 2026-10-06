@@ -757,7 +757,18 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             const bool sure = kg.confidence >= 0.6 && ! kg.ambiguous;   // a wrong key is worse than Chromatic
             pt.key = kg.key;
             pt.scale = sure ? (kg.minor ? 2 : 1) : 0;
-            if (sure)
+            if (settings.beatKeyKnown)
+            {
+                // The beat decides (Pitch follows it live); Key / Scale are only its fallback.
+                const auto& bk = settings.beatKey;
+                pt.key = bk.key;
+                pt.scale = bk.minor ? 2 : 1;
+                const int rel = bk.minor ? (bk.key + 3) % 12 : (bk.key + 9) % 12;
+                const std::string beatName = std::string (kNoteNames[static_cast<size_t> (bk.key)]) + (bk.minor ? " minor" : " major") + " (same notes as "
+                                             + kNoteNames[static_cast<size_t> (rel)] + (bk.minor ? " major)" : " minor)");
+                reason ("pitch", "Key", "From beat: " + beatName, "Voxology on your beat hears " + beatName + ", so Pitch follows the beat. Your voice alone suggested " + keyName + "; the beat always wins.");
+            }
+            else if (sure)
                 reason ("pitch", "Key", keyName, "Your sung notes fit " + keyName + " best (" + num (100.0 * kg.confidence, 0) +
                         " % sure), so notes are pulled only to notes of that scale. If your beat is in another key, change Key / Scale in the Pitch module: the beat's key always wins.");
             else
@@ -771,7 +782,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                     std::string ("For ") + kStyleNames[static_cast<size_t> (style)] + ": " + t.feel + ". Lower = more robotic, higher = more natural.");
             reason ("pitch", "Amount", pct (pt.amount), "You sing on average " + num (kg.offCents, 0) + " cents away from the nearest note" +
                     (kg.offCents < 12.0 ? " (already close: the tune will be subtle)." : kg.offCents < 25.0 ? " (normal for a take: the tune tightens it)." : " (quite loose: the tune makes a big difference)."));
-            if (! sure)
+            if (! sure && ! settings.beatKeyKnown)
                 r.notes.push_back ("KEY UNSURE: from this part Auto-Edit can't be sure of the key (best guess " + keyName + "), so Pitch is set to Chromatic."
                                    "\nNEED: Optional. Chromatic works; the right key sounds tighter."
                                    "\nSTEP: Find your beat's key (it's often in the beat's file name or listing, e.g. \"A min\")."

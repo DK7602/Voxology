@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BeatKey.h"
 #include "Modules.h"
 
 #include <array>
@@ -80,6 +81,21 @@ public:
     bool read (int slot, int64_t pos, int64_t maxAgeSamples, std::array<float, kUnmaskBands>& db) const noexcept;
     bool isLive (int slot) const noexcept;
 
+    /** Key from the beat: Voxology in BEAT mode publishes what it hears (audio thread, lock-free);
+        a vocal reads the surest beat in the project. Kept until that instance goes (or leaves BEAT
+        mode), so a stopped transport doesn't lose it. */
+    struct BeatKeyInfo
+    {
+        bool present = false;     // a Voxology on a beat
+        bool ready = false;       // it has heard enough to say
+        KeyGuess key;
+        double tuneCents = 0.0;
+        double heardSeconds = 0.0;
+    };
+    void publishKey (int slot, const BeatKeyInfo& k) noexcept;
+    void clearKey (int slot) noexcept;
+    BeatKeyInfo readBeatKey (int skipSlot) const noexcept;
+
     /** For tests: forget everything. */
     void resetForTests();
 
@@ -97,6 +113,11 @@ private:
         std::atomic<uint32_t> write { 0 };         // frames written so far
         std::atomic<int64_t> lastMs { 0 };
         std::vector<Frame> frames;
+        // Beat key (seqlock: odd = being written).
+        std::atomic<uint32_t> keySeq { 0 };
+        std::atomic<bool> keyPresent { false }, keyReady { false }, keyMinor { false }, keyAmbiguous { false }, keyAltMinor { false };
+        std::atomic<int> keyNote { 0 }, keyAlt { 0 };
+        std::atomic<double> keyConf { 0.0 }, keyNotesConf { 0.0 }, keyTune { 0.0 }, keyHeard { 0.0 };
     };
     static int64_t nowMs() noexcept;
 

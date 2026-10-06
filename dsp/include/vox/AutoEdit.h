@@ -36,6 +36,8 @@ struct AutoEditSettings
     int intensity = 1;
     double bpm = 0.0;          // host tempo; 0 = unknown (120 is used and the report says so)
     const ReferenceProfile* reference = nullptr;   // when set (and ok): match it instead of the style's target
+    bool beatKeyKnown = false;  // Pitch follows a beat whose key is known: use it, not the voice's guess
+    KeyGuess beatKey;
 };
 
 /** One explained decision: which module and control, the value chosen and why (plain language). */

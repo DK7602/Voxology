@@ -12,6 +12,7 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
     modeParam = parameters.getRawParameterValue ("mode");
     umAmountParam = parameters.getRawParameterValue ("umAmount");
     umFocusParam = parameters.getRawParameterValue ("umFocus");
+    keySrcParam = parameters.getRawParameterValue ("ptKeySrc");
     linkSlot = vox::UnmaskLink::instance().claim();
     startTimerHz (1);
 }
@@ -86,6 +87,7 @@ void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
     vocalBands.prepare (sampleRate);
     hopCount = 0;
     unmask.prepare (sampleRate, juce::jmin (channels, vox::kMaxChannels));
+    beatKey.prepare (sampleRate);
     setLatencySamples (chain.latencySamples());   // the same in both modes, so beat and vocal stay lined up
 }
 
@@ -136,6 +138,60 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     chainParams.gainOriginalDb = matching ? levelMatch.gainForADb() : 0.0;
     appliedMatchDb = chainParams.gainProcessedDb;
     const bool wantUnmask = ! chainParams.bypass && ! chainParams.listenOriginal;   // A / B and bypass hear the beat untouched
+    auto& link = vox::UnmaskLink::instance();
+    if (beatMode)
+    {
+        // BEAT: learn the beat's key and tuning from what comes in, and offer it to the vocals.
+        if (! wasBeat) beatKey.reset();
+        std::array<double, kHop> mono {};
+        for (int s = 0; s < n; s += kHop)
+        {
+            const int len = juce::jmin (kHop, n - s);
+            for (int i = 0; i < len; ++i)
+            {
+                double m = 0.0;
+                for (int c = 0; c < nch; ++c) m += static_cast<double> (buffer.getReadPointer (c)[s + i]);
+                mono[static_cast<size_t> (i)] = m / nch;
+            }
+            beatKey.process (mono.data(), len);
+        }
+        const auto r = beatKey.result();
+        link.publishKey (linkSlot, { true, r.ready, r.key, r.tuneCents, r.heardSeconds });
+        meters.bkState.store (r.ready ? 5 : 4);
+        meters.bkKey.store (r.key.key);
+        meters.bkMinor.store (r.key.minor ? 1 : 0);
+        meters.bkConf.store (static_cast<float> (r.key.notesConfidence));
+        meters.bkTune.store (static_cast<float> (r.tuneCents));
+        meters.bkHeard.store (static_cast<float> (r.heardSeconds));
+    }
+    else
+    {
+        if (wasBeat) link.clearKey (linkSlot);
+        // VOCAL: Pitch follows the surest beat in the project (Key / Scale stay as the fallback).
+        int state = 0;
+        if (keySrcParam->load() < 0.5f)
+        {
+            const auto bk = link.readBeatKey (linkSlot);
+            state = ! bk.present ? 2 : (! bk.ready || bk.key.notesConfidence < kBeatKeySure) ? 3 : 1;
+            if (state == 1)
+            {
+                vox::followBeatKey (bk.key, chainParams.pitch.scale, chainParams.pitch.key, chainParams.pitch.scale);
+                chainParams.pitch.tuneCents = bk.tuneCents;
+            }
+            if (bk.present)
+            {
+                meters.bkKey.store (bk.key.key);
+                meters.bkMinor.store (bk.key.minor ? 1 : 0);
+                meters.bkConf.store (static_cast<float> (bk.key.notesConfidence));
+                meters.bkTune.store (static_cast<float> (bk.tuneCents));
+                meters.bkHeard.store (static_cast<float> (bk.heardSeconds));
+            }
+        }
+        meters.bkState.store (state);
+        meters.keyUsed.store (chainParams.pitch.key);
+        meters.scaleUsed.store (chainParams.pitch.scale);
+    }
+    wasBeat = beatMode;
     if (beatMode)
     {
         // BEAT: the vocal chain stays out (its delayed dry path keeps the latency the same in both modes).
@@ -147,7 +203,6 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
 
     // Positions of what comes out of this block (both modes have the same latency, so they line up).
     const int lat = chain.latencySamples();
-    auto& link = vox::UnmaskLink::instance();
     if (! beatMode)
     {
         // VOCAL: publish the processed vocal's band levels every 128 samples.

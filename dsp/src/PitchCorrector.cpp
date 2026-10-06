@@ -33,7 +33,7 @@ void PitchCorrector::prepare (double sampleRate, int numChannels)
     mask = ringSize - 1;
     for (auto& v : in) v.assign (static_cast<size_t> (ringSize), 0.0);
     for (auto& v : acc) v.assign (static_cast<size_t> (ringSize), 0.0);
-    for (auto& v : lo) v.assign (static_cast<size_t> (ringSize), 0.0);
+    for (auto& v : loBand) v.assign (static_cast<size_t> (ringSize), 0.0);
     const auto xo = design::butterworth (false, kSplitHz, sr);
     for (auto& chain : xover) for (auto& b : chain) design::apply (b, xo);
     wsum.assign (static_cast<size_t> (ringSize), 0.0);
@@ -63,7 +63,7 @@ void PitchCorrector::reset() noexcept
 {
     for (auto& v : in) std::fill (v.begin(), v.end(), 0.0);
     for (auto& v : acc) std::fill (v.begin(), v.end(), 0.0);
-    for (auto& v : lo) std::fill (v.begin(), v.end(), 0.0);
+    for (auto& v : loBand) std::fill (v.begin(), v.end(), 0.0);
     for (auto& chain : xover) for (auto& b : chain) b.reset();
     markCount = markRead = 0;
     std::fill (wsum.begin(), wsum.end(), 0.0);
@@ -224,7 +224,8 @@ void PitchCorrector::analyse() noexcept
             p = std::max (std::min (rawP[0], rawP[1]), std::min (std::max (rawP[0], rawP[1]), rawP[2]));
         period = p;
 
-        const double midi = 69.0 + 12.0 * std::log2 (sr / period / 440.0);
+        // In the beat's tuning (tuneCents: a beat tuned 30 cents flat moves every note 30 cents down).
+        const double midi = 69.0 + 12.0 * std::log2 (sr / period / 440.0) - std::clamp (params.tuneCents, -50.0, 50.0) / 100.0;
         const int prevNote = note;
         const bool startOfNote = voicedRun <= 2 || note < 0;
         const bool harmonyVoice = params.harmony > 0;
@@ -468,7 +469,7 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
                        i1 = static_cast<size_t> ((s0 + 1) & mask), i2 = static_cast<size_t> ((s0 + 2) & mask);
             for (int c = 0; c < channels; ++c)
             {
-                const auto& buf = split ? lo[static_cast<size_t> (c)] : in[static_cast<size_t> (c)];
+                const auto& buf = split ? loBand[static_cast<size_t> (c)] : in[static_cast<size_t> (c)];
                 double v = buf[i0];
                 if (f != 0.0)
                 {
@@ -501,7 +502,7 @@ double PitchCorrector::cubicAt (const std::vector<double>& buf, int m, double sr
 double PitchCorrector::highAt (int c, double t) const noexcept
 {
     const auto ci = static_cast<size_t> (c);
-    return cubicAt (in[ci], mask, t) - cubicAt (lo[ci], mask, t);
+    return cubicAt (in[ci], mask, t) - cubicAt (loBand[ci], mask, t);
 }
 
 double PitchCorrector::highBand (int c, int64_t t) noexcept
@@ -541,7 +542,7 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
             const double v = ch[std::min (c, nch - 1)][i];
             in[static_cast<size_t> (c)][static_cast<size_t> (now & mask)] = v;
             auto& xo = xover[static_cast<size_t> (c)];
-            lo[static_cast<size_t> (c)][static_cast<size_t> (now & mask)] = xo[1].process (xo[0].process (v));
+            loBand[static_cast<size_t> (c)][static_cast<size_t> (now & mask)] = xo[1].process (xo[0].process (v));
             m += v;
         }
         m /= channels;
@@ -598,11 +599,22 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
 // ------------------------------------------------------------------------------------------------
 KeyGuess detectKey (const std::vector<double>& midiNotes)
 {
-    KeyGuess g;
-    if (midiNotes.size() < 20) return g;
+    if (midiNotes.size() < 20) return {};
     std::array<double, 12> hist {};
     for (double m : midiNotes)
         hist[static_cast<size_t> (((static_cast<int> (std::lround (m)) % 12) + 12) % 12)] += 1.0;
+    KeyGuess g = keyFromHistogram (hist);
+    const int scale = g.minor ? 2 : 1;
+    double off = 0.0;
+    for (double m : midiNotes)
+        off += std::abs (m - PitchCorrector::targetNote (m, g.key, scale, -1));
+    g.offCents = 100.0 * off / static_cast<double> (midiNotes.size());
+    return g;
+}
+
+KeyGuess keyFromHistogram (const std::array<double, 12>& hist)
+{
+    KeyGuess g;
     static constexpr std::array<double, 12> major { 6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88 };
     static constexpr std::array<double, 12> minor { 6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17 };
     auto corrWith = [&] (const std::array<double, 12>& prof, int key)
@@ -668,11 +680,16 @@ KeyGuess detectKey (const std::vector<double>& midiNotes)
             }
     g.confidence = std::clamp (best * 0.7 + (best - second) * 3.0, 0.0, 1.0);
     if (g.ambiguous) g.confidence = std::min (g.confidence, 0.4);
-    const int scale = g.minor ? 2 : 1;
-    double off = 0.0;
-    for (double m : midiNotes)
-        off += std::abs (m - PitchCorrector::targetNote (m, g.key, scale, -1));
-    g.offCents = 100.0 * off / static_cast<double> (midiNotes.size());
+    // For tuning only the notes matter: how far ahead is the winner of the best key with other notes
+    // (its relative major / minor has the same notes, so it doesn't count against it)?
+    {
+        const auto a = scaleSet (g.key, g.minor);
+        double other = -2.0;
+        for (int k = 0; k < 12; ++k)
+            for (int mode = 0; mode < 2; ++mode)
+                if (scaleSet (k, mode == 1) != a) other = std::max (other, score[static_cast<size_t> (k)][static_cast<size_t> (mode)]);
+        g.notesConfidence = g.ambiguous ? std::min (0.4, g.confidence) : std::clamp (bestR * 0.7 + (bestR - other) * 3.0, 0.0, 1.0);
+    }
     return g;
 }
 

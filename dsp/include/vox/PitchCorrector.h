@@ -48,6 +48,7 @@ struct PitchParams
     int harmony = 0;          // 0 = correct the voice; else a harmony voice at kHarmonies[harmony] (see below)
     int mode = kPitchClassic; // PitchMode
     double vibrato = 0.0;     // % (Natural): -100 = flat, 0 = as sung, +100 = twice as deep
+    double tuneCents = 0.0;   // the notes' tuning vs A = 440 Hz (-50 .. +50; from the beat)
 };
 
 /** Harmony intervals: scale steps when a key / scale is set (they stay in key), semitones with Chromatic. */
@@ -180,7 +181,7 @@ private:
     // high band (breath, rasp, "s" in a note) is read smoothly at the grains' moving offset instead of
     // being chopped into grains - chopped noise repeats at the voice's pitch: a buzz.
     static constexpr double kSplitHz = 2000.0;
-    std::array<std::vector<double>, 2> lo;   // low band ring (high = in - lo)
+    std::array<std::vector<double>, 2> loBand;   // low band ring (high = in - lo)
     std::array<std::array<Biquad, 2>, 2> xover {};
     struct Mark { double pos = 0.0, off = 0.0, preOff = 0.0; bool join = false, split = false; };
     static constexpr int kMarks = 256;
@@ -206,7 +207,11 @@ struct KeyGuess
     int key = 0; bool minor = true; double confidence = 0.0; double offCents = 0.0;
     /** A neighbouring key (a note apart) fits about as well: the voice alone can't tell them apart. */
     bool ambiguous = false; int altKey = 0; bool altMinor = false;
+    /** 0..1: how sure the NOTES are (the relative major / minor, same notes, doesn't lower it). */
+    double notesConfidence = 0.0;
 };
 KeyGuess detectKey (const std::vector<double>& midiNotes);
+/** The same from a pitch-class histogram (weights for C .. B); offCents is left 0. */
+KeyGuess keyFromHistogram (const std::array<double, 12>& hist);
 
 } // namespace vox

@@ -30,7 +30,7 @@ namespace VoxParams
     {
         return { "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
     }
-    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2" }; }
+    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2" }; }
 
     inline void addTo (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
     {
@@ -80,6 +80,8 @@ namespace VoxParams
         StringArray modes;
         for (auto* m : vox::kPitchModeNames) modes.add (m);
         choice ("ptMode", "Pitch Mode", modes, vox::kPitchNatural);
+        // Key from the beat (a Voxology on the beat in BEAT mode hears it); Key / Scale are the fallback.
+        choice ("ptKeySrc", "Pitch Key Source", { "From Beat", "Manual" }, 0);
         slider ("ptVibrato", "Pitch Vibrato", NormalisableRange<float> (-100.0f, 100.0f, 1.0f), 0.0f, "%",
                 [] (float v, int) { return std::abs (v) < 0.5f ? String ("As sung") : v <= -99.5f ? String ("Flat") : (v > 0 ? "+" : "") + String (roundToInt (v)) + " %"; });
 

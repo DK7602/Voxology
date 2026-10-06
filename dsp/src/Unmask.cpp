@@ -84,9 +84,58 @@ int UnmaskLink::claim()
     return -1;
 }
 
+void UnmaskLink::publishKey (int slot, const BeatKeyInfo& k) noexcept
+{
+    if (slot < 0 || slot >= kSlots) return;
+    auto& s = slots[static_cast<size_t> (slot)];
+    s.keySeq.fetch_add (1);
+    s.keyPresent.store (k.present); s.keyReady.store (k.ready);
+    s.keyNote.store (k.key.key); s.keyMinor.store (k.key.minor);
+    s.keyAmbiguous.store (k.key.ambiguous); s.keyAlt.store (k.key.altKey); s.keyAltMinor.store (k.key.altMinor);
+    s.keyConf.store (k.key.confidence); s.keyNotesConf.store (k.key.notesConfidence);
+    s.keyTune.store (k.tuneCents); s.keyHeard.store (k.heardSeconds);
+    s.keySeq.fetch_add (1);
+}
+
+void UnmaskLink::clearKey (int slot) noexcept
+{
+    publishKey (slot, {});
+}
+
+UnmaskLink::BeatKeyInfo UnmaskLink::readBeatKey (int skipSlot) const noexcept
+{
+    // The surest ready beat; else one still listening (so the vocal can say so).
+    BeatKeyInfo best;
+    for (int i = 0; i < kSlots; ++i)
+    {
+        if (i == skipSlot) continue;
+        const auto& s = slots[static_cast<size_t> (i)];
+        if (! s.used.load()) continue;
+        BeatKeyInfo k;
+        for (int tries = 0; tries < 4; ++tries)
+        {
+            const uint32_t a = s.keySeq.load();
+            if (a & 1u) continue;
+            k.present = s.keyPresent.load(); k.ready = s.keyReady.load();
+            k.key.key = s.keyNote.load(); k.key.minor = s.keyMinor.load();
+            k.key.ambiguous = s.keyAmbiguous.load(); k.key.altKey = s.keyAlt.load(); k.key.altMinor = s.keyAltMinor.load();
+            k.key.confidence = s.keyConf.load(); k.key.notesConfidence = s.keyNotesConf.load();
+            k.tuneCents = s.keyTune.load(); k.heardSeconds = s.keyHeard.load();
+            if (s.keySeq.load() == a) break;
+            k = {};
+        }
+        if (! k.present) continue;
+        const bool better = ! best.present || (k.ready && ! best.ready)
+                            || (k.ready == best.ready && (k.ready ? k.key.notesConfidence > best.key.notesConfidence : k.heardSeconds > best.heardSeconds));
+        if (better) best = k;
+    }
+    return best;
+}
+
 void UnmaskLink::release (int slot)
 {
     if (slot < 0 || slot >= kSlots) return;
+    clearKey (slot);
     auto& s = slots[static_cast<size_t> (slot)];
     s.lastMs.store (0);
     s.used.store (false);

@@ -1,5 +1,6 @@
 #include "AutoEditController.h"
 #include "Params.h"
+#include "vox/Unmask.h"
 
 AutoEditController::AutoEditController (juce::AudioProcessorValueTreeState& s, std::function<double()> getBpm)
     : state (s), bpmSource (std::move (getBpm))
@@ -103,6 +104,12 @@ void AutoEditController::launchAnalysis()
     settings.style = juce::jlimit (0, vox::kStyles - 1, choice ("aeStyle"));
     settings.intensity = juce::jlimit (0, vox::kIntensities - 1, choice ("aeIntensity"));
     settings.bpm = bpmSource ? bpmSource() : 0.0;
+    if (choice ("ptKeySrc") == 0)
+    {
+        const auto bk = vox::UnmaskLink::instance().readBeatKey (-1);
+        settings.beatKeyKnown = bk.present && bk.ready && bk.key.notesConfidence >= 0.5;
+        settings.beatKey = bk.key;
+    }
     std::shared_ptr<const vox::ReferenceProfile> ref;
     {
         const juce::ScopedLock sl (refLock);

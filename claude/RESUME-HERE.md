@@ -420,3 +420,30 @@ voxold vs new; prints buzz windows), offkey.cpp (per-note median cents off in C 
 Known: very raspy notes (clarity < 0.5, ~10 % of the user's readings) still get less tuning in Natural / Classic (clarity
 scaling); could relax now that the high band can't buzz - check by ear first.
 NEXT: user listens; step 3 = MIDI note control, per-note on/off, Honey Tune gets the two-band engine automatically (check).
+
+## v0.10.0 Key from the beat (2026-10-06)
+User asked "is this the best pitch?" - honest no; ranked next levels: 1 key from the beat, 2 low-latency recording mode,
+3 MIDI / note control, 4 better big-shift engine (harmonies, formant), 5 AI pitch detection (Honey Tune first), 6 Honey Tune
+editing (timing / length, per-note formant, partial re-render). User chose 1 now; recommended order after: 3, 2, 4/5.
+- dsp BeatKey (BeatKey.h/.cpp): 6 kHz copy, 4096 FFT every 0.25 s, peaks 50 Hz - 2 kHz that stand 12 dB over their +-40 Hz
+  neighbourhood -> pitch-class histogram (sqrt level), tuning = weighted circular mean of peak offsets (> 100 Hz); fades ~40 s;
+  ready after 6 s of tonal frames; key via keyFromHistogram (detectKey refactored: histogram part shared). KeyGuess gained
+  notesConfidence (margin vs the best key with a DIFFERENT note set: relative major / minor don't count).
+- PitchParams.tuneCents (-50..50): sung midi measured in the beat's tuning.
+- UnmaskLink: per-slot beat key (seqlock atomics) publishKey / clearKey / readBeatKey (surest ready beat); release() clears.
+  Kept while the instance lives (stopped transport keeps it).
+- Plug-in: param ptKeySrc {From Beat (default), Manual}. BEAT mode feeds BeatKey from its input and publishes each block;
+  leaving BEAT clears it. VOCAL + From Beat + a ready beat with notesConfidence >= 0.5: followBeatKey (beat gives the notes;
+  the user's Scale keeps its flavour: minor-type scales on the minor tonic, major-type on the major tonic, Chromatic -> beat's
+  Major / Minor) + tuneCents; else manual Key / Scale. Meters bkState (0 manual, 1 following, 2 no beat, 3 listening; BEAT 4/5),
+  bkKey/bkMinor/bkConf/bkTune/bkHeard, keyUsed/scaleUsed. Auto-Edit: settings.beatKeyKnown -> Key reason "From beat", no KEY
+  UNSURE note.
+- UI: Key cell has BEAT | MANUAL switch, status line ("beat: C / Am", "listening...", "no beat linked", "you set it"); key and
+  scale in use glow gold (.beat); clicking a key while following switches to Manual. BEAT page: Beat Key readout (name, % sure,
+  tuning). Tips NO BEAT LINKED, BEAT DETUNED. Pitch hex stat shows the key in use.
+- Tests tests/test_beatkey.cpp: Am-F-C-G loop with 808 + drums at 0 / -30 / +22 cents -> A minor notes, notes conf 1, tuning
+  within 0.1 cent; C minor loop; drums only -> not sure; followBeatKey flavours; link end-to-end (detuned beat -> vocal E3
+  lands 30 cents low; release clears). 62 test cases.
+- Limits to tell the user: needs a second Voxology on the beat in BEAT mode, same project (process); needs ~6 s of playback;
+  key changes are followed slowly (~40 s memory); relative major / minor can't be told apart (same notes: doesn't matter for
+  tuning). Honey Tune (separate plug-in binary) can't see the link - later: ARA key signatures from Cubase.
