@@ -103,15 +103,23 @@ void AutoEditController::launchAnalysis()
     settings.style = juce::jlimit (0, vox::kStyles - 1, choice ("aeStyle"));
     settings.intensity = juce::jlimit (0, vox::kIntensities - 1, choice ("aeIntensity"));
     settings.bpm = bpmSource ? bpmSource() : 0.0;
-    pendingSettings = settings;
+    std::shared_ptr<const vox::ReferenceProfile> ref;
+    {
+        const juce::ScopedLock sl (refLock);
+        ref = reference;
+    }
+    pendingSettings = settings;   // (no reference pointer: the job keeps its own copy alive)
+    pendingRefName = ref != nullptr && ref->ok ? juce::String::fromUTF8 (ref->name.c_str()) : juce::String();
 
     const int thisSession = session;
-    pool.addJob ([this, audio = std::move (audio), sr, settings, thisSession]
+    pool.addJob ([this, audio = std::move (audio), sr, settings, thisSession, ref]
     {
         std::unique_ptr<vox::AutoEditResult> result;
         try
         {
-            result = std::make_unique<vox::AutoEditResult> (vox::autoEdit (audio, sr, settings));
+            auto s = settings;
+            s.reference = ref != nullptr && ref->ok ? ref.get() : nullptr;
+            result = std::make_unique<vox::AutoEditResult> (vox::autoEdit (audio, sr, s));
         }
         catch (...)
         {
@@ -148,6 +156,7 @@ void AutoEditController::apply (const vox::AutoEditResult& r, const vox::AutoEdi
     doc->setProperty ("style", juce::String (vox::kStyleNames[static_cast<size_t> (s.style)]));
     doc->setProperty ("intensity", juce::String (vox::kIntensityNames[static_cast<size_t> (s.intensity)]));
     doc->setProperty ("time", juce::Time::getCurrentTime().toISO8601 (true));
+    doc->setProperty ("reference", pendingRefName);
 
     if (r.ok)
     {
@@ -239,4 +248,122 @@ bool AutoEditController::undo()
     undoValid.store (false);
     setReport ({});
     return true;
+}
+
+// =================================================================================================
+// Reference Match
+void AutoEditController::loadReference (const juce::File& file)
+{
+    if (! file.existsAsFile())
+        return;
+    refLoading.store (true);
+    ++refVersion;
+    pool.addJob ([this, file]
+    {
+        auto profile = std::make_shared<vox::ReferenceProfile>();
+        profile->name = file.getFileNameWithoutExtension().toStdString();
+        juce::AudioFormatManager formats;
+        formats.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
+        if (reader == nullptr || reader->sampleRate <= 0.0 || reader->lengthInSamples <= 0)
+            profile->problem = "Couldn't read this file. Use a WAV, AIFF, FLAC, MP3 or OGG file.";
+        else
+        {
+            const double sr = reader->sampleRate;
+            const auto total = reader->lengthInSamples;
+            const auto want = static_cast<juce::int64> (kRefSeconds * sr);
+            const auto start = total > want ? (total - want) / 2 : juce::int64 (0);   // the middle: past the intro
+            const int n = static_cast<int> (std::min (total, want));
+            const int nch = static_cast<int> (std::min (2u, reader->numChannels));
+            juce::AudioBuffer<float> buf (nch, n);
+            reader->read (&buf, 0, n, start, true, nch > 1);
+            std::vector<std::vector<float>> audio (static_cast<size_t> (nch));
+            for (int c = 0; c < nch; ++c) audio[static_cast<size_t> (c)].assign (buf.getReadPointer (c), buf.getReadPointer (c) + n);
+            *profile = vox::analyseReference (audio, sr, profile->name);
+        }
+        {
+            const juce::ScopedLock sl (refLock);
+            reference = std::move (profile);
+        }
+        refLoading.store (false);
+        ++refVersion;
+    });
+}
+
+void AutoEditController::clearReference()
+{
+    {
+        const juce::ScopedLock sl (refLock);
+        reference.reset();
+    }
+    ++refVersion;
+}
+
+juce::String AutoEditController::getReferenceJson() const
+{
+    auto* o = new juce::DynamicObject();
+    std::shared_ptr<const vox::ReferenceProfile> r;
+    {
+        const juce::ScopedLock sl (refLock);
+        r = reference;
+    }
+    o->setProperty ("state", refLoading.load() ? "loading" : r == nullptr ? "none" : r->ok ? "ok" : "problem");
+    if (r != nullptr)
+    {
+        o->setProperty ("name", juce::String::fromUTF8 (r->name.c_str()));
+        o->setProperty ("problem", juce::String::fromUTF8 (r->problem.c_str()));
+        o->setProperty ("warning", juce::String::fromUTF8 (r->warning.c_str()));
+        o->setProperty ("seconds", r->voicedSeconds);
+    }
+    return juce::JSON::toString (juce::var (o), true);
+}
+
+juce::String AutoEditController::getReferenceForSaving() const
+{
+    std::shared_ptr<const vox::ReferenceProfile> r;
+    {
+        const juce::ScopedLock sl (refLock);
+        r = reference;
+    }
+    if (r == nullptr)
+        return {};
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("ok", r->ok);
+    o->setProperty ("name", juce::String::fromUTF8 (r->name.c_str()));
+    o->setProperty ("problem", juce::String::fromUTF8 (r->problem.c_str()));
+    o->setProperty ("warning", juce::String::fromUTF8 (r->warning.c_str()));
+    o->setProperty ("sib", r->sibilanceDb);
+    o->setProperty ("punch", r->microDynDb);
+    o->setProperty ("tail", r->tailDb);
+    o->setProperty ("voiced", r->voicedSeconds);
+    juce::Array<juce::var> bands;
+    for (double v : r->bandDb) bands.add (v);
+    o->setProperty ("bands", bands);
+    return juce::JSON::toString (juce::var (o), true);
+}
+
+void AutoEditController::restoreReference (const juce::String& saved)
+{
+    std::shared_ptr<vox::ReferenceProfile> r;
+    const auto v = juce::JSON::parse (saved);
+    if (auto* o = v.getDynamicObject())
+    {
+        r = std::make_shared<vox::ReferenceProfile>();
+        r->ok = o->getProperty ("ok");
+        r->name = o->getProperty ("name").toString().toStdString();
+        r->problem = o->getProperty ("problem").toString().toStdString();
+        r->warning = o->getProperty ("warning").toString().toStdString();
+        r->sibilanceDb = o->getProperty ("sib");
+        r->microDynDb = o->getProperty ("punch");
+        r->tailDb = o->getProperty ("tail");
+        r->voicedSeconds = o->getProperty ("voiced");
+        if (auto* arr = o->getProperty ("bands").getArray())
+            for (const auto& b : *arr) r->bandDb.push_back (b);
+        if (r->bandDb.size() != vox::analysisBands().size()) r->ok = false;   // from an older version: re-load it
+    }
+    {
+        const juce::ScopedLock sl (refLock);
+        reference = std::move (r);
+    }
+    ++refVersion;
 }

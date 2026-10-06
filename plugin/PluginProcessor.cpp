@@ -120,6 +120,7 @@ void VoxologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     if (auto xml = parameters.copyState().createXml())
     {
         xml->setAttribute ("aeReport", autoEdit.getReportForSaving());
+        xml->setAttribute ("aeReference", autoEdit.getReferenceForSaving());
         copyXmlToBinary (*xml, destData);
     }
 }
@@ -130,7 +131,10 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
         if (xml->hasTagName (parameters.state.getType()))
         {
             const auto savedReport = xml->getStringAttribute ("aeReport");
+            const auto savedReference = xml->getStringAttribute ("aeReference");
             xml->removeAttribute ("aeReport");
+            xml->removeAttribute ("aeReference");
+            autoEdit.restoreReference (savedReference);
             parameters.replaceState (juce::ValueTree::fromXml (*xml));
             autoEdit.onStateRestored (savedReport);
         }

@@ -170,6 +170,7 @@ std::vector<double> pitchTrack (const Signal& x, double sr, const std::vector<bo
 
 // --- spectrum ----------------------------------------------------------------------------------
 constexpr size_t kFftN = 4096;
+constexpr double kFullSongLowDb = -14.0;   // tuned on MUSDB18-7 (vocals vs mixtures)
 
 std::vector<double> averageSpectrum (const Signal& x, const std::vector<bool>& mask, int hop, std::vector<bool>* only = nullptr)
 {
@@ -341,6 +342,151 @@ double meanActive (const std::vector<double>& gr, const std::vector<bool>& mask)
     return n ? s / static_cast<double> (n) : 0.0;
 }
 
+/** Reference Match's tone: finds the Tone EQ (5 bands, gains and frequencies) and Low Cut that bring a
+    vocal's third-octave balance (`have`) closest to `want`, by coordinate descent over every band's
+    frequency grid and gain. The balance is relative to 500 Hz - 2 kHz, so the EQ's own effect there is
+    taken out. Weights: 160 Hz - 10 kHz count fully, the extremes less. */
+struct ToneFit { EqParams eq; double lowCutHz = 20.0; double errBefore = 0.0, errAfter = 0.0; };
+
+/** The tone's overall shape: each third-octave averaged (as energy) with its neighbours, so the fit follows
+    the voice's envelope, not where a particular note's harmonics happen to land. */
+std::vector<double> smoothedTone (const std::vector<double>& t)
+{
+    std::vector<double> out (t.size());
+    for (size_t b = 0; b < t.size(); ++b)
+    {
+        double e = 0.0, wsum = 0.0;
+        for (int o = -1; o <= 1; ++o)
+        {
+            const auto k = static_cast<long> (b) + o;
+            if (k < 0 || k >= static_cast<long> (t.size())) continue;
+            const double w = o == 0 ? 2.0 : 1.0;
+            e += w * std::pow (10.0, t[static_cast<size_t> (k)] / 10.0);
+            wsum += w;
+        }
+        out[b] = 10.0 * std::log10 (e / wsum + 1.0e-30);
+    }
+    return out;
+}
+
+ToneFit fitTone (const std::vector<double>& haveRaw, const std::vector<double>& wantRaw, double lowMin, double lowMax, double sr)
+{
+    const auto have = smoothedTone (haveRaw), want = smoothedTone (wantRaw);
+    const auto& bands = analysisBands();
+    const size_t nb = std::min ({ bands.size(), have.size(), want.size() });
+    std::vector<double> w (nb);
+    for (size_t b = 0; b < nb; ++b) w[b] = bands[b] >= 160.0 && bands[b] <= 10000.0 ? 1.0 : 0.4;
+    auto lowCutDb = [] (double fc, double f) { return fc <= Cleanup::kLowCutOffHz ? 0.0 : -20.0 * std::log10 (1.0 + std::pow (fc / f, 4.0)); };
+    std::array<std::vector<double>, kEqBands> bandResp;
+    for (auto& r : bandResp) r.assign (nb, 0.0);
+    std::vector<double> lcResp (nb, 0.0);
+    auto error = [&] ()
+    {
+        std::vector<double> d (nb);
+        double mid = 0.0; int nm = 0;
+        for (size_t b = 0; b < nb; ++b)
+        {
+            d[b] = lcResp[b];
+            for (const auto& r : bandResp) d[b] += r[b];
+            if (bands[b] >= 500.0 && bands[b] <= 2000.0) { mid += d[b]; ++nm; }
+        }
+        mid /= std::max (1, nm);
+        double e = 0.0, ws = 0.0;
+        for (size_t b = 0; b < nb; ++b) { const double x = have[b] + d[b] - mid - want[b]; e += w[b] * x * x; ws += w[b]; }
+        return std::sqrt (e / ws);
+    };
+    ToneFit fit;
+    fit.eq.gainDb = { 0, 0, 0, 0, 0 };
+    fit.lowCutHz = lowMin;
+    for (size_t b = 0; b < nb; ++b) lcResp[b] = lowCutDb (lowMin, bands[b]);
+    fit.errBefore = error();
+    auto setBand = [&] (int k, double g, double f)
+    {
+        for (size_t b = 0; b < nb; ++b) bandResp[static_cast<size_t> (k)][b] = VocalEQ::bandResponseDb (k, g, f, bands[b], sr);
+    };
+    for (int sweep = 0; sweep < 5; ++sweep)
+    {
+        for (int k = 0; k < kEqBands; ++k)
+        {
+            const auto& info = kEqBandInfo[static_cast<size_t> (k)];
+            const double gLo = (k == 1 || k == 2) ? -9.0 : -8.0, gHi = (k == 1 || k == 2) ? 3.0 : 8.0;   // Mud / Nasal: mostly cuts
+            double bestE = 1.0e9, bestG = fit.eq.gainDb[static_cast<size_t> (k)], bestF = fit.eq.freqHz[static_cast<size_t> (k)];
+            for (int fi = 0; fi < 12; ++fi)
+            {
+                const double f = info.lo * std::pow (info.hi / info.lo, fi / 11.0);
+                for (double g = gLo; g <= gHi + 1.0e-9; g += 0.5)
+                {
+                    setBand (k, g, f);
+                    const double e = error();
+                    if (e < bestE - 1.0e-9) { bestE = e; bestG = g; bestF = f; }
+                }
+            }
+            fit.eq.gainDb[static_cast<size_t> (k)] = bestG;
+            fit.eq.freqHz[static_cast<size_t> (k)] = std::round (bestF);
+            setBand (k, bestG, bestF);
+        }
+        double bestE = 1.0e9, bestL = fit.lowCutHz;
+        for (int li = 0; li < 16; ++li)
+        {
+            const double fc = lowMin * std::pow (std::max (lowMax, lowMin) / lowMin, li / 15.0);
+            for (size_t b = 0; b < nb; ++b) lcResp[b] = lowCutDb (fc, bands[b]);
+            const double e = error();
+            if (e < bestE - 1.0e-9) { bestE = e; bestL = fc; }
+        }
+        fit.lowCutHz = std::round (bestL / 5.0) * 5.0;
+        for (size_t b = 0; b < nb; ++b) lcResp[b] = lowCutDb (fit.lowCutHz, bands[b]);
+    }
+    fit.errAfter = error();
+    return fit;
+}
+
+/** Punch: 50 ms levels (5 frames of 10 ms) while singing; how far the loud moments stand over the middle.
+    Low = compressed. */
+double punchDb (const Frames& f, const std::vector<bool>& mask)
+{
+    std::vector<double> lv;
+    for (size_t i = 0; i + 5 <= f.rmsDb.size() && i + 5 <= mask.size(); i += 5)
+    {
+        bool on = true;
+        double e = 0.0;
+        for (size_t j = i; j < i + 5; ++j) { on = on && mask[j]; e += std::pow (10.0, f.rmsDb[j] / 10.0); }
+        if (on) lv.push_back (energyDb (e / 5.0));
+    }
+    return lv.size() >= 20 ? percentile (lv, 95.0) - percentile (lv, 50.0) : 0.0;
+}
+
+/** Space: at each phrase end (level falls from within 12 dB of the loud part to 20 dB under it and stays
+    there for 300 ms), what's left 100 - 300 ms later vs the last 200 ms of the phrase. -120 = unknown. */
+double spaceDb (const Frames& f)
+{
+    std::vector<double> live;
+    for (double v : f.rmsDb) if (v > -100.0) live.push_back (v);
+    if (live.empty()) return -120.0;
+    const double loud = percentile (live, 95.0);
+    auto meanDb = [&f] (size_t from, size_t to)
+    {
+        double e = 0.0;
+        for (size_t j = from; j < to; ++j) e += std::pow (10.0, f.rmsDb[j] / 10.0);
+        return energyDb (e / static_cast<double> (std::max<size_t> (1, to - from)));
+    };
+    std::vector<double> tails;
+    for (size_t i = 20; i + 31 < f.rmsDb.size(); ++i)
+    {
+        if (! (f.rmsDb[i - 1] > loud - 12.0 && f.rmsDb[i] <= loud - 12.0)) continue;
+        bool quiet = true;   // stays down for 300 ms (a real phrase end, not a gap between syllables)
+        for (size_t j = i + 10; j < i + 30; ++j) quiet = quiet && f.rmsDb[j] < loud - 20.0;
+        if (quiet) tails.push_back (meanDb (i + 10, i + 30) - meanDb (i - 20, i));
+    }
+    return tails.size() >= 2 ? percentile (tails, 50.0) : -120.0;
+}
+
+/** A beat under the vocal: lots of energy under 100 Hz (kick, 808, bass). On MUSDB18-7, isolated vocals
+    sit at -20 dB or lower (95 %), full mixes at -10.5 dB or higher (95 %). */
+bool fullSong (const VocalAnalysis& a)
+{
+    return a.lowBassDb > kFullSongLowDb;
+}
+
 /** Per-style choices. */
 struct StyleSpec
 {
@@ -494,7 +640,34 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
     a.sibilanceHz = s.hz;
     a.sibilantShare = s.share;
     a.rangeDb = rangeDb (x, sr, activeThr);
+
+    a.microDynDb = punchDb (f, mask);
+    a.tailDb = spaceDb (f);
+    {
+        double low = 0.0, all = 0.0;
+        for (size_t i = 1; i < spec.size(); ++i) { all += spec[i]; if (static_cast<double> (i) * sr / static_cast<double> (kFftN) < 100.0) low += spec[i]; }
+        a.lowBassDb = energyDb (low) - energyDb (all);
+    }
     return a;
+}
+
+ReferenceProfile analyseReference (const std::vector<std::vector<float>>& audio, double sr, const std::string& name)
+{
+    ReferenceProfile r;
+    r.name = name;
+    const auto a = analyseVocal (audio, sr);
+    r.voicedSeconds = a.voicedSeconds;
+    r.bandDb = a.bandDb;
+    r.sibilanceDb = a.sibilanceDb;
+    r.microDynDb = a.microDynDb;
+    r.tailDb = a.tailDb;
+    if (a.voicedSeconds < 3.0)
+        r.problem = "Only " + num (a.voicedSeconds) + " s of voice in it. Pick a file with at least a verse or a hook of vocals (10 s or more is best).";
+    else if (fullSong (a))
+        r.warning = "This sounds like a full song (beat and vocal together), so the match will be rough: with a beat under it, "
+                    "a vocal's tone reads about 7 dB off (measured on 144 pro songs).";
+    r.ok = r.problem.empty();
+    return r;
 }
 
 // =================================================================================================
@@ -511,6 +684,9 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
 
     VocalAnalysis& a = r.analysis;
     a = analyseVocal (audio, sr);
+    const ReferenceProfile* ref = settings.reference != nullptr && settings.reference->ok ? settings.reference : nullptr;
+    const std::string aimed = ref != nullptr ? "the reference (" + ref->name + ")"
+                                             : std::string ("a finished ") + kStyleNames[static_cast<size_t> (style)] + " vocal";
     if (a.voicedSeconds < 3.0)
     {
         r.ok = false;
@@ -729,7 +905,48 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
 
     // ---------------------------------------------------------------------------------------- 03 Tone EQ
     {
-        const auto target = styleTarget (style);
+    if (ref != nullptr)
+    {
+        // Fit Tone EQ + Low Cut to the reference's tone (the low cut may rise, never past your lowest notes).
+        const double lowMin = p.cleanup.lowCutHz;
+        const double lowMax = a.f0Low > 0.0 ? std::max (lowMin, std::min (0.95 * a.f0Low, 250.0)) : std::max (lowMin, 150.0);
+        auto fit = fitTone (a.bandDb, ref->bandDb, lowMin, lowMax, sr);
+        const double strength = intensity == 0 ? 0.7 : 1.0;
+        for (auto& g : fit.eq.gainDb) { g = std::round (g * strength * 2.0) / 2.0; if (std::abs (g) < 0.5) g = 0.0; }
+        p.eq = fit.eq;
+        p.eq.enabled = true;
+        const double oldLow = p.cleanup.lowCutHz;
+        p.cleanup.lowCutHz = fit.lowCutHz;
+        const auto& bands = analysisBands();
+        const auto refShape = smoothedTone (ref->bandDb), myShape = smoothedTone (a.bandDb);
+        auto diffNear = [&] (double f)   // reference minus yours at the nearest analysis band (dB, overall shape)
+        {
+            size_t best = 0;
+            for (size_t b = 1; b < bands.size(); ++b) if (std::abs (std::log (bands[b] / f)) < std::abs (std::log (bands[best] / f))) best = b;
+            return refShape[best] - myShape[best];
+        };
+        static constexpr std::array<const char*, kEqBands> zone { "low weight", "boxy low-mids", "honky mids", "presence (where the words live)", "air on top" };
+        for (int k2 = 0; k2 < kEqBands; ++k2)
+        {
+            const auto kb = static_cast<size_t> (k2);
+            const double g = p.eq.gainDb[kb], f = p.eq.freqHz[kb], d = diffNear (f);
+            reason ("eq", kEqBandInfo[kb].name, g == 0.0 ? "0 dB" : signedDb (g) + " at " + hz (f),
+                    g == 0.0 ? std::string ("Your ") + zone[kb] + " already sit where the reference's do."
+                             : std::string ("The reference has ") + num (std::abs (d)) + " dB " + (d > 0.0 ? "more " : "less ") + zone[kb] + " than your vocal around " + hz (f) +
+                                   ", so this " + (g > 0.0 ? "lifts" : "trims") + " yours toward it.");
+        }
+        if (p.cleanup.lowCutHz > oldLow + 1.0)
+            reason ("cleanup", "Low Cut", hz (p.cleanup.lowCutHz), "Raised from " + hz (oldLow) + " to match the reference: its vocal is cleaner and thinner down low than yours. It stays under your lowest notes.");
+        reason ("eq", "Tone match", num (fit.errBefore) + " \xE2\x86\x92 " + num (fit.errAfter) + " dB",
+                "How far your vocal's tone is from the reference's, averaged across the spectrum, before and after these moves"
+                + std::string (fit.errAfter > 4.0 ? ". What's left is mostly your voice itself (its shape and the room), which no EQ can turn into someone else's." : "."));
+        if (intensity == 0) reason ("eq", "Strength", "70 %", "Light intensity: the moves go 70 % of the way to the reference.");
+    }
+    else
+    {
+        const auto target = ref != nullptr ? ref->bandDb : styleTarget (style);
+        // Matching a reference you chose: correct more of the difference than the generic style does.
+        const double kq = ref != nullptr ? std::min (1.35 * kq, 1.35) : k;
         const auto& bands = analysisBands();
         auto diffAt = [&] (double lo, double hi, double& peakHz, bool wantExcess)
         {
@@ -749,13 +966,13 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
 
         // Body (low shelf)
         const double body = diffAt (100, 250, pk, true);
-        eq.gainDb[0] = std::clamp (-body * 0.5 * k, -4.0, 3.0);
+        eq.gainDb[0] = std::clamp (-body * 0.5 * kq, -4.0, 3.0);
         eq.freqHz[0] = style == 3 ? 250.0 : 180.0;
         if (std::abs (eq.gainDb[0]) < 0.5) eq.gainDb[0] = 0.0;
         reason ("eq", "Body", eq.gainDb[0] == 0.0 ? "0 dB" : signedDb (eq.gainDb[0]) + " at " + hz (eq.freqHz[0]),
-                eq.gainDb[0] == 0.0 ? "The weight of your voice (100 - 250 Hz) is already right for " + std::string (kStyleNames[static_cast<size_t> (style)]) + "."
-                : eq.gainDb[0] < 0.0 ? "Your voice has " + num (body) + " dB more low weight than a finished " + kStyleNames[static_cast<size_t> (style)] + " vocal (often the mic's proximity effect: singing very close). Trimming it keeps the vocal from fighting the 808."
-                                     : "Your voice is " + num (-body) + " dB thinner down low than a finished " + kStyleNames[static_cast<size_t> (style)] + " vocal, so a little body adds warmth and weight.");
+                eq.gainDb[0] == 0.0 ? "The weight of your voice (100 - 250 Hz) is already right for " + (ref != nullptr ? std::string ("the reference") : std::string (kStyleNames[static_cast<size_t> (style)])) + "."
+                : eq.gainDb[0] < 0.0 ? "Your voice has " + num (body) + " dB more low weight than " + aimed + " (often the mic's proximity effect: singing very close). Trimming it keeps the vocal from fighting the 808."
+                                     : "Your voice is " + num (-body) + " dB thinner down low than " + aimed + ", so a little body adds warmth and weight.");
         if (body > 6.0)
             r.notes.push_back ("BOOMY MIC: your recording has a lot of low weight (" + num (body) + " dB over the target), usually from singing right on the mic."
                                "\nNEED: No. The Body band takes care of it."
@@ -767,7 +984,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         double mudPeak = 0.0;
         for (size_t b = 0; b < bands.size(); ++b) if (bands[b] == mudHz) mudPeak = a.bandDb[b] - target[b];
         const double mudEx = std::max (mudAvg, 0.6 * mudPeak);
-        eq.gainDb[1] = mudEx > 1.5 ? -std::clamp ((mudEx - 1.0) * 0.6 * k, 0.0, 6.0) : 0.0;
+        eq.gainDb[1] = mudEx > 1.5 ? -std::clamp ((mudEx - 1.0) * 0.6 * kq, 0.0, 6.0) : 0.0;
         eq.freqHz[1] = std::clamp (mudHz, 150.0, 800.0);
         if (eq.gainDb[1] > -0.5) eq.gainDb[1] = 0.0;
         reason ("eq", "Mud", eq.gainDb[1] == 0.0 ? "0 dB" : signedDb (eq.gainDb[1]) + " at " + hz (eq.freqHz[1]),
@@ -779,7 +996,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         double nasPeak = 0.0;
         for (size_t b = 0; b < bands.size(); ++b) if (bands[b] == nasHz) nasPeak = a.bandDb[b] - target[b];
         const double nasEx = std::max (nasAvg, 0.6 * nasPeak);
-        eq.gainDb[2] = nasEx > 2.0 ? -std::clamp ((nasEx - 1.5) * 0.6 * k, 0.0, 5.0) : 0.0;
+        eq.gainDb[2] = nasEx > 2.0 ? -std::clamp ((nasEx - 1.5) * 0.6 * kq, 0.0, 5.0) : 0.0;
         eq.freqHz[2] = std::clamp (nasHz, 500.0, 2000.0);
         if (eq.gainDb[2] > -0.5) eq.gainDb[2] = 0.0;
         reason ("eq", "Nasal", eq.gainDb[2] == 0.0 ? "0 dB" : signedDb (eq.gainDb[2]) + " at " + hz (eq.freqHz[2]),
@@ -789,26 +1006,27 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         // Presence and Air: boost or cut toward the style.
         double presHz = 4000.0;
         const double pres = diffAt (2500, 5000, presHz, true);
-        eq.gainDb[3] = std::clamp (-pres * 0.6 * k, -4.0, 5.0);
+        eq.gainDb[3] = std::clamp (-pres * 0.6 * kq, -4.0, 5.0);
         eq.freqHz[3] = pres > 0.0 ? std::clamp (presHz, 2000.0, 8000.0) : (style == 4 ? 3500.0 : 4000.0);
         if (std::abs (eq.gainDb[3]) < 0.5) eq.gainDb[3] = 0.0;
         reason ("eq", "Presence", eq.gainDb[3] == 0.0 ? "0 dB" : signedDb (eq.gainDb[3]) + " at " + hz (eq.freqHz[3]),
                 eq.gainDb[3] == 0.0 ? "Your words already cut through (2.5 - 5 kHz is on target)."
-                : eq.gainDb[3] > 0.0 ? "Your vocal is " + num (-pres) + " dB short of a finished " + kStyleNames[static_cast<size_t> (style)] + " vocal in the presence range, where the words live. This lifts it so lyrics are clear over the beat."
+                : eq.gainDb[3] > 0.0 ? "Your vocal is " + num (-pres) + " dB short of " + aimed + " in the presence range, where the words live. This lifts it so lyrics are clear over the beat."
                                      : "Your vocal is " + num (pres) + " dB hotter than the target around " + hz (eq.freqHz[3]) + ", which can sound harsh or shouty on headphones. A gentle cut smooths it.");
 
         double airHz = 12000.0;
         const double air = diffAt (8000, 12500, airHz, true);
-        double airGain = std::clamp (-air * 0.6 * k, -3.0, 6.0);
+        double airGain = std::clamp (-air * 0.6 * kq, -3.0, 6.0);
         if (a.noiseFloorDb > -60.0) airGain = std::min (airGain, 2.0);
         if (std::abs (airGain) < 0.5) airGain = 0.0;
         eq.gainDb[4] = airGain;
         eq.freqHz[4] = intensity == 2 ? 10000.0 : 12000.0;
         reason ("eq", "Air", airGain == 0.0 ? "0 dB" : signedDb (airGain) + " above " + hz (eq.freqHz[4]),
                 airGain == 0.0 ? "The top end (8 - 12.5 kHz) is already where a finished vocal sits."
-                : airGain > 0.0 ? "Your vocal is " + num (-air) + " dB darker on top than a finished " + kStyleNames[static_cast<size_t> (style)] + " vocal. Air adds the breathy, expensive sheen modern vocals have."
+                : airGain > 0.0 ? "Your vocal is " + num (-air) + " dB darker on top than " + aimed + ". Air adds the breathy, expensive sheen modern vocals have."
                                     + (a.noiseFloorDb > -60.0 ? " Capped at +2 dB because it would also lift the hiss in your recording." : "")
                                 : "Your top end is " + num (air) + " dB brighter than the target, so it's eased down a little to avoid fizz.");
+        }
     }
 
     // ---------------------------------------------------------------------------------------- 04 Dynamic EQ
@@ -921,13 +1139,14 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         const auto mask = activeMask (f, thr);
         const double voice = activeRmsDb (afterEq, mask, f.hop);
         const auto s = sibilance (afterEq, sr, mask, f.hop, voice);
-        const double target = spec.sibTarget - (intensity == 2 ? 1.0 : intensity == 0 ? -1.0 : 0.0);
+        const double target = ref != nullptr && ref->sibilanceDb > -100.0 ? std::clamp (ref->sibilanceDb, -10.0, 0.0)
+                                                                          : spec.sibTarget - (intensity == 2 ? 1.0 : intensity == 0 ? -1.0 : 0.0);
         if (s.levelDb <= target || s.levelDb <= -100.0)
         {
             p.deEsser.amount = 0.0;
             keep (Module::deEsser);
             reason ("deess", "Amount", "0 %", s.levelDb <= -100.0 ? "Auto-Edit heard almost no \"s\" sounds in this part, so there's nothing to tame."
-                                                                  : "Your \"s\" sounds peak at " + signedDb (s.levelDb) + " vs your voice, already under the " + signedDb (target) + " a finished " + kStyleNames[static_cast<size_t> (style)] + " vocal allows.");
+                                                                  : "Your \"s\" sounds peak at " + signedDb (s.levelDb) + " vs your voice, already under the " + signedDb (target) + " " + aimed + " allows.");
         }
         else
         {
@@ -960,7 +1179,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             reason ("deess", "Amount", pct (d.amount) + " at " + hz (d.freqHz),
                     "Your loudest \"s\" and \"t\" sounds peak at " + signedDb (s.levelDb) + " vs your voice (around " + hz (s.hz) + "), which is sharp on headphones and earbuds"
                     + (p.eq.gainDb[3] > 0.0 || p.eq.gainDb[4] > 0.0 ? ", and more so after the Presence / Air boost" : "") + ". " + pct (d.amount) +
-                    " brings them to " + signedDb (after) + ", where a finished " + kStyleNames[static_cast<size_t> (style)] + " vocal sits, and only while they happen.");
+                    " brings them to " + signedDb (after) + ", where " + aimed + " sits, and only while they happen.");
             if (atMax > target + 3.0)
                 r.notes.push_back ("VERY SHARP S's: even at full strength the de-esser leaves your \"s\" sounds " + num (atMax - target) + " dB brighter than ideal."
                                    "\nNEED: Optional. Listen on earbuds: if \"s\" still stings, fix it at the source."
@@ -1029,6 +1248,27 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             if (meanActive (run.levelGr, mask) > wantLevel) lo = c.thrDb; else hi = c.thrDb;
         }
         c.thrDb = std::round (0.5 * (lo + hi) * 2.0) / 2.0;
+        double refPunchFrom = 0.0;
+        if (ref != nullptr && ref->microDynDb > 0.5)
+        {
+            // Match the reference's punch (how far its loud moments stand over the middle): move the
+            // leveler until the compressed vocal measures the same, within 0.5 - 10 dB of average squeeze.
+            auto punchOf = [&] (const CompParams& q)
+            {
+                const auto rr = runComp (afterRider, sr, q, f.hop);
+                return std::make_pair (punchDb (frames (highPass (rr.out, 80.0, sr), sr), mask), meanActive (rr.levelGr, mask));
+            };
+            refPunchFrom = punchDb (frames (highPass (afterRider, 80.0, sr), sr), mask);
+            double tlo = -60.0, thi = 0.0;
+            for (int it = 0; it < 14; ++it)
+            {
+                CompParams q = c;
+                q.thrDb = 0.5 * (tlo + thi);
+                const auto [punch, squeeze] = punchOf (q);
+                if (punch > ref->microDynDb && squeeze < 10.0) thi = q.thrDb; else tlo = q.thrDb;
+            }
+            c.thrDb = std::round (0.5 * (tlo + thi) * 2.0) / 2.0;
+        }
         const auto run = runComp (afterRider, sr, c, f.hop);
         const double before = activeRmsDb (afterRider, mask, f.hop), after = activeRmsDb (run.out, mask, f.hop);
         c.makeupDb = std::clamp (std::round ((before - after) * 2.0) / 2.0, 0.0, 18.0);
@@ -1036,9 +1276,15 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         p.comp = c;
         const double gotPeak = meanOfDeepest (run.peakGr, mask, 0.05), gotLevel = meanActive (run.levelGr, mask);
         reason ("comp", "Peak", db (c.peakThrDb), "Catches the sudden loud syllables: about " + num (gotPeak) + " dB off the loudest 5 % of moments, so nothing jumps out of the beat.");
-        reason ("comp", "Level", db (c.thrDb) + ", " + num (c.ratio, 1) + ":1",
-                "Smooths the whole performance by about " + num (gotLevel) + " dB on average, the amount a " + kStyleNames[static_cast<size_t> (style)] +
-                " vocal usually gets so it sits at one steady level " + (style == 1 ? "and every word punches through." : "on top of the beat."));
+        if (ref != nullptr && ref->microDynDb > 0.5)
+            reason ("comp", "Level", db (c.thrDb) + ", " + num (c.ratio, 1) + ":1",
+                    "Matched to the reference's punch: its loud moments stand " + num (ref->microDynDb) + " dB over the middle of its level (yours: " + num (refPunchFrom) +
+                    " dB before compression, " + num (punchDb (frames (highPass (run.out, 80.0, sr), sr), mask)) + " dB after). That takes about " + num (gotLevel) +
+                    " dB of smoothing on average" + (gotLevel > 9.5 ? ", the most Auto-Edit allows: the reference is squeezed harder than that." : "."));
+        else
+            reason ("comp", "Level", db (c.thrDb) + ", " + num (c.ratio, 1) + ":1",
+                    "Smooths the whole performance by about " + num (gotLevel) + " dB on average, the amount a " + kStyleNames[static_cast<size_t> (style)] +
+                    " vocal usually gets so it sits at one steady level " + (style == 1 ? "and every word punches through." : "on top of the beat."));
         reason ("comp", "Makeup", signedDb (c.makeupDb), "Puts back the level the compressor took away, so you compare tone, not loudness.");
     }
 
@@ -1101,7 +1347,35 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         reason ("reverb", "Decay", num (spec.rvDecay) + " s, Pre-delay " + std::to_string (static_cast<int> (spec.rvPre)) + " ms",
                 std::string ("A ") + (spec.rvDecay < 1.2 ? "short room" : spec.rvDecay < 2.0 ? "medium plate" : "long, lush plate") +
                     " that gives the vocal a place to live. The pre-delay keeps the start of each word dry and clear.");
-        reason ("reverb", "Mix", pct (p.reverb.mix), "Just enough space to sound like a record without washing out the words; the low end of the reverb is cut so it never muddies the 808.");
+        if (ref != nullptr && ref->tailDb > -100.0)
+        {
+            // Match the reference's space: what rings on after a phrase ends, measured the same way on
+            // the finished chain while the reverb mix moves.
+            auto tailWith = [&] (const ChainParams& q) { return spaceDb (frames (highPass (renderMono (raw, sr, q), 80.0, sr), sr)); };
+            ChainParams q = p;
+            q.reverb.mix = 0.0;
+            double dry = tailWith (q);
+            if (dry > ref->tailDb + 2.0 && q.delay.mix > 0.0) { p.delay.mix = q.delay.mix = 0.0; dry = tailWith (q); }
+            if (dry >= ref->tailDb - 1.0 || dry <= -100.0)
+                p.reverb.mix = 0.0;
+            else
+            {
+                double mlo = 0.0, mhi = 60.0;
+                for (int it = 0; it < 8; ++it)
+                {
+                    q.reverb.mix = 0.5 * (mlo + mhi);
+                    if (tailWith (q) < ref->tailDb) mlo = q.reverb.mix; else mhi = q.reverb.mix;
+                }
+                p.reverb.mix = std::round (0.5 * (mlo + mhi));
+            }
+            reason ("reverb", "Mix", pct (p.reverb.mix),
+                    p.reverb.mix == 0.0 ? "The reference is about as dry as your recording already is (what rings on after its phrases sits " + num (-ref->tailDb, 0) +
+                                              " dB down), so no reverb is added" + std::string (p.delay.mix == 0.0 ? " and the delay is off too." : ".")
+                                        : "Matched to the reference's space: after its phrases end, " + num (-ref->tailDb, 0) + " dB of tail rings on. " + pct (p.reverb.mix) +
+                                              " reverb gives your vocal the same, measured on the finished chain.");
+        }
+        else
+            reason ("reverb", "Mix", pct (p.reverb.mix), "Just enough space to sound like a record without washing out the words; the low end of the reverb is cut so it never muddies the 808.");
     }
 
     // ---------------------------------------------------------------------------------------- Output
@@ -1126,6 +1400,17 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
     r.summary = "Listened to " + num (a.voicedSeconds) + " s of voice (" + kStyleNames[static_cast<size_t> (style)] + ", " + kIntensityNames[static_cast<size_t> (intensity)] +
                 "). Your vocal came in at " + num (a.inputLufs) + " LUFS with peaks at " + db (a.peakDb) + ". The chain is set for a " + kStyleNames[static_cast<size_t> (style)] +
                 " sound: " + spec.sound + ". Every change is explained below.";
+    if (ref != nullptr)
+    {
+        r.summary = "Listened to " + num (a.voicedSeconds) + " s of voice and matched it to your reference, \"" + ref->name + "\": its tone, how bright its \"s\" sounds are, its punch and its space. "
+                    "Your vocal came in at " + num (a.inputLufs) + " LUFS with peaks at " + db (a.peakDb) + ". Pitch, clean-up and saturation still follow " +
+                    kStyleNames[static_cast<size_t> (style)] + ". Every change is explained below.";
+        if (! ref->warning.empty())
+            r.notes.push_back ("REFERENCE IS A FULL SONG: " + ref->warning +
+                               "\nNEED: Yes, for a close match. It still works, roughly."
+                               "\nSTEP: Search for the song's acapella (\"<song name> acapella\") or ask the producer for the vocal stem."
+                               "\nSTEP: Load that as the reference (REF in the header) and run Auto-Edit again.");
+    }
     r.params = p;
     r.ok = true;
     return r;

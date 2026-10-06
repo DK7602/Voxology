@@ -40,6 +40,10 @@ const aeStart = Juce.getNativeFunction("startAutoEdit");
 const aeCancel = Juce.getNativeFunction("cancelAutoEdit");
 const aeUndo = Juce.getNativeFunction("undoAutoEdit");
 const aeGetReport = Juce.getNativeFunction("getAutoEditReport");
+const refChoose = Juce.getNativeFunction("chooseReference");
+const refClear = Juce.getNativeFunction("clearReference");
+const refGet = Juce.getNativeFunction("getReference");
+let refInfo = { state: "none" };   // Reference Match: none / loading / ok / problem
 
 function scaledToNorm(state, v) {
   const { start, end, skew } = state.properties;
@@ -49,7 +53,7 @@ function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 
 // Latest meter frame.
 const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
-  satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, in: null, out: null };
+  satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
 
@@ -825,7 +829,27 @@ function notesAsTips() {
   }
 }
 
+function referenceBlock() {
+  if (refInfo.state === "none") {
+    body.append(head("REFERENCE MATCH"), para("Got a vocal you love the sound of? Load its acapella with + REFERENCE (under STYLE). Auto-Edit then aims your vocal at its tone, how bright its s sounds are, its punch and its space, instead of the style's built-in target."));
+    body.append(tip("WHERE TO GET ONE", "Use the vocal on its own (an acapella or vocal stem), not the full song: a beat under it throws the reading off by about 7 dB.", "calm",
+      { need: "Optional. The styles work without one.", steps: ["Search for \"<song name> acapella\" (many artists release them), or ask the producer for the vocal stem.", "WAV, AIFF, FLAC, MP3 or OGG all work. A verse or hook (10 s+) is plenty."] }));
+    return;
+  }
+  body.append(head("REFERENCE MATCH"));
+  if (refInfo.state === "loading") { body.append(para("Reading the reference…")); return; }
+  if (refInfo.state === "problem") {
+    body.append(tip("CAN'T USE THIS ONE", refInfo.problem || "This file can't be used as a reference.", "warn", { need: "Yes, to use Reference Match.", steps: ["Choose another file with + REFERENCE.", "Or remove it (✕) to use the style's target."] }));
+    return;
+  }
+  body.append(para(`Auto-Edit will match "${refInfo.name}" (${Number(refInfo.seconds || 0).toFixed(0)} s of voice heard): its tone, s brightness, punch and space. Pitch, clean-up and saturation still follow the STYLE.`));
+  if (refInfo.warning) body.append(tip("FULL SONG?", refInfo.warning, "warn",
+    { need: "Yes, for a close match. It still works, roughly.", steps: ["Find the song's acapella or vocal stem and load that instead."] }));
+}
+
 function renderReport() {
+  referenceBlock();
+  if (report || refInfo.state !== "none") body.append(el("div", "l-sep"));
   if (!report) {
     body.append(head("AUTO-EDIT"), para("Auto-Edit listens to your vocal, sets every module for the style you pick and explains each choice here."));
     const ol = el("ol", "l-list");
@@ -839,7 +863,7 @@ function renderReport() {
     body.append(tip(report.tipTitle || "TRY AGAIN", report.tip || "Play a part where you're singing, then press Auto-Edit.", "warn"));
     return;
   }
-  body.append(head("AUTO-EDIT REPORT"), para(`${report.style} · ${report.intensity}`, "l-meta"), para(report.summary));
+  body.append(head("AUTO-EDIT REPORT"), para(`${report.style} · ${report.intensity}${report.reference ? ` · matched to "${report.reference}"` : ""}`, "l-meta"), para(report.summary));
   notesAsTips();
   MODULES.forEach((m, i) => {
     const rs = (report.reasons || []).filter((r) => r.module === m.key);
@@ -940,6 +964,23 @@ $("auto-edit").addEventListener("click", async () => {
     if (ok) { M.aeState = 1; M.aeProgress = 0; refreshAutoEdit(); }
   }
 });
+// Reference Match
+async function fetchReference() {
+  try { refInfo = JSON.parse((await refGet()) || "{}"); } catch { refInfo = { state: "none" }; }
+  if (!refInfo.state) refInfo.state = "none";
+  const b = $("ref");
+  b.classList.toggle("ok", refInfo.state === "ok");
+  b.classList.toggle("warn", refInfo.state === "problem" || !!refInfo.warning);
+  b.textContent = refInfo.state === "loading" ? "READING…" : refInfo.state === "none" ? "+ REFERENCE"
+    : `${refInfo.state === "ok" ? "\u266A" : "\u26A0"} ${refInfo.name || "reference"}`;
+  b.title = refInfo.state === "none" ? "Reference Match: load the acapella of a vocal you love, and Auto-Edit aims at its sound"
+    : refInfo.problem || refInfo.warning || `Auto-Edit will match "${refInfo.name}". Click to choose another.`;
+  $("ref-clear").hidden = refInfo.state === "none" || refInfo.state === "loading";
+  if (learnTab === "report") renderLearn();
+}
+$("ref").addEventListener("click", async () => { await refChoose(); });
+$("ref-clear").addEventListener("click", async () => { await refClear(); fetchReference(); });
+
 $("undo").addEventListener("click", async () => { if (await aeUndo()) { report = null; learnTab = "report"; renderLearn(); refreshAll(); } });
 
 function refreshAutoEdit() {
@@ -955,7 +996,7 @@ function refreshAutoEdit() {
   $("undo").disabled = !M.aeUndo;
 }
 
-let reportVersion = -1;
+let reportVersion = -1, refVersionSeen = -1;
 async function fetchReport(switchTab) {
   const json = await aeGetReport();
   try { report = json ? JSON.parse(json) : null; } catch { report = null; }
@@ -984,6 +1025,7 @@ window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
   liveMeters.forEach((c) => c.update());
   refreshAutoEdit();
   refreshHive();
+  if (M.refVersion !== refVersionSeen) { refVersionSeen = M.refVersion; fetchReference(); }
   if (M.aeReport !== reportVersion) { const first = reportVersion === -1; reportVersion = M.aeReport; fetchReport(!first); }
   const match = on("levelMatch") ? ` · MATCH ${fmtSigned(M.matchDb)}` : "";
   $("status").textContent = `${on("bypass") ? "BYPASSED" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY"}${match}${M.bpm > 0 ? ` · ${M.bpm.toFixed(0)} BPM` : ""}`;

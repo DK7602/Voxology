@@ -15,11 +15,27 @@ inline constexpr std::array<const char*, kStyles> kStyleNames { "Trap Lead", "Ra
 inline constexpr int kIntensities = 3;
 inline constexpr std::array<const char*, kIntensities> kIntensityNames { "Light", "Balanced", "Strong" };
 
+/** A finished vocal (an acapella) to aim at instead of the style's built-in target: its tone,
+    "s" level, punch and space. Made with analyseReference(); keeps no audio, only the measurements. */
+struct ReferenceProfile
+{
+    bool ok = false;
+    std::string name;                  // shown in the UI and report
+    std::string problem;               // why it can't be used (when !ok), plain language
+    std::string warning;               // usable, but with a catch (e.g. it sounds like a full song)
+    std::vector<double> bandDb;        // third-octave balance vs the 500 Hz - 2 kHz average (analysisBands())
+    double sibilanceDb = -120.0;       // loud "s" vs the voice; -120 = none heard
+    double microDynDb = 0.0;           // word-to-word punch (see VocalAnalysis)
+    double tailDb = -120.0;            // space after phrases; -120 = unknown
+    double voicedSeconds = 0.0;
+};
+
 struct AutoEditSettings
 {
     int style = 0;
     int intensity = 1;
     double bpm = 0.0;          // host tempo; 0 = unknown (120 is used and the report says so)
+    const ReferenceProfile* reference = nullptr;   // when set (and ok): match it instead of the style's target
 };
 
 /** One explained decision: which module and control, the value chosen and why (plain language). */
@@ -52,6 +68,9 @@ struct VocalAnalysis
     double sibilanceHz = 0.0;
     double sibilantShare = 0.0;        // % of singing frames that are sibilant
     double rangeDb = 0.0;              // loud vs quiet phrases (P90 - P10 of 400 ms levels, dB)
+    double microDynDb = 0.0;           // word-to-word punch: P95 - P50 of 50 ms levels while singing (dB; low = compressed)
+    double tailDb = -120.0;            // what rings on after a phrase ends (100 - 300 ms later vs the phrase's end, dB); -120 = unknown
+    double lowBassDb = -120.0;         // energy under 100 Hz vs the whole (dB): a beat's kick and 808 live there
     bool stereo = false, oneSided = false;
 };
 
@@ -75,6 +94,10 @@ const std::vector<double>& analysisBands();
 std::vector<double> styleTarget (int style);
 
 VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double sampleRate);
+
+/** Measures a reference vocal. It should be the vocal on its own: a full song (beat + vocal) reads ~7 dB
+    off the real vocal's tone (measured on 144 pro songs), so that gets a warning (it still works, roughly). */
+ReferenceProfile analyseReference (const std::vector<std::vector<float>>& audio, double sampleRate, const std::string& name);
 
 /** Listens to the vocal, decides every module and explains each choice. */
 AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sampleRate, const AutoEditSettings& settings);

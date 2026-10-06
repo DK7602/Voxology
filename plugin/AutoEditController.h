@@ -1,5 +1,6 @@
 #pragma once
 
+#include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "vox/AutoEdit.h"
@@ -78,6 +79,16 @@ public:
     void onStateRestored (const juce::String& savedReport);
     juce::String getReportForSaving() const;
 
+    /** Reference Match: reads an audio file on a background thread (WAV, AIFF, FLAC, MP3, OGG; up to
+        kRefSeconds from the middle) and keeps only its measurements, which are saved with the project. */
+    static constexpr double kRefSeconds = 120.0;
+    void loadReference (const juce::File& file);
+    void clearReference();
+    juce::String getReferenceJson() const;            // for the UI: state, name, problem, warning
+    juce::String getReferenceForSaving() const;       // the measurements (no audio)
+    void restoreReference (const juce::String& saved);
+    int getReferenceVersion() const noexcept { return refVersion.load(); }
+
     State getState() const noexcept           { return static_cast<State> (stateFlag.load()); }
     float getProgress() const noexcept;
     bool isHearingAudio() const noexcept       { return hearingAudio; }
@@ -116,6 +127,12 @@ private:
     std::atomic<int> reportVersion { 0 };
     mutable juce::CriticalSection reportLock;
     juce::String report;
+
+    mutable juce::CriticalSection refLock;
+    std::shared_ptr<const vox::ReferenceProfile> reference;
+    juce::String pendingRefName;
+    std::atomic<bool> refLoading { false };
+    std::atomic<int> refVersion { 0 };
 
     juce::ThreadPool pool { 1 };              // last: destroyed (and joined) first
 

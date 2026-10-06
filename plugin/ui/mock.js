@@ -44,6 +44,7 @@
 
   // Simulated Auto-Edit (listening runs 3x faster than the real 12 s). Values from the engine's own
   // report on the synthetic test vocal (tools/report.cpp).
+  const ref = { json: JSON.stringify({ state: "none" }), version: 0 };
   const ae = { state: 0, progress: 0, undo: false, version: 0, report: "", snapshot: null };
   function aeFinish() {
     ae.snapshot = { sliders: JSON.parse(JSON.stringify(sliders)), toggles: { ...toggles }, combos: JSON.parse(JSON.stringify(combos)) };
@@ -100,7 +101,7 @@
 
   window.__JUCE__ = {
     initialisationData: {
-      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport"],
+      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "chooseReference", "clearReference", "getReference"],
       __juce__registeredGlobalEventIds: [], __juce__sliders: Object.keys(sliders), __juce__toggles: Object.keys(toggles), __juce__comboBoxes: Object.keys(combos),
     },
     postMessage(message) {
@@ -126,6 +127,10 @@
         if (payload.name === "startAutoEdit") { ae.state = 1; ae.progress = 0; }
         if (payload.name === "cancelAutoEdit" && ae.state === 1) ae.state = 0;
         if (payload.name === "getAutoEditReport") result = ae.report;
+        if (payload.name === "chooseReference") { ref.json = JSON.stringify({ state: "loading" }); ref.version++;
+          setTimeout(() => { ref.json = JSON.stringify({ state: "ok", name: "Favorite Artist - Hook (Acapella)", seconds: 41, problem: "", warning: "" }); ref.version++; }, 1200); }
+        if (payload.name === "clearReference") { ref.json = JSON.stringify({ state: "none" }); ref.version++; }
+        if (payload.name === "getReference") result = ref.json;
         if (payload.name === "undoAutoEdit") {
           result = ae.undo;
           if (ae.snapshot) {
@@ -173,7 +178,7 @@
       matchDb: -1.2, bpm: 140, sr: 48000,
       pitchSung: sing ? +(57 + 0.25 * Math.sin(t * 3)).toFixed(2) : 0, pitchTarget: sing ? 57 : -1,
       pitchCorr: sing && sliders.ptAmount.value > 0 ? +(-0.25 * Math.sin(t * 3) * sliders.ptAmount.value / 100).toFixed(2) : 0,
-      aeState: ae.state, aeProgress: +ae.progress.toFixed(2), aeHearing: true, aeUndo: ae.undo, aeReport: ae.version,
+      aeState: ae.state, aeProgress: +ae.progress.toFixed(2), aeHearing: true, aeUndo: ae.undo, aeReport: ae.version, refVersion: ref.version,
       in: inS, out: outS,
     }));
   }, 1000 / 30);

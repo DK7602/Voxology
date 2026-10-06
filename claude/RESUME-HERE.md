@@ -283,3 +283,32 @@ User's effort plan: high for breath/plosive, medium for Reference Match, high fo
   block-size invariance, Auto-Edit finds them / clean take off, full chain look-ahead: pop -12 dB from its first moment,
   next word at full level). 44 test cases pass; pluginval 10 SUCCESS.
 - To verify by ear: run Auto-Edit, solo the vocal, listen to a "p" word and the gaps; Breaths 0 vs 10 dB with A/B.
+
+## v0.5.0 Reference Match (2026-10-06) + Pops safety net
+- Pops: Auto-Edit always sets Pops >= 60 % (it only acts on a real pop; Auto-Edit hears 12-30 s, the song may pop later).
+- Test data: MUSDB18-7 (SiSEC18-MUS 7 s excerpts, zenodo 3270814, CC-BY 4.0): 144 pro songs, each with the finished
+  vocal stem + full mix. Downloaded to the session scratch only (/tmp, not in the repo). Credit it if derived numbers ship.
+- Findings: (1) reading a vocal's tone from a FULL SONG is ~7.6 dB RMS off the true vocal (no better than our built-in target,
+  8.0), so the reference must be an acapella / vocal stem; full songs get a warning (lowBassDb > -14 dB: vocals <= -20 dB at
+  P95, mixes >= -10.5 dB at P5; 3 / 143 vocals and 1 mix misread). (2) Pro vocals average much less low end (-12.7 dB at
+  200 Hz, -20 at 160) and less presence (-7 to -15 dB at 2.5-5 kHz) than styleTarget() asks for. Most MUSDB songs aren't
+  trap, so the styles were NOT changed; revisit with hip-hop references.
+- dsp: VocalAnalysis gains microDynDb (punch: P95 - P50 of 50 ms levels while singing), tailDb (space: 100-300 ms after a
+  phrase end vs its last 200 ms; -120 unknown), lowBassDb (<100 Hz vs all). ReferenceProfile + analyseReference() (ok /
+  problem / warning; < 3 s of voice = problem). AutoEditSettings.reference.
+- Auto-Edit with a reference: Tone EQ + Low Cut are FITTED (coordinate descent over each band's frequency grid and gain,
+  Mud / Nasal mostly cuts, low cut may rise to 0.95 x lowest notes, max 250 Hz) to the reference's SMOOTHED third-octave shape
+  (energy average with neighbours, so harmonics landing in a band don't steer it); Light = 70 %. De-esser target = the
+  reference's "s" level (clamped -10..0). Compressor Level threshold searched so the output's punch = the reference's (0.5 -
+  10 dB average squeeze). Reverb mix searched so the finished chain's tail = the reference's (0 if the reference is drier;
+  delay off if the delay alone is too wet). Pitch, cleanup, saturation, doubler stay per STYLE. Reasons + "Tone match X -> Y dB".
+- Validation (20 random pairs of pro vocals, one as "you", one as reference): tone distance 8.2 dB (style) -> 5.5 dB
+  (reference); "s" level diff 5.1 -> 2.5 dB; punch diff 2.0 -> 1.7 dB. Remaining tone gap = the voices themselves.
+- Plug-in: AutoEditController::loadReference (background thread, AudioFormatManager basic formats + JUCE_USE_MP3AUDIOFORMAT,
+  up to 120 s from the middle), clearReference, reference JSON for the UI; measurements saved in the state ("aeReference").
+  Native fns chooseReference (FileChooser), clearReference, getReference; frame field refVersion. UI: "+ REFERENCE" chip under
+  the STYLE picker (name + X when loaded, warn colour for full-song / problem); Learn > Auto-Edit Report starts with a
+  REFERENCE MATCH section (how-to, problems, full-song warning); report meta shows "matched to ...".
+- Tests: tests/test_reference.cpp (brighter / thinner reference pulls EQ that way and lands >= 20 % closer; full song warns +
+  report note; too-short refused). 46 test cases pass; pluginval 10 SUCCESS locally.
+- User plan: find an acapella of a vocal they love ("<song> acapella"), load it with + REFERENCE, run Auto-Edit, A/B with MATCH.

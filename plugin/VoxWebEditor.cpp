@@ -65,6 +65,20 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
         .withNativeFunction ("cancelAutoEdit", [this] (const juce::Array<juce::var>&, auto complete) { audioProcessor.autoEdit.cancel(); complete (true); })
         .withNativeFunction ("undoAutoEdit", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.undo()); })
         .withNativeFunction ("getAutoEditReport", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getReportJson()); })
+        .withNativeFunction ("chooseReference", [this] (const juce::Array<juce::var>&, auto complete)
+        {
+            refChooser = std::make_unique<juce::FileChooser> ("Choose a reference vocal (an acapella you like)", juce::File(),
+                                                              "*.wav;*.aif;*.aiff;*.flac;*.mp3;*.ogg");
+            refChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                     [this] (const juce::FileChooser& fc)
+                                     {
+                                         const auto f = fc.getResult();
+                                         if (f.existsAsFile()) audioProcessor.autoEdit.loadReference (f);
+                                     });
+            complete (true);
+        })
+        .withNativeFunction ("clearReference", [this] (const juce::Array<juce::var>&, auto complete) { audioProcessor.autoEdit.clearReference(); complete (true); })
+        .withNativeFunction ("getReference", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getReferenceJson()); })
         .withResourceProvider ([] (const auto& url) { return getResource (url); });
 }
 
@@ -217,6 +231,7 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("aeHearing", ae.isHearingAudio());
     frame->setProperty ("aeUndo", ae.canUndo());
     frame->setProperty ("aeReport", ae.getReportVersion());
+    frame->setProperty ("refVersion", ae.getReferenceVersion());
     frame->setProperty ("in", makeSpectrum (audioProcessor.inputTap, inAnalyser));
     frame->setProperty ("out", makeSpectrum (audioProcessor.outputTap, outAnalyser));
     webView.emitEventIfBrowserIsVisible ("voxMeters", juce::var (frame));

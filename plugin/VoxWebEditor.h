@@ -66,6 +66,7 @@ private:
     std::vector<std::unique_ptr<juce::WebComboBoxRelay>> comboRelays = makeRelays<juce::WebComboBoxRelay> (VoxParams::comboIds());
 
     juce::WebBrowserComponent webView;
+    std::unique_ptr<juce::FileChooser> refChooser;
 
     std::vector<std::unique_ptr<juce::WebSliderParameterAttachment>> sliderAttachments;
     std::vector<std::unique_ptr<juce::WebToggleButtonParameterAttachment>> toggleAttachments;
