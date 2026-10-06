@@ -2,6 +2,7 @@
 
 #include "DynamicEq.h"
 #include "Modules.h"
+#include "PopBreath.h"
 #include "PitchCorrector.h"
 #include "Saturation.h"
 #include "Space.h"
@@ -39,6 +40,8 @@ inline constexpr int kModules = static_cast<int> (Module::count);
 struct ChainMeters
 {
     double gateDb = 0.0;        // deepest gate turn-down (<= 0)
+    double popDb = 0.0;         // deepest plosive cut (<= 0)
+    double breathDb = 0.0;      // deepest breath turn-down (<= 0)
     std::array<double, kDynBands> dynEqDb {};   // deepest Dynamic EQ cut per band (<= 0)
     double deEssDb = 0.0;       // deepest de-esser cut (<= 0)
     double riderDb = 0.0;       // rider gain now
@@ -48,7 +51,7 @@ struct ChainMeters
 };
 
 /** Voxology's vocal chain:
-      Pitch -> Cleanup -> Tone EQ -> Dynamic EQ -> De-Esser -> Rider -> Compressor -> Saturation      (inserts, linked)
+      Pitch -> Cleanup (low cut, gate, pops, breaths) -> Tone EQ -> Dynamic EQ -> De-Esser -> Rider -> Compressor -> Saturation      (inserts, linked)
       -> Doubler -> Delay -> Reverb (added to the vocal, stereo) -> Output gain
     Constant latency (Pitch look-ahead + Saturation oversampling). Framework-free: the plug-in, Auto-Edit and the
     tests all run this same class. prepare() allocates; process() never does (any block size). */
@@ -96,6 +99,8 @@ private:
     int chanCount = 2;
     PitchCorrector pitch;
     Cleanup cleanup;
+    PopRemover pops;
+    BreathControl breaths;
     VocalEQ eq;
     DynamicEq dynEq;
     DeEsser deEsser;
@@ -108,7 +113,7 @@ private:
     std::array<std::vector<double>, kMaxChannels> work;
     std::array<std::vector<double>, kMaxChannels> dryLine;   // latency-delayed input (bypass / A)
     int dryPos = 0;
-    std::vector<double> mono;
+    std::vector<double> mono, side;
     double outGain = 1.0, outGlide = 0.0;
     double mixB = 1.0, gainA = 1.0, gainB = 1.0, abGlide = 0.0;
     ChainMeters meters;

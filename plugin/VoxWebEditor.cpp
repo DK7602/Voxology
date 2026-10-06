@@ -173,6 +173,8 @@ void VoxWebEditor::timerCallback()
     auto& m = audioProcessor.meters;
     auto holdDown = [] (float& hold, float now) { hold = now < hold ? now : hold * 0.8f + now * 0.2f; };   // deepest, then glide back
     holdDown (gateHold, m.gate.exchange (0.0f));
+    holdDown (popHold, m.pops.exchange (0.0f));
+    holdDown (breathHold, m.breath.exchange (0.0f));
     holdDown (essHold, m.deEss.exchange (0.0f));
     juce::Array<juce::var> dyn;
     for (size_t b = 0; b < dynHold.size(); ++b)
@@ -195,6 +197,8 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("inPeak", roundTo (inPkHold, 0.1f));
     frame->setProperty ("outPeak", roundTo (outPkHold, 0.1f));
     frame->setProperty ("gate", roundTo (gateHold, 0.1f));
+    frame->setProperty ("pops", roundTo (popHold, 0.1f));
+    frame->setProperty ("breath", roundTo (breathHold, 0.1f));
     frame->setProperty ("deEss", roundTo (essHold, 0.1f));
     frame->setProperty ("dyn", dyn);
     frame->setProperty ("rider", roundTo (m.rider.load(), 0.1f));

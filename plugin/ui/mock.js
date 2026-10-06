@@ -8,7 +8,7 @@
   const centre = (start, end, c, value, interval = 1) => ({ start, end, skew: Math.log(0.5) / Math.log((c - start) / (end - start)), interval, value });
   const sliders = {
     ptAmount: lin(0, 100, 0), ptSpeed: centre(0, 400, 60, 50), ptHumanize: lin(0, 100, 0),
-    clLowCut: centre(20, 400, 80, 20), clGateThr: lin(-80, -20, -60), clGateRange: lin(0, 30, 0),
+    clLowCut: centre(20, 400, 80, 20), clGateThr: lin(-80, -20, -60), clGateRange: lin(0, 30, 0), clPops: lin(0, 100, 0), clBreath: lin(0, 24, 0),
     dsAmount: lin(0, 100, 0), dsSens: lin(0, 100, 50), dsFreq: centre(3000, 12000, 6000, 6000, 10),
     rdTarget: lin(-40, -6, -20), rdRange: lin(0, 12, 0),
     cpPeak: lin(-40, 0, 0), cpThr: lin(-60, 0, 0), cpRatio: centre(1, 10, 3, 1, 0.01), cpMakeup: lin(0, 24, 0), cpMix: lin(0, 100, 100),
@@ -47,7 +47,7 @@
   const ae = { state: 0, progress: 0, undo: false, version: 0, report: "", snapshot: null };
   function aeFinish() {
     ae.snapshot = { sliders: JSON.parse(JSON.stringify(sliders)), toggles: { ...toggles }, combos: JSON.parse(JSON.stringify(combos)) };
-    const v = { ptAmount: 100, ptSpeed: 10, ptHumanize: 20, clLowCut: 95, clGateThr: -40, clGateRange: 12, eqGain1: 1.3, eqGain2: -1.1, eqFreq2: 630, eqGain4: 1.4, eqGain5: -3, dqCut1: 3, dqFreq1: 125, dqCut2: 4.5, dqFreq2: 400, dqCut4: 3.5, dqFreq4: 3150, dsAmount: 63, dsFreq: 5400,
+    const v = { ptAmount: 100, ptSpeed: 10, ptHumanize: 20, clLowCut: 95, clGateThr: -40, clGateRange: 12, clPops: 80, clBreath: 8, eqGain1: 1.3, eqGain2: -1.1, eqFreq2: 630, eqGain4: 1.4, eqGain5: -3, dqCut1: 3, dqFreq1: 125, dqCut2: 4.5, dqFreq2: 400, dqCut4: 3.5, dqFreq4: 3150, dsAmount: 63, dsFreq: 5400,
       rdTarget: -24, rdRange: 2, cpPeak: -14, cpThr: -27, cpRatio: 4, cpMakeup: 7, saDrive: 3, saMix: 50, dbAmount: 30, dbWidth: 80,
       dlFeedback: 22, dlMix: 14, dlTone: 5000, dlDuck: 60, rvDecay: 1.4, rvPredelay: 30, rvMix: 12, rvTone: 6500, rvDuck: 40, outGain: 1.5 };
     for (const [k, x] of Object.entries(v)) setSlider(k, x);
@@ -67,6 +67,8 @@
         R("pitch", "Amount", "100 %", "You sing on average 21 cents away from the nearest note (normal for a take: the tune tightens it)."),
         R("cleanup", "Low Cut", "95 Hz", "Your lowest notes sit around 130 Hz, so everything under 95 Hz is rumble, mic handling and pops, not voice. Cutting it cleans the low end for the 808 and kick."),
         R("cleanup", "Gate", "−40.0 dB, 12.0 dB down", "The gaps between your phrases have noise at −58.1 dB (room, interface hiss or headphone bleed), 32 dB under your voice. The gate turns those gaps down 12 dB, so the compressor and saturation don't bring that noise up."),
+        R("cleanup", "Pops", "80 %", "Auto-Edit heard 9 pops (the low thump of a \"p\" or \"b\" hitting the mic, up to 18 dB over your voice's normal low end). The remover cuts that thump for the few hundredths of a second it lasts, and leaves the rest of the word alone."),
+        R("cleanup", "Breaths", "−8 dB", "Auto-Edit heard 39 breaths, about 9 dB under your voice. The compressor and saturation later in the chain bring quiet sounds up, so breaths would get louder. They're turned down 8 dB, so the gaps between lines stay clean and the words hit harder. Words and \"s\" sounds are left alone."),
         R("eq", "Body", "+1.3 dB at 180 Hz", "Your voice is 3.0 dB thinner down low than a finished Trap Lead vocal, so a little body adds warmth and weight."),
         R("eq", "Mud", "−1.1 dB at 630 Hz", "There's a build-up around 630 Hz (3.2 dB over a finished vocal) that makes it sound boxy or cloudy. A narrow cut there cleans it without thinning the voice."),
         R("eq", "Nasal", "0 dB", "No honky / nasal peak (800 Hz - 1.6 kHz)."),
@@ -159,6 +161,8 @@
     if (window.__JUCE__.backend) window.__JUCE__.backend.emitByBackend("voxMeters", JSON.stringify({
       inShort: +(-24 + 2 * Math.sin(t / 3)).toFixed(1), outShort: +(-23 + 2 * Math.sin(t / 3) + s("outGain")).toFixed(1),
       inPeak: +(level + 9).toFixed(1), outPeak: +(level + 8 + s("outGain")).toFixed(1),
+      pops: active("clOn") && s("clPops") > 0 && word > 0.05 && word < 0.2 ? +(-s("clPops") / 100 * 18).toFixed(1) : 0,
+      breath: active("clOn") && s("clBreath") > 0 && !sing ? -s("clBreath") : 0,
       gate: active("clOn") && s("clGateRange") > 0 && !sing ? -s("clGateRange") : 0,
       dyn: [0, 1, 2, 3].map((b) => (active("dqOn") && s("dqCut" + (b + 1)) > 0 && sing ? +(-Math.min(s("dqCut" + (b + 1)), s("dqCut" + (b + 1)) * Math.max(0, Math.sin(t * (2.1 + b * 0.7) + b)) ** 3)).toFixed(1) : 0)),
       deEss: active("dsOn") && s("dsAmount") > 0 && word > 0.9 ? +(-s("dsAmount") / 100 * 7).toFixed(1) : 0,

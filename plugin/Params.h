@@ -16,7 +16,7 @@ namespace VoxParams
 
     inline juce::StringArray sliderIds()
     {
-        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "clLowCut", "clGateThr", "clGateRange" };
+        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath" };
         for (int b = 0; b < vox::kEqBands; ++b) { ids.add (n ("eqGain", b)); ids.add (n ("eqFreq", b)); }
         ids.add ("dqSens");
         for (int b = 0; b < vox::kDynBands; ++b) { ids.add (n ("dqCut", b)); ids.add (n ("dqFreq", b)); }
@@ -75,6 +75,10 @@ namespace VoxParams
                 [] (float v, int) { return v <= static_cast<float> (vox::Cleanup::kLowCutOffHz) ? String ("Off") : String (roundToInt (v)) + " Hz"; });
         slider ("clGateThr", "Gate Threshold", NormalisableRange<float> (-80.0f, -20.0f, 0.1f), -60.0f, "dB", dbText);
         slider ("clGateRange", "Gate Range", NormalisableRange<float> (0.0f, 30.0f, 0.1f), 0.0f, "dB", dbText);
+        slider ("clPops", "Plosive Remover", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%",
+                [] (float v, int) { return v < 0.05f ? String ("Off") : String (roundToInt (v)) + " %"; });
+        slider ("clBreath", "Breath Reduction", NormalisableRange<float> (0.0f, static_cast<float> (vox::BreathControl::kMaxReductionDb), 0.1f), 0.0f, "dB",
+                [] (float v, int) { return v < 0.05f ? String ("Off") : String (-v, 1) + " dB"; });
 
         toggle ("eqOn", "Tone EQ On", true);
         for (int b = 0; b < vox::kEqBands; ++b)
@@ -161,6 +165,8 @@ namespace VoxParams
         set ("clLowCut", static_cast<float> (p.cleanup.lowCutHz));
         set ("clGateThr", static_cast<float> (p.cleanup.gateThrDb));
         set ("clGateRange", static_cast<float> (p.cleanup.gateRangeDb));
+        set ("clPops", static_cast<float> (p.cleanup.popAmount));
+        set ("clBreath", static_cast<float> (p.cleanup.breathDb));
         set ("eqOn", 1.0f);
         for (int b = 0; b < vox::kEqBands; ++b)
         {
@@ -231,7 +237,7 @@ namespace VoxParams
             p.bypass = on ("bypass");
             p.listenOriginal = on ("listenA");
             p.pitch = { on ("ptOn"), d ("ptAmount"), idx ("ptKey", 11), idx ("ptScale", vox::kScales - 1), d ("ptSpeed"), d ("ptHumanize") };
-            p.cleanup = { on ("clOn"), d ("clLowCut"), d ("clGateThr"), d ("clGateRange") };
+            p.cleanup = { on ("clOn"), d ("clLowCut"), d ("clGateThr"), d ("clGateRange"), d ("clPops"), d ("clBreath") };
             p.eq.enabled = on ("eqOn");
             for (size_t b = 0; b < static_cast<size_t> (vox::kEqBands); ++b)
             {

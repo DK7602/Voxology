@@ -3,6 +3,7 @@
 #include "vox/DynamicEq.h"
 #include "vox/Fft.h"
 #include "vox/LoudnessMeter.h"
+#include "vox/PopBreath.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -634,6 +635,94 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         else
             reason ("cleanup", "Gate", "Off", a.heardGaps ? "The gaps between your phrases are already quiet (" + db (a.noiseFloorDb) + "), so a gate would only risk chopping word endings."
                                                          : "Auto-Edit heard no gaps between phrases (or you sing straight through), so the gate stays off to protect word endings.");
+    }
+
+    // ---------------------------------------------------------------------------------------- 02 Cleanup: pops + breaths
+    {
+        // Runs both detectors on the vocal after the low cut and gate, and counts what they find.
+        const Signal cleaned = renderMono (raw, sr, p);
+        const double minutes = std::max (a.seconds / 60.0, 0.05);
+        int popCount = 0;
+        double popDeepest = 0.0;
+        {
+            PopRemover pr;
+            pr.prepare (sr, 1);
+            pr.setParams ({ 100.0 });
+            Signal y = cleaned;
+            bool in = false;
+            const auto hop = static_cast<size_t> (std::max (1, static_cast<int> (0.001 * sr)));
+            for (size_t s0 = 0; s0 < y.size(); s0 += hop)
+            {
+                double* ptr = y.data() + s0;
+                pr.process (&ptr, 1, static_cast<int> (std::min (hop, y.size() - s0)));
+                const double c = -pr.takeCutDb();
+                if (c > 6.0 && ! in) { in = true; ++popCount; }
+                if (in && c < 1.0) in = false;
+                popDeepest = std::max (popDeepest, c);
+            }
+        }
+        if (popCount > 0)
+        {
+            static constexpr std::array<double, kIntensities> amounts { 60.0, 80.0, 100.0 };
+            p.cleanup.popAmount = amounts[static_cast<size_t> (intensity)];
+            reason ("cleanup", "Pops", pct (p.cleanup.popAmount),
+                    "Auto-Edit heard " + std::to_string (popCount) + (popCount == 1 ? " pop" : " pops") +
+                    " (the low thump of a \"p\" or \"b\" hitting the mic, up to " + num (popDeepest, 0) +
+                    " dB over your voice's normal low end). The remover cuts that thump for the few hundredths of a second it lasts, and leaves the rest of the word alone.");
+            if (static_cast<double> (popCount) / minutes > 6.0)
+                r.notes.push_back ("POPPY MIC: " + std::to_string (popCount) + " pops in " + num (a.seconds, 0) + " s, so the mic gets hit by air a lot."
+                                   "\nNEED: No. The plosive remover handles them."
+                                   "\nSTEP: Next take, put a pop filter 5 - 10 cm in front of the mic, or angle the mic slightly to the side of your mouth.");
+        }
+        else
+        {
+            p.cleanup.popAmount = 0.0;
+            reason ("cleanup", "Pops", "Off", "No \"p\" or \"b\" pops hit the mic in this part, so the plosive remover stays off.");
+        }
+
+        int breathCount = 0;
+        double breathSeconds = 0.0, breathEnergy = 0.0;
+        size_t breathSamples = 0;
+        {
+            BreathControl bc;
+            bc.prepare (sr, 1);
+            bc.setParams ({ 12.0 });
+            Signal y = cleaned;
+            bool in = false;
+            const auto hop = static_cast<size_t> (std::max (1, static_cast<int> (0.001 * sr)));
+            for (size_t s0 = 0; s0 < y.size(); s0 += hop)
+            {
+                double* ptr = y.data() + s0;
+                const auto len = std::min (hop, y.size() - s0);
+                bc.process (&ptr, 1, static_cast<int> (len));
+                const bool b = bc.inBreath();
+                if (b && ! in) ++breathCount;
+                in = b;
+                if (b)
+                {
+                    breathSeconds += static_cast<double> (len) / sr;
+                    for (size_t k2 = s0; k2 < s0 + len; ++k2) breathEnergy += cleaned[k2] * cleaned[k2];
+                    breathSamples += len;
+                }
+            }
+        }
+        const double breathDb = breathSamples ? energyDb (breathEnergy / static_cast<double> (breathSamples)) - a.voiceRmsDb : -120.0;
+        static constexpr std::array<double, kStyles> breathBase { 9.0, 10.0, 6.0, 12.0, 5.0 };   // Trap Lead, Rap, Melodic, Ad-libs, R&B
+        if (breathCount >= 2 && breathDb > -36.0)
+        {
+            const double amt = std::clamp (std::round (breathBase[static_cast<size_t> (style)] * k / 0.85), 3.0, 18.0);
+            p.cleanup.breathDb = amt;
+            reason ("cleanup", "Breaths", "\xE2\x88\x92" + num (amt, 0) + " dB",
+                    "Auto-Edit heard " + std::to_string (breathCount) + " breaths, about " + num (-breathDb, 0) + " dB under your voice. The compressor and saturation later in the chain bring quiet sounds up, so breaths would get louder. They're turned down " +
+                    num (amt, 0) + " dB" + (style == 2 || style == 4 ? ", only a little, because a bit of breath sounds natural on sung parts." : ", so the gaps between lines stay clean and the words hit harder.") +
+                    " Words and \"s\" sounds are left alone.");
+        }
+        else
+        {
+            p.cleanup.breathDb = 0.0;
+            reason ("cleanup", "Breaths", "Off", breathCount < 2 ? "Auto-Edit heard almost no breaths in this part, so breath control stays off."
+                                                               : "Your breaths are already quiet (about " + num (-breathDb, 0) + " dB under your voice), so there's nothing to turn down.");
+        }
     }
 
     // ---------------------------------------------------------------------------------------- 03 Tone EQ

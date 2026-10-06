@@ -22,7 +22,7 @@ fit();
 
 // ---------------------------------------------------------------------------------------------
 // Parameters
-const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "clLowCut", "clGateThr", "clGateRange", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
+const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
   "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth",
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
@@ -48,7 +48,7 @@ function scaledToNorm(state, v) {
 function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 
 // Latest meter frame.
-const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
+const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
@@ -112,15 +112,23 @@ const MODULES = [
     ],
     stat: () => (val("ptAmount") < 0.05 ? ["idle", false] : M.pitchTarget >= 0 ? [`\u2192 ${noteName(M.pitchTarget)}`, true]
       : [`${NOTES[choice("ptKey")]} ${SCALES_SHORT[choice("ptScale")].split(" ")[0].toLowerCase()}`, true]) },
-  { key: "cleanup", name: "CLEANUP", onId: "clOn", what: "low cut + gate: rumble and room noise out",
+  { key: "cleanup", name: "CLEANUP", onId: "clOn", what: "low cut, pops, breaths and gate: the recording cleaned up",
     cells: () => [
       knob("clLowCut", "Low Cut", "rumble below", (v) => (v <= 20.5 ? "Off" : fmtHz(v)), 20),
-      knob("clGateThr", "Threshold", "gate opens above", fmtDb, -60),
-      knob("clGateRange", "Range", "gaps turned down", (v) => (v < 0.05 ? "Off" : fmtDb(v)), 0),
-      meter("Gate", "turning down now", () => M.gate, 30, false, (v) => (v > -0.1 ? "open" : fmtDb(v))),
+      knob("clPops", "Pops", "p & b thumps", (v) => (v < 0.05 ? "Off" : fmtPct(v)), 0),
+      knob("clBreath", "Breaths", "turned down", (v) => (v < 0.05 ? "Off" : `${MINUS}${v.toFixed(1)} dB`), 0),
+      knob("clGateThr", "Gate", "opens above", fmtDb, -60),
+      knob("clGateRange", "Gate Range", "gaps turned down", (v) => (v < 0.05 ? "Off" : fmtDb(v)), 0),
+      multiMeter("Working", "right now", [["P", () => M.pops, 24, () => val("clPops") >= 0.05], ["B", () => M.breath, 24, () => val("clBreath") >= 0.05],
+        ["G", () => M.gate, 30, () => val("clGateRange") >= 0.05]]),
     ],
-    stat: () => (M.gate < -0.5 ? [`gate ${fmtNum(M.gate, 0)} dB`, true] : val("clLowCut") > 20.5 || val("clGateRange") >= 0.05
-      ? [val("clLowCut") > 20.5 ? `cut ${fmtHz(val("clLowCut"))}` : "gate ready", true] : ["idle", false]) },
+    stat: () => {
+      if (M.pops < -3) return [`pop ${fmtNum(M.pops, 0)} dB`, true];
+      if (M.breath < -1) return [`breath ${fmtNum(M.breath, 0)} dB`, true];
+      if (M.gate < -0.5) return [`gate ${fmtNum(M.gate, 0)} dB`, true];
+      const parts = [val("clLowCut") > 20.5, val("clPops") >= 0.05, val("clBreath") >= 0.05, val("clGateRange") >= 0.05].filter(Boolean).length;
+      return parts ? [val("clLowCut") > 20.5 ? `cut ${fmtHz(val("clLowCut"))}` : "ready", true] : ["idle", false];
+    } },
   { key: "eq", name: "TONE EQ", onId: "eqOn", what: "body, mud, nasal, presence, air",
     cells: () => [
       ...EQ_BANDS.map((b, i) => knob("eqGain" + (i + 1), b.name, "gain", fmtSigned, 0, true)),
@@ -229,7 +237,7 @@ function faceFor(id) {
   if (id === "rvDecay") return ["blank", "s"];
   if (id === "rvPredelay") return ["blank", "ms"];
   if (id === "cpRatio") return ["blank", ":1"];
-  if (/Gain|Thr|Target|Range|Peak|Makeup|Drive|Cut/.test(id)) return ["db", ""];
+  if (/Gain|Thr|Target|Range|Peak|Makeup|Drive|Cut|Breath/.test(id)) return ["db", ""];
   return ["blank", "%"];
 }
 function knobSvg(face, glyph) {
@@ -357,6 +365,28 @@ function meter(label, sub, get, range, up, fmt, floor = 0) {
     const frac = up === true ? (x - floor) / range : up === null ? Math.abs(x) / range : -x / range;
     bar.style.height = `${clamp(frac, 0, 1) * (bar.parentElement.clientHeight - 6)}px`;
     v.textContent = fmt(x);
+  };
+  liveMeters.push(cell);
+  cell.update();
+  return cell;
+}
+
+/** Several live bars in one cell: [letter, value (dB, <= 0), full scale (dB), in use?]. */
+function multiMeter(label, sub, bars) {
+  const cell = document.createElement("div");
+  cell.className = "cell meter-cell dyn-meter";
+  cell.innerHTML = `<span class="cell-label">${label}</span><span class="cell-sub">${sub}</span><div class="dyn-bars">${bars.map(([n]) =>
+    `<div class="dyn-col"><div class="mbar"><i></i></div><span class="dyn-name mono">${n}</span></div>`).join("")}</div><span class="cell-value"></span>`;
+  const is = [...cell.querySelectorAll(".mbar i")], cols = [...cell.querySelectorAll(".dyn-col")], v = cell.querySelector(".cell-value");
+  cell.update = () => {
+    let deepest = 0;
+    bars.forEach(([, get, range, used], k) => {
+      const x = get() || 0;
+      deepest = Math.min(deepest, x);
+      is[k].style.height = `${clamp(-x / range, 0, 1) * (is[k].parentElement.clientHeight - 6)}px`;
+      cols[k].classList.toggle("off", !used());
+    });
+    v.textContent = deepest > -0.1 ? "0 dB" : fmtDb(deepest);
   };
   liveMeters.push(cell);
   cell.update();
@@ -666,14 +696,18 @@ const LEARN = {
       return t;
     } },
   cleanup: {
-    does: "Two clean-up tools before anything else. Low Cut removes everything under the voice: rumble, AC hum, mic-stand bumps and the boom of p and b pops. The gate turns the gaps between your phrases down, so room noise and headphone bleed don't get louder when the compressor works.",
-    how: ["Low Cut: raise it until the voice starts to thin, then back off 10 - 20 Hz. Deep male voices sit around 70 - 90 Hz, higher voices 100 - 150 Hz.",
-      "Gate Threshold: set it between the noise in your gaps and your quietest words.",
-      "Gate Range: how far the gaps go down. 10 - 15 dB sounds natural; more can sound choppy."],
+    does: "Cleans up the recording before anything else. Low Cut removes rumble, hum and mic-stand bumps under the voice. Pops catches the low thump of \"p\" and \"b\" hitting the mic and cuts it for just those few hundredths of a second. Breaths turns your breaths down (they get louder later, when the compressor works) without touching the words. The gate turns the gaps between phrases down, so room noise and headphone bleed don't creep up.",
+    how: ["Low Cut: raise it until the voice starts to thin, then back off 10 - 20 Hz. Deep voices sit around 70 - 90 Hz, higher voices 100 - 150 Hz.",
+      "Pops: 60 - 100 % catches them. It only acts on a pop, so a high setting is safe.",
+      "Breaths: 4 - 8 dB keeps them natural, 10 - 15 dB is the clean, tight rap sound. Off keeps every breath as recorded.",
+      "Gate: set it between the noise in your gaps and your quietest words. Gate Range 10 - 15 dB sounds natural.",
+      "The Working meter shows P (pop cut), B (breath turn-down) and G (gate) live."],
     live: () => {
       const t = [];
       if (val("clGateRange") >= 20) t.push(tip("DEEP GATE", `The gaps go down ${fmtNum(val("clGateRange"), 0)} dB. Breaths vanish completely, which can sound robotic.`, "calm",
-        { need: "Optional. Fine if you like it dead-quiet between lines.", steps: ["Lower Gate Range to about 12 dB for a more natural sound."] }));
+        { need: "Optional. Fine if you like it dead-quiet between lines.", steps: ["Lower Gate Range to about 12 dB, and use Breaths at 8 - 10 dB instead for a cleaner but natural sound."] }));
+      if (val("clBreath") >= 16) t.push(tip("NO AIR", `Breaths go down ${fmtNum(val("clBreath"), 0)} dB, so they're almost gone. Some breath keeps a vocal human, especially on sung parts.`, "calm",
+        { need: "Optional: your call. Rap ad-libs often sound good this tight.", steps: ["Try 8 - 10 dB and compare with A / B."] }));
       return t;
     } },
   eq: {

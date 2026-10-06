@@ -258,3 +258,28 @@ Dynamic EQ (dsp DynamicEq.h/.cpp, module 04, between Tone EQ and De-Esser; Modul
   (< 4 % apart) the guess is "ambiguous" (KeyGuess.ambiguous / altKey / altMinor; confidence capped at 0.4). Auto-Edit only
   trusts a key at >= 60 % and not ambiguous (else Chromatic + "set your beat's key"); Honey Tune shows "G major or C major".
   Lesson: the beat decides the key; tell the user to set Key / Scale from the beat when unsure.
+
+## v0.4.0 Breath control + plosive remover (2026-10-06), inside module 02 CLEANUP
+User's effort plan: high for breath/plosive, medium for Reference Match, high for Unmask and Harmony/formant.
+- dsp PopBreath.h/.cpp: PopRemover (clPops 0-100 %, 100 % = up to 24 dB) and BreathControl (clBreath 0-24 dB). Run after
+  Cleanup's low cut + gate. Params live in CleanupParams (popAmount, breathDb); clOn switches all of Cleanup.
+- FREE LOOK-AHEAD: both listen to the chain INPUT (mono "side" buffer captured before Pitch), which is Pitch's latency
+  (~32 ms) ahead of the audio they process; decisions are delayed to land 3 ms (pops) / 25 ms (breaths) early. No added
+  latency. Standalone (sc == nullptr, Auto-Edit's measuring runs) = no look-ahead.
+- Pops: <150 Hz vs >150 Hz peak followers (0.3 ms / 30 ms), ratio vs a learned normal (running 60th percentile, prior 0 dB =
+  cautious, learns only when not cutting); threshold 9 dB, knee 4, slope 1.5; must be loud (low band within 18 dB of the
+  recent voice level). Cut = two low shelves at 160 Hz (each half the cut), attack 0.5 ms, release 50 ms.
+- Breaths: 10 ms mean-square of body (100-800 Hz), air (1.5-6 kHz), top (>6 kHz), full (>80 Hz); breath = audible, 8+ dB
+  under the recent voice peak, air beats body by 2 dB, not an "s" (top < 1.5 x air), for >= 100 ms (so "sh"/"f"/"h" end
+  first). A word (loud, voiced or "s") ends it at once with a 4 ms release (25 ms ahead in the chain); quiet = 40 ms hold.
+- Auto-Edit (Cleanup): counts pops (cut > 6 dB) -> 60/80/100 % by intensity, POPPY MIC note if > 6 / min; counts breaths and
+  their level vs the voice -> base by style (Trap 9, Rap 10, Melodic 6, Ad-libs 12, R&B 5 dB) x intensity, off if < 2
+  breaths or already 36 dB+ under the voice.
+- User's dry vocal: 9 pops (all right before a sung word), 39 breaths (~1 per 2.7 s), 0.00 s of flagged breath had a pitch.
+  Auto-Edit (Melodic): Pops 80 %, Breaths -6 dB.
+- UI: Cleanup page = Low Cut, Pops, Breaths, Gate, Gate Range + "Working" meter (P / B / G bars; multiMeter()). Learn text
+  + NO AIR tip. Meters "pops", "breath" in the 30 Hz frame.
+- Tests tests/test_popbreath.cpp (pass-through, pop cut / vowels untouched, breaths -10 dB / words and "s" untouched,
+  block-size invariance, Auto-Edit finds them / clean take off, full chain look-ahead: pop -12 dB from its first moment,
+  next word at full level). 44 test cases pass; pluginval 10 SUCCESS.
+- To verify by ear: run Auto-Edit, solo the vocal, listen to a "p" word and the gaps; Breaths 0 vs 10 dB with A/B.

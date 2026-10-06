@@ -10,6 +10,10 @@ void VocalChain::prepare (double sampleRate, int numChannels)
     chanCount = std::clamp (numChannels, 1, kMaxChannels);
     pitch.prepare (sr, chanCount);
     cleanup.prepare (sr, chanCount);
+    // Pops and breaths listen to the chain's input, which is Pitch's latency ahead of them: free look-ahead.
+    pops.prepare (sr, chanCount, pitch.latencySamples());
+    breaths.prepare (sr, chanCount, pitch.latencySamples());
+    side.assign (kChunk, 0.0);
     eq.prepare (sr, chanCount);
     dynEq.prepare (sr, chanCount);
     deEsser.prepare (sr, chanCount);
@@ -32,6 +36,8 @@ void VocalChain::reset() noexcept
 {
     pitch.reset();
     cleanup.reset();
+    pops.reset();
+    breaths.reset();
     eq.reset();
     dynEq.reset();
     deEsser.reset();
@@ -55,6 +61,8 @@ void VocalChain::setParams (const ChainParams& p) noexcept
     params = p;
     pitch.setParams (p.pitch);
     cleanup.setParams (p.cleanup);
+    pops.setParams ({ p.cleanup.enabled ? p.cleanup.popAmount : 0.0 });
+    breaths.setParams ({ p.cleanup.enabled ? p.cleanup.breathDb : 0.0 });
     eq.setParams (p.eq);
     dynEq.setParams (p.dynEq);
     deEsser.setParams (p.deEsser);
@@ -70,6 +78,8 @@ ChainMeters VocalChain::takeMeters() noexcept
 {
     ChainMeters m = meters;
     m.gateDb = cleanup.takeGateDb();
+    m.popDb = pops.takeCutDb();
+    m.breathDb = breaths.takeGainDb();
     m.dynEqDb = dynEq.takeCutDb();
     m.deEssDb = deEsser.takeCutDb();
     m.riderDb = Rider::isNeutral (params.rider) ? 0.0 : rider.currentGainDb();
@@ -102,6 +112,14 @@ void VocalChain::processChunk (int nch, int len) noexcept
         if (++dryPos >= dlen) dryPos = 0;
     }
 
+    // The mono input, before Pitch delays it: the pops / breaths side-chain.
+    for (int i = 0; i < len; ++i)
+    {
+        double m = 0.0;
+        for (int c = 0; c < nch; ++c) m += ch[static_cast<size_t> (c)][i];
+        side[static_cast<size_t> (i)] = m / nch;
+    }
+
     const bool wantB = ! (params.bypass || params.listenOriginal);
     const bool fullyA = ! wantB && mixB == 0.0;
     if (! fullyA || ! params.bypass)
@@ -109,6 +127,8 @@ void VocalChain::processChunk (int nch, int len) noexcept
         // Inserts (the chain keeps running while you listen to A, so B comes back without a jump).
         pitch.process (ch.data(), nch, len);
         cleanup.process (ch.data(), nch, len);
+        pops.process (ch.data(), nch, len, side.data());
+        breaths.process (ch.data(), nch, len, side.data());
         eq.process (ch.data(), nch, len);
         dynEq.process (ch.data(), nch, len);
         deEsser.process (ch.data(), nch, len);

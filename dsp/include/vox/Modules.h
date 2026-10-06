@@ -28,6 +28,8 @@ struct CleanupParams
     double lowCutHz = 20.0;     // <= kLowCutOffHz = off; 24 dB/oct otherwise
     double gateThrDb = -60.0;   // the gate opens above this (peak level, dBFS)
     double gateRangeDb = 0.0;   // how far the gaps are turned down; 0 = gate off
+    double popAmount = 0.0;     // plosive remover, 0..100 % (PopRemover); 0 = off
+    double breathDb = 0.0;      // breath control: how far breaths go down, 0..24 dB (BreathControl); 0 = off
 };
 
 class Cleanup
