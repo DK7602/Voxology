@@ -364,3 +364,15 @@ User's effort plan: high for breath/plosive, medium for Reference Match, high fo
   -> 6.8 % of a core with 2 voices + formant (mono). On the user's dry vocal: voices -7.7 dB under the lead, finite.
 - Honest limits: harmonies follow the sung melody note by note (a "smart" harmonizer, not chord-aware); fast rap gets choppy
   harmonies (meant for hooks / ad-libs); octave down is the most artificial-sounding.
+
+## Thread handoff (2026-10-06): add-ons thread -> "Pitch Improvement" thread
+Add-ons thread finished: v0.3 Dynamic EQ, v0.3.1 fixes, v0.4 Pops + Breaths, v0.5 Reference Match, v0.6 Unmask (BEAT mode),
+v0.7 harmony voices + formant. Last green Windows build: Actions run 37408152948 (v0.7.0). The user hasn't reported Cubase
+results for v0.4-v0.7 yet: ask them (harmonies on their voice, Unmask linking, Pops/Breaths, Reference Match).
+New thread "Pitch Improvement" (user-requested): the Pitch module (dsp PitchCorrector, TD-PSOLA, YIN detection, ~32 ms latency)
+and probably Honey Tune. Known facts to start from: the user sings quite out of tune (avg ~36 cents off on Don_Birthday_2024);
+their key app says C major; the voice alone reads G in the first ~50 s (see v0.3.1 notes); key guess now flags ambiguity.
+Real test audio (session scratch only, re-request if gone): the user's dry vocal Don_Birthday_2024_Vox_only.mp3 (105 s, f0 ~246 Hz).
+PitchCorrector now also has formant (grain read speed) and harmony mode (pulse-aligned grains for ratio < 0.6): keep the
+pitch / Honey Tune / voices tests green when changing it. Start by asking the user what to improve (sound quality, artefacts,
+speed of tracking, key handling, Honey Tune editing?) and propose a short plan with warnings.
