@@ -448,3 +448,19 @@ editing (timing / length, per-note formant, partial re-render). User chose 1 now
 - Limits to tell the user: needs a second Voxology on the beat in BEAT mode, same project (process); needs ~6 s of playback;
   key changes are followed slowly (~40 s memory); relative major / minor can't be told apart (same notes: doesn't matter for
   tuning). Honey Tune (separate plug-in binary) can't see the link - later: ARA key signatures from Cubase.
+
+## v0.10.1 Beat key by NOTE SET + saved test songs (2026-10-06)
+- User's test songs are now in the repo: test-audio/ (see its README: Don_Birthday vocal, Gallas rap / sing clip with beat, mix
+  and master, Don & Lysette acoustic clip with backing vocal). Private repo; user asked to keep them for all future threads and
+  plug-ins. Earlier notes saying "scratch only" are superseded.
+- First real-beat run of v0.10.0 found flip-flopping: Gallas beat (B minor) went 100 % <-> 40 % sure (ambiguity cap: C vs C#
+  barely played); Don & Lysette (E with a D chord) flipped E major <-> A major. Fix: BeatKey now picks the 7-note set holding
+  most of the histogram (hysteresis: a new set must win by 1 % of all), then the home note = set note with the most level +
+  1/4 of its fifth -> tonicOffset (mode). Result {setRoot, tonicOffset, confidence = in-set share mapped 0.70-0.85 -> 0-1,
+  unclear}. followBeatKey(beat, userScale): 7-note scales keep the beat's exact notes (Major +0, Minor / Harm Minor / Minor
+  Penta / Blues +9, Dorian +2, Phrygian +4, Mixolydian +7, Major Penta +0); Chromatic = the beat's own tonic + mode. KeyGuess
+  .notesConfidence removed. Vocal side hysteresis: start following at 0.5, keep down to 0.3. UI names "B minor", "E mixolydian".
+- Real beats now: Gallas B minor (D major notes) conf 1 for the whole clip, tune -3; Don & Lysette E mixolydian (A major
+  notes) conf 1, tune +4. Natural 25 ms in those keys: Gallas note centres 28 -> 21 cents (lots of rap), Don & Lysette 23 -> 14.
+  Sent the user both mixes (tuned vocal + beat).
+- Test: synthetic E - D - A - E loop -> A major notes, home E (mixolydian); vi-IV-I-V accepts A or C home (same notes).

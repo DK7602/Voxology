@@ -107,8 +107,12 @@ void AutoEditController::launchAnalysis()
     if (choice ("ptKeySrc") == 0)
     {
         const auto bk = vox::UnmaskLink::instance().readBeatKey (-1);
-        settings.beatKeyKnown = bk.present && bk.ready && bk.key.notesConfidence >= 0.5;
-        settings.beatKey = bk.key;
+        settings.beatKeyKnown = bk.present && bk.beat.ready && bk.beat.confidence >= 0.5;
+        if (settings.beatKeyKnown)
+        {
+            vox::followBeatKey (bk.beat, 0, settings.beatKeyNote, settings.beatScale);
+            settings.beatKeyName = std::string (vox::kNoteNames[static_cast<size_t> (bk.beat.tonic())]) + " " + vox::modeName (bk.beat.tonicOffset);
+        }
     }
     std::shared_ptr<const vox::ReferenceProfile> ref;
     {

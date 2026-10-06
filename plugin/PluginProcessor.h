@@ -77,7 +77,7 @@ public:
         std::array<std::atomic<int>, 2> hvNotes { -1, -1 };   // the harmony voices' notes (MIDI, -1 = none)
         // Key from the beat. VOCAL: 0 manual, 1 following the beat, 2 no beat found, 3 beat still listening / unsure.
         // BEAT: this beat's own reading (bkState 4 = listening, 5 = has a key).
-        std::atomic<int> bkState { 0 }, bkKey { 0 }, bkMinor { 0 }, keyUsed { 0 }, scaleUsed { 0 };
+        std::atomic<int> bkState { 0 }, bkKey { 0 }, bkMode { 0 }, bkSet { 0 }, bkUnclear { 0 }, keyUsed { 0 }, scaleUsed { 0 };
         std::atomic<float> bkConf { 0.0f }, bkTune { 0.0f }, bkHeard { 0.0f };
     };
     Meters meters;
@@ -112,11 +112,12 @@ private:
     std::atomic<float>* umFocusParam = nullptr;
     std::atomic<float>* keySrcParam = nullptr;
     vox::BeatKey beatKey;              // BEAT mode: the beat's key and tuning
-    bool wasBeat = false;
+    bool wasBeat = false, followingBeat = false;
+    void storeBeatMeters (const vox::BeatKey::Result& r) noexcept;
 
     // Unmask: every instance has a link slot; VOCAL mode publishes its processed vocal's bands there.
     static constexpr int kHop = 128;
-    static constexpr double kBeatKeySure = 0.5;   // notes confidence needed to follow the beat
+    static constexpr double kBeatKeySure = 0.5;   // confidence needed to start following the beat
     double preparedRate = 48000.0;
     int linkSlot = -1;
     juce::String unmaskSourceName, pendingSourceName;   // message thread

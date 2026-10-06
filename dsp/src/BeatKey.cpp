@@ -35,6 +35,7 @@ void BeatKey::reset() noexcept
     pos = 0; sinceLast = 0; decCount = 0; decAcc = 0.0;
     chroma.fill (0.0);
     tuneRe = tuneIm = 0.0;
+    currentSet = -1;
     res = {};
 }
 
@@ -100,12 +101,38 @@ void BeatKey::analyse() noexcept
     tuneRe = tuneRe * fade + frameRe / total;
     tuneIm = tuneIm * fade + frameIm / total;
     res.heardSeconds += 0.25;
-    if (res.heardSeconds >= kMinSeconds)
+    if (res.heardSeconds < kMinSeconds) return;
+
+    // The 7-note set holding the most of the histogram (a new one must win by 1 % of everything).
+    static constexpr std::array<int, 7> major { 0, 2, 4, 5, 7, 9, 11 };
+    double sum = 0.0;
+    for (double c : chroma) sum += c;
+    std::array<double, 12> held {};
+    for (int r = 0; r < 12; ++r)
+        for (int step : major) held[static_cast<size_t> (r)] += chroma[static_cast<size_t> ((r + step) % 12)];
+    int best = 0, second = -1;
+    for (int r = 1; r < 12; ++r) if (held[static_cast<size_t> (r)] > held[static_cast<size_t> (best)]) best = r;
+    for (int r = 0; r < 12; ++r) if (r != best && (second < 0 || held[static_cast<size_t> (r)] > held[static_cast<size_t> (second)])) second = r;
+    if (currentSet < 0 || held[static_cast<size_t> (best)] > held[static_cast<size_t> (currentSet)] + 0.01 * sum) currentSet = best;
+    const int set = currentSet;
+    const double share = held[static_cast<size_t> (set)] / sum;
+
+    // Home: the set's note the beat leans on most (plus a quarter of its fifth, which backs a tonic up).
+    double bestHome = -1.0; int home = 0;
+    for (int step : major)
     {
-        res.ready = true;
-        res.key = keyFromHistogram (chroma);
-        res.tuneCents = 100.0 * std::atan2 (tuneIm, tuneRe) / (2.0 * std::numbers::pi);
+        const int n = (set + step) % 12;
+        const double w = chroma[static_cast<size_t> (n)] + 0.25 * chroma[static_cast<size_t> ((n + 7) % 12)];
+        if (w > bestHome) { bestHome = w; home = step; }
     }
+    res.ready = true;
+    res.setRoot = set;
+    res.tonicOffset = home;
+    // Random / drum-only material spreads over all 12 (a 7-note set holds ~58 %); real music > 85 %.
+    res.confidence = std::clamp ((share - 0.70) / 0.15, 0.0, 1.0);
+    const int other = set == best ? second : best;
+    res.unclear = (held[static_cast<size_t> (set)] - held[static_cast<size_t> (other)]) < 0.03 * sum;
+    res.tuneCents = 100.0 * std::atan2 (tuneIm, tuneRe) / (2.0 * std::numbers::pi);
 }
 
 } // namespace vox

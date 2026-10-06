@@ -1,5 +1,6 @@
 #include "Signals.h"
 #include "vox/BeatKey.h"
+#include "vox/Unmask.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -55,63 +56,66 @@ BeatKey::Result listen (const std::vector<double>& x)
     for (size_t s = 0; s < x.size(); s += 512) bk.process (x.data() + s, static_cast<int> (std::min<size_t> (512, x.size() - s)));
     return bk.result();
 }
-bool sameNotes (const KeyGuess& g, int key, bool minor)
-{
-    // The relative major / minor has the same notes (A minor = C major).
-    const int rel = minor ? (key + 3) % 12 : (key + 9) % 12;
-    return (g.key == key && g.minor == minor) || (g.key == rel && g.minor != minor);
-}
 }
 
 TEST_CASE ("Beat key: a minor trap loop, in tune and detuned", "[beatkey]")
 {
-    // Am - F - C - G, 2 s each, 3 loops (24 s).
+    // Am - F - C - G, 2 s each, 3 loops (24 s): the notes of C major, home A (minor).
     const std::vector<std::pair<int, bool>> prog { { 45, true }, { 41, false }, { 48, false }, { 43, false } };
     for (double detune : { 0.0, -30.0, 22.0 })
     {
         const auto r = listen (beat (prog, 2.0, 3, detune));
-        INFO ("detune " << detune << ": key " << kNoteNames[static_cast<size_t> (r.key.key)] << (r.key.minor ? " minor" : " major")
-              << " conf " << r.key.confidence << " notes conf " << r.key.notesConfidence << " tune " << r.tuneCents);
+        INFO ("detune " << detune << ": notes of " << kNoteNames[static_cast<size_t> (r.setRoot)] << " major, home " << kNoteNames[static_cast<size_t> (r.tonic())]
+              << " " << modeName (r.tonicOffset) << ", conf " << r.confidence << " tune " << r.tuneCents);
         REQUIRE (r.ready);
-        CHECK (sameNotes (r.key, 9, true));
-        CHECK (r.key.notesConfidence >= 0.6);
+        CHECK (r.setRoot == 0);
+        CHECK ((r.tonic() == 9 || r.tonic() == 0));   // vi - IV - I - V: heard as A minor or C major (same notes)
+        CHECK (r.confidence >= 0.8);
         CHECK (std::abs (r.tuneCents - detune) < 6.0);
     }
 }
 
-TEST_CASE ("Beat key: C minor (i - VI - VII - i) and drums alone", "[beatkey]")
+TEST_CASE ("Beat key: C minor (i - VI - VII - i), E mixolydian (E - D - A - E), drums alone", "[beatkey]")
 {
     const std::vector<std::pair<int, bool>> cm { { 48, true }, { 44, false }, { 46, false }, { 48, true } };
     const auto r = listen (beat (cm, 2.0, 3, 0.0));
-    INFO ("key " << kNoteNames[static_cast<size_t> (r.key.key)] << (r.key.minor ? " minor" : " major") << " notes conf " << r.key.notesConfidence);
+    INFO ("notes of " << kNoteNames[static_cast<size_t> (r.setRoot)] << " major, home " << kNoteNames[static_cast<size_t> (r.tonic())] << " " << modeName (r.tonicOffset));
     REQUIRE (r.ready);
-    CHECK (sameNotes (r.key, 0, true));
-    CHECK (r.key.notesConfidence >= 0.6);
+    CHECK (r.setRoot == 3);   // E flat major's notes
+    CHECK (r.tonic() == 0);   // home C: C minor
+    CHECK (r.confidence >= 0.8);
+
+    const std::vector<std::pair<int, bool>> mix { { 40, false }, { 38, false }, { 45, false }, { 40, false } };
+    const auto m = listen (beat (mix, 2.0, 3, 0.0));
+    INFO ("mix: notes of " << kNoteNames[static_cast<size_t> (m.setRoot)] << " major, home " << kNoteNames[static_cast<size_t> (m.tonic())] << " " << modeName (m.tonicOffset));
+    REQUIRE (m.ready);
+    CHECK (m.setRoot == 9);   // A major's notes (D, not D#) ...
+    CHECK (m.tonic() == 4);   // ... at home on E: E mixolydian
 
     // Drums only: no notes to go on -> never sure.
     const auto d = listen (beat (cm, 2.0, 3, 0.0, true));
-    INFO ("drums: ready " << d.ready << " notes conf " << d.key.notesConfidence);
-    CHECK ((! d.ready || d.key.notesConfidence < 0.5));
+    INFO ("drums: ready " << d.ready << " conf " << d.confidence);
+    CHECK ((! d.ready || d.confidence < 0.5));
 }
 
-TEST_CASE ("Beat key: following keeps your scale's flavour", "[beatkey]")
+TEST_CASE ("Beat key: following keeps the beat's notes in any scale flavour", "[beatkey]")
 {
-    KeyGuess cMajor; cMajor.key = 0; cMajor.minor = false;   // = A minor's notes
+    BeatKey::Result b; b.ready = true; b.setRoot = 2; b.tonicOffset = 9;   // B minor (D major's notes)
     int key = -1, scale = -1;
-    followBeatKey (cMajor, 0, key, scale);   // Chromatic -> the beat's own
-    CHECK ((key == 0 && scale == 1));
-    followBeatKey (cMajor, 4, key, scale);   // Minor Pentatonic -> on A
-    CHECK ((key == 9 && scale == 4));
-    followBeatKey (cMajor, 8, key, scale);   // Mixolydian -> on C
-    CHECK ((key == 0 && scale == 8));
-    KeyGuess fMinor; fMinor.key = 5; fMinor.minor = true;
-    followBeatKey (fMinor, 1, key, scale);   // Major -> A flat major (same notes as F minor)
-    CHECK ((key == 8 && scale == 1));
-    followBeatKey (fMinor, 9, key, scale);   // Blues -> on F
-    CHECK ((key == 5 && scale == 9));
+    followBeatKey (b, 0, key, scale);   // Chromatic -> the beat's own: B minor
+    CHECK ((key == 11 && scale == 2));
+    followBeatKey (b, 1, key, scale);   // Major -> D major (same notes)
+    CHECK ((key == 2 && scale == 1));
+    followBeatKey (b, 4, key, scale);   // Minor Pentatonic on B
+    CHECK ((key == 11 && scale == 4));
+    followBeatKey (b, 6, key, scale);   // Dorian -> E dorian (same notes)
+    CHECK ((key == 4 && scale == 6));
+    b.setRoot = 9; b.tonicOffset = 7;   // E mixolydian
+    followBeatKey (b, 0, key, scale);
+    CHECK ((key == 4 && scale == 8));
+    followBeatKey (b, 2, key, scale);   // Minor -> F# minor (same notes)
+    CHECK ((key == 6 && scale == 2));
 }
-
-#include "vox/Unmask.h"
 
 TEST_CASE ("Beat key: through the link, a detuned beat tunes the vocal to it", "[beatkey]")
 {
@@ -123,16 +127,17 @@ TEST_CASE ("Beat key: through the link, a detuned beat tunes the vocal to it", "
     // The beat (Am - F - C - G, 30 cents flat) is heard and published.
     const std::vector<std::pair<int, bool>> prog { { 45, true }, { 41, false }, { 48, false }, { 43, false } };
     const auto r = listen (beat (prog, 2.0, 2, -30.0));
-    link.publishKey (beatSlot, { true, r.ready, r.key, r.tuneCents, r.heardSeconds });
+    link.publishKey (beatSlot, { true, r });
     const auto bk = link.readBeatKey (vocalSlot);
     REQUIRE (bk.present);
-    REQUIRE (bk.ready);
-    CHECK (std::abs (bk.tuneCents + 30.0) < 6.0);
+    REQUIRE (bk.beat.ready);
+    CHECK (bk.beat.setRoot == 0);
+    CHECK (std::abs (bk.beat.tuneCents + 30.0) < 6.0);
 
     // A vocal sung on a true (A440) E3 is pulled to the beat's E3, 30 cents lower.
     PitchParams p; p.amount = 100.0; p.speedMs = 0.0;
-    followBeatKey (bk.key, 2, p.key, p.scale);
-    p.tuneCents = bk.tuneCents;
+    followBeatKey (bk.beat, 2, p.key, p.scale);
+    p.tuneCents = bk.beat.tuneCents;
     CHECK ((p.key == 9 && p.scale == 2));
     const double e3 = 164.81;
     std::vector<double> v (static_cast<size_t> (1.2 * kSr));

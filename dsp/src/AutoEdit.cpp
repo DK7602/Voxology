@@ -760,13 +760,10 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             if (settings.beatKeyKnown)
             {
                 // The beat decides (Pitch follows it live); Key / Scale are only its fallback.
-                const auto& bk = settings.beatKey;
-                pt.key = bk.key;
-                pt.scale = bk.minor ? 2 : 1;
-                const int rel = bk.minor ? (bk.key + 3) % 12 : (bk.key + 9) % 12;
-                const std::string beatName = std::string (kNoteNames[static_cast<size_t> (bk.key)]) + (bk.minor ? " minor" : " major") + " (same notes as "
-                                             + kNoteNames[static_cast<size_t> (rel)] + (bk.minor ? " major)" : " minor)");
-                reason ("pitch", "Key", "From beat: " + beatName, "Voxology on your beat hears " + beatName + ", so Pitch follows the beat. Your voice alone suggested " + keyName + "; the beat always wins.");
+                pt.key = settings.beatKeyNote;
+                pt.scale = settings.beatScale;
+                reason ("pitch", "Key", "From beat: " + settings.beatKeyName, "Voxology on your beat hears " + settings.beatKeyName
+                        + ", so Pitch follows the beat. Your voice alone suggested " + keyName + "; the beat always wins.");
             }
             else if (sure)
                 reason ("pitch", "Key", keyName, "Your sung notes fit " + keyName + " best (" + num (100.0 * kg.confidence, 0) +

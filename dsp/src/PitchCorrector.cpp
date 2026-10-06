@@ -680,16 +680,6 @@ KeyGuess keyFromHistogram (const std::array<double, 12>& hist)
             }
     g.confidence = std::clamp (best * 0.7 + (best - second) * 3.0, 0.0, 1.0);
     if (g.ambiguous) g.confidence = std::min (g.confidence, 0.4);
-    // For tuning only the notes matter: how far ahead is the winner of the best key with other notes
-    // (its relative major / minor has the same notes, so it doesn't count against it)?
-    {
-        const auto a = scaleSet (g.key, g.minor);
-        double other = -2.0;
-        for (int k = 0; k < 12; ++k)
-            for (int mode = 0; mode < 2; ++mode)
-                if (scaleSet (k, mode == 1) != a) other = std::max (other, score[static_cast<size_t> (k)][static_cast<size_t> (mode)]);
-        g.notesConfidence = g.ambiguous ? std::min (0.4, g.confidence) : std::clamp (bestR * 0.7 + (bestR - other) * 3.0, 0.0, 1.0);
-    }
     return g;
 }
 

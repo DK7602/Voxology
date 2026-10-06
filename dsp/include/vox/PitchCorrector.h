@@ -207,8 +207,6 @@ struct KeyGuess
     int key = 0; bool minor = true; double confidence = 0.0; double offCents = 0.0;
     /** A neighbouring key (a note apart) fits about as well: the voice alone can't tell them apart. */
     bool ambiguous = false; int altKey = 0; bool altMinor = false;
-    /** 0..1: how sure the NOTES are (the relative major / minor, same notes, doesn't lower it). */
-    double notesConfidence = 0.0;
 };
 KeyGuess detectKey (const std::vector<double>& midiNotes);
 /** The same from a pitch-class histogram (weights for C .. B); offCents is left 0. */

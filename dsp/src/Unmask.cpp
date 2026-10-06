@@ -89,11 +89,10 @@ void UnmaskLink::publishKey (int slot, const BeatKeyInfo& k) noexcept
     if (slot < 0 || slot >= kSlots) return;
     auto& s = slots[static_cast<size_t> (slot)];
     s.keySeq.fetch_add (1);
-    s.keyPresent.store (k.present); s.keyReady.store (k.ready);
-    s.keyNote.store (k.key.key); s.keyMinor.store (k.key.minor);
-    s.keyAmbiguous.store (k.key.ambiguous); s.keyAlt.store (k.key.altKey); s.keyAltMinor.store (k.key.altMinor);
-    s.keyConf.store (k.key.confidence); s.keyNotesConf.store (k.key.notesConfidence);
-    s.keyTune.store (k.tuneCents); s.keyHeard.store (k.heardSeconds);
+    const auto& b = k.beat;
+    s.keyPresent.store (k.present); s.keyReady.store (b.ready); s.keyUnclear.store (b.unclear);
+    s.keySet.store (b.setRoot); s.keyTonic.store (b.tonicOffset);
+    s.keyConf.store (b.confidence); s.keyTune.store (b.tuneCents); s.keyHeard.store (b.heardSeconds);
     s.keySeq.fetch_add (1);
 }
 
@@ -116,17 +115,17 @@ UnmaskLink::BeatKeyInfo UnmaskLink::readBeatKey (int skipSlot) const noexcept
         {
             const uint32_t a = s.keySeq.load();
             if (a & 1u) continue;
-            k.present = s.keyPresent.load(); k.ready = s.keyReady.load();
-            k.key.key = s.keyNote.load(); k.key.minor = s.keyMinor.load();
-            k.key.ambiguous = s.keyAmbiguous.load(); k.key.altKey = s.keyAlt.load(); k.key.altMinor = s.keyAltMinor.load();
-            k.key.confidence = s.keyConf.load(); k.key.notesConfidence = s.keyNotesConf.load();
-            k.tuneCents = s.keyTune.load(); k.heardSeconds = s.keyHeard.load();
+            auto& b = k.beat;
+            k.present = s.keyPresent.load(); b.ready = s.keyReady.load(); b.unclear = s.keyUnclear.load();
+            b.setRoot = s.keySet.load(); b.tonicOffset = s.keyTonic.load();
+            b.confidence = s.keyConf.load(); b.tuneCents = s.keyTune.load(); b.heardSeconds = s.keyHeard.load();
             if (s.keySeq.load() == a) break;
             k = {};
         }
         if (! k.present) continue;
-        const bool better = ! best.present || (k.ready && ! best.ready)
-                            || (k.ready == best.ready && (k.ready ? k.key.notesConfidence > best.key.notesConfidence : k.heardSeconds > best.heardSeconds));
+        const auto &kb = k.beat, &bb = best.beat;
+        const bool better = ! best.present || (kb.ready && ! bb.ready)
+                            || (kb.ready == bb.ready && (kb.ready ? kb.confidence > bb.confidence : kb.heardSeconds > bb.heardSeconds));
         if (better) best = k;
     }
     return best;

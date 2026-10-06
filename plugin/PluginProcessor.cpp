@@ -23,6 +23,17 @@ VoxologyAudioProcessor::~VoxologyAudioProcessor()
     vox::UnmaskLink::instance().release (linkSlot);
 }
 
+void VoxologyAudioProcessor::storeBeatMeters (const vox::BeatKey::Result& r) noexcept
+{
+    meters.bkKey.store (r.tonic());
+    meters.bkMode.store (r.tonicOffset);
+    meters.bkSet.store (r.setRoot);
+    meters.bkUnclear.store (r.unclear ? 1 : 0);
+    meters.bkConf.store (static_cast<float> (r.confidence));
+    meters.bkTune.store (static_cast<float> (r.tuneCents));
+    meters.bkHeard.store (static_cast<float> (r.heardSeconds));
+}
+
 void VoxologyAudioProcessor::setUnmaskSourceByName (const juce::String& name)
 {
     unmaskSourceName = name;
@@ -156,13 +167,9 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
             beatKey.process (mono.data(), len);
         }
         const auto r = beatKey.result();
-        link.publishKey (linkSlot, { true, r.ready, r.key, r.tuneCents, r.heardSeconds });
+        link.publishKey (linkSlot, { true, r });
         meters.bkState.store (r.ready ? 5 : 4);
-        meters.bkKey.store (r.key.key);
-        meters.bkMinor.store (r.key.minor ? 1 : 0);
-        meters.bkConf.store (static_cast<float> (r.key.notesConfidence));
-        meters.bkTune.store (static_cast<float> (r.tuneCents));
-        meters.bkHeard.store (static_cast<float> (r.heardSeconds));
+        storeBeatMeters (r);
     }
     else
     {
@@ -172,21 +179,17 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
         if (keySrcParam->load() < 0.5f)
         {
             const auto bk = link.readBeatKey (linkSlot);
-            state = ! bk.present ? 2 : (! bk.ready || bk.key.notesConfidence < kBeatKeySure) ? 3 : 1;
+            // Follow once sure; keep following unless it gets much less sure (no flip-flopping).
+            const double need = followingBeat ? kBeatKeySure - 0.2 : kBeatKeySure;
+            state = ! bk.present ? 2 : (! bk.beat.ready || bk.beat.confidence < need) ? 3 : 1;
             if (state == 1)
             {
-                vox::followBeatKey (bk.key, chainParams.pitch.scale, chainParams.pitch.key, chainParams.pitch.scale);
-                chainParams.pitch.tuneCents = bk.tuneCents;
+                vox::followBeatKey (bk.beat, chainParams.pitch.scale, chainParams.pitch.key, chainParams.pitch.scale);
+                chainParams.pitch.tuneCents = bk.beat.tuneCents;
             }
-            if (bk.present)
-            {
-                meters.bkKey.store (bk.key.key);
-                meters.bkMinor.store (bk.key.minor ? 1 : 0);
-                meters.bkConf.store (static_cast<float> (bk.key.notesConfidence));
-                meters.bkTune.store (static_cast<float> (bk.tuneCents));
-                meters.bkHeard.store (static_cast<float> (bk.heardSeconds));
-            }
+            if (bk.present) storeBeatMeters (bk.beat);
         }
+        followingBeat = state == 1;
         meters.bkState.store (state);
         meters.keyUsed.store (chainParams.pitch.key);
         meters.scaleUsed.store (chainParams.pitch.scale);

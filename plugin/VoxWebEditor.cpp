@@ -252,7 +252,9 @@ void VoxWebEditor::timerCallback()
     }
     frame->setProperty ("bkState", m.bkState.load());
     frame->setProperty ("bkKey", m.bkKey.load());
-    frame->setProperty ("bkMinor", m.bkMinor.load());
+    frame->setProperty ("bkMode", m.bkMode.load());
+    frame->setProperty ("bkSet", m.bkSet.load());
+    frame->setProperty ("bkUnclear", m.bkUnclear.load());
     frame->setProperty ("bkConf", roundTo (m.bkConf.load(), 0.01f));
     frame->setProperty ("bkTune", roundTo (m.bkTune.load(), 0.1f));
     frame->setProperty ("bkHeard", roundTo (m.bkHeard.load(), 0.1f));

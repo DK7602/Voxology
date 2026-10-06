@@ -87,10 +87,7 @@ public:
     struct BeatKeyInfo
     {
         bool present = false;     // a Voxology on a beat
-        bool ready = false;       // it has heard enough to say
-        KeyGuess key;
-        double tuneCents = 0.0;
-        double heardSeconds = 0.0;
+        BeatKey::Result beat;     // what it hears (beat.ready: enough to say)
     };
     void publishKey (int slot, const BeatKeyInfo& k) noexcept;
     void clearKey (int slot) noexcept;
@@ -115,9 +112,9 @@ private:
         std::vector<Frame> frames;
         // Beat key (seqlock: odd = being written).
         std::atomic<uint32_t> keySeq { 0 };
-        std::atomic<bool> keyPresent { false }, keyReady { false }, keyMinor { false }, keyAmbiguous { false }, keyAltMinor { false };
-        std::atomic<int> keyNote { 0 }, keyAlt { 0 };
-        std::atomic<double> keyConf { 0.0 }, keyNotesConf { 0.0 }, keyTune { 0.0 }, keyHeard { 0.0 };
+        std::atomic<bool> keyPresent { false }, keyReady { false }, keyUnclear { false };
+        std::atomic<int> keySet { 0 }, keyTonic { 0 };
+        std::atomic<double> keyConf { 0.0 }, keyTune { 0.0 }, keyHeard { 0.0 };
     };
     static int64_t nowMs() noexcept;
 

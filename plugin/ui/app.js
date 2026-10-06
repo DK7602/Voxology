@@ -59,7 +59,7 @@ function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 // Latest meter frame.
 const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1],
-  bkState: 0, bkKey: 0, bkMinor: 0, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, in: null, out: null };
+  bkState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
 
@@ -90,11 +90,11 @@ const SCALES_SHORT = ["Chromatic", "Major", "Minor", "Harm. Minor", "Minor Penta
 const PITCH_MODES = ["Natural", "Classic", "Robot"];
 const fmtVib = (v) => (Math.abs(v) < 0.5 ? "as sung" : v <= -99.5 ? "flat" : `${v > 0 ? "+" : MINUS}${Math.abs(Math.round(v))} %`);
 
-/** The beat's key, both names: "C major / A minor" (same notes). */
+/** The beat's key: its home note and mode ("B minor", "E mixolydian"); short form "Bm", "E mix". */
+const MODE_NAMES = { 0: "major", 2: "dorian", 4: "phrygian", 5: "lydian", 7: "mixolydian", 9: "minor", 11: "locrian" };
+const MODE_SHORT = { 0: "", 2: " dor", 4: " phr", 5: " lyd", 7: " mix", 9: "m", 11: " loc" };
 function beatKeyName(short = false) {
-  const k = M.bkKey, minor = !!M.bkMinor, rel = minor ? (k + 3) % 12 : (k + 9) % 12;
-  const a = `${NOTES[k]} ${minor ? "minor" : "major"}`, b = `${NOTES[rel]} ${minor ? "major" : "minor"}`;
-  return short ? `${NOTES[k]}${minor ? "m" : ""} / ${NOTES[rel]}${minor ? "" : "m"}` : `${a} / ${b}`;
+  return short ? `${NOTES[M.bkKey]}${MODE_SHORT[M.bkMode] ?? ""}` : `${NOTES[M.bkKey]} ${MODE_NAMES[M.bkMode] ?? "major"}`;
 }
 const fmtTune = (c) => `${c >= 0 ? "+" : MINUS}${Math.abs(c).toFixed(0)}\u00A2`;
 
@@ -141,7 +141,7 @@ function beatKeyCell() {
   const name = cell.querySelector(".bk-name"), info = cell.querySelector(".bk-info");
   cell.update = () => {
     if (M.bkState !== 5) { name.textContent = "\u2026"; info.textContent = M.bkHeard > 0 ? `listening ${Math.round(M.bkHeard)} / 6 s` : "press play"; return; }
-    name.textContent = beatKeyName(true);
+    name.textContent = beatKeyName(false);
     info.textContent = `${Math.round(M.bkConf * 100)} % sure \u00B7 tuned ${Math.abs(M.bkTune) < 3 ? "A440" : fmtTune(M.bkTune)}`;
   };
   liveMeters.push(cell);
@@ -897,7 +897,7 @@ const LEARN = {
   pitch: {
     does: "Pitch correction (auto-tune). It hears the note you sing, picks the nearest note of your key, and pulls you onto it. Your voice's tone stays the same (no chipmunk sound); breaths and s sounds are never touched. Three modes: Natural (your voice, just in tune), Classic (the familiar auto-tune glide) and Robot (the hard, stepped trap effect). It's first in the chain, so everything after it hears the tuned voice.",
     how: ["Mode: Natural for a human-sounding lead (notes land on pitch; your vibrato and the start of a scoop stay). Robot for the T-Pain / melodic-trap effect: instant, flat, stepped notes whatever Retune says. Classic is in between and follows Retune.",
-      "Key, Beat (the default): put a second Voxology on your beat track and switch it to BEAT. It hears the beat's key and tuning and Pitch follows them; your Scale choice keeps its flavour (e.g. Minor Penta on the beat's minor key). Key / Scale are the fallback.",
+      "Key, Beat (the default): put a second Voxology on your beat track and switch it to BEAT. It hears the beat's notes, home key and tuning, and Pitch follows them. Your Scale choice picks the flavour within the beat's notes (Minor = its minor home, Minor Penta = the 5 safest notes); Chromatic uses the beat's own key. Key / Scale are the fallback.",
       "Key, Manual: set Key / Scale to your beat's key (often in the beat's name, e.g. \"A min\"). Chromatic allows all 12 notes when you're not sure.",
       "Retune: how fast a note is pulled in. Natural: 10 - 40 ms (your vibrato stays at any speed). Classic: 0 - 10 ms is hard and robotic, 30 - 80 ms tuned but natural, 100+ ms only fixes drift.",
       "Vibrato (Natural): 0 keeps it as you sang it; turn it down to calm a wobbly note (all the way = flat), up to make it deeper.",
