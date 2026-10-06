@@ -540,4 +540,5 @@ length (time-stretch: move notes, stretch ends), 3 per-note formant. Later: key 
   up / down = pitch, sideways = time; grabbing a note's end (7 px) stretches from that end; cursor shows it; cells, links and
   the pitch line are drawn where the note sounds (Original: as sung). Panel: NOTE DRIFT / NOTE VIBRATO / NOTE FORMANT (-6..+6
   st, double-click 0); note info shows "+80 ms, 120 % long". Archive HNY3 adds shift / length / formant per edit (HNY2 / v1 load).
+- CI green: Actions run 37510226963. Sent the user a demo (Don vocal 8-16 s: note #6 stretched 1.4x, #8 moved +80 ms; no clicks, level same).
 - Limits: big stretches of noisy / breathy parts can sound smeary; a note can't be moved past its neighbours (clamped).
