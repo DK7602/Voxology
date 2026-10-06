@@ -171,9 +171,12 @@ void HoneyPanel::refresh()
                    + ", still off-key " + String (off) + "  |  " + String (edited) + " changed by hand  |  heard " + vox::kNoteNames[static_cast<size_t> (s.guess.key)]
                    + (s.guess.minor ? " minor" : " major")
                    + (s.guess.ambiguous ? String (" or ") + vox::kNoteNames[static_cast<size_t> (s.guess.altKey)] + (s.guess.altMinor ? " minor" : " major") : String())
-                   + " (" + String (roundToInt (s.guess.confidence * 100)) + " % sure)";
+                   + " (" + String (roundToInt (s.guess.confidence * 100)) + " % sure)"
+                   + (s.track != nullptr && s.track->aiChecked > 0
+                          ? "  |  AI check: " + String (s.track->aiFixed) + " octave slips fixed, " + String (s.track->aiFound) + " missed notes found"
+                          : String());
             break;
-        case 1: status = "Listening to the clip..."; break;
+        case 1: status = "Listening to the clip, then an AI pitch check (a few seconds per minute of audio)..."; break;
         case 3: status = "Couldn't read the clip's audio."; break;
         default: status = model == nullptr ? "Honey Tune works on a clip: in Cubase select the vocal event, then Audio > Extensions > Honey Tune."
                                           : "Waiting for the clip's audio..."; break;

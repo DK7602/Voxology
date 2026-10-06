@@ -22,6 +22,7 @@ struct Track
     std::vector<double> time;      // input time of each reading (samples)
     std::vector<double> midi;      // fractional MIDI note; 0 = no note (breath, consonant, silence)
     std::vector<double> clarity;   // 0..1
+    int aiChecked = 0, aiFixed = 0, aiFound = 0;   // AI check: moments checked, octave slips fixed, skipped notes found
 };
 
 struct Note
@@ -57,7 +58,13 @@ TimeMap timeMap (const std::vector<Note>& notes, double clipSamples, double samp
 std::vector<float> warp (const std::vector<float>& mono, double sampleRate, const Track& track, const TimeMap& map,
                          size_t from, size_t to);
 
-Track analyse (const std::vector<float>& mono, double sampleRate);
+/** ai: also run the AI check (CREPE, see Crepe.h) every 30 ms where the voice is up: where it and the
+    detector are an octave apart, the one that agrees with the moments around it wins; loud moments the
+    detector called unvoiced (rasp) but the AI is sure about become notes. Offline only (a few seconds per
+    minute of audio, on several threads). */
+Track analyse (const std::vector<float>& mono, double sampleRate, bool ai = true);
+/** The AI check on its own (analyse() runs it when ai is on). */
+void aiCheck (Track& track, const std::vector<float>& mono, double sampleRate);
 std::vector<Note> findNotes (const Track& track);
 
 /** Pulls every note's target to the nearest note of the key / scale (amount 0..1 of the way). */

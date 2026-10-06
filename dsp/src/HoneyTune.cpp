@@ -1,4 +1,7 @@
 #include "vox/HoneyTune.h"
+#include "vox/Crepe.h"
+
+#include <thread>
 
 #include <numbers>
 
@@ -69,7 +72,95 @@ private:
 } // namespace
 
 // ------------------------------------------------------------------------------------------------
-Track analyse (const std::vector<float>& mono, double sr)
+void aiCheck (Track& t, const std::vector<float>& mono, double sr)
+{
+    const size_t n = t.midi.size();
+    if (n == 0 || mono.empty()) return;
+    const auto x = crepe::resampleTo16k (mono, sr);
+    const double hop = 0.03;   // seconds between checks
+    // Loud enough: within 40 dB of the clip's loudest moment.
+    std::vector<double> times, levels;
+    for (double ts = 0.04; (ts + 0.04) * crepe::kRate < static_cast<double> (x.size()); ts += hop)
+    {
+        const auto c = static_cast<size_t> (ts * crepe::kRate);
+        double e = 0.0;
+        for (size_t i = c - 512; i < c + 512; ++i) e += static_cast<double> (x[i]) * x[i];
+        times.push_back (ts);
+        levels.push_back (10.0 * std::log10 (e / 1024.0 + 1.0e-20));
+    }
+    if (times.empty()) return;
+    const double loudest = *std::max_element (levels.begin(), levels.end());
+    std::vector<size_t> todo;
+    for (size_t k = 0; k < times.size(); ++k) if (levels[k] > loudest - 40.0) todo.push_back (k);
+    std::vector<crepe::Estimate> est (times.size());
+    const unsigned threads = std::max (1u, std::min (8u, std::thread::hardware_concurrency()));
+    std::vector<std::thread> pool;
+    for (unsigned w = 0; w < threads; ++w)
+        pool.emplace_back ([&, w]
+        {
+            crepe::Tiny net;
+            for (size_t j = w; j < todo.size(); j += threads)
+            {
+                const auto c = static_cast<size_t> (times[todo[j]] * crepe::kRate);
+                est[todo[j]] = net.run (x.data() + c - 512);
+            }
+        });
+    for (auto& th : pool) th.join();
+    t.aiChecked = static_cast<int> (todo.size());
+
+    // The detector's reading nearest each check (index into the track).
+    auto nearest = [&] (double seconds)
+    {
+        const double tin = seconds * sr;
+        const auto it = std::lower_bound (t.time.begin(), t.time.end(), tin);
+        auto i = static_cast<size_t> (std::clamp<long> (it - t.time.begin(), 0, static_cast<long> (n) - 1));
+        if (i > 0 && std::abs (t.time[i - 1] - tin) < std::abs (t.time[i] - tin)) --i;
+        return i;
+    };
+    std::vector<double> ym (times.size(), 0.0), am (times.size(), 0.0);
+    for (size_t k = 0; k < times.size(); ++k)
+    {
+        ym[k] = t.midi[nearest (times[k])];
+        if (est[k].confidence > 0.6 && est[k].hz > 0.0) am[k] = 69.0 + 12.0 * std::log2 (est[k].hz / 440.0);
+    }
+    auto octaveApart = [] (double a, double b) { const double d = std::abs (a - b); return std::abs (d - 12.0) < 0.7 || std::abs (d - 24.0) < 0.7; };
+    // Apply a decision to the readings within half a hop of check k.
+    auto apply = [&] (size_t k, auto&& fn)
+    {
+        const double a = (times[k] - 0.5 * hop) * sr, b = (times[k] + 0.5 * hop) * sr;
+        for (auto i = static_cast<size_t> (std::lower_bound (t.time.begin(), t.time.end(), a) - t.time.begin()); i < n && t.time[i] < b; ++i) fn (i);
+    };
+    for (size_t k = 0; k < times.size(); ++k)
+    {
+        if (am[k] <= 0.0) continue;
+        if (ym[k] > 0.0 && octaveApart (ym[k], am[k]))
+        {
+            // Context: the moments around (+-120 ms) where both agree.
+            std::vector<double> agree;
+            for (size_t j = (k > 4 ? k - 4 : 0); j < std::min (times.size(), k + 5); ++j)
+                if (j != k && am[j] > 0.0 && ym[j] > 0.0 && std::abs (am[j] - ym[j]) < 0.5) agree.push_back (am[j]);
+            bool aiWins = est[k].confidence > 0.8;
+            if (! agree.empty())
+            {
+                const double m = median (agree);
+                aiWins = std::abs (am[k] - m) < std::abs (ym[k] - m);
+            }
+            if (! aiWins) continue;
+            const double shift = 12.0 * std::round ((am[k] - ym[k]) / 12.0);
+            apply (k, [&] (size_t i) { if (t.midi[i] > 0.0) t.midi[i] += shift; });
+            ++t.aiFixed;
+        }
+        else if (ym[k] <= 0.0 && est[k].confidence > 0.75 && levels[k] > loudest - 20.0)
+        {
+            // A loud moment (within 20 dB of the loudest: not a note's fading tail) the detector skipped (rasp,
+            // grit) that the AI is sure is a note.
+            apply (k, [&] (size_t i) { if (t.midi[i] <= 0.0) { t.midi[i] = am[k]; t.clarity[i] = 0.5 * est[k].confidence; } });
+            ++t.aiFound;
+        }
+    }
+}
+
+Track analyse (const std::vector<float>& mono, double sr, bool ai)
 {
     Track t;
     t.sampleRate = sr;
@@ -130,6 +221,7 @@ Track analyse (const std::vector<float>& mono, double sr)
         for (size_t j = i - 2; j <= i + 2; ++j) if (fixed[j] > 0.0) w.push_back (fixed[j]);
         if (w.size() >= 3) t.midi[i] = median (w);
     }
+    if (ai) aiCheck (t, mono, sr);
     return t;
 }
 

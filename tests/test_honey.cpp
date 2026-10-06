@@ -1,5 +1,6 @@
 #include "Signals.h"
 #include "vox/HoneyTune.h"
+#include "vox/Crepe.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -186,8 +187,9 @@ TEST_CASE ("Honey Tune: an edit re-renders only around its note, same result as 
     INFO ("note 1 level: partial " << rms (prev, after[1].start, after[1].end) << " full " << rms (full, after[1].start, after[1].end) << " input " << rms (std::vector<float> (x), after[1].start, after[1].end)
           << "; first 50 ms: partial " << rms (prev, after[1].start, after[1].start + 0.05 * kSr) << " full " << rms (full, after[1].start, after[1].start + 0.05 * kSr));
     CHECK (rms (prev, from, to) == Approx (rms (full, from, to)).margin (1.5));   // (a 2-semitone move varies +-1 dB with the shifter's start)
+    // (vs the input's own steepest step: a note ending abruptly can come out either way)
     double jx = 0, jy = 0;
-    for (size_t i = 1; i < x.size(); ++i) { jx = std::max (jx, std::abs (static_cast<double> (full[i]) - full[i - 1])); jy = std::max (jy, std::abs (static_cast<double> (prev[i]) - prev[i - 1])); }
+    for (size_t i = 1; i < x.size(); ++i) { jx = std::max (jx, std::abs (static_cast<double> (x[i]) - x[i - 1])); jy = std::max (jy, std::abs (static_cast<double> (prev[i]) - prev[i - 1])); }
     CHECK (jy < 1.2 * jx);
     // Nothing changed -> an empty region.
     CHECK (changedRegion (after, after, static_cast<double> (x.size()), kSr, from, to));
@@ -294,4 +296,50 @@ TEST_CASE ("Honey Tune: move a note later, stretch a note, per-note formant", "[
         CHECK (a.second == Approx (b.second).margin (0.011));
         CHECK (midiOf (hzAt (prev, 0.95, 0.12)) == Approx (60.0).margin (0.05));
     }
+}
+
+TEST_CASE ("AI pitch (CREPE tiny): accurate on clean notes; Honey Tune's AI check repairs an octave slip", "[honey][ai]")
+{
+    // The network on its own: harmonic tones 100 - 600 Hz at 16 kHz.
+    crepe::Tiny net;
+    std::vector<float> f (crepe::kFrame);
+    for (double hz : { 100.0, 146.8, 220.0, 330.0, 523.3 })
+    {
+        for (int i = 0; i < crepe::kFrame; ++i)
+        {
+            double v = 0.0;
+            for (int h = 1; h * hz < 7000.0; ++h) v += std::sin (2 * std::numbers::pi * h * hz * i / crepe::kRate) / h;
+            f[static_cast<size_t> (i)] = static_cast<float> (v);
+        }
+        const auto e = net.run (f.data());
+        INFO (hz << " Hz -> " << e.hz << " Hz, confidence " << e.confidence);
+        CHECK (std::abs (1200.0 * std::log2 (e.hz / hz)) < 12.0);
+        CHECK (e.confidence > 0.7);
+    }
+    // Through the resampler (44.1 kHz -> 16 kHz) the pitch is kept.
+    const auto x = sing ({ { 57, 0.6, 0.2 }, { 64, 0.6, 0.2 } });
+    const auto y16 = crepe::resampleTo16k (x, kSr);
+    const auto e = net.run (y16.data() + static_cast<size_t> (0.3 * crepe::kRate) - crepe::kFrame / 2);
+    CHECK (std::abs (69.0 + 12.0 * std::log2 (e.hz / 440.0) - 57.0) < 0.15);
+
+    // The check: plant an octave slip (the detector's classic mistake on rasp) in the middle of the first
+    // note; the AI, backed by the moments around it, puts it back. A clean track is left as it is.
+    auto t = analyse (x, kSr, false);
+    const auto clean = t;
+    aiCheck (t, x, kSr);
+    CHECK (t.aiFixed == 0);
+    CHECK (t.aiChecked > 20);
+    for (size_t i = 0; i < t.midi.size(); ++i) if (clean.midi[i] > 0.0) REQUIRE (std::abs (t.midi[i] - clean.midi[i]) < 1.0e-9);
+    auto slipped = clean;
+    int planted = 0;
+    for (size_t i = 0; i < slipped.midi.size(); ++i)
+        if (slipped.midi[i] > 0.0 && slipped.time[i] > 0.25 * kSr && slipped.time[i] < 0.37 * kSr) { slipped.midi[i] -= 12.0; ++planted; }
+    REQUIRE (planted > 10);
+    aiCheck (slipped, x, kSr);
+    int back = 0;
+    for (size_t i = 0; i < slipped.midi.size(); ++i)
+        if (clean.midi[i] > 0.0 && slipped.time[i] > 0.27 * kSr && slipped.time[i] < 0.35 * kSr) back += std::abs (slipped.midi[i] - clean.midi[i]) < 0.01 ? 1 : 0;
+    INFO ("fixed " << slipped.aiFixed << " checks; readings back on the note: " << back);
+    CHECK (slipped.aiFixed >= 2);
+    CHECK (back > 10);
 }

@@ -560,3 +560,27 @@ pitch). Baseline mean envelope error 5.2 dB; octave down 11-23 dB and 2 of 9 cas
   ~6-15 dB on the synthetic test - edge cases (singers change the vowel there).
 - Test added: octave down of a source-filter vowel within 4 dB of the ideal (got 1.0), pitch within 10 cents, level within 2 dB.
 - Sent renders: Gallas acapella + its octave-down double, BEFORE (v0.13) and AFTER. CI green: Actions run 37514662285.
+
+## v0.15.0 AI pitch check in Honey Tune (CREPE tiny) (2026-10-06)
+- Model: CREPE "tiny" (marl/crepe, MIT; weights from raw.githubusercontent.com/marl/crepe/models/model-tiny.h5.bz2 - the
+  github.com/.../raw URL is 403 behind the proxy; old PyPI sdists only hold the 88 MB full model). 487,096 weights stored as
+  float16 bits in dsp/src/CrepeWeights.cpp (generated: per conv layer kernel (w x in x out), bias, BN gamma / beta / mean / var;
+  then dense 256x360 + bias; float16 = identical results to float32 on the checks). License: dsp/third_party/CREPE-LICENSE.txt,
+  README "Third-party".
+- dsp Crepe.h / .cpp: vox::crepe::Tiny (6 x [conv 'same' -> ReLU -> BN (eps 1e-3, folded to scale / shift) -> maxpool 2], time-
+  major flatten 4x64, dense sigmoid 360; decode = salience-weighted mean of +-4 bins around the peak, cents = 1997.38 + 20 x bin;
+  Hz = 10 x 2^(c/1200)); per-frame mean / std normalisation. Matches a numpy reference exactly (110 / 220 / 440 / 330 Hz ->
+  109.89 / 220.24 / 440.61 / 329.67). ~7 ms per estimate at -O3 (Crepe.cpp gets -O3 in Release for GCC / Clang).
+  resampleTo16k: Blackman windowed sinc.
+- honey::aiCheck (also public) run by analyse(..., ai = true): every 30 ms where the 16 kHz frame is within 40 dB of the clip's
+  loudest, on up to 8 threads; where detector and AI (conf > 0.6) are an octave (or two) apart, whichever is closer to the
+  median of the agreeing moments within +-120 ms wins (no context: AI if conf > 0.8) -> readings within +-15 ms shifted by
+  octaves; unvoiced readings where the AI is > 0.75 sure and the level is within 20 dB of the loudest become notes (clarity =
+  0.5 x conf). Track.aiChecked / aiFixed / aiFound; Honey Tune status line shows them.
+- Evidence (user's vocals): Don, octave disagreements settled by context: AI right 62, detector right 10; Gallas 3 cases,
+  detector right 3 (the context rule handles both). Results: Don 65 slips fixed + 42 missed notes found; Gallas 0 + 36; Schaf
+  4 + 32; Don & Lysette 66 + 55 (two singers on one track: some may follow the backing voice). Time here (4 cores): +19 s per
+  105 s of audio.
+- Tests: network accuracy 100 - 523 Hz within 12 cents, conf > 0.7; resampler keeps pitch; a planted octave slip is repaired
+  (30 readings back), a clean track is untouched. Partial-render click check now vs the input's own steepest step. 69 cases.
+- Live Voxology chain does NOT use it (too heavy for real time).

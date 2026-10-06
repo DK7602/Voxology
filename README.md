@@ -29,3 +29,8 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
 - `plugin/` JUCE wrapper: `Params.h` (all parameters), processor, `AutoEditController`, web editor.
 - `plugin/ui/` HTML / CSS / JS interface (embedded in the binary).
 - `tests/` Catch2 tests; `tools/report.cpp` prints Auto-Edit's report for a test vocal or a raw file.
+
+## Third-party
+- CREPE "tiny" pitch model weights (`dsp/src/CrepeWeights.cpp`, from github.com/marl/crepe), MIT License,
+  (c) 2018 Jong Wook Kim: see `dsp/third_party/CREPE-LICENSE.txt`. Used by Honey Tune's AI pitch check.
+- JUCE (AGPLv3 / commercial), ARA SDK (Apache 2.0), Catch2 (BSL-1.0): fetched at build time.
