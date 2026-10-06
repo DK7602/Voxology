@@ -398,4 +398,25 @@ epoch marks, see v0.2.1 notes); step 3 MIDI note control + custom note on/off + 
   into ui/juce, serve, screenshot with Playwright (chromium at /opt/pw-browsers).
 - Auto-Edit: Trap Lead Classic 10 ms, Rap Natural 60 ms 70 %, Melodic Classic 5 ms, Ad-libs Robot, R&B Natural 40 ms
   humanize 50; new "Mode" reason line; Pitch-off (rap) leaves Mode on Natural.
-NEXT: user test in Cubase (Natural vs Classic vs Robot on their vocal), then step 2.
+v0.8.0 CI green: Actions run 37456434434.
+
+## v0.9.0 Pitch step 2: no buzz on breath / rasp + Natural reworked (2026-10-06)
+User's dry vocal re-sent in this thread: Don_Birthday_2024_Vox_only.mp3 (105 s; session upload, scratch only, not in repo).
+Test harness (scratch, rebuild if gone): render.cpp (old engine = previous commit's PitchCorrector compiled into namespace
+voxold vs new; prints buzz windows), offkey.cpp (per-note median cents off in C major), dump.cpp (pitch readings).
+- Two bands (PitchCorrector kSplitHz 2 kHz, LR4 low band ring `lo`; high = in - lo): grains carry only the low band; the high
+  band is read at the grains' offset, interpolated between grain Marks (pos, off, preOff, join, split), so it is resampled by
+  the same ratio; at a join (cycle repeat / skip) it crossfades old -> new offset over that grain gap (Hann, like the grains).
+  Only when correcting a single voice (harmony == 0 and formant == 0: those need the whole voice in the grains). No correction
+  = exact low + high = input. Synthetic breathy voice: high-band pulse at the output pitch 0.14-0.17 -> ~0.01 (= input);
+  user's vocal: buzzy 40 ms windows 21-24 -> 0-1 of 2624 (all modes). CPU ~ +0.3 % of a core.
+- Natural reworked after the real vocal: the user's pitch wanders (0.3-0.5 st swings at 2-4 Hz) and the centre-tracking design
+  kept it (note centres 28 -> 20 cents off only). Now: corr glides to (note - midi + kept vibrato) at Retune speed; kept vibrato =
+  band-pass 5.5 Hz Q 1.5 over (midi - centre) per reading, faded in over noteAge 0.1-0.25 s, reset at a new note; Vibrato knob
+  adds (vib/100) x kept. Centre (2 x 80 ms) still picks the note and spots new notes; no-overshoot clamp kept. On the vocal (C
+  major): note centres off 27.9 -> Natural 25 ms 13.5 (10 ms 9.6), Classic 10 ms 10.6, Robot 5.6. Synthetic tests unchanged.
+- Auto-Edit R&B Natural 25 ms. Test "breath and rasp in a note don't turn into a buzz" added (58 cases).
+- Sent the user renders (C major): Natural 25 ms, Classic 10 ms, Robot, Classic before the buzz fix.
+Known: very raspy notes (clarity < 0.5, ~10 % of the user's readings) still get less tuning in Natural / Classic (clarity
+scaling); could relax now that the high band can't buzz - check by ear first.
+NEXT: user listens; step 3 = MIDI note control, per-note on/off, Honey Tune gets the two-band engine automatically (check).

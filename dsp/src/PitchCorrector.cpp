@@ -33,6 +33,9 @@ void PitchCorrector::prepare (double sampleRate, int numChannels)
     mask = ringSize - 1;
     for (auto& v : in) v.assign (static_cast<size_t> (ringSize), 0.0);
     for (auto& v : acc) v.assign (static_cast<size_t> (ringSize), 0.0);
+    for (auto& v : lo) v.assign (static_cast<size_t> (ringSize), 0.0);
+    const auto xo = design::butterworth (false, kSplitHz, sr);
+    for (auto& chain : xover) for (auto& b : chain) design::apply (b, xo);
     wsum.assign (static_cast<size_t> (ringSize), 0.0);
     mono.assign (static_cast<size_t> (ringSize), 0.0);
 
@@ -48,6 +51,11 @@ void PitchCorrector::prepare (double sampleRate, int numChannels)
     design::apply (aa2, lp);
     hop = std::max (32, static_cast<int> (std::lround (0.00267 * sr)));
     levelCoeff = design::onePole (0.010, sr);
+    {
+        // Vibrato band-pass over the pitch readings (one per hop): 5.5 Hz, Q 1.5 (0 dB at the centre).
+        const double w0 = 2.0 * std::numbers::pi * 5.5 * hop / sr, al = std::sin (w0) / (2.0 * 1.5);
+        vibBp.setCoefficients (al, 0.0, -al, 1.0 + al, -2.0 * std::cos (w0), 1.0 - al);
+    }
     reset();
 }
 
@@ -55,13 +63,16 @@ void PitchCorrector::reset() noexcept
 {
     for (auto& v : in) std::fill (v.begin(), v.end(), 0.0);
     for (auto& v : acc) std::fill (v.begin(), v.end(), 0.0);
+    for (auto& v : lo) std::fill (v.begin(), v.end(), 0.0);
+    for (auto& chain : xover) for (auto& b : chain) b.reset();
+    markCount = markRead = 0;
     std::fill (wsum.begin(), wsum.end(), 0.0);
     std::fill (mono.begin(), mono.end(), 0.0);
     std::fill (dbuf.begin(), dbuf.end(), 0.0);
     aa1.reset(); aa2.reset();
     now = 0; dnow = 0; decAcc = 0.0; decCount = 0; hopCount = 0;
     period = 0.0; levelMs = 0.0;
-    note = -1; corr = 0.0; sustain = 0.0; centreA = centreB = 0.0; noteAge = 0.0; jumpRun = 0; voicedRun = 0; lastP = 0.0; noteEnergy = 0.0; clarityS = 1.0;
+    note = -1; corr = 0.0; sustain = 0.0; vibBp.reset(); centreA = centreB = 0.0; noteAge = 0.0; jumpRun = 0; voicedRun = 0; lastP = 0.0; noteEnergy = 0.0; clarityS = 1.0;
     rawP = { 0.0, 0.0, 0.0 };
     last = {};
     synthPos = anaPos = 0.0;
@@ -228,7 +239,7 @@ void PitchCorrector::analyse() noexcept
             jumpRun = std::abs (midi - centreB) > 0.8 ? jumpRun + 1 : 0;
             fresh = jumpRun >= 2;
         }
-        if (fresh) { centreA = centreB = midi; jumpRun = 0; }
+        if (fresh) { centreA = centreB = midi; jumpRun = 0; vibBp.reset(); }
         const double ca = 1.0 - std::exp (-hopSec / 0.08);
         centreA += (midi - centreA) * ca;
         centreB += (centreA - centreB) * ca;
@@ -236,7 +247,11 @@ void PitchCorrector::analyse() noexcept
         sustain = note == prevNote ? sustain + hopSec : 0.0;
         noteAge = note == prevNote && ! fresh ? noteAge + hopSec : 0.0;
 
-        double extra = 0.0;   // applied on top of the glide, unsmoothed (Natural's vibrato control)
+        // Natural keeps real vibrato (the 4 - 7 Hz wobble of a held note: a band-pass over the sung pitch,
+        // its gain faded in over a note's first 0.1 - 0.25 s so a scoop's swing isn't taken for it);
+        // slow wander and drift are tuned out like anything else.
+        const double vib = vibBp.process (midi - centreB);
+        double extra = 0.0;   // applied on top of the glide, unsmoothed (Natural's vibrato)
         if (mode == kPitchRobot)
         {
             // Hard and stepped: the whole pitch line sits on the note, every reading.
@@ -244,9 +259,9 @@ void PitchCorrector::analyse() noexcept
         }
         else
         {
+            const double vibKept = mode == kPitchNatural ? std::clamp ((noteAge - 0.1) / 0.15, 0.0, 1.0) * vib : 0.0;
             const double desired = harmonyVoice ? harmonyNote (note, params.harmony, params.key, params.scale) - midi
-                                 : mode == kPitchNatural ? (note - centreB) * amt
-                                                         : (note - midi) * amt;
+                                                : (note - midi + vibKept) * amt;
             if (harmonyVoice && startOfNote) corr = desired;   // a backing voice starts on its note (no scoop)
             const double tau = params.speedMs / 1000.0 * (1.0 + 3.0 * std::clamp (params.humanize, 0.0, 100.0) / 100.0 * std::clamp (sustain / 0.6, 0.0, 1.0));
             corr += (desired - corr) * (tau <= 1.0e-4 ? 1.0 : 1.0 - std::exp (-hopSec / tau));
@@ -258,8 +273,9 @@ void PitchCorrector::analyse() noexcept
                 const double d = (note - midi) * amt;
                 const double m = std::max (0.0, (noteAge - 0.12) / 0.18);
                 if (m < 1.0) corr = std::clamp (corr, std::min (0.0, d) - m, std::max (0.0, d) + m);
-                // Vibrato: -100 % lays the pitch flat on the note, +100 % doubles its depth.
-                extra = std::clamp (params.vibrato, -100.0, 100.0) / 100.0 * (midi - centreB) * amt;
+                // Vibrato: 0 % keeps it as sung, -100 % lays the pitch flat, +100 % doubles its depth.
+                // (The glide already leaves the vibrato in; this takes it out or adds more.)
+                extra = std::clamp (params.vibrato, -100.0, 100.0) / 100.0 * vibKept * amt;
             }
         }
         last = { true, midi, note, corr, 0.0, 0.0, 0.0 };
@@ -385,6 +401,7 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
         // half a period one cycle is repeated or skipped - once, at a matching waveform point. It is
         // never re-derived from scratch when the detected period changes (that made the read point
         // jump around at word edges: ticks).
+        const double preDrift = drift;
         if (voiced)
         {
             // Joins happen past +-0.6 P, so right after one (offset ~ -+0.4 P) the opposite join needs a
@@ -404,6 +421,11 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
         // In breaths / consonants the offset just holds: a constant offset joins seamlessly (any
         // change in it misaligns two overlapping grains = a tick at the end of a note).
         anaPos = synthPos + drift;
+        // Two bands only when the grains just correct the voice: harmony voices and formant moves need
+        // the whole voice in the grains (the high band would keep its old pitch / formants).
+        const bool split = params.harmony == 0 && std::abs (params.formant) < 0.01;
+        marks[static_cast<size_t> (markCount % kMarks)] = { synthPos, drift, preDrift, std::abs (drift - preDrift) > 0.25 * P, split };
+        ++markCount;
         // Big downward shifts (octave down): each grain must hold ONE glottal pulse, or the two-period
         // grains laid twice as far apart keep the original pitch. Read it centred on the pulse nearest
         // the analysis point (the waveform's peak within half a period). Smaller shifts don't need it.
@@ -446,7 +468,7 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
                        i1 = static_cast<size_t> ((s0 + 1) & mask), i2 = static_cast<size_t> ((s0 + 2) & mask);
             for (int c = 0; c < channels; ++c)
             {
-                const auto& buf = in[static_cast<size_t> (c)];
+                const auto& buf = split ? lo[static_cast<size_t> (c)] : in[static_cast<size_t> (c)];
                 double v = buf[i0];
                 if (f != 0.0)
                 {
@@ -465,6 +487,46 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
     }
 }
 
+double PitchCorrector::cubicAt (const std::vector<double>& buf, int m, double src) noexcept
+{
+    const auto s0 = static_cast<int64_t> (std::floor (src));
+    const double f = src - static_cast<double> (s0);
+    const double y0 = buf[static_cast<size_t> (s0 & m)];
+    if (f == 0.0) return y0;
+    const double ym1 = buf[static_cast<size_t> ((s0 - 1) & m)], y1 = buf[static_cast<size_t> ((s0 + 1) & m)], y2 = buf[static_cast<size_t> ((s0 + 2) & m)];
+    const double c1 = 0.5 * (y1 - ym1), c2 = ym1 - 2.5 * y0 + 2.0 * y1 - 0.5 * y2, c3 = 0.5 * (y2 - ym1) + 1.5 * (y0 - y1);
+    return ((c3 * f + c2) * f + c1) * f + y0;
+}
+
+double PitchCorrector::highAt (int c, double t) const noexcept
+{
+    const auto ci = static_cast<size_t> (c);
+    return cubicAt (in[ci], mask, t) - cubicAt (lo[ci], mask, t);
+}
+
+double PitchCorrector::highBand (int c, int64_t t) noexcept
+{
+    // The marks around t: the high band follows the grains' offset (so it stays in time with them and
+    // moves in pitch with them: reading at a sliding offset resamples it by the same ratio). Where the
+    // grains join (repeat / skip a cycle), it crossfades from the old offset to the new over that gap.
+    const double tt = static_cast<double> (t);
+    while (markRead + 1 < markCount && marks[static_cast<size_t> ((markRead + 1) % kMarks)].pos <= tt) ++markRead;
+    if (markRead < markCount - kMarks + 1) markRead = markCount - kMarks + 1;
+    if (markCount < 2 || markRead + 1 >= markCount) return 0.0;
+    const Mark& a = marks[static_cast<size_t> (markRead % kMarks)];
+    const Mark& b = marks[static_cast<size_t> ((markRead + 1) % kMarks)];
+    if (a.pos > tt) return 0.0;
+    const double u = std::clamp ((tt - a.pos) / std::max (1.0e-9, b.pos - a.pos), 0.0, 1.0);
+    const double w = 0.5 - 0.5 * std::cos (std::numbers::pi * u);   // b's share (the grains' Hann overlap)
+    const double share = (a.split ? 1.0 - w : 0.0) + (b.split ? w : 0.0);
+    if (share <= 0.0) return 0.0;
+    if (! b.join)
+        return share * highAt (c, tt + a.off + (b.off - a.off) * u);
+    const double jump = b.off - b.preOff;
+    return share * ((1.0 - w) * highAt (c, tt + a.off + (b.preOff - a.off) * u)
+                    + w * highAt (c, tt + a.off + jump + (b.preOff - a.off) * u));
+}
+
 void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
 {
     nch = std::min (nch, channels);
@@ -478,6 +540,8 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
         {
             const double v = ch[std::min (c, nch - 1)][i];
             in[static_cast<size_t> (c)][static_cast<size_t> (now & mask)] = v;
+            auto& xo = xover[static_cast<size_t> (c)];
+            lo[static_cast<size_t> (c)][static_cast<size_t> (now & mask)] = xo[1].process (xo[0].process (v));
             m += v;
         }
         m /= channels;
@@ -513,6 +577,7 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
             drift = 0.0;
             for (auto& v : acc) std::fill (v.begin(), v.end(), 0.0);
             std::fill (wsum.begin(), wsum.end(), 0.0);
+            markCount = markRead = 0;
         }
         synthesiseUpTo (now - 1 - static_cast<int64_t> (std::ceil (1.5 * maxP)));
 
@@ -522,7 +587,7 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
         {
             double y = 0.0;
             if (t >= 0)
-                y = ws > 0.05 ? acc[static_cast<size_t> (c)][ti] / ws : in[static_cast<size_t> (c)][ti];
+                y = ws > 0.05 ? acc[static_cast<size_t> (c)][ti] / ws + highBand (c, t) : in[static_cast<size_t> (c)][ti];
             ch[c][i] = y;
         }
         for (auto& v : acc) v[ti] = 0.0;

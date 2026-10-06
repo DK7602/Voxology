@@ -28,8 +28,8 @@ inline constexpr std::array<std::array<bool, 12>, kScales> kScaleMasks {{
 }};
 inline constexpr std::array<const char*, 12> kNoteNames { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
-/** How the tune behaves. Natural: each note's centre is pulled onto the note; vibrato, scoops and
-    life stay (Vibrato can calm or deepen them). Classic: the whole pitch line glides to the note at
+/** How the tune behaves. Natural: notes are pulled onto pitch at the Retune speed but real vibrato
+    (and the start of a scoop) stays; Vibrato can calm or deepen it. Classic: the whole pitch line glides to the note at
     the Retune speed (fast = flat and tight, slow = only drift fixed). Robot: instant, flat, stepped
     notes whatever the knobs say - the hard trap / T-Pain effect. */
 enum PitchMode : int { kPitchNatural = 0, kPitchClassic = 1, kPitchRobot = 2 };
@@ -160,6 +160,7 @@ private:
     double noteAge = 0.0;              // seconds since this note started (voiced, same note)
     int jumpRun = 0;                   // Natural: readings in a row far from the centre (a new note)
     double centreA = 0.0, centreB = 0.0;  // Natural: the note's centre (two one-poles over the sung pitch)
+    Biquad vibBp;                      // Natural: the vibrato band of the sung pitch
     std::array<double, 3> rawP {};     // newest period readings (median of three)
     double lastP = 0.0;                // previous period reading (octave guard)
     double clarityS = 1.0;             // smoothed note clarity (how much of the correction to apply)
@@ -174,6 +175,20 @@ private:
     int frameCount = 0;
     Frame frameAt (double t) const noexcept;
     void pushFrame (double time, double p, double c) noexcept;
+
+    // Two bands (correcting a single voice): the grains carry only the low band (the notes); the airy
+    // high band (breath, rasp, "s" in a note) is read smoothly at the grains' moving offset instead of
+    // being chopped into grains - chopped noise repeats at the voice's pitch: a buzz.
+    static constexpr double kSplitHz = 2000.0;
+    std::array<std::vector<double>, 2> lo;   // low band ring (high = in - lo)
+    std::array<std::array<Biquad, 2>, 2> xover {};
+    struct Mark { double pos = 0.0, off = 0.0, preOff = 0.0; bool join = false, split = false; };
+    static constexpr int kMarks = 256;
+    std::array<Mark, kMarks> marks {};
+    int64_t markCount = 0, markRead = 0;
+    double highAt (int c, double t) const noexcept;
+    double highBand (int c, int64_t t) noexcept;
+    static double cubicAt (const std::vector<double>& buf, int mask, double src) noexcept;
 
     // Synthesis.
     double synthPos = 0.0;             // next output grain centre (input time)

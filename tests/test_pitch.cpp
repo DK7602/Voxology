@@ -279,3 +279,50 @@ TEST_CASE ("Pitch: the new scales", "[pitch]")
     CHECK (PitchCorrector::targetNote (63.1, 9, 9, -1) == 63);
     CHECK (PitchCorrector::targetNote (71.0, 9, 9, -1) != 71);
 }
+
+TEST_CASE ("Pitch: breath and rasp in a note don't turn into a buzz", "[pitch]")
+{
+    // A voice (harmonics under 3.5 kHz) 40 cents sharp with steady breath noise above 2 kHz. Tuning
+    // must not chop the noise into a buzz at the new pitch: the > 4.5 kHz band's envelope should
+    // pulse at the output pitch no more than the input's does.
+    std::mt19937 rng (7);
+    std::normal_distribution<double> g (0.0, 1.0);
+    Biquad n1, n2; design::apply (n1, design::butterworth (true, 2000.0, kSr)); design::apply (n2, design::butterworth (true, 2000.0, kSr));
+    const double f0 = 246.0 * std::pow (2.0, 40.0 / 1200.0);
+    std::vector<double> x (static_cast<size_t> (2.0 * kSr));
+    double ph = 0.0;
+    for (size_t i = 0; i < x.size(); ++i)
+    {
+        ph += f0 / kSr;
+        double s = 0.0;
+        for (int h = 1; h * f0 < 3500.0; ++h) s += std::sin (2 * std::numbers::pi * h * ph) / h;
+        x[i] = 0.1 * s + 0.03 * n2.process (n1.process (g (rng)));
+    }
+    auto pulse = [] (const std::vector<double>& y, double f)
+    {
+        Biquad h1, h2; design::apply (h1, design::butterworth (true, 4500.0, kSr)); design::apply (h2, design::butterworth (true, 4500.0, kSr));
+        const double c = design::onePole (0.0003, kSr);
+        std::vector<double> e (y.size());
+        double env = 0.0;
+        for (size_t i = 0; i < y.size(); ++i) { env += (std::abs (h2.process (h1.process (y[i]))) - env) * c; e[i] = env; }
+        const size_t a = 24000, b = 90000;
+        double m = 0.0; for (size_t i = a; i < b; ++i) m += e[i]; m /= static_cast<double> (b - a);
+        double tot = 0.0;
+        for (int k = 1; k <= 3; ++k)
+        {
+            double re = 0.0, im = 0.0;
+            for (size_t i = a; i < b; ++i) { const double w = 2 * std::numbers::pi * k * f * static_cast<double> (i) / kSr; re += (e[i] - m) * std::cos (w); im -= (e[i] - m) * std::sin (w); }
+            tot += re * re + im * im;
+        }
+        return 2.0 * std::sqrt (tot) / static_cast<double> (b - a) / m;
+    };
+    const double target = 440.0 * std::pow (2.0, (59 - 69) / 12.0);   // B3
+    for (int mode : { kPitchNatural, kPitchClassic, kPitchRobot })
+    {
+        PitchParams p; p.mode = mode; p.amount = 100.0; p.speedMs = 10.0;
+        const auto y = run (p, x);
+        INFO ("mode " << mode << ": pitch " << measureHz (y, 40000) << " Hz, buzz in " << pulse (x, f0) << " out " << pulse (y, target));
+        CHECK (std::abs (cents (measureHz (y, 40000), target)) < 5.0);
+        CHECK (pulse (y, target) < 0.03);   // was ~0.15 with the noise inside the grains
+    }
+}

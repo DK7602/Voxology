@@ -728,7 +728,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             { kPitchNatural, 60.0, 30.0, 70.0, "a light touch: it keeps sung bits near the note without sounding tuned" },
             { kPitchClassic, 5.0, 10.0, 100.0, "the hard melodic-trap sound: every note locks on" },
             { kPitchRobot, 0.0, 0.0, 100.0, "the full robotic effect, the classic ad-lib sound" },
-            { kPitchNatural, 40.0, 50.0, 100.0, "natural R&B tuning: each note lands, slides and vibrato stay" },
+            { kPitchNatural, 25.0, 50.0, 100.0, "natural R&B tuning: each note lands, slides and vibrato stay" },
         }};
         const auto& t = tunes[static_cast<size_t> (style)];
         auto& pt = p.pitch;
