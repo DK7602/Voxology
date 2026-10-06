@@ -7,7 +7,7 @@
   const lin = (start, end, value, interval = 0.1) => ({ start, end, skew: 1, interval, value });
   const centre = (start, end, c, value, interval = 1) => ({ start, end, skew: Math.log(0.5) / Math.log((c - start) / (end - start)), interval, value });
   const sliders = {
-    ptAmount: lin(0, 100, 0), ptSpeed: centre(0, 400, 60, 50), ptHumanize: lin(0, 100, 0), ptFormant: lin(-6, 6, 0),
+    ptAmount: lin(0, 100, 0), ptSpeed: centre(0, 400, 60, 50), ptHumanize: lin(0, 100, 0), ptFormant: lin(-6, 6, 0), ptVibrato: lin(-100, 100, 0, 1),
     hvLevel: lin(0, 100, 50), hvFormant: lin(-6, 6, 0),
     clLowCut: centre(20, 400, 80, 20), clGateThr: lin(-80, -20, -60), clGateRange: lin(0, 30, 0), clPops: lin(0, 100, 0), clBreath: lin(0, 24, 0),
     dsAmount: lin(0, 100, 0), dsSens: lin(0, 100, 50), dsFreq: centre(3000, 12000, 6000, 6000, 10),
@@ -32,7 +32,8 @@
     aeStyle: { choices: ["Trap Lead", "Rap", "Melodic", "Ad-libs", "R&B"], value: 0 },
     aeIntensity: { choices: ["Light", "Balanced", "Strong"], value: 0.5 },
     ptKey: { choices: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"], value: 0 },
-    ptScale: { choices: ["Chromatic", "Major", "Minor", "Harmonic Minor", "Minor Pentatonic", "Major Pentatonic"], value: 0 },
+    ptScale: { choices: ["Chromatic", "Major", "Minor", "Harmonic Minor", "Minor Pentatonic", "Major Pentatonic", "Dorian", "Phrygian", "Mixolydian", "Blues"], value: 0 },
+    ptMode: { choices: ["Natural", "Classic", "Robot"], value: 0 },
     rdSpeed: { choices: ["Slow", "Medium", "Fast"], value: 0.5 },
     saMode: { choices: ["Tape", "Tube", "Clip"], value: 0 },
     dlTime: { choices: ["1/4", "1/8", "1/8 dot", "1/4 dot", "1/16", "1/2"], value: 0 },

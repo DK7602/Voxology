@@ -11,8 +11,9 @@
 namespace vox {
 
 /** Scales for pitch correction: which of the 12 notes (from the key's root) are allowed. */
-inline constexpr int kScales = 6;
-inline constexpr std::array<const char*, kScales> kScaleNames { "Chromatic", "Major", "Minor", "Harmonic Minor", "Minor Pentatonic", "Major Pentatonic" };
+inline constexpr int kScales = 10;
+inline constexpr std::array<const char*, kScales> kScaleNames { "Chromatic", "Major", "Minor", "Harmonic Minor", "Minor Pentatonic", "Major Pentatonic",
+                                                                "Dorian", "Phrygian", "Mixolydian", "Blues" };
 inline constexpr std::array<std::array<bool, 12>, kScales> kScaleMasks {{
     { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
     { 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1 },
@@ -20,8 +21,20 @@ inline constexpr std::array<std::array<bool, 12>, kScales> kScaleMasks {{
     { 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1 },
     { 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0 },
     { 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0 },
+    { 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0 },
+    { 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0 },
+    { 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0 },
+    { 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0 },
 }};
 inline constexpr std::array<const char*, 12> kNoteNames { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+
+/** How the tune behaves. Natural: each note's centre is pulled onto the note; vibrato, scoops and
+    life stay (Vibrato can calm or deepen them). Classic: the whole pitch line glides to the note at
+    the Retune speed (fast = flat and tight, slow = only drift fixed). Robot: instant, flat, stepped
+    notes whatever the knobs say - the hard trap / T-Pain effect. */
+enum PitchMode : int { kPitchNatural = 0, kPitchClassic = 1, kPitchRobot = 2 };
+inline constexpr int kPitchModes = 3;
+inline constexpr std::array<const char*, kPitchModes> kPitchModeNames { "Natural", "Classic", "Robot" };
 
 struct PitchParams
 {
@@ -33,6 +46,8 @@ struct PitchParams
     double humanize = 0.0;    // %: long notes get a slower retune so they keep their life
     double formant = 0.0;     // semitones (-kMaxFormant .. +kMaxFormant): + thinner / younger, - deeper; 0 = your own
     int harmony = 0;          // 0 = correct the voice; else a harmony voice at kHarmonies[harmony] (see below)
+    int mode = kPitchClassic; // PitchMode
+    double vibrato = 0.0;     // % (Natural): -100 = flat, 0 = as sung, +100 = twice as deep
 };
 
 /** Harmony intervals: scale steps when a key / scale is set (they stay in key), semitones with Chromatic. */
@@ -142,9 +157,12 @@ private:
     int note = -1;
     double corr = 0.0;                 // semitones, smoothed
     double sustain = 0.0;              // seconds on the current note
-    std::array<double, 3> rawP {};
-    double lastP = 0.0;
-    double clarityS = 1.0;             // smoothed note clarity (how much of the correction to apply)                // previous period reading (octave guard)     // newest period readings (median of three)
+    double noteAge = 0.0;              // seconds since this note started (voiced, same note)
+    int jumpRun = 0;                   // Natural: readings in a row far from the centre (a new note)
+    double centreA = 0.0, centreB = 0.0;  // Natural: the note's centre (two one-poles over the sung pitch)
+    std::array<double, 3> rawP {};     // newest period readings (median of three)
+    double lastP = 0.0;                // previous period reading (octave guard)
+    double clarityS = 1.0;             // smoothed note clarity (how much of the correction to apply)
     int voicedRun = 0;                 // + consecutive voiced readings, - consecutive unvoiced
     Reading last;
 

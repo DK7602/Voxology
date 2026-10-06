@@ -722,13 +722,13 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
 
     // ---------------------------------------------------------------------------------------- 01 Pitch
     {
-        struct Tune { double speed, humanize, amount; const char* feel; };
+        struct Tune { int mode; double speed, humanize, amount; const char* feel; };
         static constexpr std::array<Tune, kStyles> tunes {{
-            { 10.0, 20.0, 100.0, "a tight, modern trap tune: notes snap in, long notes keep a little life" },
-            { 60.0, 30.0, 70.0, "a light touch: it keeps sung bits near the note without sounding tuned" },
-            { 5.0, 10.0, 100.0, "the hard melodic-trap sound: every note locks on" },
-            { 0.0, 0.0, 100.0, "the full robotic effect, the classic ad-lib sound" },
-            { 80.0, 50.0, 90.0, "natural R&B tuning: slides and vibrato stay, only drift is fixed" },
+            { kPitchClassic, 10.0, 20.0, 100.0, "a tight, modern trap tune: notes snap in, long notes keep a little life" },
+            { kPitchNatural, 60.0, 30.0, 70.0, "a light touch: it keeps sung bits near the note without sounding tuned" },
+            { kPitchClassic, 5.0, 10.0, 100.0, "the hard melodic-trap sound: every note locks on" },
+            { kPitchRobot, 0.0, 0.0, 100.0, "the full robotic effect, the classic ad-lib sound" },
+            { kPitchNatural, 40.0, 50.0, 100.0, "natural R&B tuning: each note lands, slides and vibrato stay" },
         }};
         const auto& t = tunes[static_cast<size_t> (style)];
         auto& pt = p.pitch;
@@ -739,6 +739,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         if (a.f0Median <= 0.0 || a.pitchedShare < 15.0)
         {
             pt.amount = 0.0;
+            pt.mode = kPitchNatural;   // if you turn it up yourself
             keep (Module::pitch);
             reason ("pitch", "Amount", "Off", "Auto-Edit heard almost no held notes (" + num (a.pitchedShare, 0) +
                     " % of the vocal has a clear pitch), so this sounds like rapping, not singing. Tuning spoken words only adds artefacts, so Pitch stays off. Turn it up yourself for the robotic effect.");
@@ -751,6 +752,8 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             pt.amount = std::round (amount);
             pt.speedMs = std::round (speed);
             pt.humanize = t.humanize;
+            pt.mode = t.mode;
+            pt.vibrato = 0.0;
             const bool sure = kg.confidence >= 0.6 && ! kg.ambiguous;   // a wrong key is worse than Chromatic
             pt.key = kg.key;
             pt.scale = sure ? (kg.minor ? 2 : 1) : 0;
@@ -760,6 +763,10 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             else
                 reason ("pitch", "Key", "Chromatic", "Auto-Edit couldn't tell the key from this part (best guess " + keyName +
                         "), so Pitch uses all 12 notes: it can't pull you to a wrong-key note. Set Key / Scale to your beat's key for a tighter tune.");
+            reason ("pitch", "Mode", kPitchModeNames[static_cast<size_t> (pt.mode)],
+                    pt.mode == kPitchNatural ? "Natural pulls the centre of each note onto pitch and leaves your vibrato, scoops and slides alone: you, just in tune."
+                    : pt.mode == kPitchRobot ? "Robot snaps every note instantly and lays it flat: the hard, stepped effect. Switch to Natural for a human sound."
+                                             : "Classic glides the whole pitch line onto the note at the Retune speed: the familiar auto-tune sound. Natural keeps more of your own voice; Robot is harder.");
             reason ("pitch", "Retune", std::to_string (static_cast<int> (pt.speedMs)) + " ms, Humanize " + pct (pt.humanize),
                     std::string ("For ") + kStyleNames[static_cast<size_t> (style)] + ": " + t.feel + ". Lower = more robotic, higher = more natural.");
             reason ("pitch", "Amount", pct (pt.amount), "You sing on average " + num (kg.offCents, 0) + " cents away from the nearest note" +

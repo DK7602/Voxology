@@ -61,7 +61,7 @@ void PitchCorrector::reset() noexcept
     aa1.reset(); aa2.reset();
     now = 0; dnow = 0; decAcc = 0.0; decCount = 0; hopCount = 0;
     period = 0.0; levelMs = 0.0;
-    note = -1; corr = 0.0; sustain = 0.0; voicedRun = 0; lastP = 0.0; noteEnergy = 0.0; clarityS = 1.0;
+    note = -1; corr = 0.0; sustain = 0.0; centreA = centreB = 0.0; noteAge = 0.0; jumpRun = 0; voicedRun = 0; lastP = 0.0; noteEnergy = 0.0; clarityS = 1.0;
     rawP = { 0.0, 0.0, 0.0 };
     last = {};
     synthPos = anaPos = 0.0;
@@ -216,14 +216,52 @@ void PitchCorrector::analyse() noexcept
         const double midi = 69.0 + 12.0 * std::log2 (sr / period / 440.0);
         const int prevNote = note;
         const bool startOfNote = voicedRun <= 2 || note < 0;
-        note = targetNote (midi, params.key, params.scale, note);
-        sustain = note == prevNote ? sustain + hopSec : 0.0;
         const bool harmonyVoice = params.harmony > 0;
-        const double desired = harmonyVoice ? harmonyNote (note, params.harmony, params.key, params.scale) - midi
-                                            : (note - midi) * std::clamp (params.amount, 0.0, 100.0) / 100.0;
-        if (harmonyVoice && startOfNote) corr = desired;   // a backing voice starts on its note (no scoop)
-        const double tau = params.speedMs / 1000.0 * (1.0 + 3.0 * std::clamp (params.humanize, 0.0, 100.0) / 100.0 * std::clamp (sustain / 0.6, 0.0, 1.0));
-        corr += (desired - corr) * (tau <= 1.0e-4 ? 1.0 : 1.0 - std::exp (-hopSec / tau));
+        const int mode = harmonyVoice ? kPitchClassic : std::clamp (params.mode, 0, kPitchModes - 1);
+        const double amt = std::clamp (params.amount, 0.0, 100.0) / 100.0;
+        // Natural: the note's centre follows the sung pitch slowly (two 80 ms one-poles: a 5.5 Hz
+        // vibrato moves it by ~8 %) and picks the note, so a wide vibrato can't flip it. A real move
+        // to another note (0.8 semitone off the centre, two readings running) starts a new centre.
+        bool fresh = startOfNote;
+        if (! fresh)
+        {
+            jumpRun = std::abs (midi - centreB) > 0.8 ? jumpRun + 1 : 0;
+            fresh = jumpRun >= 2;
+        }
+        if (fresh) { centreA = centreB = midi; jumpRun = 0; }
+        const double ca = 1.0 - std::exp (-hopSec / 0.08);
+        centreA += (midi - centreA) * ca;
+        centreB += (centreA - centreB) * ca;
+        note = targetNote (mode == kPitchNatural ? centreB : midi, params.key, params.scale, note);
+        sustain = note == prevNote ? sustain + hopSec : 0.0;
+        noteAge = note == prevNote && ! fresh ? noteAge + hopSec : 0.0;
+
+        double extra = 0.0;   // applied on top of the glide, unsmoothed (Natural's vibrato control)
+        if (mode == kPitchRobot)
+        {
+            // Hard and stepped: the whole pitch line sits on the note, every reading.
+            corr = (note - midi) * amt;
+        }
+        else
+        {
+            const double desired = harmonyVoice ? harmonyNote (note, params.harmony, params.key, params.scale) - midi
+                                 : mode == kPitchNatural ? (note - centreB) * amt
+                                                         : (note - midi) * amt;
+            if (harmonyVoice && startOfNote) corr = desired;   // a backing voice starts on its note (no scoop)
+            const double tau = params.speedMs / 1000.0 * (1.0 + 3.0 * std::clamp (params.humanize, 0.0, 100.0) / 100.0 * std::clamp (sustain / 0.6, 0.0, 1.0));
+            corr += (desired - corr) * (tau <= 1.0e-4 ? 1.0 : 1.0 - std::exp (-hopSec / tau));
+            if (mode == kPitchNatural)
+            {
+                // A note's start (a scoop up into it, a fall into the next): the centre still lags, so
+                // never push past the note - that would turn a scoop from below into an overshoot from
+                // above. The limit lets go over 0.12 - 0.3 s, as the vibrato starts.
+                const double d = (note - midi) * amt;
+                const double m = std::max (0.0, (noteAge - 0.12) / 0.18);
+                if (m < 1.0) corr = std::clamp (corr, std::min (0.0, d) - m, std::max (0.0, d) + m);
+                // Vibrato: -100 % lays the pitch flat on the note, +100 % doubles its depth.
+                extra = std::clamp (params.vibrato, -100.0, 100.0) / 100.0 * (midi - centreB) * amt;
+            }
+        }
         last = { true, midi, note, corr, 0.0, 0.0, 0.0 };
         // Tune by how clear the note is: a clean vowel gets the full correction; rasp, breath and
         // "s" / "sh" mixed into the note get less (re-pitching the noisy part chops it into a buzz at
@@ -231,8 +269,9 @@ void PitchCorrector::analyse() noexcept
         const double clarity = std::min (std::clamp ((kVoicedAperiodicity - aper) / 0.15, 0.0, 1.0),
                                          std::clamp ((bestR - 0.75) / 0.17, 0.0, 1.0));
         clarityS += (clarity - clarityS) * 0.5;
-        // (A harmony voice always takes its whole interval: half of it would just be out of tune.)
-        const double applied = harmonyVoice ? corr : corr * clarityS;
+        // (A harmony voice always takes its whole interval: half of it would just be out of tune. Robot
+        // tunes everything: the grit is part of that sound.)
+        const double applied = harmonyVoice || mode == kPitchRobot ? corr : (corr + extra) * clarityS;
         last.correction = applied;
         last.period = period;
         last.clarity = clarityS;

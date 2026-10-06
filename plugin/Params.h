@@ -16,7 +16,7 @@ namespace VoxParams
 
     inline juce::StringArray sliderIds()
     {
-        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath" };
+        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath" };
         for (int b = 0; b < vox::kEqBands; ++b) { ids.add (n ("eqGain", b)); ids.add (n ("eqFreq", b)); }
         ids.add ("dqSens");
         for (int b = 0; b < vox::kDynBands; ++b) { ids.add (n ("dqCut", b)); ids.add (n ("dqFreq", b)); }
@@ -30,7 +30,7 @@ namespace VoxParams
     {
         return { "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
     }
-    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2" }; }
+    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2" }; }
 
     inline void addTo (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
     {
@@ -77,6 +77,11 @@ namespace VoxParams
         auto stText = [] (float v, int) { return std::abs (v) < 0.05f ? String ("0 st") : (v > 0 ? "+" : "") + String (v, 1) + " st"; };
         const auto fm = static_cast<float> (vox::kMaxFormant);
         slider ("ptFormant", "Pitch Formant", NormalisableRange<float> (-fm, fm, 0.1f), 0.0f, "st", stText);
+        StringArray modes;
+        for (auto* m : vox::kPitchModeNames) modes.add (m);
+        choice ("ptMode", "Pitch Mode", modes, vox::kPitchNatural);
+        slider ("ptVibrato", "Pitch Vibrato", NormalisableRange<float> (-100.0f, 100.0f, 1.0f), 0.0f, "%",
+                [] (float v, int) { return std::abs (v) < 0.5f ? String ("As sung") : v <= -99.5f ? String ("Flat") : (v > 0 ? "+" : "") + String (roundToInt (v)) + " %"; });
 
         // Voices (the doubler's module): two harmony voices in the Pitch key / scale.
         StringArray intervals;
@@ -177,6 +182,8 @@ namespace VoxParams
         set ("ptScale", static_cast<float> (p.pitch.scale));
         set ("ptSpeed", static_cast<float> (p.pitch.speedMs));
         set ("ptHumanize", static_cast<float> (p.pitch.humanize));
+        set ("ptMode", static_cast<float> (p.pitch.mode));
+        set ("ptVibrato", static_cast<float> (p.pitch.vibrato));
         set ("clOn", 1.0f);
         set ("clLowCut", static_cast<float> (p.cleanup.lowCutHz));
         set ("clGateThr", static_cast<float> (p.cleanup.gateThrDb));
@@ -252,7 +259,8 @@ namespace VoxParams
 
             p.bypass = on ("bypass");
             p.listenOriginal = on ("listenA");
-            p.pitch = { on ("ptOn"), d ("ptAmount"), idx ("ptKey", 11), idx ("ptScale", vox::kScales - 1), d ("ptSpeed"), d ("ptHumanize"), d ("ptFormant"), 0 };
+            p.pitch = { on ("ptOn"), d ("ptAmount"), idx ("ptKey", 11), idx ("ptScale", vox::kScales - 1), d ("ptSpeed"), d ("ptHumanize"), d ("ptFormant"), 0,
+                        idx ("ptMode", vox::kPitchModes - 1), d ("ptVibrato") };
             p.voices.interval = { idx ("hv1", vox::kHarmonies - 1), idx ("hv2", vox::kHarmonies - 1) };
             p.voices.level = d ("hvLevel");
             p.voices.formant = d ("hvFormant");

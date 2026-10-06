@@ -376,3 +376,26 @@ Real test audio (session scratch only, re-request if gone): the user's dry vocal
 PitchCorrector now also has formant (grain read speed) and harmony mode (pulse-aligned grains for ratio < 0.6): keep the
 pitch / Honey Tune / voices tests green when changing it. Start by asking the user what to improve (sound quality, artefacts,
 speed of tracking, key handling, Honey Tune editing?) and propose a short plan with warnings.
+
+## v0.8.0 Pitch modes (2026-10-06, "Pitch Improvement" thread)
+User asked for a "more robust, in-depth" tuner: mostly a human voice with corrected notes, but a robotic sound on demand.
+Plan agreed (my call): step 1 modes + vibrato + scales (this); step 2 sound quality on raspy / breathy notes (two-band or
+epoch marks, see v0.2.1 notes); step 3 MIDI note control + custom note on/off + Honey Tune upgrades.
+- PitchParams.mode (kPitchNatural 0 / kPitchClassic 1 / kPitchRobot 2; struct default Classic so Voices / Honey Tune / old
+  tests are untouched; the plug-in param ptMode defaults to Natural) and PitchParams.vibrato (% -100 flat .. +100 double).
+- Natural: note centre = two 80 ms one-poles over the sung pitch (reset at a new note: start of a phrase or 0.8 st off the
+  centre two readings running); the note is picked from the centre (a wide vibrato can't flip it); correction glides to
+  note - centre at Retune speed (Humanize as before); no-overshoot clamp for the first 0.12-0.3 s of a note (a scoop never
+  goes past the note); Vibrato adds (vib/100) x (midi - centre). Classic = the old code path exactly. Robot = corr = note -
+  midi every reading, ignores Retune / Humanize, no clarity scaling (grit gets tuned too).
+- Scales: + Dorian, Phrygian, Mixolydian, Blues (kScales 10; Honey Tune's list picks them up).
+- Measured (tests/test_pitch.cpp, 4 new): G3 35 cents sharp +-40 vibrato -> Natural mean -0.6 cents, vibrato spread 77 -> 83
+  (kept); Vibrato -100 -> spread 7, +100 -> 165; drift -30..+30 cents held within 10; scoop overshoot 0.06 cents; Robot with
+  Retune 400 / Humanize 100 -> mean -0.2, spread 58 -> 10. 57 test cases pass.
+- UI: Pitch page now two rows: Mode (Natural / Classic / Robot), Amount, Retune ("how fast"), Vibrato (bipolar, "as sung"),
+  Humanize, Formant; Key, Scale (2 columns), Tune readout. Knobs the mode ignores are dimmed (.cell.inactive). Learn text
+  rewritten; new tip ROBOT + CHROMATIC. Browser preview: copy plugin/ui + JUCE's native/javascript/{index,check_native_interop}.js
+  into ui/juce, serve, screenshot with Playwright (chromium at /opt/pw-browsers).
+- Auto-Edit: Trap Lead Classic 10 ms, Rap Natural 60 ms 70 %, Melodic Classic 5 ms, Ad-libs Robot, R&B Natural 40 ms
+  humanize 50; new "Mode" reason line; Pitch-off (rap) leaves Mode on Natural.
+NEXT: user test in Cubase (Natural vs Classic vs Robot on their vocal), then step 2.

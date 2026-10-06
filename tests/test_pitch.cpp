@@ -65,6 +65,32 @@ double measureHz (const std::vector<double>& x, size_t from, size_t len = 4800)
     return kSr / (bl + (std::abs (d) > 1e-12 ? 0.5 * (a - c) / d : 0.0));
 }
 double cents (double f, double ref) { return 1200.0 * std::log2 (f / ref); }
+
+/** The same voice following any pitch curve: hz (t seconds). */
+template <typename F>
+std::vector<double> voiceCurve (F hz, double seconds)
+{
+    const size_t n = static_cast<size_t> (kSr * seconds);
+    std::vector<double> x (n);
+    double ph = 0.0;
+    Biquad formant; design::apply (formant, design::bell (700.0, 9.0, 2.0, kSr));
+    for (size_t i = 0; i < n; ++i)
+    {
+        ph += hz (static_cast<double> (i) / kSr) / kSr;
+        double s = 0.0;
+        for (int h = 1; h * hz (static_cast<double> (i) / kSr) < 8000.0; ++h) s += std::sin (2 * std::numbers::pi * h * ph) / h;
+        x[i] = 0.1 * formant.process (s);
+    }
+    return x;
+}
+
+/** Cents vs ref in 25 ms windows from sample a to b: { mean, spread (max - min) }. */
+std::pair<double, double> track (const std::vector<double>& y, double ref, size_t a, size_t b)
+{
+    double lo = 1e9, hi = -1e9, sum = 0; int n = 0;
+    for (size_t s = a; s + 2000 < b; s += 600) { const double c = cents (measureHz (y, s, 1200), ref); lo = std::min (lo, c); hi = std::max (hi, c); sum += c; ++n; }
+    return { sum / n, hi - lo };
+}
 double rmsDb (const std::vector<double>& x, size_t a, size_t b) { double e = 0; for (size_t i = a; i < b; ++i) e += x[i] * x[i]; return 10 * std::log10 (e / static_cast<double> (b - a) + 1e-30); }
 }
 
@@ -181,4 +207,75 @@ TEST_CASE ("Key detection from sung notes", "[pitch]")
     INFO ("key " << kNoteNames[static_cast<size_t> (g.key)] << (g.minor ? " minor" : " major") << " conf " << g.confidence << " off " << g.offCents);
     CHECK ((g.key == 9 && g.minor));
     CHECK (g.offCents < 12.0);
+}
+
+TEST_CASE ("Pitch: Natural fixes each note's centre and keeps the vibrato", "[pitch]")
+{
+    // G3 sung 35 cents sharp with a +-40 cent vibrato (a 5.5 Hz wobble).
+    const double g3 = 196.0;
+    const auto x = voiceCurve ([&] (double t) { return g3 * std::pow (2.0, (35.0 + 40.0 * std::sin (2 * std::numbers::pi * 5.5 * t)) / 1200.0); }, 2.5);
+    const auto in = track (x, g3, 40000, 110000);
+    PitchParams nat; nat.mode = kPitchNatural; nat.amount = 100.0; nat.speedMs = 50.0;
+    const auto y = run (nat, x);
+    const auto out = track (y, g3, 40000, 110000);
+    INFO ("in: mean " << in.first << " spread " << in.second << " / natural: mean " << out.first << " spread " << out.second);
+    CHECK (std::abs (out.first) < 6.0);              // centred on G3
+    CHECK (out.second > 0.8 * in.second);            // vibrato kept
+    CHECK (out.second < 1.25 * in.second);
+
+    PitchParams flat = nat; flat.vibrato = -100.0;   // Vibrato -100 %: laid flat on the note
+    const auto f = track (run (flat, x), g3, 40000, 110000);
+    PitchParams deep = nat; deep.vibrato = 100.0;    // +100 %: twice as deep
+    const auto d = track (run (deep, x), g3, 40000, 110000);
+    INFO ("flat: mean " << f.first << " spread " << f.second << " / deep: spread " << d.second);
+    CHECK (std::abs (f.first) < 6.0);
+    CHECK (f.second < 0.35 * in.second);
+    CHECK (d.second > 1.6 * in.second);
+}
+
+TEST_CASE ("Pitch: Natural fixes slow drift and doesn't overshoot a scoop", "[pitch]")
+{
+    // A4 drifting 30 cents flat -> 30 sharp over 2 s.
+    const auto x = voiceCurve ([] (double t) { return 440.0 * std::pow (2.0, (-30.0 + 30.0 * t) / 1200.0); }, 2.0);
+    PitchParams nat; nat.mode = kPitchNatural; nat.amount = 100.0; nat.speedMs = 30.0;
+    const auto y = run (nat, x);
+    for (size_t s = 24000; s + 6000 < y.size(); s += 6000)
+    {
+        INFO ("at " << s << " in " << cents (measureHz (x, s - 1536, 1200), 440.0) << " out " << cents (measureHz (y, s, 1200), 440.0));
+        CHECK (std::abs (cents (measureHz (y, s, 1200), 440.0)) < 10.0);
+    }
+
+    // A scoop: a semitone below C4 rising onto it over 100 ms, then held. Natural keeps the scoop's
+    // shape and never goes past the note.
+    const double c4 = 261.63;
+    const auto sc = voiceCurve ([&] (double t) { const double u = std::clamp ((t - 0.3) / 0.1, 0.0, 1.0); return c4 * std::pow (2.0, (-1.0 + u) / 12.0); }, 1.2);
+    const auto z = run (nat, sc);
+    double worst = -1e9;
+    for (size_t s = static_cast<size_t> (0.4 * kSr) + 1536; s + 2000 < static_cast<size_t> (0.9 * kSr); s += 240)
+        worst = std::max (worst, cents (measureHz (z, s, 1200), c4));
+    INFO ("highest point after the scoop " << worst << " cents");
+    CHECK (worst < 12.0);
+}
+
+TEST_CASE ("Pitch: Robot is hard and flat whatever the Retune knob says", "[pitch]")
+{
+    const double g3 = 196.0;
+    // 15 cents sharp with a +-30 cent vibrato (its peaks stay on G3's side of the halfway point).
+    const auto x = voiceCurve ([&] (double t) { return g3 * std::pow (2.0, (15.0 + 30.0 * std::sin (2 * std::numbers::pi * 5.5 * t)) / 1200.0); }, 2.0);
+    PitchParams rb; rb.mode = kPitchRobot; rb.amount = 100.0; rb.speedMs = 400.0; rb.humanize = 100.0;
+    const auto in = track (x, g3, 40000, 90000);
+    const auto out = track (run (rb, x), g3, 40000, 90000);
+    INFO ("robot: mean " << out.first << " spread " << out.second << " (in " << in.second << ")");
+    CHECK (std::abs (out.first) < 4.0);
+    CHECK (out.second < 0.3 * in.second);
+}
+
+TEST_CASE ("Pitch: the new scales", "[pitch]")
+{
+    // D dorian (D E F G A B C): F# (66) isn't in it -> F or G.
+    const int t = PitchCorrector::targetNote (66.0, 2, 6, -1);
+    CHECK ((t == 65 || t == 67));
+    // A blues (A C D D# E G): D# (63) is allowed, B (71) isn't.
+    CHECK (PitchCorrector::targetNote (63.1, 9, 9, -1) == 63);
+    CHECK (PitchCorrector::targetNote (71.0, 9, 9, -1) != 71);
 }

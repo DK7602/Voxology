@@ -301,13 +301,25 @@ body.beat #beat-banner { display: flex; flex-direction: column; gap: 4px; margin
 .pf-dot.idle { opacity: 0.3; }
 .pf-cents { font-size: 10.5px; color: var(--ink-soft); }
 #cells[data-page="pitch"] { padding-left: 4px; padding-right: 4px; gap: 4px 2px; }
-#cells[data-page="pitch"] .cell { width: 82px; }
-#cells[data-page="pitch"] .knob, #cells[data-page="pitch"] .knob img, #cells[data-page="pitch"] .knob svg { width: 82px; }
-#cells[data-page="pitch"] .knob { height: 100px; }
+#cells[data-page="pitch"] { padding-top: 8px; padding-bottom: 4px; row-gap: 0; }
+#cells[data-page="pitch"] .cell { width: 102px; height: 178px; }
+#cells[data-page="pitch"] .knob, #cells[data-page="pitch"] .knob img, #cells[data-page="pitch"] .knob svg { width: 86px; }
+#cells[data-page="pitch"] .knob { height: 104px; }
+#cells[data-page="pitch"] .cell.pt-key, #cells[data-page="pitch"] .cell.pt-scale, #cells[data-page="pitch"] .cell.pt-tune { height: 146px; }
 #cells[data-page="pitch"] .cell-sub { font-size: 10px; white-space: nowrap; }
-#cells[data-page="pitch"] .cell:nth-child(5) { width: 158px; }
-#cells[data-page="pitch"] .cell:nth-child(6), #cells[data-page="pitch"] .cell:nth-child(7) { width: 112px; }
+#cells[data-page="pitch"] .cell.pt-mode { width: 104px; margin-right: 6px; }
+#cells[data-page="pitch"] .pt-mode .vseg.list { width: 100px; gap: 6px; margin-top: 12px; }
+#cells[data-page="pitch"] .pt-mode .vseg.list button { height: 30px; font-size: 13px; }
+#cells[data-page="pitch"] .cell.pt-key { width: 168px; margin-left: 40px; }
+#cells[data-page="pitch"] .cell.pt-scale { width: 210px; }
+#cells[data-page="pitch"] .cell.pt-scale .vseg.keys { width: 206px; grid-template-columns: 1fr 1fr; gap: 3px 4px; margin-top: 6px; }
+#cells[data-page="pitch"] .cell.pt-scale .vseg.keys button { height: 20px; font-size: 11px; }
+#cells[data-page="pitch"] .cell.pt-key .vseg.keys button { height: 27px; }
+#cells[data-page="pitch"] .cell.pt-key .vseg.keys { margin-top: 6px; }
+#cells[data-page="pitch"] .cell.pt-tune .pitch-face { margin-top: 6px; width: 124px; }
+#cells[data-page="pitch"] .cell.pt-tune { width: 130px; }
 #cells[data-page="pitch"] .vseg.keys { width: 156px; gap: 4px; }
+.cell.inactive { opacity: 0.4; }
 #cells[data-page="double"] .cell:nth-child(3), #cells[data-page="double"] .cell:nth-child(4) { width: 132px; }
 #cells[data-page="double"] .vseg.keys { width: 128px; gap: 4px; }
 #cells[data-page="double"] .vseg.keys button { height: 30px; font-size: 12px; }

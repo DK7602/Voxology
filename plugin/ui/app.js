@@ -25,12 +25,12 @@ fit();
 
 // ---------------------------------------------------------------------------------------------
 // Parameters
-const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
+const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
   "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth",
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
 const TOGGLES = ["bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn"];
-const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2"];
+const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
 for (const id of TOGGLES) P[id] = Juce.getToggleState(id);
@@ -84,8 +84,37 @@ const eqFreq = (b) => val("eqFreq" + (b + 1));
 const compNeutral = () => val("cpPeak") > -0.05 && val("cpRatio") < 1.005 && Math.abs(val("cpMakeup")) < 0.005;
 
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-const SCALES = ["Chromatic", "Major", "Minor", "Harmonic Minor", "Minor Pentatonic", "Major Pentatonic"];
-const SCALES_SHORT = ["Chromatic", "Major", "Minor", "Harm. Minor", "Minor Penta", "Major Penta"];
+const SCALES = ["Chromatic", "Major", "Minor", "Harmonic Minor", "Minor Pentatonic", "Major Pentatonic", "Dorian", "Phrygian", "Mixolydian", "Blues"];
+const SCALES_SHORT = ["Chromatic", "Major", "Minor", "Harm. Minor", "Minor Penta", "Major Penta", "Dorian", "Phrygian", "Mixolydian", "Blues"];
+const PITCH_MODES = ["Natural", "Classic", "Robot"];
+const fmtVib = (v) => (Math.abs(v) < 0.5 ? "as sung" : v <= -99.5 ? "flat" : `${v > 0 ? "+" : MINUS}${Math.abs(Math.round(v))} %`);
+
+/** Pitch page: dims the knobs the chosen mode ignores (Robot: Retune / Humanize / Vibrato; Classic: Vibrato). */
+function pitchCells() {
+  const tag = (cell, cls) => { cell.classList.add(cls); return cell; };
+  const cells = [
+    tag(grid("ptMode", "Mode", "how it tunes", PITCH_MODES, 1), "pt-mode"),
+    knob("ptAmount", "Amount", "how much", fmtPct, 0),
+    knob("ptSpeed", "Retune", "how fast", fmtMs, 50),
+    knob("ptVibrato", "Vibrato", "flat ↔ deeper", fmtVib, 0, true),
+    knob("ptHumanize", "Humanize", "long notes live", fmtPct, 0),
+    knob("ptFormant", "Formant", "deeper / thinner", fmtSt, 0, true),
+    tag(grid("ptKey", "Key", "your beat's key", NOTES, 4), "pt-key"),
+    tag(grid("ptScale", "Scale", "allowed notes", SCALES_SHORT, 2), "pt-scale"),
+    tag(pitchCell(), "pt-tune"),
+  ];
+  const [, , speed, vib, human] = cells;
+  const refresh = () => {
+    const m = choice("ptMode");
+    speed.classList.toggle("inactive", m === 2);
+    human.classList.toggle("inactive", m === 2);
+    vib.classList.toggle("inactive", m !== 0);
+  };
+  P.ptMode.valueChangedEvent.addListener(refresh);
+  P.ptMode.propertiesChangedEvent.addListener(refresh);
+  refresh();
+  return cells;
+}
 const noteName = (m) => `${NOTES[((Math.round(m) % 12) + 12) % 12]}${Math.floor(Math.round(m) / 12) - 1}`;
 
 /** Live pitch: the note you sing (with how far off, in cents) and the note it pulls to. */
@@ -110,18 +139,10 @@ function pitchCell() {
 }
 
 const MODULES = [
-  { key: "pitch", name: "PITCH", onId: "ptOn", what: "auto-tune: pulls every note onto your key",
-    cells: () => [
-      knob("ptAmount", "Amount", "how much", fmtPct, 0),
-      knob("ptSpeed", "Retune", "low = robotic", fmtMs, 50),
-      knob("ptHumanize", "Humanize", "long notes live", fmtPct, 0),
-      knob("ptFormant", "Formant", "deeper / thinner", fmtSt, 0, true),
-      grid("ptKey", "Key", "your beat's key", NOTES, 4),
-      grid("ptScale", "Scale", "allowed notes", SCALES_SHORT, 1),
-      pitchCell(),
-    ],
+  { key: "pitch", name: "PITCH", onId: "ptOn", what: "auto-tune: natural tuning to the full robot effect",
+    cells: pitchCells,
     stat: () => (val("ptAmount") < 0.05 ? ["idle", false] : M.pitchTarget >= 0 ? [`\u2192 ${noteName(M.pitchTarget)}`, true]
-      : [`${NOTES[choice("ptKey")]} ${SCALES_SHORT[choice("ptScale")].split(" ")[0].toLowerCase()}`, true]) },
+      : [`${NOTES[choice("ptKey")]} ${SCALES_SHORT[choice("ptScale")].split(" ")[0].toLowerCase()} · ${PITCH_MODES[choice("ptMode")].toLowerCase()}`, true]) },
   { key: "cleanup", name: "CLEANUP", onId: "clOn", what: "low cut, pops, breaths and gate: the recording cleaned up",
     cells: () => [
       knob("clLowCut", "Low Cut", "rumble below", (v) => (v <= 20.5 ? "Off" : fmtHz(v)), 20),
@@ -806,10 +827,12 @@ function list(items) { const ul = el("ul", "l-list"); items.forEach((t) => ul.ap
 
 const LEARN = {
   pitch: {
-    does: "Pitch correction (auto-tune). It hears the note you sing, picks the nearest note of your key, and pulls you onto it. Your voice's tone stays the same (no chipmunk sound); breaths and s sounds are never touched. It's first in the chain, so everything after it hears the tuned voice.",
-    how: ["Key / Scale: set them to your beat's key (often in the beat's name, e.g. \"A min\"). Chromatic allows all 12 notes when you're not sure.",
-      "Retune: 0 - 10 ms gives the hard, robotic trap sound; 30 - 80 ms sounds tuned but natural; 100+ ms only fixes drift.",
-      "Humanize: lets long held notes keep their vibrato while short notes still snap in.",
+    does: "Pitch correction (auto-tune). It hears the note you sing, picks the nearest note of your key, and pulls you onto it. Your voice's tone stays the same (no chipmunk sound); breaths and s sounds are never touched. Three modes: Natural (your voice, just in tune), Classic (the familiar auto-tune glide) and Robot (the hard, stepped trap effect). It's first in the chain, so everything after it hears the tuned voice.",
+    how: ["Mode: Natural for a human-sounding lead (each note's centre lands on pitch; your vibrato, scoops and slides stay). Robot for the T-Pain / melodic-trap effect: instant, flat, stepped notes whatever Retune says. Classic is in between and follows Retune.",
+      "Key / Scale: set them to your beat's key (often in the beat's name, e.g. \"A min\"). Chromatic allows all 12 notes when you're not sure.",
+      "Retune: how fast a note is pulled in. Natural: 20 - 60 ms. Classic: 0 - 10 ms is hard and robotic, 30 - 80 ms tuned but natural, 100+ ms only fixes drift.",
+      "Vibrato (Natural): 0 keeps it as you sang it; turn it down to calm a wobbly note (all the way = flat), up to make it deeper.",
+      "Humanize: lets long held notes keep their life while short notes still snap in.",
       "Amount: 100 % lands right on the note; lower keeps some of your own pitch.",
       "Already using Auto-Tune or Melodyne? Turn this off: one tuner is enough."],
     live: () => {
@@ -817,7 +840,9 @@ const LEARN = {
       if (val("ptAmount") >= 0.05 && choice("ptScale") === 0) t.push(tip("CHROMATIC", "All 12 notes are allowed, so a wrong note can't be pulled into the key; it just gets cleaned up.", "calm",
         { need: "Optional. It works; the right key sounds tighter.", steps: ["Set Key and Scale to your beat's key (Auto-Edit suggests one in its report)."] }));
       if (val("ptAmount") >= 0.05 && M.pitchTarget >= 0 && Math.abs(M.pitchCorr) > 0.9) t.push(tip("BIG JUMP", `It's moving your voice ${Math.abs(M.pitchCorr * 100).toFixed(0)} cents right now. Big moves can sound warbly on held notes.`, "calm",
-        { need: "Only if it sounds off. Big moves usually mean the Key / Scale doesn't match the beat.", steps: ["Check the Key / Scale match your beat.", "Or raise Retune to 40 ms or more for a softer pull."] }));
+        { need: "Only if it sounds off. Big moves usually mean the Key / Scale doesn't match the beat.", steps: ["Check the Key / Scale match your beat.", "Or raise Retune to 40 ms or more for a softer pull (not in Robot mode)."] }));
+      if (val("ptAmount") >= 0.05 && choice("ptMode") === 2 && choice("ptScale") === 0) t.push(tip("ROBOT + CHROMATIC", "Robot snaps to the nearest of all 12 notes, so in-between notes can land on notes outside your beat's key.", "warn",
+        { need: "Yes for the classic effect: it needs the key.", steps: ["Set Key and Scale to your beat's key."] }));
       return t;
     } },
   cleanup: {
