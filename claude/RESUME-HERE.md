@@ -469,3 +469,5 @@ editing (timing / length, per-note formant, partial re-render). User chose 1 now
   set's note when unclear; followBeatKey(..., &extraNotes) allows it too with 7-note scales (PitchParams.extraNotes bitmask,
   targetNote(..., extraNotes)). All 3 real beats now hold one answer for the whole clip: Gallas B minor, Don & Lysette E
   mixolydian, Schaf F# dorian (D / D# open). UI Beat Key shows "D / D# open". Test added (63 cases).
+- CI green: Actions run 37470452372 (v0.10.1 with the Schaf fix). Test clips' peaks over 0 dB are intact (float in MP3, not
+  flattened): scale them down when mixing / exporting renders.

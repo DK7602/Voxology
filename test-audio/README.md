@@ -20,3 +20,6 @@ Do not share or publish. All MP3, 44.1 kHz stereo.
 | Schaf_2026_Clip_Mastered.mp3 | mastered | the user's own master |
 
 Decode for the engine: `ffmpeg -i X.mp3 -ac 1 -ar 48000 -f f64le x.f64` (raw doubles, mono 48 kHz).
+
+Levels: the acapellas peak above 0 dBFS when decoded to float (Gallas +8 dB, Don & Lysette +3, Schaf +2, Don_Birthday +2). The
+peaks are intact, not clipped (only Schaf has a few flat tops): turn them down (e.g. -8 dB) before mixing or encoding renders.
