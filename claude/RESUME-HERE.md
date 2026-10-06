@@ -486,4 +486,5 @@ editing (timing / length, per-note formant, partial re-render). User chose 1 now
   LEARN, transpose - / +. Learn text + tip LEARN IS WAITING.
 - Tests: MIDI-only target (A3 -> C4 with a C held), removed notes, all-off fallback, transpose +3 after Robot, -12 at Amount 0
   (an octave down, untuned). 64 cases.
+- CI green: Actions run 37477442784.
 - Cubase how-to for the user: MIDI track -> output = Voxology (insert on the vocal track); "Notes" = play / draw the melody.
