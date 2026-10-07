@@ -735,3 +735,17 @@ test-audio/DMinor_Test_2026_Clip_Music_Vox.mp3: BeatKey reads it C-major notes, 
   with Key on AUTO (no side-chains needed); side-chain only for a single vocal. Never Pitch on a vocal group (monophonic).
 - Open: user to confirm "beat: Em" on Gallas with the full beat; voice-only key can land one note off (Gal Bears vocal
   read A mixolydian); Don & Lysette home now B dorian (unconfirmed).
+
+## Cleanup audit (2026-10-07, "Voxology audit" thread) - findings only, no code changed yet
+Tool: tools/audit/cleanup_audit.cpp (4 acapellas, Auto-Edit settings: Gallas / Schaf Rap, Don Melodic, Don & Lysette R&B).
+- Low cut: fine (0.72 x lowest notes: 90 - 135 Hz; Don's rumble handled).
+- Breath control: fine. 0 ducks over loud voiced sound on all four (Don: 37 breaths, 5.6 s turned down).
+- Gate: inside words fine (0.5 - 2.5 % of word frames touched, 0.00 dB lost). PROBLEM: phrase starts. It has no
+  look-ahead, so soft starts are cut until they cross the threshold: Don 12 of 20 phrase starts lose > 3 dB (median
+  -8.5 dB), fully open a median 40 ms after the word starts (worst 373 ms). Others mild (1 start each).
+- Pops: the big cuts (15 - 19 dB) hit real thumps (under-100 Hz 10 - 28 dB over the voice). PROBLEMS: (1) the cut
+  hangs on 50 - 140 ms > 6 dB (30 ms detector release + 50 ms cut release), into the vowel after the "p"; (2) ~half
+  the events are light 3 - 6 dB cuts on ordinary voiced words (low band only ~10 dB over its norm): small thinning.
+- Proposed plan (awaiting the user's OK): 1) gate listens to the side-chain (free look-ahead, like pops / breaths) and
+  opens ~10 ms before the word; 2) pops let go within ~20 - 30 ms of the thump, and ignore the small 3 - 6 dB cases;
+  re-run the audit + tests, then build.
