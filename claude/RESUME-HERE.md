@@ -699,4 +699,6 @@ test-audio/DMinor_Test_2026_Clip_Music_Vox.mp3: BeatKey reads it C-major notes, 
 - Tests: "Auto-Edit: Pop, Folk and Natural Singer styles", "Voice key: a sung D minor melody, one held note, rap
   glides". 75 cases. Plug-in compiled on Linux (apt: X11 / GTK / WebKit dev libs) before pushing.
 - Open: user to try side-chain routing in Cubase (Artist 14: side-chain button in the plug-in window, then a Send from
-  the beat track to "Voxology - Side-Chain"); pluginval / VST3 validator with the new bus run in CI.
+  the beat track to "Voxology - Side-Chain").
+- CI green: Actions run 37634314512 (v0.18.0, commit 8de7309: engine ASan tests, Windows build + tests, pluginval
+  strictness 10 + VST3 validator, with the new side-chain bus).
