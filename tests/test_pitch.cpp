@@ -470,3 +470,33 @@ TEST_CASE ("Pitch: moving a note a whole step keeps the voice's tone (the top re
         CHECK (hi < 3.0);
     }
 }
+
+TEST_CASE ("Pitch: Natural doesn't restart a long note with a wide vibrato (no warp)", "[pitch]")
+{
+    // A G3 held for 2 s, 40 cents sharp, with a wide +-0.9 semitone vibrato: its peaks reach past 0.8 semitone
+    // from the note's centre. They used to restart the note mid-word (the centre jumped to the peak, the vibrato
+    // went flat for a moment, the correction jumped): the note warped. Now the correction stays smooth.
+    const double g3 = 196.0 * std::pow (2.0, 40.0 / 1200.0);
+    const auto x = voiceCurve ([g3] (double t) { return g3 * std::pow (2.0, 0.9 / 12.0 * std::sin (2 * std::numbers::pi * 5.5 * t)); }, 2.0);
+    PitchParams p; p.mode = kPitchNatural; p.amount = 100.0; p.speedMs = 25.0; p.humanize = 50.0;
+    PitchCorrector pc; pc.setParams (p); pc.prepare (kSr, 1);
+    std::vector<double> buf (128);
+    double prev = 0.0, worst = 0.0, lo = 1e9, hi = -1e9;
+    for (size_t s = 0; s + 128 <= x.size(); s += 128)
+    {
+        std::copy (x.begin() + static_cast<long> (s), x.begin() + static_cast<long> (s + 128), buf.begin());
+        double* ptr = buf.data();
+        pc.process (&ptr, 1, 128);
+        const auto r = pc.reading();
+        if (s > static_cast<size_t> (0.5 * kSr) && r.voiced)
+        {
+            worst = std::max (worst, std::abs (r.correction - prev));
+            lo = std::min (lo, r.correction); hi = std::max (hi, r.correction);
+        }
+        prev = r.correction;
+    }
+    INFO ("biggest correction step between readings " << worst * 100 << " cents; correction range " << lo << " .. " << hi);
+    CHECK (worst < 0.05);          // no jumps (was ~0.25 semitone when the note restarted)
+    CHECK (hi < 0.0);              // always pulling a sharp note down
+    CHECK (lo > -0.8);
+}

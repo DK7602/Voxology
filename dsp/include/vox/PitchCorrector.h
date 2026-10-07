@@ -175,6 +175,9 @@ private:
     double sustain = 0.0;              // seconds on the current note
     double noteAge = 0.0;              // seconds since this note started (voiced, same note)
     int jumpRun = 0;                   // Natural: readings in a row far from the centre (a new note)
+    double onsetSum = 0.0;             // Natural: the sung pitch summed since the note (re)started
+    int onsetN = 0;
+    double sinceFresh = 0.0, sinceRestart = 1.0;   // seconds since the note (re)started / since a mid-note restart
     double centreA = 0.0, centreB = 0.0;  // Natural: the note's centre (two one-poles over the sung pitch)
     Biquad vibBp;                      // Natural: the vibrato band of the sung pitch
     std::array<double, 3> rawP {};     // newest period readings (median of three)
@@ -199,7 +202,8 @@ private:
     // ...but resampling moves the high band's resonances with the pitch: fine for a tuning nudge, a
     // different-sounding voice on a bigger move. Past this the grains carry the whole voice (they keep
     // its resonances where they are).
-    static constexpr double kSplitMaxSemis = 1.0;
+    static constexpr double kSplitMaxSemis = 1.0, kSplitBackSemis = 0.8;   // off above 1, back on below 0.8 (no flip-flop)
+    bool splitBig = false;   // the current correction is too big for two bands
     std::array<std::vector<double>, 2> loBand;   // low band ring (high = in - lo)
     std::array<std::array<Biquad, 2>, 2> xover {};
     struct Mark { double pos = 0.0, off = 0.0, preOff = 0.0; bool join = false, split = false; };

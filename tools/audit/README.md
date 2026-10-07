@@ -1,0 +1,14 @@
+# Pitch audit (Voxology live Pitch + Honey Tune)
+
+Not part of the build. Run on the vocals in `test-audio/` (decode: `ffmpeg -i X.mp3 -ac 1 -ar 48000 -f f64le X.f64`).
+Compile each against the engine: `g++ -std=c++20 -O2 -Idsp/include tools/audit/<file>.cpp build-t/dsp/libvox_dsp.a -lpthread -o <name>`.
+
+| Tool | What it measures |
+|---|---|
+| `reference_notes.cpp in.f64 out.notes` | Honey Tune's offline notes of a vocal (the fixed reference) |
+| `dump_readings.cpp in.f64 mode retuneMs humanize out.d` | the live Pitch's readings every 2.7 ms: time, voiced, sung, applied correction, target |
+| `score_vs_reference.py` | for each reference note >= 0.3 s: centre error (cents), shape change (movement above 1 Hz vs as sung), correction jumps (> 6 cents in one reading), wrong-note time (> 0.5 semitone from the note) |
+| `live_pitch_audit.cpp in.f64 mode retune humanize amount` | per-config summary, re-measuring the actual output audio (shifter accuracy, vibrato kept) |
+| `honey_tune_audit.cpp in.f64` | Honey Tune: snap every note, keep drift + vibrato, re-analyse: lands within, shape kept, pitch glitches |
+
+Results and history: claude/RESUME-HERE.md (v0.17.0).

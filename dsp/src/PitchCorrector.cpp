@@ -75,6 +75,7 @@ void PitchCorrector::reset() noexcept
     for (auto& v : loBand) std::fill (v.begin(), v.end(), 0.0);
     for (auto& chain : xover) for (auto& b : chain) b.reset();
     markCount = markRead = 0;
+    splitBig = false;
     lowD = static_cast<double> (latency); xfOld = 0.0; xfLeft = 0; xfLen = 0;
     std::fill (wsum.begin(), wsum.end(), 0.0);
     std::fill (wfloor.begin(), wfloor.end(), 0.0);
@@ -83,7 +84,7 @@ void PitchCorrector::reset() noexcept
     aa1.reset(); aa2.reset();
     now = 0; dnow = 0; decAcc = 0.0; decCount = 0; hopCount = 0;
     period = 0.0; levelMs = 0.0;
-    note = -1; corr = 0.0; sustain = 0.0; vibBp.reset(); centreA = centreB = 0.0; noteAge = 0.0; jumpRun = 0; voicedRun = 0; lastP = 0.0; noteEnergy = 0.0; clarityS = 1.0;
+    note = -1; corr = 0.0; sustain = 0.0; vibBp.reset(); centreA = centreB = 0.0; noteAge = 0.0; jumpRun = 0; onsetSum = 0.0; onsetN = 0; sinceFresh = 0.0; sinceRestart = 1.0; voicedRun = 0; lastP = 0.0; noteEnergy = 0.0; clarityS = 1.0;
     rawP = { 0.0, 0.0, 0.0 };
     last = {};
     synthPos = anaPos = 0.0;
@@ -256,19 +257,32 @@ void PitchCorrector::analyse() noexcept
         const bool harmonyVoice = params.harmony > 0;
         const int mode = harmonyVoice ? kPitchClassic : std::clamp (params.mode, 0, kPitchModes - 1);
         const double amt = std::clamp (params.amount, 0.0, 100.0) / 100.0;
-        // Natural: the note's centre follows the sung pitch slowly (two 80 ms one-poles: a 5.5 Hz
-        // vibrato moves it by ~8 %) and picks the note, so a wide vibrato can't flip it. A real move
-        // to another note (0.8 semitone off the centre, two readings running) starts a new centre.
+        // Natural: the note's centre follows the sung pitch slowly and picks the note, so a wide vibrato
+        // can't flip it. For its first 0.25 s the centre is the average of everything sung since the note
+        // began (one wobble cycle settles it); after that two 80 ms one-poles (a 5.5 Hz vibrato moves them
+        // by ~8 %). A real move to another note (0.8 semitone off the centre, nearer another note; 1.5
+        // semitones at once, less only if it stays out 45 ms - a vibrato peak is out there ~30 ms and comes
+        // back) starts a new centre, and then there's no other restart for 0.15 s unless it's a big jump.
+        // (A wobble's peaks used to restart a note again and again, the centre landing on each peak: the
+        // note flip-flopped between two notes, the vibrato went flat, the correction jumped - a warp.)
         bool fresh = startOfNote;
         if (! fresh)
         {
-            jumpRun = std::abs (midi - centreB) > 0.8 ? jumpRun + 1 : 0;
-            fresh = jumpRun >= 2;
+            const double off = std::abs (midi - centreB);
+            jumpRun = off > 0.8 ? jumpRun + 1 : 0;
+            const bool cooling = sinceRestart < 0.15 && off < 2.0;
+            fresh = ! cooling && jumpRun >= 2 && (off >= 1.5 || jumpRun * hopSec >= 0.045)
+                    && targetNote (midi, params.key, params.scale, note, params.extraNotes, params.onlyNotes, params.removedNotes) != note;
+            if (fresh) sinceRestart = 0.0;
         }
-        if (fresh) { centreA = centreB = midi; jumpRun = 0; vibBp.reset(); }
+        if (fresh) { centreA = centreB = midi; jumpRun = 0; vibBp.reset(); onsetSum = 0.0; onsetN = 0; sinceFresh = 0.0; }
+        sinceFresh += hopSec;
+        sinceRestart += hopSec;
         const double ca = 1.0 - std::exp (-hopSec / 0.08);
         centreA += (midi - centreA) * ca;
         centreB += (centreA - centreB) * ca;
+        onsetSum += midi; ++onsetN;
+        if (sinceFresh < 0.25) centreA = centreB = onsetSum / onsetN;
         note = targetNote (mode == kPitchNatural ? centreB : midi, params.key, params.scale, note, params.extraNotes, params.onlyNotes, params.removedNotes);
         sustain = note == prevNote ? sustain + hopSec : 0.0;
         noteAge = note == prevNote && ! fresh ? noteAge + hopSec : 0.0;
@@ -310,7 +324,7 @@ void PitchCorrector::analyse() noexcept
         // the voice's pitch: the crackle). Clarity from the YIN aperiodicity and the period match.
         const double clarity = std::min (std::clamp ((kVoicedAperiodicity - aper) / 0.15, 0.0, 1.0),
                                          std::clamp ((bestR - 0.75) / 0.17, 0.0, 1.0));
-        clarityS += (clarity - clarityS) * 0.5;
+        clarityS += (clarity - clarityS) * (1.0 - std::exp (-hopSec / 0.04));   // smoothed: a flickering value would wobble the pitch
         // (A harmony voice always takes its whole interval: half of it would just be out of tune. Robot
         // tunes everything: the grit is part of that sound.)
         const double applied = (harmonyVoice || mode == kPitchRobot ? corr : (corr + extra) * clarityS)
@@ -453,8 +467,9 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
         // Two bands only when the grains just correct the voice by a little: harmony voices, formant moves
         // and bigger moves need the whole voice in the grains (the resampled high band would take its
         // resonances along with the pitch: a thinner voice moving up, a darker one moving down).
-        const bool split = params.harmony == 0 && std::abs (fr.formant) < 0.01 && std::abs (params.transpose) <= 2
-                           && std::abs (fr.corr) <= kSplitMaxSemis;
+        if (std::abs (fr.corr) > kSplitMaxSemis) splitBig = true;
+        else if (std::abs (fr.corr) < kSplitBackSemis) splitBig = false;
+        const bool split = params.harmony == 0 && std::abs (fr.formant) < 0.01 && std::abs (params.transpose) <= 2 && ! splitBig;
         marks[static_cast<size_t> (markCount % kMarks)] = { synthPos, drift, preDrift, std::abs (drift - preDrift) > 0.25 * P, split };
         ++markCount;
         // Big downward shifts (octave down): each grain must hold ONE glottal pulse, or the two-period

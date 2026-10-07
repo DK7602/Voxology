@@ -637,3 +637,31 @@ pitch). Baseline mean envelope error 5.2 dB; octave down 11-23 dB and 2 of 9 cas
   metric 32-34 -> 36-37 dB on the moved note (raw 32): slightly more, watch for it.
 - Test: "moving a note a whole step keeps the voice's tone": error above 2 kHz vs ideal 6.6 / 7.1 dB before, 1.3 / 1.1
   after. Sent the user BEFORE / AFTER renders of note 26 on A3 and F3. 72 test cases.
+
+## v0.17.0 Pitch audit: long notes no longer warp (Natural) (2026-10-07)
+- User: "G3 sounds warped too ... Voxology made that note sound weird"; "warping long notes in other songs, supposed to
+  sound natural"; "audit the pitch correction in Voxology and Honey Tune"; "getting way better results with Waves Tune
+  Real-Time". Audit tools now in tools/audit/ (README there). Reference = Honey Tune's offline notes of each vocal; all
+  five test vocals (Don, Gallas, Gallas note 26, Schaf, Don & Lysette), Natural 25 / 60 ms and Classic 10 ms.
+- ROOT CAUSE of the warp: Natural restarted a note (centre = the instantaneous pitch, vibrato band reset, onset clamp
+  re-armed) whenever the pitch was 0.8 st off the centre for 2 readings (5 ms). A wide wobble (note 26: +-0.8 st at ~6 Hz)
+  hit that at its peaks; the new centre sat on a peak, so the next swing restarted it again: the target flip-flopped
+  G3 <-> G#3 (18 flips in 1.5 s on a replica), correction steps up to 40 - 66 cents in one reading.
+- Fix (PitchCorrector::analyse): for a note's first 0.25 s the centre is the average of everything sung since it began;
+  a mid-note restart needs the pitch off the centre by 0.8 AND nearer another note AND (>= 1.5 st, or out for 45 ms);
+  then 0.15 s cooldown (unless >= 2 st). Replica: biggest step 0.9 c, 0 flips.
+- Also: clarity smoothing 0.5 per reading -> 40 ms one-pole (its flicker scaled the correction: a wobble) - jumps -27 %.
+  Two-band hysteresis: off above 1.0 st, back on below 0.8 (splitBig).
+- Tried and dropped (scored worse on the fair test): note "persistence" (a new note must win 12 - 40 ms: delayed real
+  changes, and a buggy first version stuck between two notes); a vibrato-depth-raised restart threshold (notes landed
+  late); a centre-only Natural (output = note + sung - slow centre: no jumps but notes 25 - 40 c off on p90, and
+  overshoots after dips) - code kept in the audit history only.
+- Fair score (released v0.16.2 -> v0.17.0), Natural 25 ms: centre error p90 69 -> 58 c, wrong-note time 20.6 -> 18.7 %,
+  jumps -21 %; Natural 60 ms: p90 57 -> 49, 19.2 -> 16.8 %, jumps -23 %; median centre +0.8 c (noise); Classic: same.
+  Shape change (movement above 1 Hz vs sung) stays ~13 - 19 c median: Natural still evens out non-vibrato movement.
+- Honey Tune audit: notes land within 0.2 - 0.4 c median (p90 0.9 - 2 c); shape kept ~4 - 7 c rms; pitch "glitches" are
+  mostly the measuring tracker's own noise (32 - 106 / min on untouched audio). Guide path unaffected by the Natural fix.
+- Test: "Natural doesn't restart a long note with a wide vibrato (no warp)" (+-0.9 st, 40 c sharp): step < 5 c.
+  Sent the user BEFORE / AFTER: note-26 clip through Auto-Edit Rap, Don's long notes (Natural 25 ms). 73 test cases.
+- Open: Natural's evening-out of non-vibrato movement (shape change) is a design trade-off; compare with Waves Tune RT
+  by ear once the user has v0.17.0.
