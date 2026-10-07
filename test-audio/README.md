@@ -19,6 +19,9 @@ Do not share or publish. All MP3, 44.1 kHz stereo.
 | Schaf_2026_Clip_Music_Vox_Unmastered.mp3 | vocal + beat | the user's raw mix, not mastered |
 | Schaf_2026_Clip_Mastered.mp3 | mastered | the user's own master |
 
+| Gallas_2026_Note26_Raw.mp3 | rap vocal, 8.7 s, no plug-ins | note 26 (3.88 - 4.56 s) sung G3 +46 cents: the Honey Tune whole-step test |
+| Gallas_2026_Note26_HoneyTune_A3_v0.15.mp3 | Honey Tune (v0.15) + Voxology Auto-Edit, note 26 moved to A3 | the bug: top resonances moved with the pitch (4-6 kHz +11 dB); fixed in v0.16.2 |
+
 Decode for the engine: `ffmpeg -i X.mp3 -ac 1 -ar 48000 -f f64le x.f64` (raw doubles, mono 48 kHz).
 
 Levels: the acapellas peak above 0 dBFS when decoded to float (Gallas +8 dB, Don & Lysette +3, Schaf +2, Don_Birthday +2). The

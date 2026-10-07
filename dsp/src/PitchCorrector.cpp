@@ -450,9 +450,11 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
         // In breaths / consonants the offset just holds: a constant offset joins seamlessly (any
         // change in it misaligns two overlapping grains = a tick at the end of a note).
         anaPos = synthPos + drift;
-        // Two bands only when the grains just correct the voice: harmony voices and formant moves need
-        // the whole voice in the grains (the high band would keep its old pitch / formants).
-        const bool split = params.harmony == 0 && std::abs (fr.formant) < 0.01 && std::abs (params.transpose) <= 2;
+        // Two bands only when the grains just correct the voice by a little: harmony voices, formant moves
+        // and bigger moves need the whole voice in the grains (the resampled high band would take its
+        // resonances along with the pitch: a thinner voice moving up, a darker one moving down).
+        const bool split = params.harmony == 0 && std::abs (fr.formant) < 0.01 && std::abs (params.transpose) <= 2
+                           && std::abs (fr.corr) <= kSplitMaxSemis;
         marks[static_cast<size_t> (markCount % kMarks)] = { synthPos, drift, preDrift, std::abs (drift - preDrift) > 0.25 * P, split };
         ++markCount;
         // Big downward shifts (octave down): each grain must hold ONE glottal pulse, or the two-period

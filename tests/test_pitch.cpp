@@ -445,3 +445,28 @@ TEST_CASE ("Pitch: an octave down is a clean lower voice (no bits of the origina
     // Level kept within 2 dB.
     CHECK (rmsDb (y, 30000, 50000) == Approx (rmsDb (x, 30000, 50000)).margin (2.0));
 }
+
+TEST_CASE ("Pitch: moving a note a whole step keeps the voice's tone (the top resonances stay put)", "[pitch]")
+{
+    // The ideal: the same pulses at the new pitch through the same resonances. Above 2 kHz the voice used to
+    // be resampled along with the pitch, which moved its top resonances (a thinner voice up, darker down).
+    for (int st : { 2, -2 })
+    {
+        const double r = std::pow (2.0, st / 12.0);
+        const auto x = vowel (196.0, 1.2);
+        const auto ideal = vowel (196.0 * r, 1.2, r);
+        PitchParams p; p.transpose = st;
+        int lat = 0;
+        auto y = run (p, x, 256, &lat);
+        y.erase (y.begin(), y.begin() + lat);
+        y.resize (x.size(), 0.0);
+        CHECK (std::abs (cents (measureHz (y, 30000), 196.0 * r)) < 10.0);
+        const auto a = harmonicEnvelope (y, 196.0 * r), b = harmonicEnvelope (ideal, 196.0 * r);
+        double hi = 0; int n = 0;
+        for (size_t i = 0; i < a.size(); ++i)
+            if ((static_cast<double> (i) + 1.0) * 196.0 * r > 2000.0) { hi += std::abs (a[i] - b[i]); ++n; }
+        hi /= std::max (1, n);
+        INFO (st << " semitones: tone error above 2 kHz vs the ideal " << hi << " dB");
+        CHECK (hi < 3.0);
+    }
+}

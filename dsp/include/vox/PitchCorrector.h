@@ -196,6 +196,10 @@ private:
     // high band (breath, rasp, "s" in a note) is read smoothly at the grains' moving offset instead of
     // being chopped into grains - chopped noise repeats at the voice's pitch: a buzz.
     static constexpr double kSplitHz = 2000.0;
+    // ...but resampling moves the high band's resonances with the pitch: fine for a tuning nudge, a
+    // different-sounding voice on a bigger move. Past this the grains carry the whole voice (they keep
+    // its resonances where they are).
+    static constexpr double kSplitMaxSemis = 1.0;
     std::array<std::vector<double>, 2> loBand;   // low band ring (high = in - lo)
     std::array<std::array<Biquad, 2>, 2> xover {};
     struct Mark { double pos = 0.0, off = 0.0, preOff = 0.0; bool join = false, split = false; };

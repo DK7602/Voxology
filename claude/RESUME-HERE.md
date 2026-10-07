@@ -623,3 +623,17 @@ pitch). Baseline mean envelope error 5.2 dB; octave down 11-23 dB and 2 of 9 cas
 - On the user's files: master-on 1070 clipped stretches / 0 overs; master-off 0 / 58,214 overs; raw punch 277 / 0.
   71 test cases.
 - CI green: Actions run 37529268173 (v0.16.0 run 37526831096 was green too, superseded).
+
+## v0.16.2 Whole-step moves keep the voice's tone (Honey Tune + Pitch) (2026-10-07)
+- User: Honey Tune note 26 (Gallas, sung G3 +46 c) moved to A3 / F3 "not in the right octave or something". Their
+  vocal-only exports (Error*.wav, saved as test-audio/Gallas_2026_Note26_*): pitch and octave were RIGHT (A3 = 220 Hz
+  fundamental), but the tone changed: on A3 the 3.7 kHz resonance moved to 4.2 kHz, 4-6 kHz +11..13 dB (thin); on F3
+  1-1.6 kHz +7.6 dB. (The first look, at a screen recording with the beat mixed in, wrongly suggested a weak fundamental.)
+- Cause: PitchCorrector's two-band mode (> 2 kHz read at the grains' sliding offset = resampled) moves the high band's
+  formants by the pitch ratio. Fine for nudges, wrong for whole steps. Fix: split only when |corr| <= kSplitMaxSemis
+  (1.0 st); bigger moves put the whole voice in the grains (PSOLA keeps formants). Marks already crossfade split on/off.
+- Measured: synthetic voice, shifter vs ideal per band: before up to +-13 dB, after within ~2 dB (one 600 Hz band -5..-7
+  both before and after). User's note: A3 4-6 kHz +13.2 -> -0.3 dB; F3 1-1.6 kHz +7.6 -> +0.2. HF pitch-pulse ("buzz")
+  metric 32-34 -> 36-37 dB on the moved note (raw 32): slightly more, watch for it.
+- Test: "moving a note a whole step keeps the voice's tone": error above 2 kHz vs ideal 6.6 / 7.1 dB before, 1.3 / 1.1
+  after. Sent the user BEFORE / AFTER renders of note 26 on A3 and F3. 72 test cases.
