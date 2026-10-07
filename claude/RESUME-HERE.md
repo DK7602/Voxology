@@ -727,3 +727,4 @@ test-audio/DMinor_Test_2026_Clip_Music_Vox.mp3: BeatKey reads it C-major notes, 
   Stereo Out (it has the vocal in it). Key changes mid-song are followed slowly (15 - 40 s). Guitar-only: notes right,
   home name less sure.
 - Test "Beat key: the 808 names the home note" (Bm - G - Bm - D over an 808 on E1 -> E minor, C# open). 76 cases.
+- CI green: Actions run 37671076436 (v0.18.1, commit 972bc23).
