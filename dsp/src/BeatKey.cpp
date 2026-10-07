@@ -103,23 +103,29 @@ void BeatKey::analyse() noexcept
     res.heardSeconds += 0.25;
     if (res.heardSeconds < kMinSeconds) return;
 
-    // The 7-note set holding the most of the histogram (a new one must win by 1 % of everything).
+    // Free to change its mind while it's still learning (first 15 s), firm after that.
+    // Random / drum-only material spreads over all 12 (a 7-note set holds ~58 %); real music > 85 %.
+    pickNoteSet (chroma, res.heardSeconds < 15.0 ? 0.0 : 0.03, 0.70, 0.85, currentSet, res);
+    res.tuneCents = 100.0 * std::atan2 (tuneIm, tuneRe) / (2.0 * std::numbers::pi);
+}
+
+int pickNoteSet (const std::array<double, 12>& chroma, double margin, double confLo, double confHi, int& currentSet, BeatKey::Result& res) noexcept
+{
     static constexpr std::array<int, 7> major { 0, 2, 4, 5, 7, 9, 11 };
     double sum = 0.0;
     for (double c : chroma) sum += c;
+    if (sum <= 0.0) return 0;
     std::array<double, 12> held {};
     for (int r = 0; r < 12; ++r)
         for (int step : major) held[static_cast<size_t> (r)] += chroma[static_cast<size_t> ((r + step) % 12)];
     int best = 0, second = -1;
     for (int r = 1; r < 12; ++r) if (held[static_cast<size_t> (r)] > held[static_cast<size_t> (best)]) best = r;
     for (int r = 0; r < 12; ++r) if (r != best && (second < 0 || held[static_cast<size_t> (r)] > held[static_cast<size_t> (second)])) second = r;
-    // Free to change its mind while it's still learning (first 15 s), firm after that.
-    const double margin = res.heardSeconds < 15.0 ? 0.0 : 0.03;
     if (currentSet < 0 || held[static_cast<size_t> (best)] > held[static_cast<size_t> (currentSet)] + margin * sum) currentSet = best;
     const int set = currentSet;
     const double share = held[static_cast<size_t> (set)] / sum;
 
-    // Home: the set's note the beat leans on most (plus a quarter of its fifth, which backs a tonic up).
+    // Home: the set's note leaned on most (plus a quarter of its fifth, which backs a tonic up).
     double bestHome = -1.0; int home = 0;
     for (int step : major)
     {
@@ -130,8 +136,7 @@ void BeatKey::analyse() noexcept
     res.ready = true;
     res.setRoot = set;
     res.tonicOffset = home;
-    // Random / drum-only material spreads over all 12 (a 7-note set holds ~58 %); real music > 85 %.
-    res.confidence = std::clamp ((share - 0.70) / 0.15, 0.0, 1.0);
+    res.confidence = std::clamp ((share - confLo) / (confHi - confLo), 0.0, 1.0);
     const int other = set == best ? second : best;
     res.unclear = (held[static_cast<size_t> (set)] - held[static_cast<size_t> (other)]) < 0.03 * sum;
     // The runner-up's note that ours doesn't have (neighbouring sets differ by one note).
@@ -143,7 +148,70 @@ void BeatKey::analyse() noexcept
         for (int n = 0; n < 12; ++n) if (in (other, n) && ! in (set, n)) { ++count; found = n; }
         if (count == 1) res.openNote = found;
     }
-    res.tuneCents = 100.0 * std::atan2 (tuneIm, tuneRe) / (2.0 * std::numbers::pi);
+    int ties = 0;
+    for (int r = 0; r < 12; ++r) if (r != set && held[static_cast<size_t> (r)] >= held[static_cast<size_t> (set)] - 0.03 * sum) ++ties;
+    return ties;
+}
+
+// =================================================================================================
+void VoiceKey::reset() noexcept
+{
+    fine.fill (0.0);
+    chroma.fill (0.0);
+    smooth = 0.0; gap = 1.0; sinceAnalyse = 0.0;
+    currentSet = -1;
+    res = {};
+}
+
+void VoiceKey::add (bool voiced, double sungMidi, double clarity, double seconds) noexcept
+{
+    if (seconds <= 0.0) return;
+    const bool clear = voiced && clarity >= kMinClarity && sungMidi > 20.0;
+    if (! clear) { gap += seconds; return; }
+    // Steady: near the pitch's recent average (~60 ms), so vibrato around a note counts, glides don't.
+    if (gap > 0.05) smooth = sungMidi;   // a new phrase starts here
+    gap = 0.0;
+    smooth += (sungMidi - smooth) * (1.0 - std::exp (-seconds / 0.06));
+    if (std::abs (sungMidi - smooth) > 0.4) return;
+    // Memory: about a minute of held notes (fades only while notes are heard: pauses forget nothing).
+    const double fade = std::exp (-seconds / 60.0);
+    for (double& c : fine) c *= fade;
+    const auto bin = static_cast<size_t> (((static_cast<long> (std::lround (smooth * 10.0)) % 120) + 120) % 120);
+    fine[bin] += seconds;
+    res.heardSeconds += seconds;
+    sinceAnalyse += seconds;
+    if (res.heardSeconds < kMinSeconds || sinceAnalyse < 0.25) return;
+    sinceAnalyse = 0.0;
+    analyse();
+}
+
+void VoiceKey::analyse() noexcept
+{
+    // The singer's overall offset from the notes (weighted circular mean), then fold into 12 notes.
+    double re = 0.0, im = 0.0;
+    for (size_t b = 0; b < fine.size(); ++b)
+    {
+        const double ang = 2.0 * std::numbers::pi * static_cast<double> (b % 10) / 10.0;
+        re += fine[b] * std::cos (ang);
+        im += fine[b] * std::sin (ang);
+    }
+    const double offset = std::atan2 (im, re) / (2.0 * std::numbers::pi);   // semitones, -0.5 .. 0.5
+    chroma.fill (0.0);
+    for (size_t b = 0; b < fine.size(); ++b)
+    {
+        const double note = static_cast<double> (b) / 10.0 - offset;
+        chroma[static_cast<size_t> (((static_cast<long> (std::lround (note)) % 12) + 12) % 12)] += fine[b];
+    }
+    // Sung melodies stay in the key less strictly than chords (passing notes, scoops landing late):
+    // a 7-note set holding 68 % is a guess, 88 % is sure (tested on the user's four acapellas: a set
+    // holding ~72 % was one note off the beat's).
+    const int ties = pickNoteSet (chroma, res.heardSeconds < 20.0 ? 0.0 : 0.04, 0.68, 0.88, currentSet, res);
+    double sum = 0.0;
+    for (double c : chroma) sum += c;
+    int notes = 0;
+    for (double c : chroma) if (c >= 0.03 * sum) ++notes;
+    // Too few different notes sung so far (one note held, or three keys hold them all): not sure yet.
+    if (ties >= 2 || notes < 5) res.confidence = std::min (res.confidence, 0.25);
 }
 
 } // namespace vox

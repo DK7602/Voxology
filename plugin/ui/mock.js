@@ -34,7 +34,7 @@
     ptKey: { choices: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"], value: 0 },
     ptScale: { choices: ["Chromatic", "Major", "Minor", "Harmonic Minor", "Minor Pentatonic", "Major Pentatonic", "Dorian", "Phrygian", "Mixolydian", "Blues"], value: 0 },
     ptMode: { choices: ["Natural", "Classic", "Robot"], value: 0 },
-    ptKeySrc: { choices: ["From Beat", "Manual"], value: 0 },
+    ptKeySrc: { choices: ["Auto", "Manual"], value: 0 },
     ptMidi: { choices: ["Off", "Notes", "Learn"], value: 0.5 },
     rdSpeed: { choices: ["Slow", "Medium", "Fast"], value: 0.5 },
     saMode: { choices: ["Tape", "Tube", "Clip"], value: 0 },

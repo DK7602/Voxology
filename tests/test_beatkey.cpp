@@ -185,3 +185,41 @@ TEST_CASE ("Beat key: a note the beat leaves open is allowed both ways", "[beatk
     followBeatKey (r, 4, key, scale, &extra);   // pentatonic: no open note added
     CHECK (extra == 0);
 }
+
+TEST_CASE ("Voice key: a sung D minor melody, one held note, rap glides", "[beatkey]")
+{
+    // Readings every 10 ms, as Pitch gives them: held notes with a 5.5 Hz vibrato (+-0.3 st), sung
+    // 20 cents sharp, with short gaps between notes.
+    const std::array<int, 12> melody { 62, 65, 69, 67, 65, 64, 62, 60, 62, 70, 69, 65 };   // D F A G F E D C D Bb A F
+    VoiceKey vk;
+    vk.reset();
+    double t = 0.0;
+    for (int rep = 0; rep < 6; ++rep)
+        for (int note : melody)
+        {
+            for (int i = 0; i < 45; ++i, t += 0.01)
+                vk.add (true, note + 0.2 + 0.3 * std::sin (2.0 * std::numbers::pi * 5.5 * t), 0.9, 0.01);
+            for (int i = 0; i < 8; ++i, t += 0.01) vk.add (false, 0.0, 0.0, 0.01);
+        }
+    const auto r = vk.result();
+    REQUIRE (r.ready);
+    CHECK (r.setRoot == 5);              // the notes of F major = D minor
+    CHECK (r.confidence >= 0.5);
+    int key = 0, scale = 0, extra = 0;
+    followBeatKey (r, 2, key, scale, &extra);   // Minor -> D minor
+    CHECK (key == 2);
+    CHECK (scale == 2);
+
+    // One note held for a long time: lots of keys fit, so it isn't sure.
+    VoiceKey one;
+    one.reset();
+    for (int i = 0; i < 3000; ++i) one.add (true, 67.0 + 0.2 * std::sin (0.3 * i), 0.9, 0.01);
+    CHECK (one.result().confidence < 0.5);
+
+    // Rap: the pitch keeps sliding, nothing is held: it doesn't learn from that.
+    VoiceKey rap;
+    rap.reset();
+    for (int i = 0; i < 3000; ++i) rap.add (true, 55.0 + 4.0 * std::sin (2.0 * std::numbers::pi * 3.0 * i * 0.01), 0.9, 0.01);
+    CHECK (rap.result().heardSeconds < 3.0);
+    CHECK_FALSE (rap.result().ready);
+}

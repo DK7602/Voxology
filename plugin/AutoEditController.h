@@ -105,6 +105,10 @@ private:
 
     juce::AudioProcessorValueTreeState& state;
     std::function<double()> bpmSource;
+public:
+    /** The key Pitch follows right now (Key on Auto), if any: fills settings.beatKey* (message thread). */
+    std::function<void (vox::AutoEditSettings&)> liveKeySource;
+private:
 
     std::vector<float> captureL, captureR;
     std::atomic<int> capacity { 0 };

@@ -41,6 +41,7 @@ struct AutoEditSettings
     bool beatKeyKnown = false;  // Pitch follows a beat whose key is known: use it, not the voice's guess
     int beatKeyNote = 0, beatScale = 1;   // the key / scale Pitch uses from it (followBeatKey)
     std::string beatKeyName;              // e.g. "B minor"
+    bool beatKeyFromVoice = false;        // that key was learned from the voice (no beat to hear)
 };
 
 /** One explained decision: which module and control, the value chosen and why (plain language). */

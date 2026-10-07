@@ -68,6 +68,41 @@ private:
     Result res;
 };
 
+/** The 7-note (major-scale) set holding most of a pitch-class histogram, and its home note: shared by
+    the beat (BeatKey) and the voice (VoiceKey). A new set must beat the current one by margin x the
+    whole histogram (no flip-flopping); confidence maps the set's share confLo .. confHi to 0 .. 1.
+    Fills setRoot, tonicOffset, confidence, unclear, openNote and ready; returns how many other sets
+    fit about as well (within 3 %: 1 = the usual open note, 2+ = too few notes to tell). */
+int pickNoteSet (const std::array<double, 12>& chroma, double margin, double confLo, double confHi, int& currentSet, BeatKey::Result& res) noexcept;
+
+/** The key of the vocal itself, heard live from what it sings (Voxology on a vocal with no beat to
+    hear). Held notes count, slides and rap glides don't: a reading counts when the pitch is clear and
+    stays near its recent (~60 ms) average. Notes are kept 10 cents apart, so the singer's own overall
+    sharp / flat can be taken out before they're counted as notes (a G sung 40 cents sharp is a G, not
+    a G#). Same note-set method as the beat; sure only once 5+ different notes are sung (a melody, not
+    one note held). The memory is about a minute of singing; ready after kMinSeconds of held notes.
+    tuneCents stays 0 (a voice's own tuning isn't the song's). Audio thread: never allocates. */
+class VoiceKey
+{
+public:
+    static constexpr double kMinSeconds = 6.0;     // of held, clear notes before a key is reported
+    static constexpr double kMinClarity = 0.5;
+
+    void reset() noexcept;
+    /** One Pitch reading (sungMidi, clarity 0..1, voiced) that lasted `seconds`. */
+    void add (bool voiced, double sungMidi, double clarity, double seconds) noexcept;
+    BeatKey::Result result() const noexcept { return res; }
+    const std::array<double, 12>& histogram() const noexcept { return chroma; }
+
+private:
+    void analyse() noexcept;
+    std::array<double, 120> fine {};   // 10-cent steps around the octave
+    std::array<double, 12> chroma {};  // fine, folded into notes after taking the singer's offset out
+    double smooth = 0.0, gap = 1.0, sinceAnalyse = 0.0;
+    int currentSet = -1;
+    BeatKey::Result res;
+};
+
 /** Pitch follows the beat: the beat gives the notes, your Scale choice picks where home is in them.
     A 7-note scale keeps exactly the beat's notes (Minor on its minor home, Dorian on its dorian home,
     ...); pentatonics are those notes' major / minor pentatonic; Harmonic Minor and Blues sit on the

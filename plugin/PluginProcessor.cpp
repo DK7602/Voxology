@@ -4,7 +4,8 @@
 VoxologyAudioProcessor::VoxologyAudioProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::mono(), true)
-                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                          .withInput  ("Beat (side-chain)", juce::AudioChannelSet::stereo(), false)),
       parameters (*this, nullptr, "VoxologyParams", createParameterLayout())
 {
     reader.attach (parameters);
@@ -16,6 +17,20 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
     midiParam = parameters.getRawParameterValue ("ptMidi");
     recParam = parameters.getRawParameterValue ("recMode");
     linkSlot = vox::UnmaskLink::instance().claim();
+    autoEdit.liveKeySource = [this] (vox::AutoEditSettings& s)
+    {
+        // The key the audio thread follows (Key on Auto): Auto-Edit keeps it instead of guessing from the voice.
+        const int source = meters.bkSource.load();
+        s.beatKeyKnown = meters.bkState.load() == 1 && source > 0;
+        if (! s.beatKeyKnown) return;
+        vox::BeatKey::Result r;
+        r.ready = true;
+        r.setRoot = meters.bkSet.load();
+        r.tonicOffset = meters.bkMode.load();
+        vox::followBeatKey (r, 0, s.beatKeyNote, s.beatScale);
+        s.beatKeyName = std::string (vox::kNoteNames[static_cast<size_t> (r.tonic())]) + " " + vox::modeName (r.tonicOffset);
+        s.beatKeyFromVoice = source == 3;
+    };
     startTimerHz (1);
 }
 
@@ -84,6 +99,13 @@ bool VoxologyAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts)
         return false;
     if (in != juce::AudioChannelSet::mono() && in != juce::AudioChannelSet::stereo())
         return false;
+    // The side-chain (the beat, only listened to for its key): off, mono or stereo.
+    if (layouts.inputBuses.size() > 1)
+    {
+        const auto sc = layouts.getChannelSet (true, 1);
+        if (! sc.isDisabled() && sc != juce::AudioChannelSet::mono() && sc != juce::AudioChannelSet::stereo())
+            return false;
+    }
     return in.size() <= out.size();
 }
 
@@ -106,6 +128,8 @@ void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
     hopCount = 0;
     unmask.prepare (sampleRate, juce::jmin (channels, vox::kMaxChannels));
     beatKey.prepare (sampleRate);
+    sideKey.prepare (sampleRate);
+    voiceKey.reset();
     // The same in VOCAL and BEAT, so beat and vocal stay lined up (Record mode: much less, while recording).
     wantedLatency = active().latencySamples();
     setLatencySamples (wantedLatency.load());
@@ -115,10 +139,32 @@ template <typename Sample>
 void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buffer, const juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
-    const int numIn = getTotalNumInputChannels();
+    const int numIn = getMainBusNumInputChannels();
     const int numOut = getTotalNumOutputChannels();
     const int n = buffer.getNumSamples();
     const int nch = juce::jmin (buffer.getNumChannels(), numOut, vox::kMaxChannels);
+    const bool beatMode = isBeatMode();
+
+    // The side-chain (VOCAL: the beat, for its key). Read it first: its channels share the buffer with
+    // the outputs, which the lines below write.
+    const bool sideOn = ! beatMode && sideChainOn();
+    if (sideOn)
+    {
+        const auto sc = getBusBuffer (buffer, true, 1);
+        const int scn = sc.getNumChannels();
+        std::array<double, kHop> mono {};
+        for (int s = 0; s < n && scn > 0; s += kHop)
+        {
+            const int len = juce::jmin (kHop, n - s);
+            for (int i = 0; i < len; ++i)
+            {
+                double m = 0.0;
+                for (int c = 0; c < scn; ++c) m += static_cast<double> (sc.getReadPointer (c)[s + i]);
+                mono[static_cast<size_t> (i)] = m / scn;
+            }
+            sideKey.process (mono.data(), len);
+        }
+    }
 
     // A mono vocal feeds both sides; any other extra output channel starts silent.
     if (numIn == 1 && numOut >= 2 && buffer.getNumChannels() >= 2)
@@ -138,7 +184,6 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
                 if (auto t = position->getTimeInSamples())
                     songPos = *t;
         }
-    const bool beatMode = isBeatMode();
 
     double inputPeak = 0.0;
     for (int c = 0; c < juce::jmin (numIn, buffer.getNumChannels()); ++c)
@@ -182,24 +227,41 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     }
     else
     {
-        if (wasBeat) link.clearKey (linkSlot);
-        // VOCAL: Pitch follows the surest beat in the project (Key / Scale stay as the fallback).
-        int state = 0;
+        if (wasBeat) { link.clearKey (linkSlot); voiceKey.reset(); }
+        // VOCAL, Key on Auto: Pitch follows the surest key it can hear: the beat on the side-chain, then a
+        // Voxology on the beat, then the voice itself (Key / Scale stay as the fallback).
+        int state = 0, source = 0;
         if (keySrcParam->load() < 0.5f)
         {
             const auto bk = link.readBeatKey (linkSlot);
-            // Follow once sure; keep following unless it gets much less sure (no flip-flopping).
-            const double need = followingBeat ? kBeatKeySure - 0.2 : kBeatKeySure;
-            state = ! bk.present ? 2 : (! bk.beat.ready || bk.beat.confidence < need) ? 3 : 1;
-            if (state == 1)
+            const auto side = sideKey.result();
+            const auto voice = voiceKey.result();
+            const bool sideHeard = sideOn && side.heardSeconds > 0.0;
+            // Start following once sure; keep following unless it gets much less sure (no flip-flopping).
+            auto sure = [this] (const vox::BeatKey::Result& r, int src) { return r.ready && r.confidence >= (followSource == src ? kBeatKeySure - 0.2 : kBeatKeySure); };
+            const vox::BeatKey::Result* use = nullptr;
+            if (sideHeard && sure (side, 2)) { use = &side; source = 2; }
+            else if (bk.present && sure (bk.beat, 1)) { use = &bk.beat; source = 1; }
+            else if (sure (voice, 3)) { use = &voice; source = 3; }
+            if (use != nullptr)
             {
-                vox::followBeatKey (bk.beat, chainParams.pitch.scale, chainParams.pitch.key, chainParams.pitch.scale, &chainParams.pitch.extraNotes);
-                chainParams.pitch.tuneCents = bk.beat.tuneCents;
+                state = 1;
+                vox::followBeatKey (*use, chainParams.pitch.scale, chainParams.pitch.key, chainParams.pitch.scale, &chainParams.pitch.extraNotes);
+                chainParams.pitch.tuneCents = use->tuneCents;
+                storeBeatMeters (*use);
             }
-            if (bk.present) storeBeatMeters (bk.beat);
+            else
+            {
+                // Not sure yet: show what it's listening to (a beat before the voice).
+                use = sideHeard ? &side : bk.present ? &bk.beat : voice.heardSeconds > 0.0 ? &voice : nullptr;
+                source = sideHeard ? 2 : bk.present ? 1 : use != nullptr ? 3 : 0;
+                state = use != nullptr ? 3 : 2;
+                if (use != nullptr) storeBeatMeters (*use);
+            }
         }
-        followingBeat = state == 1;
+        followSource = state == 1 ? source : 0;
         meters.bkState.store (state);
+        meters.bkSource.store (source);
         // MIDI: Notes = only the notes held right now (none held: the key as usual); Learn = the last notes played.
         handleMidi (midi);
         int held = 0;
@@ -300,6 +362,8 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     for (int c = 0; c < nch; ++c) outPeak = juce::jmax (outPeak, static_cast<double> (buffer.getMagnitude (c, 0, n)));
     holdMax (meters.outPeak, clampDb (outPeak > 0.0 ? 20.0 * std::log10 (outPeak) : -100.0));
     const auto m = live.takeMeters();
+    if (! beatMode)
+        voiceKey.add (m.pitch.voiced, m.pitch.sungMidi, m.pitch.clarity, n / juce::jmax (1.0, preparedRate));
     holdMin (meters.gate, static_cast<float> (m.gateDb));
     holdMin (meters.pops, static_cast<float> (m.popDb));
     holdMin (meters.breath, static_cast<float> (m.breathDb));

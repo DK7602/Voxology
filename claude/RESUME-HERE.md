@@ -667,21 +667,36 @@ pitch). Baseline mean envelope error 5.2 dB; octave down 11-23 dB and 2 of 9 cas
   by ear once the user has v0.17.0.
 - CI green: Actions run 37570962193 (v0.16.2 run 37568620976 green too).
 
-## v0.18.0 (IN PROGRESS, 2026-10-07, "key detection" thread): header, 3 new styles, key from the voice
+## v0.18.0 Auto key (beat, side-chain or voice) + header + Pop / Folk / Natural Singer (2026-10-07, "key detection" thread)
 User video: vocal-only session, Key Compass says D minor, Voxology fell back to A Chromatic (no beat linked) and sounded
-off; D minor / D mixolydian sounded great. Asked: 1) key detection that works with OR without Voxology on the beat;
-2) header: MATCH next to A/B, REC next to MATCH, Voxology wordmark between REC and power, power button round (was squished);
-3) styles Pop, Folk, Natural Singer.
-- DONE (items 2 + 3), 74 tests pass locally; header checked in Chromium with mock.js (fits at 1600 px with
-  "Natural Singer" in the picker; power 46 x 46 round; BEAT mode: COMPARE, MATCH, title, power on the right):
-  2) index.html order: UNDO, COMPARE, MATCH, REC, title, power; styles.css: title margin-left auto (0 in BEAT), height 76,
-     gap 9, power flex-shrink 0.
-  3) kStyles 8 (appended: Pop 5, Folk 6, Natural Singer 7, so saved projects keep their style); kSpecs, pitch tunes
-     (all Natural: 15 / 50 / 40 ms), breathBase, isSungStyle(); Folk / Natural Singer: no doubler, no delay (new "Off"
-     delay reason, keep(Module::delay)); presence 3.5 kHz for R&B / Folk / Natural. UI STYLES list, long name smaller font.
-     Test "Auto-Edit: Pop, Folk and Natural Singer styles".
-- PLAN for 1 (user to confirm): Key source BEAT -> AUTO: beat linked and sure -> beat key (as now); else the vocal's own
-  key learned live from the sung notes (Pitch's sungMidi, input side, not the tuned output) with BeatKey's note-set +
-  open-note method (factor it out of BeatKey::analyse); Chromatic until sure. Status "voice: D minor". Test on all 4
-  acapellas vs their beat keys first (Don's voice alone leans G in a C song: expect that kind of miss). Asked the user
-  for the D-minor song (acapella + beat) for test-audio.
+off; D minor / D mixolydian sounded great. Asked: 1) key detection with OR without Voxology on the beat ("ideally I'm
+playing with music on so it can detect key from the beat during play"); 2) header re-order + round power button;
+3) styles Pop, Folk, Natural Singer. Their "Test for Claude" WAV (vocal + beat, D minor) saved as
+test-audio/DMinor_Test_2026_Clip_Music_Vox.mp3: BeatKey reads it C-major notes, Bb open, home D = D minor, conf 1.
+- Header (commit 2d33f86, CI green run 37629922384): UNDO, COMPARE, MATCH, REC, wordmark (margin-left auto; 0 in BEAT),
+  power (flex-shrink 0: round 46 x 46). Checked in Chromium with mock.js at 1600 px.
+- Styles appended (indices 5 Pop, 6 Folk, 7 Natural Singer: saved projects keep theirs): kSpecs, pitch tunes (all
+  Natural: 15 / 50 / 40 ms; amount 100 / 70 / 80), breathBase 7 / 3 / 4, isSungStyle(); Folk / Natural Singer no doubler,
+  no delay (delay "Off" reason, keep(Module::delay)); presence 3.5 kHz for R&B / Folk / Natural. Picker: long names 13 px.
+- Key source param ptKeySrc renamed {Auto, Manual} (same index). VOCAL + Auto picks the surest of, in order:
+  2 = the beat on Voxology's new SIDE-CHAIN input (bus "Beat (side-chain)", stereo, off by default; a second BeatKey,
+  sideKey, read first in processBlock since its channels alias the outputs), 1 = a Voxology on the beat (link, as
+  before), 3 = the voice (VoiceKey). Hysteresis per source: start 0.5, keep 0.3. Meter bkSource (0 none / 1 link /
+  2 side-chain / 3 voice); bkState 1 following, 3 listening, 2 nothing heard. numIn is now getMainBusNumInputChannels().
+- dsp: pickNoteSet() factored out of BeatKey::analyse (returns ties: sets within 3 %). VoiceKey: fed one Pitch reading
+  per host block (voiced, sungMidi, clarity >= 0.5); counts readings within 0.4 st of a 60 ms smoothed pitch (held notes,
+  vibrato ok, glides no); 10-cent histogram, the singer's own sharp / flat (circular mean) taken out before folding
+  into notes; ~60 s memory (fades only while singing); ready after 6 s held; confidence share 0.68 -> 0, 0.88 -> 1,
+  capped 0.25 if 2+ ties or < 5 notes at >= 3 %. tuneCents 0.
+- Voice-only results (probe, block 128 / 512 / 2048 all alike): Don & Lysette A major notes (E mixolydian) sure at
+  ~25 s = the beat's; Don: unsure 45 s (holds G 70 %), then G major notes, F open later (song C major per user's app:
+  one note apart); Gallas, Schaf (rap): max conf 0.41, never followed -> Chromatic. First tries without the fixes were
+  sure of wrong keys (D# major on Don, F# major on Schaf): the 5-note rule, offset removal and 0.68-0.88 fixed those.
+- Auto-Edit: AutoEditController.liveKeySource (set by the processor from the meters) fills settings.beatKey*; new
+  beatKeyFromVoice -> Key reason "From your voice: ..."; KEY UNSURE note steps point to side-chain / Auto.
+- UI: Key switch AUTO | MANUAL; status "beat: Dm" / "voice: Dm" / "voice: listening..." / "sing or play"; tip NO BEAT
+  HEARD (side-chain steps for Cubase) replaces NO BEAT LINKED; Learn text updated. Version 0.18.0.
+- Tests: "Auto-Edit: Pop, Folk and Natural Singer styles", "Voice key: a sung D minor melody, one held note, rap
+  glides". 75 cases. Plug-in compiled on Linux (apt: X11 / GTK / WebKit dev libs) before pushing.
+- Open: user to try side-chain routing in Cubase (Artist 14: side-chain button in the plug-in window, then a Send from
+  the beat track to "Voxology - Side-Chain"); pluginval / VST3 validator with the new bus run in CI.

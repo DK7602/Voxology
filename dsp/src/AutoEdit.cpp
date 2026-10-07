@@ -783,8 +783,12 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                 // The beat decides (Pitch follows it live); Key / Scale are only its fallback.
                 pt.key = settings.beatKeyNote;
                 pt.scale = settings.beatScale;
-                reason ("pitch", "Key", "From beat: " + settings.beatKeyName, "Voxology on your beat hears " + settings.beatKeyName
-                        + ", so Pitch follows the beat. Your voice alone suggested " + keyName + "; the beat always wins.");
+                if (settings.beatKeyFromVoice)
+                    reason ("pitch", "Key", "From your voice: " + settings.beatKeyName, "No beat is heard, so Voxology learned the key from the notes you sing: "
+                            + settings.beatKeyName + ". Pitch follows it live. For the surest key, let Voxology hear your beat: feed it to the side-chain, or put a second Voxology on the beat in BEAT mode.");
+                else
+                    reason ("pitch", "Key", "From beat: " + settings.beatKeyName, "Voxology hears your beat in " + settings.beatKeyName
+                            + ", so Pitch follows the beat. Your voice alone suggested " + keyName + "; the beat always wins.");
             }
             else if (sure)
                 reason ("pitch", "Key", keyName, "Your sung notes fit " + keyName + " best (" + num (100.0 * kg.confidence, 0) +
@@ -803,8 +807,9 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             if (! sure && ! settings.beatKeyKnown)
                 r.notes.push_back ("KEY UNSURE: from this part Auto-Edit can't be sure of the key (best guess " + keyName + "), so Pitch is set to Chromatic."
                                    "\nNEED: Optional. Chromatic works; the right key sounds tighter."
-                                   "\nSTEP: Find your beat's key (it's often in the beat's file name or listing, e.g. \"A min\")."
-                                   "\nSTEP: In the Pitch module, set Key and Scale to it.");
+                                   "\nSTEP: Easiest: leave Key on AUTO and let Voxology hear your beat: in Cubase, turn on Voxology's side-chain and send the beat track to it (or put a second Voxology on the beat in BEAT mode)."
+                                   "\nSTEP: With no beat, AUTO learns the key from your singing after about 20 - 40 s of held notes (rap may never be sure)."
+                                   "\nSTEP: Or set Key and Scale yourself (the key is often in the beat's name, e.g. \"A min\"), with Key on MANUAL.");
         }
     }
 

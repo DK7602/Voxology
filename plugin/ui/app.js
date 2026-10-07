@@ -61,7 +61,7 @@ function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 // Latest meter frame.
 const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, clipNow: 0, clipTotal: 0, overNow: 0, hotPeak: -100, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1],
-  bkState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, midiNotes: 0, notesUsed: 0xFFF, recMode: 0, latencyMs: 33, in: null, out: null };
+  bkState: 0, bkSource: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, midiNotes: 0, notesUsed: 0xFFF, recMode: 0, latencyMs: 33, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
 
@@ -100,15 +100,15 @@ function beatKeyName(short = false) {
 }
 const fmtTune = (c) => `${c >= 0 ? "+" : MINUS}${Math.abs(c).toFixed(0)}\u00A2`;
 
-/** Key cell: BEAT | MANUAL source switch, the status line and the 12 keys. Following the beat, the
-    keys show the one in use (gold); clicking a key switches to Manual. */
+/** Key cell: AUTO | MANUAL source switch, the status line and the 12 keys. Following a key (the beat's,
+    or the voice's own), the keys show the one in use (gold); clicking a key switches to Manual. */
 function keyCell() {
   const cell = grid("ptKey", "Key", "", NOTES, 4);
   cell.classList.add("pt-key");
   const sub = cell.querySelector(".cell-sub");
   const sw = document.createElement("div");
   sw.className = "key-src";
-  const btns = ["Beat", "Manual"].map((t, i) => {
+  const btns = ["Auto", "Manual"].map((t, i) => {
     const b = document.createElement("button");
     b.type = "button"; b.textContent = t;
     b.addEventListener("click", () => { P.ptKeySrc.setChoiceIndex(i); cell.update(); anyEdited(); });
@@ -124,8 +124,9 @@ function keyCell() {
     const following = M.bkState === 1;
     cell.classList.toggle("following", following);
     keys.forEach((b, i) => b.classList.toggle("beat", following && i === M.keyUsed));
-    sub.textContent = src === 1 ? "you set it" : following ? `beat: ${beatKeyName(true)}`
-      : M.bkState === 3 ? "beat: listening\u2026" : "no beat linked";
+    const from = M.bkSource === 3 ? "voice" : "beat";
+    sub.textContent = src === 1 ? "you set it" : following ? `${from}: ${beatKeyName(true)}`
+      : M.bkState === 3 ? `${from}: listening\u2026` : "sing or play";
     sub.classList.toggle("lit", following);
   };
   liveMeters.push(cell);
@@ -960,7 +961,7 @@ const LEARN = {
   pitch: {
     does: "Pitch correction (auto-tune). It hears the note you sing, picks the nearest note of your key, and pulls you onto it. Your voice's tone stays the same (no chipmunk sound); breaths and s sounds are never touched. Three modes: Natural (your voice, just in tune), Classic (the familiar auto-tune glide) and Robot (the hard, stepped trap effect). It's first in the chain, so everything after it hears the tuned voice.",
     how: ["Mode: Natural for a human-sounding lead (notes land on pitch; your vibrato and the start of a scoop stay). Robot for the T-Pain / melodic-trap effect: instant, flat, stepped notes whatever Retune says. Classic is in between and follows Retune.",
-      "Key, Beat (the default): put a second Voxology on your beat track and switch it to BEAT. It hears the beat's notes, home key and tuning, and Pitch follows them. Your Scale choice picks the flavour within the beat's notes (Minor = its minor home, Minor Penta = the 5 safest notes); Chromatic uses the beat's own key. Key / Scale are the fallback.",
+      "Key, Auto (the default): Pitch follows the key it hears. Surest: let Voxology hear your beat, either by sending the beat to this Voxology's side-chain (Cubase: side-chain button in the plug-in's top bar, then a Send from the beat track), or with a second Voxology on the beat in BEAT mode. It hears the beat's notes, home key and tuning. With no beat, it learns the key from the notes you sing (about 20 - 40 s of held notes; rap may never be sure). Your Scale choice picks the flavour within those notes (Minor = the minor home, Minor Penta = the 5 safest notes); Chromatic uses the key's own mode. Key / Scale are the fallback.",
       "Key, Manual: set Key / Scale to your beat's key (often in the beat's name, e.g. \"A min\"). Chromatic allows all 12 notes when you're not sure.",
       "Retune: how fast a note is pulled in. Natural: 10 - 40 ms (your vibrato stays at any speed). Classic: 0 - 10 ms is hard and robotic, 30 - 80 ms tuned but natural, 100+ ms only fixes drift.",
       "Vibrato (Natural): 0 keeps it as you sang it; turn it down to calm a wobbly note (all the way = flat), up to make it deeper.",
@@ -977,8 +978,9 @@ const LEARN = {
         { need: "Switch it off when you're done recording.", steps: ["Click REC in the header to go back to full quality for mixing (Cubase adjusts the timing for you)."] }));
       if (choice("ptMidi") === 2 && M.midiNotes === 0) t.push(tip("LEARN IS WAITING", "MIDI is on Learn, but no notes have been played yet, so Pitch uses the key as usual.", "calm",
         { need: "Only if you want the MIDI scale.", steps: ["Route a MIDI track's output to Voxology (Cubase: the track's output menu).", "Play the beat's notes or chords once: they light up blue in Notes."] }));
-      if (val("ptAmount") >= 0.05 && choice("ptKeySrc") === 0 && M.bkState === 2) t.push(tip("NO BEAT LINKED", "Key is set to follow the beat, but there's no Voxology on a beat in this project, so Pitch uses the Key / Scale below.", "calm",
-        { need: "Optional, but it's the easy way to always be in the beat's key.", steps: ["Insert Voxology on your beat track (or the beat's group).", "Click BEAT in its Signal Chain card.", "Press play: after about 6 s the key shows up here."] }));
+      if (val("ptAmount") >= 0.05 && choice("ptKeySrc") === 0 && M.bkSource !== 1 && M.bkSource !== 2) t.push(tip("NO BEAT HEARD",
+        `Key is on Auto, but Voxology can't hear your beat, so it learns the key from your singing${M.bkState === 1 ? ` (now: ${beatKeyName()})` : ": that takes about 20 - 40 s of held notes, and rap may never be sure"}. ${M.bkState === 1 ? "" : "Until then Pitch uses the Key / Scale below. "}The beat is the surest way.`, "calm",
+        { need: "Optional, but it's the surest way to always be in the beat's key.", steps: ["Open Voxology on your vocal and click the side-chain button in the top bar of its window (Cubase), so it lights up.", "On your beat track, add a Send and pick this vocal's \"Voxology - Side-Chain\" as its destination, at 0 dB.", "Press play: after about 6 s the beat's key shows up here. (Or: put a second Voxology on the beat track and click BEAT.)"] }));
       if (val("ptAmount") >= 0.05 && M.bkState === 1 && Math.abs(M.bkTune) >= 10) t.push(tip("BEAT DETUNED", `Your beat is tuned ${fmtTune(M.bkTune)} away from standard (A = 440 Hz). Pitch tunes your notes to the beat's tuning, so they sit with it.`, "calm",
         { need: "No. It's handled.", steps: ["Nothing to do. (If you also use another tuner, set its reference to match.)"] }));
       if (val("ptAmount") >= 0.05 && M.bkState !== 1 && M.scaleUsed === 0) t.push(tip("CHROMATIC", "All 12 notes are allowed, so a wrong note can't be pulled into the key; it just gets cleaned up.", "calm",

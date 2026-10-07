@@ -84,7 +84,7 @@ namespace VoxParams
         for (auto* m : vox::kPitchModeNames) modes.add (m);
         choice ("ptMode", "Pitch Mode", modes, vox::kPitchNatural);
         // Key from the beat (a Voxology on the beat in BEAT mode hears it); Key / Scale are the fallback.
-        choice ("ptKeySrc", "Pitch Key Source", { "From Beat", "Manual" }, 0);
+        choice ("ptKeySrc", "Pitch Key Source", { "Auto", "Manual" }, 0);
         // MIDI into Voxology: Notes = the voice goes to the notes you hold; Learn = the notes you play become the scale.
         choice ("ptMidi", "Pitch MIDI", { "Off", "Notes", "Learn" }, 0);
         slider ("ptTranspose", "Pitch Transpose", NormalisableRange<float> (-12.0f, 12.0f, 1.0f), 0.0f, "st",
