@@ -766,6 +766,7 @@ Tool: tools/audit/cleanup_audit.cpp (4 acapellas, Auto-Edit settings: Gallas / S
 - Tests: "In the chain the gate opens before a soft word start", plus the vowel after each pop gets its low end back
   (within 1 dB, 100 - 200 ms after the pop starts). Both fail on v0.18.1, pass now. 77 cases.
 - Low cut, breath control: no change (fine).
+- CI green: Actions run 37702101577 (v0.18.2, commit 0555a36).
 
 ## Tone EQ audit (2026-10-07) - findings only, no code changed yet
 Tool: tools/audit/eq_audit.cpp. Same 4 vocals / styles as the Cleanup audit.
