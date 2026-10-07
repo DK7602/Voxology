@@ -665,3 +665,4 @@ pitch). Baseline mean envelope error 5.2 dB; octave down 11-23 dB and 2 of 9 cas
   Sent the user BEFORE / AFTER: note-26 clip through Auto-Edit Rap, Don's long notes (Natural 25 ms). 73 test cases.
 - Open: Natural's evening-out of non-vibrato movement (shape change) is a design trade-off; compare with Waves Tune RT
   by ear once the user has v0.17.0.
+- CI green: Actions run 37570962193 (v0.16.2 run 37568620976 green too).
