@@ -518,6 +518,15 @@ const std::array<StyleSpec, kStyles> kSpecs {{
     // R&B
     { 1.0, 0.0, 1.5,   20, 60,  0, 25, 12, 5000, 55, false,  2.6, 40, 20, 7500, 30,  SaturationMode::tube, -40,  3.0, 2.5, 2.5,  8, 0.8, 0,   -6.0,
       "warm, silky and natural, with a lush tail" },
+    // Pop
+    { 0.0, 1.5, 2.5,   25, 70,  0, 20, 12, 5500, 55, false,  1.8, 30, 15, 7500, 35,  SaturationMode::tube, -36,  5.0, 4.0, 4.0,  10, 1.0, 1,  -5.0,
+      "bright, polished and upfront, with a clean plate and a touch of width" },
+    // Folk (no doubler, no delay: one voice in a room)
+    { 1.0, 0.0, 0.5,   0, 0,    0, 10, 0, 5000, 50, false,   1.4, 20, 14, 6500, 20,  SaturationMode::tape, -42,  3.0, 2.5, 2.5,  6, 0.7, 0,   -6.0,
+      "warm, close and natural, like a singer in a room with an acoustic guitar" },
+    // Natural Singer (the lightest touch: your own voice, cleaner and more even)
+    { 0.5, 0.5, 1.0,   0, 0,    0, 10, 0, 5000, 50, false,   1.2, 20, 10, 7000, 30,  SaturationMode::tape, -44,  3.0, 2.0, 2.0,  6, 0.8, 0,   -6.0,
+      "your own voice, just cleaner and more even: light control, little colour, a small room" },
 }};
 
 constexpr std::array<double, kIntensities> kIntensityScale { 0.6, 0.85, 1.1 };
@@ -738,6 +747,9 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             { kPitchClassic, 5.0, 10.0, 100.0, "the hard melodic-trap sound: every note locks on" },
             { kPitchRobot, 0.0, 0.0, 100.0, "the full robotic effect, the classic ad-lib sound" },
             { kPitchNatural, 25.0, 50.0, 100.0, "natural R&B tuning: each note lands, slides and vibrato stay" },
+            { kPitchNatural, 15.0, 40.0, 100.0, "a polished pop tune: notes land clean and on time, vibrato stays" },
+            { kPitchNatural, 50.0, 60.0, 70.0, "a light, hidden touch: drifting notes are nudged, slides and character stay" },
+            { kPitchNatural, 40.0, 60.0, 80.0, "a transparent touch: only the centre of each note is nudged, nothing sounds tuned" },
         }};
         const auto& t = tunes[static_cast<size_t> (style)];
         auto& pt = p.pitch;
@@ -909,14 +921,14 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             }
         }
         const double breathDb = breathSamples ? energyDb (breathEnergy / static_cast<double> (breathSamples)) - a.voiceRmsDb : -120.0;
-        static constexpr std::array<double, kStyles> breathBase { 9.0, 10.0, 6.0, 12.0, 5.0 };   // Trap Lead, Rap, Melodic, Ad-libs, R&B
+        static constexpr std::array<double, kStyles> breathBase { 9.0, 10.0, 6.0, 12.0, 5.0, 7.0, 3.0, 4.0 };   // Trap Lead, Rap, Melodic, Ad-libs, R&B, Pop, Folk, Natural Singer
         if (breathCount >= 2 && breathDb > -36.0)
         {
             const double amt = std::clamp (std::round (breathBase[static_cast<size_t> (style)] * k / 0.85), 3.0, 18.0);
             p.cleanup.breathDb = amt;
             reason ("cleanup", "Breaths", "\xE2\x88\x92" + num (amt, 0) + " dB",
                     "Auto-Edit heard " + std::to_string (breathCount) + " breaths, about " + num (-breathDb, 0) + " dB under your voice. The compressor and saturation later in the chain bring quiet sounds up, so breaths would get louder. They're turned down " +
-                    num (amt, 0) + " dB" + (style == 2 || style == 4 ? ", only a little, because a bit of breath sounds natural on sung parts." : ", so the gaps between lines stay clean and the words hit harder.") +
+                    num (amt, 0) + " dB" + (isSungStyle (style) ? ", only a little, because a bit of breath sounds natural on sung parts." : ", so the gaps between lines stay clean and the words hit harder.") +
                     " Words and \"s\" sounds are left alone.");
         }
         else
@@ -1031,7 +1043,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         double presHz = 4000.0;
         const double pres = diffAt (2500, 5000, presHz, true);
         eq.gainDb[3] = std::clamp (-pres * 0.6 * kq, -4.0, 5.0);
-        eq.freqHz[3] = pres > 0.0 ? std::clamp (presHz, 2000.0, 8000.0) : (style == 4 ? 3500.0 : 4000.0);
+        eq.freqHz[3] = pres > 0.0 ? std::clamp (presHz, 2000.0, 8000.0) : (style == 4 || style == 6 || style == 7 ? 3500.0 : 4000.0);
         if (std::abs (eq.gainDb[3]) < 0.5) eq.gainDb[3] = 0.0;
         reason ("eq", "Presence", eq.gainDb[3] == 0.0 ? "0 dB" : signedDb (eq.gainDb[3]) + " at " + hz (eq.freqHz[3]),
                 eq.gainDb[3] == 0.0 ? "Your words already cut through (2.5 - 5 kHz is on target)."
@@ -1345,7 +1357,8 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         {
             p.doubler.amount = 0.0;
             keep (Module::doubler);
-            reason ("double", "Amount", "Off", std::string (kStyleNames[static_cast<size_t> (style)]) + " vocals stay single and centred, so every word hits hard in the middle.");
+            reason ("double", "Amount", "Off", std::string (kStyleNames[static_cast<size_t> (style)]) + " vocals stay single and centred, " +
+                    (style >= 6 ? "so it sounds like one real voice, close to the listener." : "so every word hits hard in the middle."));
         }
         else
             reason ("double", "Amount", pct (p.doubler.amount) + ", Width " + pct (p.doubler.width),
@@ -1358,10 +1371,19 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         p.delay.duck = spec.dlDuck;
         p.delay.pingPong = spec.dlPing;
         p.delay.bpm = settings.bpm > 0.0 ? settings.bpm : 120.0;
+        if (p.delay.mix < 1.0)
+        {
+            p.delay.mix = 0.0;
+            keep (Module::delay);
+            reason ("delay", "Mix", "Off", std::string ("No echo for ") + kStyleNames[static_cast<size_t> (style)] + ": the small room of the reverb is all the space it needs, so the voice stays natural and close.");
+        }
+        else
+        {
         reason ("delay", "Time", std::string (kDelayNames[static_cast<size_t> (spec.dlDiv)]) + " at " + num (p.delay.bpm, 0) + " BPM",
-                std::string ("Echoes on the beat grid fill the gaps between lines. Duck ") + pct (spec.dlDuck) + " keeps them quiet while you're rapping, so words stay clear."
+                std::string ("Echoes on the beat grid fill the gaps between lines. Duck ") + pct (spec.dlDuck) + " keeps them quiet while you're singing or rapping, so words stay clear."
                 + (settings.bpm > 0.0 ? "" : " Your session tempo wasn't available, so 120 BPM is used: it locks to Cubase's tempo once playback runs."));
         reason ("delay", "Mix", pct (p.delay.mix) + ", Feedback " + pct (p.delay.feedback), "Low enough to feel, not hear as a separate echo" + std::string (spec.dlPing ? "; Ping-Pong bounces the repeats left / right." : "."));
+        }
 
         p.reverb.decayS = spec.rvDecay;
         p.reverb.predelayMs = spec.rvPre;

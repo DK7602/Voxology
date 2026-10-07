@@ -57,15 +57,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .caps { color: var(--gold-deep); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9); }
 
 /* ---------------------------------------------------------------- header */
-#header { --glass: rgba(255, 250, 240, 0.45); left: 16px; top: 14px; width: 1568px; height: 120px; display: flex; align-items: center; gap: 11px; padding: 0 16px 0 8px; }
-#header .logo { height: 104px; cursor: pointer; filter: drop-shadow(0 3px 4px rgba(80, 56, 14, 0.3)); }
-#header .title { height: 84px; margin-left: -18px; margin-right: 6px; filter: drop-shadow(0 3px 4px rgba(80, 56, 14, 0.3)); }
+#header { --glass: rgba(255, 250, 240, 0.45); left: 16px; top: 14px; width: 1568px; height: 120px; display: flex; align-items: center; gap: 9px; padding: 0 16px 0 8px; }
+#header .logo { height: 104px; margin-right: 4px; cursor: pointer; filter: drop-shadow(0 3px 4px rgba(80, 56, 14, 0.3)); }
+/* The wordmark sits on the right, between REC and the power button. */
+#header .title { height: 76px; flex-shrink: 0; margin-left: auto; filter: drop-shadow(0 3px 4px rgba(80, 56, 14, 0.3)); }
 .h-group { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
 .h-label { font-size: 11px; letter-spacing: 0.16em; font-weight: 700; color: var(--gold-deep); text-shadow: 0 0 4px #fff, 0 0 2px #fff; }
 .picker { display: flex; align-items: center; height: 40px; border-radius: 20px; background: var(--marble);
   box-shadow: inset 0 0 0 2px var(--gold), inset 0 2px 6px rgba(36, 97, 143, 0.2); }
 .picker button { width: 34px; height: 40px; border: 0; background: none; font-size: 26px; line-height: 1; color: var(--blue-deep); }
-.picker span { min-width: 108px; text-align: center; font-weight: 700; font-size: 17px; color: var(--blue-deep); }
+.picker span { width: 108px; text-align: center; font-weight: 700; font-size: 17px; color: var(--blue-deep); white-space: nowrap; }
+.picker span.long { font-size: 13px; letter-spacing: -0.01em; }
 .seg { display: flex; border-radius: 20px; overflow: hidden; box-shadow: inset 0 0 0 2.5px var(--gold), 0 2px 5px rgba(60, 40, 6, 0.25); background: var(--marble-cream); }
 .seg button { border: 0; background: none; height: 40px; padding: 0 14px; font-weight: 700; font-size: 13px; letter-spacing: 0.06em; color: var(--ink-soft); }
 .seg button + button { box-shadow: inset 1px 0 0 rgba(201, 151, 58, 0.5); }
@@ -81,7 +83,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .ref-chip.warn { color: var(--warn); }
 .ref-x { width: 24px; height: 24px; border: 0; border-radius: 12px; background: var(--marble-cream); color: var(--ink-soft); font-size: 11px; box-shadow: inset 0 0 0 1.5px var(--gold); cursor: pointer; }
 .chip:disabled { opacity: 0.4; cursor: default; }
-.power { width: 46px; height: 46px; border-radius: 50%; border: 0; background: var(--marble); color: var(--blue-deep);
+.power { flex-shrink: 0; width: 46px; height: 46px; border-radius: 50%; border: 0; background: var(--marble); color: var(--blue-deep);
   box-shadow: inset 0 0 0 2px var(--gold), 0 2px 5px rgba(80, 56, 14, 0.25); display: grid; place-items: center; }
 .power.off { background: var(--marble-cream); color: var(--warn); }
 
@@ -262,6 +264,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 body.beat #hive, body.beat .chain-foot, body.beat .g-style, body.beat .g-int, body.beat #auto-edit, body.beat #undo { display: none; }
 body.beat #beat-card { display: flex; flex-direction: column; align-items: center; gap: 18px; padding-top: 40px; }
 body.beat #beat-banner { display: flex; flex-direction: column; gap: 4px; margin-left: 10px; margin-right: auto; }
+body.beat #header .title { margin-left: 0; }
 .bb-title { font-weight: 700; font-size: 26px; letter-spacing: 0.14em; color: var(--gold-deep); text-shadow: 0 0 6px #fff; }
 .bb-sub { font-size: 14px; color: var(--ink-soft); text-shadow: 0 0 4px #fff; }
 #beat-card .hex.big { position: relative; width: 200px; height: 230px; }

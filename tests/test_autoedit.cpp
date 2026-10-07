@@ -69,6 +69,30 @@ TEST_CASE ("Auto-Edit: clean vocal keeps the gate off; styles differ", "[autoedi
     checkNotes (rap);
 }
 
+TEST_CASE ("Auto-Edit: Pop, Folk and Natural Singer styles", "[autoedit]")
+{
+    const auto x = testsig::vocal (kSr, 14.0, -95.0, -16.0, 5, 210.0);
+    const auto pop = autoEdit ({ x }, kSr, { 5, 1, 0.0 });
+    const auto folk = autoEdit ({ x }, kSr, { 6, 1, 0.0 });
+    const auto nat = autoEdit ({ x }, kSr, { 7, 1, 0.0 });
+    REQUIRE (pop.ok);
+    REQUIRE (folk.ok);
+    REQUIRE (nat.ok);
+    CHECK (pop.params.doubler.amount > 0.0);
+    CHECK (pop.params.delay.mix > 0.0);
+    // Folk and Natural Singer: one voice in a room, no doubler, no echo, gentle compression.
+    for (const auto* r : { &folk, &nat })
+    {
+        CHECK (r->params.doubler.amount == 0.0);
+        CHECK (r->params.delay.mix == 0.0);
+        CHECK (r->params.reverb.mix > 0.0);
+        CHECK (r->params.comp.ratio < pop.params.comp.ratio);
+        checkNotes (*r);
+    }
+    CHECK (nat.params.reverb.decayS < pop.params.reverb.decayS);
+    checkNotes (pop);
+}
+
 TEST_CASE ("Auto-Edit trims a boomy recording and flags clipping", "[autoedit]")
 {
     auto x = testsig::vocal (kSr, 14.0, -70.0, -10.0, 9, 120.0, true);

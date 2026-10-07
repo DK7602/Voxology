@@ -29,7 +29,7 @@
   });
   const toggles = { recMode: true, ptRm0: false, ptRm1: false, ptRm2: false, ptRm3: false, ptRm4: false, ptRm5: false, ptRm6: true, ptRm7: false, ptRm8: false, ptRm9: false, ptRm10: false, ptRm11: false, bypass: false, listenA: false, levelMatch: false, ptOn: true, clOn: true, eqOn: true, dqOn: true, dsOn: true, rdOn: true, cpOn: true, saOn: true, dbOn: true, dlOn: true, dlPing: false, rvOn: true };
   const combos = {
-    aeStyle: { choices: ["Trap Lead", "Rap", "Melodic", "Ad-libs", "R&B"], value: 0 },
+    aeStyle: { choices: ["Trap Lead", "Rap", "Melodic", "Ad-libs", "R&B", "Pop", "Folk", "Natural Singer"], value: 0 },
     aeIntensity: { choices: ["Light", "Balanced", "Strong"], value: 0.5 },
     ptKey: { choices: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"], value: 0 },
     ptScale: { choices: ["Chromatic", "Major", "Minor", "Harmonic Minor", "Minor Pentatonic", "Major Pentatonic", "Dorian", "Phrygian", "Mixolydian", "Blues"], value: 0 },
