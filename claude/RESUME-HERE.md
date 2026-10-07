@@ -766,3 +766,18 @@ Tool: tools/audit/cleanup_audit.cpp (4 acapellas, Auto-Edit settings: Gallas / S
 - Tests: "In the chain the gate opens before a soft word start", plus the vowel after each pop gets its low end back
   (within 1 dB, 100 - 200 ms after the pop starts). Both fail on v0.18.1, pass now. 77 cases.
 - Low cut, breath control: no change (fine).
+
+## Tone EQ audit (2026-10-07) - findings only, no code changed yet
+Tool: tools/audit/eq_audit.cpp. Same 4 vocals / styles as the Cleanup audit.
+- Filters: fine. Measured response = what the UI / Auto-Edit predict (within ~0.1 dB; glides, exact bypass at 0 dB).
+- Auto-Edit gets only part of the way: mean distance from the style target 3.4 -> 2.5 (Gallas), 3.5 -> 3.0 (Schaf),
+  2.3 -> 1.8 (Don), 4.1 -> 2.9 dB (Don & Lysette). Three causes:
+  1) Mud aims at the wrong spot: all four vocals are 4 - 7 dB hot at 315 - 630 Hz (boxy), but Mud lands at 200 Hz on
+     Gallas / Schaf (already Body's job) and cuts only ~2 dB; 315 - 400 Hz stays +4.5 to +6 dB after.
+  2) Presence boosts at a fixed 4 kHz; the real dip is 2.5 - 3.15 kHz (-4 to -7.6 dB) and stays -3.5 to -4.7 after.
+  3) Body judges bands under the singer's lowest note (Don & Lysette: 160 Hz, which the low cut is removing anyway)
+     and boosts +1.9 dB there.
+- Caveat: the target curve is built in, not measured from real finished vocals; 4 different singers all reading
+  "boxy" could partly be the target. Any fix should be A/B'd by ear.
+- Proposed plan: Mud searches 250 - 630 Hz and cuts a bit more of the excess; Presence boosts where the dip actually
+  is; Body only judges bands at / above the lowest notes. Re-run the audit + tests, send before / after clips.

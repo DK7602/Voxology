@@ -10,6 +10,7 @@ Compile each against the engine: `g++ -std=c++20 -O2 -Idsp/include tools/audit/<
 | `score_vs_reference.py` | for each reference note >= 0.3 s: centre error (cents), shape change (movement above 1 Hz vs as sung), correction jumps (> 6 cents in one reading), wrong-note time (> 0.5 semitone from the note) |
 | `live_pitch_audit.cpp in.f64 mode retune humanize amount` | per-config summary, re-measuring the actual output audio (shifter accuracy, vibrato kept) |
 | `cleanup_audit.cpp in.f64 style [intensity]` | Cleanup: Auto-Edit's settings, then low cut / gate / pops / breaths as the chain runs them: words turned down by the gate, how late it opens on phrase starts, each pop cut (depth, time > 6 dB, low band vs normal), breath ducks over voiced sound |
+| `eq_audit.cpp in.f64 style [intensity]` | Tone EQ: the vocal's third-octave tone vs the style target, the EQ Auto-Edit chose, predicted vs measured after (low cut + EQ rendered), mean distance from target before / after |
 | `honey_tune_audit.cpp in.f64` | Honey Tune: snap every note, keep drift + vibrato, re-analyse: lands within, shape kept, pitch glitches |
 
 Results and history: claude/RESUME-HERE.md (v0.17.0).
