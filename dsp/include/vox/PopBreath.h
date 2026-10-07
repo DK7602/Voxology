@@ -31,7 +31,7 @@ class PopRemover
 public:
     static constexpr double kMaxCutDb = 24.0;
     static constexpr double kSplitHz = 150.0, kShelfHz = 160.0;
-    static constexpr double kThresholdDb = 9.0;        // low band this far over its normal = a pop
+    static constexpr double kThresholdDb = 10.0;        // low band this far over its normal = a pop
     static constexpr double kKneeDb = 4.0, kSlope = 1.5;
     static constexpr double kLoudWindowDb = 18.0;      // the burst must be within this of the recent voice level
 

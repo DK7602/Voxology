@@ -749,3 +749,20 @@ Tool: tools/audit/cleanup_audit.cpp (4 acapellas, Auto-Edit settings: Gallas / S
 - Proposed plan (awaiting the user's OK): 1) gate listens to the side-chain (free look-ahead, like pops / breaths) and
   opens ~10 ms before the word; 2) pops let go within ~20 - 30 ms of the thump, and ignore the small 3 - 6 dB cases;
   re-run the audit + tests, then build.
+
+## v0.18.2 Cleanup fixes (2026-10-07): gate look-ahead, pops let go sooner
+- CORRECTION to the audit above: most of Don's "chopped phrase starts" were BREATHS before phrases (unvoiced,
+  ~-35 dB, 200 - 370 ms), which the gate is meant to turn down. Real voiced starts lost 0 - 1 dB on Don. The real
+  chopped starts were soft sung ones: Don & Lysette 16.04 s (-6.6 dB) and 24.17 s (-2.5), Gallas 30.75 s (-4.2).
+  Pop tail also smaller than first said: cut > 6 dB on sound with no thump was 0.1 - 0.64 s per clip (~15 - 20 ms
+  per pop), not 50 - 140 ms (most of that time the thump is still there).
+- Gate: Cleanup::listen() hears the chain's input (before Pitch, its own copy of the low cut) and the gate's peak
+  detector reads it through a delay line so it leads the audio by 10 ms (kLookAheadSeconds); hold + 10 ms so tails
+  aren't cut earlier. Record mode: ~5 ms lead (all there is). Standalone (no listen) unchanged. Results: soft sung
+  starts -6.6 -> -2.1, -2.5 -> -0.3, Gallas -4.2 -> -1.4 dB; voiced frames touched roughly halved (Don 17 -> 8).
+- Pops: cut release 50 -> 20 ms; threshold 9 -> 10 dB (11 failed the synthetic 6 dB pop test by 0.01 dB; 12 missed
+  real thumps). Cut on no-thump sound: Gallas 0.46 -> 0.16 s, Schaf 0.64 -> 0.10, Don 0.10 -> 0.01; small (< 8 dB)
+  catches 12 -> 10, 11 -> 8, 12 -> 7; deep cuts on real thumps kept (13 / 20 / 16).
+- Tests: "In the chain the gate opens before a soft word start", plus the vowel after each pop gets its low end back
+  (within 1 dB, 100 - 200 ms after the pop starts). Both fail on v0.18.1, pass now. 77 cases.
+- Low cut, breath control: no change (fine).

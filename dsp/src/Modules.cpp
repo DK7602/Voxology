@@ -8,10 +8,14 @@ using design::onePole;
 
 // ================================================================================================
 // Cleanup
-void Cleanup::prepare (double sampleRate, int numChannels)
+void Cleanup::prepare (double sampleRate, int numChannels, int lookAheadAvailable, int maxBlock)
 {
     sr = sampleRate;
     channels = std::clamp (numChannels, 1, kMaxChannels);
+    const int la = static_cast<int> (std::lround (kLookAheadSeconds * sr));
+    lookAhead = std::min (la, std::max (0, lookAheadAvailable));
+    peakLine.assign (static_cast<size_t> (std::max (0, lookAheadAvailable - la) + 1), 0.0);
+    heard.assign (static_cast<size_t> (std::max (0, maxBlock)), 0.0);
     envRelease = onePole (0.030, sr);
     gainAttack = onePole (0.001, sr);
     gainRelease = onePole (0.120, sr);
@@ -21,7 +25,11 @@ void Cleanup::prepare (double sampleRate, int numChannels)
 void Cleanup::reset() noexcept
 {
     for (auto& c : hp) for (auto& f : c) f.reset();
+    for (auto& c : listenHp) for (auto& f : c) f.reset();
     designedHz = -1.0;
+    std::fill (peakLine.begin(), peakLine.end(), 0.0);
+    peakPos = 0;
+    listened = false;
     env = 0.0;
     gain = 1.0;
     gainDb = 0.0;
@@ -37,6 +45,31 @@ void Cleanup::updateFilter() noexcept
     const auto c = design::butterworth (true, std::max (params.lowCutHz, 10.0), sr);
     for (auto& chan : hp)
         for (auto& f : chan) design::apply (f, c);
+    for (auto& chan : listenHp)
+        for (auto& f : chan) design::apply (f, c);
+}
+
+void Cleanup::listen (const double* const* in, int nch, int n) noexcept
+{
+    listened = false;
+    nch = std::min (nch, channels);
+    if (isNeutral (params) || params.gateRangeDb < 0.05 || n > static_cast<int> (heard.size()))
+        return;
+    const bool lowCut = params.lowCutHz > kLowCutOffHz;
+    if (lowCut) updateFilter();
+    for (int i = 0; i < n; ++i)
+    {
+        double peak = 0.0;
+        for (int c = 0; c < nch; ++c)
+        {
+            double x = in[c][i];
+            if (lowCut)
+                x = listenHp[static_cast<size_t> (c)][1].process (listenHp[static_cast<size_t> (c)][0].process (x));
+            peak = std::max (peak, std::abs (x));
+        }
+        heard[static_cast<size_t> (i)] = peak;
+    }
+    listened = true;
 }
 
 void Cleanup::process (double* const* ch, int nch, int n) noexcept
@@ -52,7 +85,10 @@ void Cleanup::process (double* const* ch, int nch, int n) noexcept
     if (lowCut) updateFilter();
     const bool gateOn = params.gateRangeDb >= 0.05;
     const double openLevel = fromDb (params.gateThrDb), closeLevel = fromDb (params.gateThrDb - kHysteresisDb);
-    const int hold = static_cast<int> (kHoldSeconds * sr);
+    // Listening ahead: the gate also closes that much earlier, so hold it open that much longer.
+    const bool ahead = listened;
+    listened = false;
+    const int hold = static_cast<int> (kHoldSeconds * sr) + (ahead ? lookAhead : 0);
 
     for (int i = 0; i < n; ++i)
     {
@@ -68,6 +104,13 @@ void Cleanup::process (double* const* ch, int nch, int n) noexcept
         if (! gateOn)
             continue;
 
+        if (ahead)
+        {
+            // What the input had lookAheadAvailable - kLookAheadSeconds ago: kLookAheadSeconds ahead of this sample.
+            peakLine[static_cast<size_t> (peakPos)] = heard[static_cast<size_t> (i)];
+            if (++peakPos >= static_cast<int> (peakLine.size())) peakPos = 0;
+            peak = peakLine[static_cast<size_t> (peakPos)];
+        }
         env = peak > env ? peak : env + (peak - env) * envRelease;
         if (env > openLevel) { open = true; holdLeft = hold; }
         else if (env < closeLevel && holdLeft <= 0) open = false;

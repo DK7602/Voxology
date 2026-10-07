@@ -21,7 +21,12 @@ inline double fromDb (double db) noexcept { return std::pow (10.0, db / 20.0); }
 // ------------------------------------------------------------------------------------------------
 /** Cleanup: a low cut (removes rumble, handling noise and pops below the voice) and a gate that
     turns the gaps between phrases down by Range (room noise, headphone bleed, breaths are kept a
-    little so the vocal still sounds natural). */
+    little so the vocal still sounds natural).
+
+    Look-ahead for free: in the chain the gate can listen() to the chain's input, which is
+    `lookAheadAvailable` samples (Pitch's latency) ahead of the audio it turns down, so it opens a
+    little before a word arrives and soft starts aren't chopped. Without listen() it hears the audio
+    itself (no look-ahead). */
 struct CleanupParams
 {
     bool enabled = true;
@@ -38,14 +43,19 @@ public:
     static constexpr double kLowCutOffHz = 20.5;
     static constexpr double kHysteresisDb = 4.0;   // closes this far below the threshold
     static constexpr double kHoldSeconds = 0.08;
+    static constexpr double kLookAheadSeconds = 0.010;   // opens this long before the word
 
-    void prepare (double sampleRate, int numChannels);
+    /** maxBlock: the most samples listen() / process() get at once. */
+    void prepare (double sampleRate, int numChannels, int lookAheadAvailable = 0, int maxBlock = 0);
     void reset() noexcept;
     void setParams (const CleanupParams& p) noexcept { params = p; }
     static bool isNeutral (const CleanupParams& p) noexcept
     {
         return ! p.enabled || (p.lowCutHz <= kLowCutOffHz && p.gateRangeDb < 0.05);
     }
+    /** The chain's input for the block process() gets next (lookAheadAvailable samples ahead of it).
+        Read only. Call before process(), with the same n. */
+    void listen (const double* const* in, int nch, int n) noexcept;
     void process (double* const* ch, int nch, int n) noexcept;
 
     /** Deepest gate turn-down since the last call (dB, <= 0). */
@@ -58,8 +68,13 @@ private:
     CleanupParams params;
     double sr = 48000.0;
     int channels = 2;
-    std::array<std::array<Biquad, 2>, kMaxChannels> hp {};
+    std::array<std::array<Biquad, 2>, kMaxChannels> hp {}, listenHp {};   // the low cut on the audio / on what listen() hears
     double designedHz = -1.0;
+    std::vector<double> heard;   // listen()'s peaks for the next block
+    bool listened = false;
+    std::vector<double> peakLine;   // those peaks held back so they lead the audio by kLookAheadSeconds
+    int peakPos = 0;
+    int lookAhead = 0;
     double env = 0.0, envRelease = 0.0, gain = 1.0, gainDb = 0.0, gainAttack = 0.0, gainRelease = 0.0;
     int holdLeft = 0;
     bool open = true;

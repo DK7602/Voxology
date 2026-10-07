@@ -27,7 +27,7 @@ void PopRemover::prepare (double sampleRate, int numChannels, int lookAheadAvail
     voiceAvg = onePole (0.005, sr);
     voiceFall = onePole (2.0, sr);
     cutAtk = onePole (0.0005, sr);
-    cutRel = onePole (0.050, sr);
+    cutRel = onePole (0.020, sr);
     reset();
 }
 

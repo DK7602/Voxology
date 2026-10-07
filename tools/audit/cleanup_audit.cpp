@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <vector>
 
@@ -51,11 +52,21 @@ int main (int argc, char** argv)
         CleanupParams p = c; p.gateRangeDb = 0.0; cl.setParams (p);
         double* ptr = lc.data(); cl.process (&ptr, 1, n);
     }
-    gated = lc;
+    // The gate listens to the input (lc here), the audio it turns down is L samples behind; results shifted back.
+    gated.assign (static_cast<size_t> (n), 0.0);
     {
-        Cleanup g; g.prepare (sr, 1);
+        Cleanup g; g.prepare (sr, 1, L, 1);
         CleanupParams p = c; p.lowCutHz = 20.0; g.setParams (p);
-        for (int i = 0; i < n; ++i) { double* ptr = gated.data() + i; g.process (&ptr, 1, 1); gateDb[static_cast<size_t> (i)] = g.takeGateDb(); }
+        std::vector<double> d (static_cast<size_t> (n + L), 0.0), gd (static_cast<size_t> (n + L), 0.0);
+        for (int i = 0; i < n; ++i) d[static_cast<size_t> (i + L)] = lc[static_cast<size_t> (i)];
+        const double zero = 0.0;
+        for (int i = 0; i < n + L; ++i)
+        {
+            const double* lp = i < n ? lc.data() + i : &zero;
+            if (std::getenv ("NO_LOOKAHEAD") == nullptr || *std::getenv ("NO_LOOKAHEAD") == 0) g.listen (&lp, 1, 1);
+            double* ptr = d.data() + i; g.process (&ptr, 1, 1); gd[static_cast<size_t> (i)] = g.takeGateDb();
+        }
+        for (int i = 0; i < n; ++i) { gated[static_cast<size_t> (i)] = d[static_cast<size_t> (i + L)]; gateDb[static_cast<size_t> (i)] = gd[static_cast<size_t> (i + L)]; }
     }
     // Stage 2: pops then breaths, side-chain = the input, audio L samples behind.
     std::vector<double> sc (x), aud (static_cast<size_t> (n), 0.0), popDb (static_cast<size_t> (n), 0.0), brDb (static_cast<size_t> (n), 0.0);
@@ -118,7 +129,7 @@ int main (int argc, char** argv)
                 for (int i = 0; i < F; ++i) { const double s0 = lc[static_cast<size_t> (f * F + i)], s1 = gated[static_cast<size_t> (f * F + i)]; eIn += s0 * s0; eOut += s1 * s1; }
         }
         // soft starts: a frame over voice-30 after >= 100 ms of gate closed: energy lost in its first 30 ms
-        std::vector<double> starts, lags;
+        std::vector<double> starts, lags, vstarts;
         for (int f = 10; f < nf - 3; ++f)
         {
             bool closedBefore = true;
@@ -126,11 +137,26 @@ int main (int argc, char** argv)
             if (! closedBefore || lev[static_cast<size_t> (f)] <= voice - 30) continue;
             // the word itself: walk back while the frames stay within 30 dB of the voice
             int b = f; while (b > f - 10 && lev[static_cast<size_t> (b - 1)] > voice - 30) --b;
+            // a voiced start, if there is one (else the rise may be a breath, which the gate should turn down)
+            int vb = -1; for (int k = b; k <= f + 3; ++k) if (clar[static_cast<size_t> (k)] > 0.7) { vb = k; break; }
+            if (vb >= 0)
+            {
+                double e0 = 0, e1 = 0;
+                for (int i = vb * F; i < (vb + 3) * F; ++i) { e0 += lc[static_cast<size_t> (i)] * lc[static_cast<size_t> (i)]; e1 += gated[static_cast<size_t> (i)] * gated[static_cast<size_t> (i)]; }
+                vstarts.push_back (db (e1) - db (e0));
+                if (std::getenv ("SHOW") != nullptr) std::printf ("    start %.2f s: rise from %.2f, voiced at %.2f, lost %.1f dB (voiced 30 ms)\n", f * F / sr, b * F / sr, vb * F / sr, db (e1) - db (e0));
+            }
             int lag = 0; while (lag < 100 * F && gateDb[static_cast<size_t> (b * F + lag)] < -1) ++lag;
             lags.push_back (1000.0 * lag / sr);
             double e0 = 0, e1 = 0;
             for (int i = b * F; i < (f + 3) * F; ++i) { e0 += lc[static_cast<size_t> (i)] * lc[static_cast<size_t> (i)]; e1 += gated[static_cast<size_t> (i)] * gated[static_cast<size_t> (i)]; }
             starts.push_back (db (e1) - db (e0));
+            if (std::getenv ("SHOW") != nullptr)
+            {
+                std::printf ("    rise %.2f s (loud at %.2f), lost %.1f dB, open after %.0f ms; frames lev/clar:", b * F / sr, f * F / sr, db (e1) - db (e0), lags.back());
+                for (int k = b; k <= std::min (f + 4, b + 14); ++k) std::printf (" %.0f/%.2f", lev[static_cast<size_t> (k)], clar[static_cast<size_t> (k)]);
+                std::printf ("\n");
+            }
             ++opens;
             f += 10;
         }
@@ -140,6 +166,9 @@ int main (int argc, char** argv)
         if (! starts.empty())
             std::printf ("      %d phrase starts: start energy lost median %.1f dB, worst %.1f dB, %d worse than -3 dB\n", opens,
                          starts[starts.size() / 2], starts.front(), static_cast<int> (std::count_if (starts.begin(), starts.end(), [] (double d) { return d < -3; })));
+        std::sort (vstarts.begin(), vstarts.end());
+        if (! vstarts.empty()) std::printf ("      %d voiced starts: first 30 ms of voice lost median %.1f dB, worst %.1f dB, %d worse than -3 dB\n", static_cast<int> (vstarts.size()),
+                                            vstarts[vstarts.size() / 2], vstarts.front(), static_cast<int> (std::count_if (vstarts.begin(), vstarts.end(), [] (double d) { return d < -3; })));
         std::sort (lags.begin(), lags.end());
         if (! lags.empty()) std::printf ("      gate fully open after the word starts: median %.0f ms, worst %.0f ms\n", lags[lags.size() / 2], lags.back());
     }
@@ -157,12 +186,18 @@ int main (int argc, char** argv)
     const double lowNorm = vl.empty() ? -30 : vl[vl.size() / 2];
     std::printf ("voiced frames: under-100 Hz vs whole, median %.1f dB\n", lowNorm);
     {
-        int events = 0, onVoiced = 0; double deepest = 0; bool inE = false; int start = 0; double dur = 0, evDeep = 0; int over6 = 0; double over6Tot = 0;
+        int events = 0, onVoiced = 0; double deepest = 0; bool inE = false; int start = 0; double dur = 0, evDeep = 0; int over6 = 0; double over6Tot = 0; int noThump = 0;
         for (int i = 0; i < n; ++i)
         {
             const double cdb = popDb[static_cast<size_t> (i)];
             if (cdb > 3 && ! inE) { inE = true; start = i; ++events; }
             if (inE) { deepest = std::max (deepest, cdb); evDeep = std::max (evDeep, cdb); if (cdb > 6) ++over6; }
+            if (cdb > 6)
+            {
+                // cut while the input (lined up) has no thump: low band within 10 dB of its voiced normal
+                const int fa = std::clamp ((i - L) / F, 0, nf - 1);
+                if (lowLev[static_cast<size_t> (fa)] - lev[static_cast<size_t> (fa)] < lowNorm + 10 && lev[static_cast<size_t> (fa)] > voice - 30) ++noThump;
+            }
             if (inE && cdb < 0.5)
             {
                 inE = false; dur += (i - start) / sr;
@@ -176,7 +211,7 @@ int main (int argc, char** argv)
                 over6Tot += over6 / sr; over6 = 0; evDeep = 0;
             }
         }
-        std::printf ("POPS: %d events, deepest %.1f dB, avg length %.0f ms (%.0f ms > 6 dB), %d on clearly voiced frames\n", events, deepest, events ? 1000 * dur / events : 0.0, events ? 1000 * over6Tot / events : 0.0, onVoiced);
+        std::printf ("POPS: %d events, deepest %.1f dB, avg length %.0f ms (%.0f ms > 6 dB), %d on clearly voiced frames; > 6 dB cut on sound with no thump: %.2f s\n", events, deepest, events ? 1000 * dur / events : 0.0, events ? 1000 * over6Tot / events : 0.0, onVoiced, noThump / sr);
     }
     // Breaths: events (gain < -1 dB), how many overlap voiced frames.
     if (c.breathDb > 0.05)

@@ -251,6 +251,10 @@ TEST_CASE ("In the full chain, pops are cut from their first moment (look-ahead 
         if (p0 < static_cast<size_t> (2.0 * kSr)) continue;
         INFO ("pop at " << static_cast<double> (p0) / kSr << " s");
         CHECK (lowDb (y, p0, p1) < lowDb (x, p0, p1) - 12.0);
+        // Once the thump has died away the vowel gets its low end back quickly (the cut doesn't hang on).
+        const auto t0 = p0 + static_cast<size_t> (0.10 * kSr), t1 = p0 + static_cast<size_t> (0.20 * kSr);
+        INFO ("vowel after it: " << lowDb (y, t0, t1) - lowDb (x, t0, t1) << " dB");
+        CHECK (lowDb (y, t0, t1) > lowDb (x, t0, t1) - 1.0);
     }
     for (size_t k = 2; k < l.breaths.size(); ++k)
     {

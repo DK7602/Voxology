@@ -10,8 +10,8 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
     chanCount = std::clamp (numChannels, 1, kMaxChannels);
     clipWatch.prepare (chanCount);
     pitch.prepare (sr, chanCount, lowLatency);
-    cleanup.prepare (sr, chanCount);
-    // Pops and breaths listen to the chain's input, which is Pitch's latency ahead of them: free look-ahead.
+    // The gate, pops and breaths listen to the chain's input, which is Pitch's latency ahead of them: free look-ahead.
+    cleanup.prepare (sr, chanCount, pitch.latencySamples(), kChunk);
     pops.prepare (sr, chanCount, pitch.latencySamples());
     breaths.prepare (sr, chanCount, pitch.latencySamples());
     side.assign (kChunk, 0.0);
@@ -126,7 +126,8 @@ void VocalChain::processChunk (int nch, int len) noexcept
     // The incoming vocal: clipped or too hot? (read-only, for the tips)
     clipWatch.process (ch.data(), nch, len);
 
-    // The mono input, before Pitch delays it: the pops / breaths side-chain.
+    // The input, before Pitch delays it: the gate / pops / breaths side-chain.
+    cleanup.listen (ch.data(), nch, len);
     for (int i = 0; i < len; ++i)
     {
         double m = 0.0;
