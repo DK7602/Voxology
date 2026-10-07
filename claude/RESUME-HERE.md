@@ -702,3 +702,28 @@ test-audio/DMinor_Test_2026_Clip_Music_Vox.mp3: BeatKey reads it C-major notes, 
   the beat track to "Voxology - Side-Chain").
 - CI green: Actions run 37634314512 (v0.18.0, commit 8de7309: engine ASan tests, Windows build + tests, pluginval
   strictness 10 + VST3 validator, with the new side-chain bus).
+
+## v0.18.1 Beat key home from the 808 + side-chain status + bigger Pitch titles (2026-10-07)
+- User test (video, "Gal Bears" = the Gallas clip): side-chain on, but the beat track's send was off -> Voxology only
+  heard the voice ("voice: A mix", flip-flopping). Send on, side-chained to the RHYTHM KEYS track only: "beat: Bm";
+  Key Compass: Em. User's chord list (F#m E D C#7) does NOT match the audio (G, not G#, in the beat; numpy chroma).
+- Root cause: BeatKey's home note came from the chords only (B 25 %); the 808 sits on E (E1 = 41 Hz, under the old
+  50 Hz floor; its 3rd harmonic B2 fooled a first bass try). Fix: per analysis the LOWEST prominent peak 28 - 160 Hz is
+  the bass note, weighted by its level vs the frame's loudest peak (an 808 counts fully, an acoustic guitar's low strings
+  little), faded like the chroma; home score = chroma + 1/4 fifth + bass (pickNoteSet(..., &bass)). Also: when two sets
+  tie on one barely played note, name the one where home is minor / major (E minor, not E dorian; same notes allowed).
+  Real beats: Gallas E minor (was B minor), Schaf F# minor (A major notes, D# open), D-minor test D minor, Don & Lysette
+  notes A major, home now B dorian (was E mixolydian; never confirmed by the user; its lowest notes are mostly B).
+- Side-chain status: meter scState (0 off, 1 on but under -80 dBFS for 2 s, 2 sound); Key status "beat: no sound" and
+  warn tip SIDE-CHAIN SILENT (Cubase steps) when the vocal plays but the side-chain is silent.
+- VoiceKey: once sure (>= 0.5), the few-notes / ties cap no longer applies (no flip-flopping between "listening" and a key).
+- UI: Key / Scale / Tune / Notes title and status on one pill line, status 12.5 px ("KEY · beat: Em"); Tune's status
+  "live". Checked in Chromium (serve plugin/ui over http with JUCE's javascript/ as juce/: app.js is a module).
+- Tools (local, -DVOX_BUILD_LINKCHECK=ON): vox_sidecheck (the processor with a beat on its side-chain: prints side-chain
+  state / source / key); vox_vst3sidecheck (loads the real Voxology.vst3 like a host, side-chain on, F4 sine vocal:
+  "moved" = the beat's key followed; MANUAL_BMINOR=1 control). Linux plug-in build needs apt X11 / GTK / WebKit dev
+  libs; build with --parallel 2 - 3 (8 ran out of memory and restarted the worker).
+- Advice given: side-chain the whole beat (a Group of all music tracks, or the 2-track beat), not one instrument and not
+  Stereo Out (it has the vocal in it). Key changes mid-song are followed slowly (15 - 40 s). Guitar-only: notes right,
+  home name less sure.
+- Test "Beat key: the 808 names the home note" (Bm - G - Bm - D over an 808 on E1 -> E minor, C# open). 76 cases.

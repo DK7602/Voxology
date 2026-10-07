@@ -313,6 +313,12 @@ body.beat #header .title { margin-left: 0; }
 #cells[data-page="pitch"] .knob { height: 104px; }
 #cells[data-page="pitch"] .cell.pt-key, #cells[data-page="pitch"] .cell.pt-scale, #cells[data-page="pitch"] .cell.pt-tune { height: 146px; }
 #cells[data-page="pitch"] .cell-sub { font-size: 10px; white-space: nowrap; }
+/* Key, Scale, Tune, Notes: title and status on one line, the status as big as the title. */
+#module .cell-title { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; padding: 2px 10px; border-radius: 10px;
+  background: rgba(255, 250, 240, 0.92); box-shadow: inset 0 0 0 1.5px var(--gold); }
+#module .cell-title .cell-label, #module .cell-title .cell-sub { background: none; box-shadow: none; padding: 0; margin: 0; border-radius: 0; }
+#module .cell-title .cell-sub { font-size: 12.5px; font-weight: 600; }
+#module .cell-title .cell-sub::before { content: "\00B7"; margin-right: 6px; color: var(--gold-deep); font-weight: 700; }
 #cells[data-page="pitch"] .cell.pt-mode { width: 104px; margin-right: 6px; }
 #cells[data-page="pitch"] .pt-mode .vseg.list { width: 100px; gap: 6px; margin-top: 12px; }
 #cells[data-page="pitch"] .pt-mode .vseg.list button { height: 30px; font-size: 13px; }

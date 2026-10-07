@@ -49,6 +49,8 @@ public:
         int tonic() const noexcept { return (setRoot + tonicOffset) % 12; }
     };
     Result result() const noexcept { return res; }
+    const std::array<double, 12>& histogram() const noexcept { return chroma; }
+    const std::array<double, 12>& bassHistogram() const noexcept { return bass; }
 
 private:
     void analyse() noexcept;
@@ -62,6 +64,7 @@ private:
     std::vector<std::complex<double>> buf;
     std::vector<double> window, mag;
     std::array<double, 12> chroma {};
+    std::array<double, 12> bass {};    // the same, from the bass (under 160 Hz) only: it names the home note
     double tuneRe = 0.0, tuneIm = 0.0; // tuning as a weighted circular mean (cents on a 100-cent circle)
     double fade = 1.0;                 // per analysis
     int currentSet = -1;
@@ -73,7 +76,8 @@ private:
     whole histogram (no flip-flopping); confidence maps the set's share confLo .. confHi to 0 .. 1.
     Fills setRoot, tonicOffset, confidence, unclear, openNote and ready; returns how many other sets
     fit about as well (within 3 %: 1 = the usual open note, 2+ = too few notes to tell). */
-int pickNoteSet (const std::array<double, 12>& chroma, double margin, double confLo, double confHi, int& currentSet, BeatKey::Result& res) noexcept;
+int pickNoteSet (const std::array<double, 12>& chroma, double margin, double confLo, double confHi, int& currentSet, BeatKey::Result& res,
+                 const std::array<double, 12>* bass = nullptr) noexcept;
 
 /** The key of the vocal itself, heard live from what it sings (Voxology on a vocal with no beat to
     hear). Held notes count, slides and rap glides don't: a reading counts when the pitch is clear and
@@ -100,6 +104,7 @@ private:
     std::array<double, 12> chroma {};  // fine, folded into notes after taking the singer's offset out
     double smooth = 0.0, gap = 1.0, sinceAnalyse = 0.0;
     int currentSet = -1;
+    bool wasSure = false;
     BeatKey::Result res;
 };
 

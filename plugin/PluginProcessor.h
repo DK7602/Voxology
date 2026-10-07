@@ -79,8 +79,9 @@ public:
         std::array<std::atomic<int>, 2> hvNotes { -1, -1 };   // the harmony voices' notes (MIDI, -1 = none)
         // Key (Auto). VOCAL: 0 manual, 1 following a key, 2 nothing heard yet, 3 listening / not sure yet;
         // bkSource: what it hears (0 nothing, 1 Voxology on a beat, 2 the beat on the side-chain, 3 the voice).
+        // scState: the side-chain input (0 off, 1 on but no sound for 2 s, 2 sound coming in).
         // BEAT: this beat's own reading (bkState 4 = listening, 5 = has a key).
-        std::atomic<int> bkState { 0 }, bkSource { 0 }, bkKey { 0 }, bkMode { 0 }, bkSet { 0 }, bkUnclear { 0 }, bkOpen { -1 }, keyUsed { 0 }, scaleUsed { 0 };
+        std::atomic<int> bkState { 0 }, bkSource { 0 }, scState { 0 }, bkKey { 0 }, bkMode { 0 }, bkSet { 0 }, bkUnclear { 0 }, bkOpen { -1 }, keyUsed { 0 }, scaleUsed { 0 };
         std::atomic<int> midiNotes { 0 }, notesUsed { 0 };
         std::atomic<int> recMode { 0 }, latencyMs10 { 0 };   // Record mode on; the chain's latency (0.1 ms)   // pitch classes (bits): MIDI held / learned, and what Pitch may aim for
         std::atomic<float> bkConf { 0.0f }, bkTune { 0.0f }, bkHeard { 0.0f };
@@ -131,6 +132,7 @@ private:
     vox::VoiceKey voiceKey;            // VOCAL: the key of what's sung
     bool wasBeat = false;
     int followSource = 0;              // bkSource of the key Pitch follows (0 = none)
+    double sideQuietSeconds = 1.0e9;   // how long the side-chain has had no sound
     bool sideChainOn() const noexcept { return getBusCount (true) > 1 && getBus (true, 1)->isEnabled() && getBus (true, 1)->getNumberOfChannels() > 0; }
     void storeBeatMeters (const vox::BeatKey::Result& r) noexcept;
 

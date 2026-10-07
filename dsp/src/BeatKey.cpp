@@ -34,6 +34,7 @@ void BeatKey::reset() noexcept
     std::fill (ring.begin(), ring.end(), 0.0);
     pos = 0; sinceLast = 0; decCount = 0; decAcc = 0.0;
     chroma.fill (0.0);
+    bass.fill (0.0);
     tuneRe = tuneIm = 0.0;
     currentSet = -1;
     res = {};
@@ -68,7 +69,7 @@ void BeatKey::analyse() noexcept
 
     const double binHz = fs / kFft;
     const auto lo = static_cast<size_t> (std::ceil (50.0 / binHz)), hi = std::min (mag.size() - 2, static_cast<size_t> (2000.0 / binHz));
-    std::array<double, 12> frame {};
+    std::array<double, 12> frame {}, bassFrame {};
     double frameRe = 0.0, frameIm = 0.0, total = 0.0;
     const auto reach = static_cast<size_t> (std::ceil (40.0 / binHz));   // neighbourhood: +-40 Hz
     for (size_t k = lo; k <= hi; ++k)
@@ -86,7 +87,8 @@ void BeatKey::analyse() noexcept
         const double midi = 69.0 + 12.0 * std::log2 (kk * binHz / 440.0);
         const double note = std::round (midi);
         const double w = std::sqrt (m);   // level, compressed: loud 808s don't drown the chords
-        frame[static_cast<size_t> (((static_cast<int> (note) % 12) + 12) % 12)] += w;
+        const auto pc = static_cast<size_t> (((static_cast<int> (note) % 12) + 12) % 12);
+        frame[pc] += w;
         total += w;
         // Tuning: only peaks with enough resolution (a bin is < 1/4 semitone wide above ~100 Hz).
         if (kk * binHz > 100.0)
@@ -97,7 +99,25 @@ void BeatKey::analyse() noexcept
         }
     }
     if (total <= 0.0) return;
+    // The bass note (808, bass line): the LOWEST peak that stands out between 28 and 160 Hz, so its
+    // overtones (an 808 on E1 rings loudly on B2) don't count. It usually sits on the home note. It
+    // counts as much as it's loud next to the loudest note in the frame: a real 808 / bass fully, an
+    // acoustic guitar's low strings (no bass player) hardly.
+    double loudest = 0.0;
+    for (size_t k = lo; k <= hi; ++k) loudest = std::max (loudest, mag[k]);
+    for (size_t k = std::max<size_t> (2, static_cast<size_t> (std::ceil (28.0 / binHz))); k <= static_cast<size_t> (160.0 / binHz); ++k)
+    {
+        const double m = mag[k];
+        if (m <= mag[k - 1] || m < mag[k + 1]) continue;
+        double sum = 0.0; size_t cnt = 0;
+        for (size_t j = (k > reach ? k - reach : 1); j <= k + reach; ++j) { sum += mag[j]; ++cnt; }
+        if (m < 4.0 * sum / static_cast<double> (cnt)) continue;
+        const double midi = 69.0 + 12.0 * std::log2 (static_cast<double> (k) * binHz / 440.0);
+        bassFrame[static_cast<size_t> (((static_cast<int> (std::lround (midi)) % 12) + 12) % 12)] += std::min (1.0, m / (loudest + 1.0e-30));
+        break;
+    }
     for (size_t i = 0; i < 12; ++i) chroma[i] = chroma[i] * fade + frame[i] / total;
+    for (size_t i = 0; i < 12; ++i) bass[i] = bass[i] * fade + bassFrame[i];
     tuneRe = tuneRe * fade + frameRe / total;
     tuneIm = tuneIm * fade + frameIm / total;
     res.heardSeconds += 0.25;
@@ -105,11 +125,12 @@ void BeatKey::analyse() noexcept
 
     // Free to change its mind while it's still learning (first 15 s), firm after that.
     // Random / drum-only material spreads over all 12 (a 7-note set holds ~58 %); real music > 85 %.
-    pickNoteSet (chroma, res.heardSeconds < 15.0 ? 0.0 : 0.03, 0.70, 0.85, currentSet, res);
+    pickNoteSet (chroma, res.heardSeconds < 15.0 ? 0.0 : 0.03, 0.70, 0.85, currentSet, res, &bass);
     res.tuneCents = 100.0 * std::atan2 (tuneIm, tuneRe) / (2.0 * std::numbers::pi);
 }
 
-int pickNoteSet (const std::array<double, 12>& chroma, double margin, double confLo, double confHi, int& currentSet, BeatKey::Result& res) noexcept
+int pickNoteSet (const std::array<double, 12>& chroma, double margin, double confLo, double confHi, int& currentSet, BeatKey::Result& res,
+                 const std::array<double, 12>* bass) noexcept
 {
     static constexpr std::array<int, 7> major { 0, 2, 4, 5, 7, 9, 11 };
     double sum = 0.0;
@@ -125,12 +146,15 @@ int pickNoteSet (const std::array<double, 12>& chroma, double margin, double con
     const int set = currentSet;
     const double share = held[static_cast<size_t> (set)] / sum;
 
-    // Home: the set's note leaned on most (plus a quarter of its fifth, which backs a tonic up).
+    // Home: the set's note leaned on most (plus a quarter of its fifth, which backs a tonic up), and
+    // above all the note the bass sits on (the 808 plays the home note far more than any other).
+    // (bass: on the chroma's scale, each analysis adds up to 1 to it and exactly 1 to the chroma).
     double bestHome = -1.0; int home = 0;
     for (int step : major)
     {
         const int n = (set + step) % 12;
-        const double w = chroma[static_cast<size_t> (n)] + 0.25 * chroma[static_cast<size_t> ((n + 7) % 12)];
+        double w = chroma[static_cast<size_t> (n)] + 0.25 * chroma[static_cast<size_t> ((n + 7) % 12)];
+        if (bass != nullptr) w += (*bass)[static_cast<size_t> (n)];
         if (w > bestHome) { bestHome = w; home = step; }
     }
     res.ready = true;
@@ -147,6 +171,19 @@ int pickNoteSet (const std::array<double, 12>& chroma, double margin, double con
         int count = 0, found = -1;
         for (int n = 0; n < 12; ++n) if (in (other, n) && ! in (set, n)) { ++count; found = n; }
         if (count == 1) res.openNote = found;
+        // The two sets differ by one barely played note, so either names the key. Prefer the one where
+        // home is plain minor or major (E minor rather than E dorian): the same notes are allowed.
+        const int homeNote = (set + home) % 12;
+        const int otherOffset = (homeNote - other + 12) % 12;
+        const bool otherHasHome = in (other, homeNote);
+        if (res.openNote >= 0 && otherHasHome && home != 0 && home != 9 && (otherOffset == 0 || otherOffset == 9))
+        {
+            int mine = -1;
+            for (int n = 0; n < 12; ++n) if (in (set, n) && ! in (other, n)) mine = n;
+            res.setRoot = other;
+            res.tonicOffset = otherOffset;
+            res.openNote = mine;
+        }
     }
     int ties = 0;
     for (int r = 0; r < 12; ++r) if (r != set && held[static_cast<size_t> (r)] >= held[static_cast<size_t> (set)] - 0.03 * sum) ++ties;
@@ -160,6 +197,7 @@ void VoiceKey::reset() noexcept
     chroma.fill (0.0);
     smooth = 0.0; gap = 1.0; sinceAnalyse = 0.0;
     currentSet = -1;
+    wasSure = false;
     res = {};
 }
 
@@ -211,7 +249,9 @@ void VoiceKey::analyse() noexcept
     int notes = 0;
     for (double c : chroma) if (c >= 0.03 * sum) ++notes;
     // Too few different notes sung so far (one note held, or three keys hold them all): not sure yet.
-    if (ties >= 2 || notes < 5) res.confidence = std::min (res.confidence, 0.25);
+    // Once it has been sure, a part that leans on fewer notes doesn't undo that (no flip-flopping).
+    if (! wasSure && (ties >= 2 || notes < 5)) res.confidence = std::min (res.confidence, 0.25);
+    wasSure = wasSure || res.confidence >= 0.5;
 }
 
 } // namespace vox

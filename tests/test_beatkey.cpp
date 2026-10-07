@@ -9,9 +9,10 @@ using namespace vox;
 namespace {
 constexpr double kSr = 48000.0;
 
-/** A trap-style loop: a chord pad (saw-ish, 3 notes), an 808 on the chord root, kick / snare / hats.
-    chords: MIDI roots + minor (true) / major; detune in cents. */
-std::vector<double> beat (const std::vector<std::pair<int, bool>>& chords, double secondsPerChord, int loops, double detuneCents, bool drumsOnly = false)
+/** A trap-style loop: a chord pad (saw-ish, 3 notes), an 808 on the chord root (or on one note all
+    along: bass808 >= 0), kick / snare / hats. chords: MIDI roots + minor (true) / major; detune in cents. */
+std::vector<double> beat (const std::vector<std::pair<int, bool>>& chords, double secondsPerChord, int loops, double detuneCents, bool drumsOnly = false,
+                          int bass808 = -1)
 {
     std::mt19937 rng (11);
     std::normal_distribution<double> g (0.0, 1.0);
@@ -34,7 +35,7 @@ std::vector<double> beat (const std::vector<std::pair<int, bool>>& chords, doubl
                 ph[k] += hz (notes[k] + 12) / kSr;
                 for (int h = 1; h <= 6; ++h) s += 0.03 * std::sin (2 * std::numbers::pi * h * ph[k]) / h;
             }
-            ph808 += hz (root) / kSr;
+            ph808 += hz (bass808 >= 0 ? bass808 : root) / kSr;
             const double env = std::exp (-tIn * 1.5);
             s += 0.25 * env * (std::sin (2 * std::numbers::pi * ph808) + 0.3 * std::sin (4 * std::numbers::pi * ph808));
         }
@@ -222,4 +223,19 @@ TEST_CASE ("Voice key: a sung D minor melody, one held note, rap glides", "[beat
     for (int i = 0; i < 3000; ++i) rap.add (true, 55.0 + 4.0 * std::sin (2.0 * std::numbers::pi * 3.0 * i * 0.01), 0.9, 0.01);
     CHECK (rap.result().heardSeconds < 3.0);
     CHECK_FALSE (rap.result().ready);
+}
+
+TEST_CASE ("Beat key: the 808 names the home note (chords lean on B, the 808 sits on E)", "[beatkey]")
+{
+    // Like the user's Gallas beat: Bm - G - Bm - D over an 808 held on E1. The chords alone point at B;
+    // the bass says E. The notes hold G major (C / C# not played: either fits), so it's E minor.
+    const std::vector<std::pair<int, bool>> prog { { 47, true }, { 43, false }, { 47, true }, { 50, false } };
+    const auto r = listen (beat (prog, 2.0, 3, 0.0, false, 28));
+    INFO ("notes of " << kNoteNames[static_cast<size_t> (r.setRoot)] << " major, home " << kNoteNames[static_cast<size_t> (r.tonic())] << " " << modeName (r.tonicOffset));
+    REQUIRE (r.ready);
+    CHECK (r.tonic() == 4);          // E
+    CHECK (r.tonicOffset == 9);      // minor (named E minor, not E dorian)
+    CHECK (r.setRoot == 7);          // the notes of G major ...
+    CHECK (r.unclear);
+    CHECK (r.openNote == 1);         // ... with C# allowed too
 }

@@ -61,7 +61,7 @@ function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 // Latest meter frame.
 const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, clipNow: 0, clipTotal: 0, overNow: 0, hotPeak: -100, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1],
-  bkState: 0, bkSource: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, midiNotes: 0, notesUsed: 0xFFF, recMode: 0, latencyMs: 33, in: null, out: null };
+  bkState: 0, bkSource: 0, scState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, midiNotes: 0, notesUsed: 0xFFF, recMode: 0, latencyMs: 33, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
 let learnTab = "module";
 
@@ -125,7 +125,9 @@ function keyCell() {
     cell.classList.toggle("following", following);
     keys.forEach((b, i) => b.classList.toggle("beat", following && i === M.keyUsed));
     const from = M.bkSource === 3 ? "voice" : "beat";
-    sub.textContent = src === 1 ? "you set it" : following ? `${from}: ${beatKeyName(true)}`
+    const scSilent = M.scState === 1 && M.bkSource !== 2 && M.inShort > -70;   // side-chain on, vocal playing, beat silent
+    sub.textContent = src === 1 ? "you set it" : scSilent && !following ? "beat: no sound"
+      : following ? `${from}: ${beatKeyName(true)}`
       : M.bkState === 3 ? `${from}: listening\u2026` : "sing or play";
     sub.classList.toggle("lit", following);
   };
@@ -213,6 +215,14 @@ function pitchCells() {
     tag(pitchCell(), "pt-tune"),
     notesCell(),
   ];
+  // Key, Scale, Tune, Notes: the status sits on the title line, bigger ("KEY \u00B7 beat: Bm").
+  cells.slice(6).forEach((cell) => {
+    const label = cell.querySelector(".cell-label"), sub = cell.querySelector(".cell-sub");
+    const row = document.createElement("div");
+    row.className = "cell-title";
+    label.before(row);
+    row.append(label, sub);
+  });
   const [, , speed, vib, human, , , scaleCell] = cells;
   // Following the beat: the scale in use (your choice, or the beat's Major / Minor for Chromatic) glows gold.
   const scaleBtns = [...scaleCell.querySelectorAll(".vseg button")];
@@ -239,7 +249,7 @@ const noteName = (m) => `${NOTES[((Math.round(m) % 12) + 12) % 12]}${Math.floor(
 function pitchCell() {
   const cell = document.createElement("div");
   cell.className = "cell pitch-cell";
-  cell.innerHTML = `<span class="cell-label">Tune</span><span class="cell-sub">you sing \u2192 you get</span>
+  cell.innerHTML = `<span class="cell-label">Tune</span><span class="cell-sub">live</span>
     <div class="pitch-face"><div class="pf-row"><span class="pf-sung">\u2014</span><span class="pf-arrow">\u2192</span><span class="pf-target">\u2014</span></div>
     <div class="pf-bar"><i class="pf-zero"></i><i class="pf-dot"></i></div><div class="pf-cents mono">listening</div></div>`;
   const sung = cell.querySelector(".pf-sung"), tgt = cell.querySelector(".pf-target"), dot = cell.querySelector(".pf-dot"), c = cell.querySelector(".pf-cents");
@@ -978,7 +988,10 @@ const LEARN = {
         { need: "Switch it off when you're done recording.", steps: ["Click REC in the header to go back to full quality for mixing (Cubase adjusts the timing for you)."] }));
       if (choice("ptMidi") === 2 && M.midiNotes === 0) t.push(tip("LEARN IS WAITING", "MIDI is on Learn, but no notes have been played yet, so Pitch uses the key as usual.", "calm",
         { need: "Only if you want the MIDI scale.", steps: ["Route a MIDI track's output to Voxology (Cubase: the track's output menu).", "Play the beat's notes or chords once: they light up blue in Notes."] }));
-      if (val("ptAmount") >= 0.05 && choice("ptKeySrc") === 0 && M.bkSource !== 1 && M.bkSource !== 2) t.push(tip("NO BEAT HEARD",
+      if (choice("ptKeySrc") === 0 && M.scState === 1 && M.bkSource !== 2 && M.inShort > -70) t.push(tip("SIDE-CHAIN SILENT",
+        "Voxology's side-chain is switched on, but no sound is coming into it, so the key can't come from your beat" + (M.bkSource === 3 ? " (it's guessing from your voice instead)." : "."), "warn",
+        { need: "Yes, if you want the beat's key.", steps: ["In Voxology's window, click the small arrow next to the side-chain button (top bar) and choose Add Side-Chain Source, then pick your beat track. (Or: on the beat track, add a Send whose destination is this vocal's Voxology side-chain.)", "Make sure that send is switched on (lit) and its level is up, around 0 dB, and the beat track isn't muted.", "Press play: within a few seconds the Key status should read \"beat: \u2026\". If it still says \"beat: no sound\", send me a screenshot of the beat track's Sends."] }));
+      if (val("ptAmount") >= 0.05 && choice("ptKeySrc") === 0 && M.bkSource !== 1 && M.bkSource !== 2 && M.scState !== 1) t.push(tip("NO BEAT HEARD",
         `Key is on Auto, but Voxology can't hear your beat, so it learns the key from your singing${M.bkState === 1 ? ` (now: ${beatKeyName()})` : ": that takes about 20 - 40 s of held notes, and rap may never be sure"}. ${M.bkState === 1 ? "" : "Until then Pitch uses the Key / Scale below. "}The beat is the surest way.`, "calm",
         { need: "Optional, but it's the surest way to always be in the beat's key.", steps: ["Open Voxology on your vocal and click the side-chain button in the top bar of its window (Cubase), so it lights up.", "On your beat track, add a Send and pick this vocal's \"Voxology - Side-Chain\" as its destination, at 0 dB.", "Press play: after about 6 s the beat's key shows up here. (Or: put a second Voxology on the beat track and click BEAT.)"] }));
       if (val("ptAmount") >= 0.05 && M.bkState === 1 && Math.abs(M.bkTune) >= 10) t.push(tip("BEAT DETUNED", `Your beat is tuned ${fmtTune(M.bkTune)} away from standard (A = 440 Hz). Pitch tunes your notes to the beat's tuning, so they sit with it.`, "calm",

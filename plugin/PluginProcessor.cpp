@@ -152,6 +152,9 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     {
         const auto sc = getBusBuffer (buffer, true, 1);
         const int scn = sc.getNumChannels();
+        float scPeak = 0.0f;
+        for (int c = 0; c < scn; ++c) scPeak = juce::jmax (scPeak, static_cast<float> (sc.getMagnitude (c, 0, n)));
+        sideQuietSeconds = scPeak > 1.0e-4f ? 0.0 : sideQuietSeconds + n / juce::jmax (1.0, preparedRate);   // -80 dBFS
         std::array<double, kHop> mono {};
         for (int s = 0; s < n && scn > 0; s += kHop)
         {
@@ -260,6 +263,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
             }
         }
         followSource = state == 1 ? source : 0;
+        meters.scState.store (! sideOn ? 0 : sideQuietSeconds > 2.0 ? 1 : 2);
         meters.bkState.store (state);
         meters.bkSource.store (source);
         // MIDI: Notes = only the notes held right now (none held: the key as usual); Learn = the last notes played.

@@ -269,6 +269,7 @@ void VoxWebEditor::timerCallback()
     }
     frame->setProperty ("bkState", m.bkState.load());
     frame->setProperty ("bkSource", m.bkSource.load());
+    frame->setProperty ("scState", m.scState.load());
     frame->setProperty ("bkKey", m.bkKey.load());
     frame->setProperty ("bkMode", m.bkMode.load());
     frame->setProperty ("bkSet", m.bkSet.load());
