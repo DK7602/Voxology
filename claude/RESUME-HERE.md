@@ -728,3 +728,10 @@ test-audio/DMinor_Test_2026_Clip_Music_Vox.mp3: BeatKey reads it C-major notes, 
   home name less sure.
 - Test "Beat key: the 808 names the home note" (Bm - G - Bm - D over an 808 on E1 -> E minor, C# open). 76 cases.
 - CI green: Actions run 37671076436 (v0.18.1, commit 972bc23).
+
+## Thread handoff (2026-10-07): "key detection" thread -> "Voxology audit" thread
+- Key detection state: v0.18.1 (CI green). User's setup advice given: one Voxology in BEAT mode on a Group of all music
+  tracks ("Beat"; Cubase 14: right-click > Add Track > Group Track to Selected Channels), Voxology on each vocal track
+  with Key on AUTO (no side-chains needed); side-chain only for a single vocal. Never Pitch on a vocal group (monophonic).
+- Open: user to confirm "beat: Em" on Gallas with the full beat; voice-only key can land one note off (Gal Bears vocal
+  read A mixolydian); Don & Lysette home now B dorian (unconfirmed).
