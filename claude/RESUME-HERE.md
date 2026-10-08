@@ -992,3 +992,25 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
 - User prefs (unchanged): short replies, plain language, honest assessments, a plan with every warning; Actions link
   when green + Chrome Ctrl+J -> Keep; keep this file updated; push to claude/voxology; no PRs. Linux builds:
   --parallel 2 - 3. Repo is PUBLIC until the user makes it private (Nov 1).
+
+## Honey Tune audit (2026-10-08, "Honey Tune audit" thread) - findings only, no code changed yet
+User report: "off-key notes no longer highlight red". Tools: HoneyPreview (cmake -DVOX_HONEY_PREVIEW=ON; Linux needs
+libx11 / xrandr / xinerama / xcursor / freetype / fontconfig / asound dev packages), tools/audit/honey_tune_audit.cpp,
+scratch keyck.cpp (Auto key per vocal). 85 tests pass.
+- RED GLOW: not a regression (logic unchanged since v0.11 Round 7): red = will SOUND off-key (NoteView.off from the target).
+  Snap defaults to 100 %, so in the Tuned view every note lands on a note -> nothing is ever red (sung-off notes turn
+  gold). Red only shows in Original or with Snap < ~75 %. Confirmed on Gallas: Snap 100 % = 0 red, Snap 0 % = 80 red.
+- AUTO KEY falls back to Chromatic when < 45 % sure: Don (C major, 40 %, "or G") and Gallas (said D major or G
+  major 40 %; real E minor = G major notes) both -> Chromatic. Then "off-key" only means "between two semitones" and
+  wrong notes vs the song's key are never flagged or fixed. Schaf F# minor 87 %, Don & Lysette A major 100 % (Voxology's
+  beat key said E mixolydian = same notes) are fine. Honey Tune doesn't use the host's key or Voxology's beat key.
+- SOUND (snap every note, keep drift + vibrato): unchanged from v0.17 - lands within 0.2 - 0.4 c median (p90 0.9 - 2 c),
+  shape kept 4 - 7 c rms median; glitch counts = the measuring tracker's own noise.
+- Code read: the playback renderer outputs SILENCE if the clip's sample rate differs from the project's (comment says
+  the host plays it untouched - JUCE ignores the false return; buffer is cleared). Cubase usually converts on import, so
+  rare; unverified. Minor: Ctrl+wheel zoom max 1500 px/s vs + / - keys 2000.
+- Proposed plan (awaiting the user's OK): 1) red glow = SUNG off-key in both views (gold body = now tuned onto the key,
+  blue = plays as sung), legend "sung off-key" / "tuned to key"; 2) key: read the host's key signature (ARA musical
+  context; Cubase sends it when the project has one) for Auto; when unsure, keep Chromatic snapping but say so plainly
+  in red ("Key unsure: pick your song's key") with the two candidates; 3) sample-rate mismatch: play the recording
+  untouched (or resample) instead of silence; 4) test for the red rule.
