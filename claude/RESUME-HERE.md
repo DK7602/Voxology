@@ -893,3 +893,10 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
 - Tried and reverted: aiming the leveler at the pros' punch (3.5 dB) like Reference Match does: the leveler then
   barely works (thresholds -0 .. -5.5 dB) because the peak stage alone brings the punch down, and lines got less even
   (Don 5.6 -> 8.1 dB). Pros' line-to-line range can't be measured on 7 s clips, so the evidence doesn't support it.
+
+## Saturation audit (2026-10-08): no change
+- tools/audit/sat_audit.cpp. Auto-Edit's estimate = the real oversampled module within 0.4 dB (-34.2 .. -42.4 dB of
+  harmonics at Mix 50 %). Aliasing with a loud 9 kHz tone: -127 dB (Tape), -71 dB (Tube, its 2nd harmonic at 18 kHz is
+  -39 dB). Note: the curve is level-dependent (bends relative to full scale, Polisher's design); the user's float
+  acapellas reach it peaking +5 .. +9 dBFS, so Auto-Edit picks low Drive (1 - 3 dB). Re-run Auto-Edit after changing
+  the vocal's level before Voxology.
