@@ -252,6 +252,56 @@ bool AutoEditController::undo()
     return true;
 }
 
+namespace {
+juce::String profileToJson (const vox::ReferenceProfile& r)
+{
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("ok", r.ok);
+    o->setProperty ("name", juce::String::fromUTF8 (r.name.c_str()));
+    o->setProperty ("problem", juce::String::fromUTF8 (r.problem.c_str()));
+    o->setProperty ("warning", juce::String::fromUTF8 (r.warning.c_str()));
+    o->setProperty ("about", juce::String::fromUTF8 (r.about.c_str()));
+    o->setProperty ("builtin", r.builtin);
+    o->setProperty ("sib", r.sibilanceDb);
+    o->setProperty ("punch", r.microDynDb);
+    o->setProperty ("tail", r.tailDb);
+    o->setProperty ("voiced", r.voicedSeconds);
+    o->setProperty ("f0", r.f0Median);
+    juce::Array<juce::var> bands;
+    for (double v : r.bandDb) bands.add (v);
+    o->setProperty ("bands", bands);
+    return juce::JSON::toString (juce::var (o), true);
+}
+
+std::shared_ptr<vox::ReferenceProfile> profileFromJson (const juce::String& saved)
+{
+    const auto v = juce::JSON::parse (saved);
+    auto* o = v.getDynamicObject();
+    if (o == nullptr) return nullptr;
+    auto r = std::make_shared<vox::ReferenceProfile>();
+    r->ok = o->getProperty ("ok");
+    r->name = o->getProperty ("name").toString().toStdString();
+    r->problem = o->getProperty ("problem").toString().toStdString();
+    r->warning = o->getProperty ("warning").toString().toStdString();
+    r->about = o->getProperty ("about").toString().toStdString();
+    r->builtin = o->hasProperty ("builtin") && static_cast<bool> (o->getProperty ("builtin"));
+    r->sibilanceDb = o->getProperty ("sib");
+    r->microDynDb = o->getProperty ("punch");
+    r->tailDb = o->getProperty ("tail");
+    r->voicedSeconds = o->getProperty ("voiced");
+    r->f0Median = o->hasProperty ("f0") ? static_cast<double> (o->getProperty ("f0")) : 0.0;
+    if (auto* arr = o->getProperty ("bands").getArray())
+        for (const auto& b : *arr) r->bandDb.push_back (b);
+    if (r->bandDb.size() != vox::analysisBands().size()) r->ok = false;   // from an older version: re-load it
+    return r;
+}
+
+juce::File userRefFile (const juce::String& name)
+{
+    return AutoEditController::userReferenceFolder().getChildFile (juce::File::createLegalFileName (name) + ".json");
+}
+}
+
 // =================================================================================================
 // Reference Match
 void AutoEditController::loadReference (const juce::File& file)
@@ -282,6 +332,13 @@ void AutoEditController::loadReference (const juce::File& file)
             std::vector<std::vector<float>> audio (static_cast<size_t> (nch));
             for (int c = 0; c < nch; ++c) audio[static_cast<size_t> (c)].assign (buf.getReadPointer (c), buf.getReadPointer (c) + n);
             *profile = vox::analyseReference (audio, sr, profile->name);
+            if (profile->ok)
+            {
+                // Keep its measurements in your reference library, so it's there in every project.
+                const auto folder = userReferenceFolder();
+                if (folder.createDirectory())
+                    userRefFile (juce::String::fromUTF8 (profile->name.c_str())).replaceWithText (profileToJson (*profile));
+            }
         }
         {
             const juce::ScopedLock sl (refLock);
@@ -316,6 +373,8 @@ juce::String AutoEditController::getReferenceJson() const
         o->setProperty ("problem", juce::String::fromUTF8 (r->problem.c_str()));
         o->setProperty ("warning", juce::String::fromUTF8 (r->warning.c_str()));
         o->setProperty ("seconds", r->voicedSeconds);
+        o->setProperty ("about", juce::String::fromUTF8 (r->about.c_str()));
+        o->setProperty ("builtin", r->builtin);
     }
     return juce::JSON::toString (juce::var (o), true);
 }
@@ -327,47 +386,76 @@ juce::String AutoEditController::getReferenceForSaving() const
         const juce::ScopedLock sl (refLock);
         r = reference;
     }
-    if (r == nullptr)
-        return {};
-    auto* o = new juce::DynamicObject();
-    o->setProperty ("ok", r->ok);
-    o->setProperty ("name", juce::String::fromUTF8 (r->name.c_str()));
-    o->setProperty ("problem", juce::String::fromUTF8 (r->problem.c_str()));
-    o->setProperty ("warning", juce::String::fromUTF8 (r->warning.c_str()));
-    o->setProperty ("sib", r->sibilanceDb);
-    o->setProperty ("punch", r->microDynDb);
-    o->setProperty ("tail", r->tailDb);
-    o->setProperty ("voiced", r->voicedSeconds);
-    o->setProperty ("f0", r->f0Median);
-    juce::Array<juce::var> bands;
-    for (double v : r->bandDb) bands.add (v);
-    o->setProperty ("bands", bands);
-    return juce::JSON::toString (juce::var (o), true);
+    return r == nullptr ? juce::String() : profileToJson (*r);
 }
 
 void AutoEditController::restoreReference (const juce::String& saved)
 {
-    std::shared_ptr<vox::ReferenceProfile> r;
-    const auto v = juce::JSON::parse (saved);
-    if (auto* o = v.getDynamicObject())
-    {
-        r = std::make_shared<vox::ReferenceProfile>();
-        r->ok = o->getProperty ("ok");
-        r->name = o->getProperty ("name").toString().toStdString();
-        r->problem = o->getProperty ("problem").toString().toStdString();
-        r->warning = o->getProperty ("warning").toString().toStdString();
-        r->sibilanceDb = o->getProperty ("sib");
-        r->microDynDb = o->getProperty ("punch");
-        r->tailDb = o->getProperty ("tail");
-        r->voicedSeconds = o->getProperty ("voiced");
-        r->f0Median = o->hasProperty ("f0") ? static_cast<double> (o->getProperty ("f0")) : 0.0;
-        if (auto* arr = o->getProperty ("bands").getArray())
-            for (const auto& b : *arr) r->bandDb.push_back (b);
-        if (r->bandDb.size() != vox::analysisBands().size()) r->ok = false;   // from an older version: re-load it
-    }
+    std::shared_ptr<vox::ReferenceProfile> r = saved.isEmpty() ? nullptr : profileFromJson (saved);
     {
         const juce::ScopedLock sl (refLock);
         reference = std::move (r);
     }
+    ++refVersion;
+}
+
+juce::File AutoEditController::userReferenceFolder()
+{
+    return juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("Voxology").getChildFile ("References");
+}
+
+juce::String AutoEditController::listReferencesJson() const
+{
+    juce::Array<juce::var> builtin, yours;
+    for (const auto& r : vox::builtinReferences())
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("name", juce::String::fromUTF8 (r.name.c_str()));
+        o->setProperty ("about", juce::String::fromUTF8 (r.about.c_str()));
+        builtin.add (juce::var (o));
+    }
+    auto files = userReferenceFolder().findChildFiles (juce::File::findFiles, false, "*.json");
+    files.sort();
+    for (const auto& f : files)
+        if (auto r = profileFromJson (f.loadFileAsString()); r != nullptr && r->ok)
+        {
+            auto* o = new juce::DynamicObject();
+            o->setProperty ("name", juce::String::fromUTF8 (r->name.c_str()));
+            yours.add (juce::var (o));
+        }
+    std::shared_ptr<const vox::ReferenceProfile> cur;
+    {
+        const juce::ScopedLock sl (refLock);
+        cur = reference;
+    }
+    auto* res = new juce::DynamicObject();
+    res->setProperty ("builtin", builtin);
+    res->setProperty ("yours", yours);
+    res->setProperty ("folder", userReferenceFolder().getFullPathName());
+    res->setProperty ("current", cur == nullptr ? juce::String() : juce::String::fromUTF8 (cur->name.c_str()));
+    return juce::JSON::toString (juce::var (res), true);
+}
+
+void AutoEditController::selectReference (bool builtin, const juce::String& name)
+{
+    std::shared_ptr<vox::ReferenceProfile> r;
+    if (builtin)
+    {
+        for (const auto& b : vox::builtinReferences())
+            if (juce::String::fromUTF8 (b.name.c_str()) == name) r = std::make_shared<vox::ReferenceProfile> (b);
+    }
+    else if (const auto f = userRefFile (name); f.existsAsFile())
+        r = profileFromJson (f.loadFileAsString());
+    if (r == nullptr) return;
+    {
+        const juce::ScopedLock sl (refLock);
+        reference = std::move (r);
+    }
+    ++refVersion;
+}
+
+void AutoEditController::deleteUserReference (const juce::String& name)
+{
+    userRefFile (name).deleteFile();
     ++refVersion;
 }

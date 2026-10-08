@@ -111,3 +111,26 @@ TEST_CASE ("Reference Match keeps each band on its job (no stacking, nothing und
     if (e.gainDb[4] != 0.0) CHECK (e.freqHz[4] >= 8000.0);
     CHECK (r.params.cleanup.lowCutHz <= 0.86 * r.analysis.f0Low + 5.0);
 }
+
+TEST_CASE ("Built-in references: six pro groups, usable by Auto-Edit", "[reference]")
+{
+    const auto& lib = builtinReferences();
+    REQUIRE (lib.size() == 6);
+    const auto mine = testsig::vocal (kSr, 14.0, -80.0, -14.0, 3, 150.0);
+    for (const auto& ref : lib)
+    {
+        INFO (ref.name);
+        CHECK (ref.ok);
+        CHECK (ref.builtin);
+        CHECK (! ref.about.empty());
+        CHECK (ref.bandDb.size() == analysisBands().size());
+        CHECK (ref.f0Median > 100.0);
+        CHECK (ref.sibilanceDb > -15.0);
+        CHECK (ref.microDynDb > 2.0);
+        AutoEditSettings s { 1, 1, 0.0, &ref };
+        const auto r = autoEdit ({ mine }, kSr, s);
+        REQUIRE (r.ok);
+        CHECK (r.summary.find (ref.name) != std::string::npos);
+        for (double g : r.params.eq.gainDb) CHECK (std::abs (g) <= 8.0);
+    }
+}

@@ -12,6 +12,7 @@ add_library(vox_dsp STATIC
     src/Space.cpp
     src/VocalChain.cpp
     src/AutoEdit.cpp
+    src/ReferenceLibrary.cpp
     src/PitchCorrector.cpp
     src/HoneyTune.cpp
     src/BeatKey.cpp

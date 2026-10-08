@@ -47,6 +47,9 @@ const aeUndo = Juce.getNativeFunction("undoAutoEdit");
 const aeGetReport = Juce.getNativeFunction("getAutoEditReport");
 const refChoose = Juce.getNativeFunction("chooseReference");
 const refClear = Juce.getNativeFunction("clearReference");
+const refList = Juce.getNativeFunction("listReferences");
+const refSelect = Juce.getNativeFunction("selectReference");
+const refDelete = Juce.getNativeFunction("deleteReference");
 const refGet = Juce.getNativeFunction("getReference");
 const umGetSources = Juce.getNativeFunction("getUnmaskSources");
 const umSetSource = Juce.getNativeFunction("setUnmaskSource");
@@ -1161,7 +1164,7 @@ function notesAsTips() {
 
 function referenceBlock() {
   if (refInfo.state === "none") {
-    body.append(head("REFERENCE MATCH"), para("Got a vocal you love the sound of? Load its acapella with + REFERENCE (under STYLE). Auto-Edit then aims your vocal at its tone, how bright its s sounds are, its punch and its space, instead of the style's built-in target."));
+    body.append(head("REFERENCE MATCH"), para("Click + REFERENCE (under STYLE) to aim Auto-Edit at a sound you like: pick one of the BUILT-IN finished pro vocals (male / female, singer / rap), or add the acapella of a vocal you love. Auto-Edit then matches its tone, how bright its s sounds are and its punch, instead of the style's built-in target. Every vocal you add is saved under YOURS, so it's there in every project."));
     body.append(tip("WHERE TO GET ONE", "Use the vocal on its own (an acapella or vocal stem), not the full song: a beat under it throws the reading off by about 7 dB.", "calm",
       { need: "Optional. The styles work without one.", steps: ["Search for \"<song name> acapella\" (many artists release them), or ask the producer for the vocal stem.", "WAV, AIFF, FLAC, MP3 or OGG all work. A verse or hook (10 s+) is plenty."] }));
     return;
@@ -1310,12 +1313,52 @@ async function fetchReference() {
   b.classList.toggle("warn", refInfo.state === "problem" || !!refInfo.warning);
   b.textContent = refInfo.state === "loading" ? "READING…" : refInfo.state === "none" ? "+ REFERENCE"
     : `${refInfo.state === "ok" ? "\u266A" : "\u26A0"} ${refInfo.name || "reference"}`;
-  b.title = refInfo.state === "none" ? "Reference Match: load the acapella of a vocal you love, and Auto-Edit aims at its sound"
+  b.title = refInfo.state === "none" ? "Reference Match: pick a built-in pro vocal or add an acapella you love, and Auto-Edit aims at its sound"
     : refInfo.problem || refInfo.warning || `Auto-Edit will match "${refInfo.name}". Click to choose another.`;
   $("ref-clear").hidden = refInfo.state === "none" || refInfo.state === "loading";
   if (learnTab === "report") renderLearn();
 }
-$("ref").addEventListener("click", async () => { await refChoose(); });
+// The reference menu: built-in pro references, the vocals you've loaded (saved for every project), add a file, none.
+let refMenu = null;
+function closeRefMenu() { if (refMenu) { refMenu.remove(); refMenu = null; } }
+async function openRefMenu() {
+  closeRefMenu();
+  let lib = { builtin: [], yours: [], folder: "", current: "" };
+  try { lib = Object.assign(lib, JSON.parse((await refList()) || "{}")); } catch { /* keep the empty library */ }
+  const m = el("div", "ref-menu");
+  const item = (label, title, onPick, current, onDelete) => {
+    const row = el("div", "ref-item" + (current ? " current" : ""));
+    const b = el("button", "ref-pick", (current ? "\u266A " : "") + label);
+    b.type = "button";
+    if (title) b.title = title;
+    b.addEventListener("click", async () => { closeRefMenu(); await onPick(); fetchReference(); });
+    row.append(b);
+    if (onDelete) {
+      const x = el("button", "ref-del", "\u2715");
+      x.type = "button";
+      x.title = `Remove "${label}" from your references`;
+      x.addEventListener("click", async (e) => { e.stopPropagation(); await onDelete(); openRefMenu(); });
+      row.append(x);
+    }
+    m.append(row);
+  };
+  m.append(el("div", "ref-head", "BUILT-IN \u00B7 finished pro vocals"));
+  for (const r of lib.builtin) item(r.name, r.about, () => refSelect(true, r.name), r.name === lib.current, null);
+  m.append(el("div", "ref-head", "YOURS"));
+  if (!lib.yours.length) m.append(el("div", "ref-hint", "Vocals you add are saved here for every project."));
+  for (const r of lib.yours) item(r.name, "", () => refSelect(false, r.name), r.name === lib.current, () => refDelete(r.name));
+  m.append(el("div", "ref-sep"));
+  item("+ Add a vocal file\u2026", "An acapella you like (WAV, AIFF, FLAC, MP3 or OGG). It's measured once and saved under YOURS" + (lib.folder ? ` (${lib.folder})` : "") + ".", () => refChoose(), false, null);
+  if (lib.current) item("No reference (use the style)", "", () => refClear(), false, null);
+  const r = $("ref").getBoundingClientRect();
+  m.style.left = `${Math.round(r.left)}px`;
+  m.style.top = `${Math.round(r.bottom + 4)}px`;
+  document.body.append(m);
+  refMenu = m;
+}
+document.addEventListener("mousedown", (e) => { if (refMenu && !refMenu.contains(e.target) && e.target !== $("ref")) closeRefMenu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeRefMenu(); });
+$("ref").addEventListener("click", async () => { if (refMenu) closeRefMenu(); else await openRefMenu(); });
 $("ref-clear").addEventListener("click", async () => { await refClear(); fetchReference(); });
 
 $("undo").addEventListener("click", async () => { if (await aeUndo()) { report = null; learnTab = "report"; renderLearn(); refreshAll(); } });

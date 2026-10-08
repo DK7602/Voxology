@@ -949,3 +949,17 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
 - Clips for the user: tonight's START (v0.18.2) vs NOW (v0.19.4 = v0.19.5 without a reference), Auto-Edit whole chain.
 - Open: user to listen and report; user's own finished vocal stems would sharpen the pro targets for trap / rap
   (MUSDB18 is mostly rock / indie). Cambridge-MT needs the user to download (Cloudflare blocks automation).
+
+## v0.20.0 Reference library: built-in pro references + "Yours" (2026-10-08)
+- User asked for a ready-made reference database (male / female, several genres) they can add to.
+- Built-in (dsp/src/ReferenceLibrary.cpp, builtinReferences()): 6 profiles, medians of MUSDB18 groups (measurements
+  only, no audio): Pro male singer (18 clips), Pro male rap / rhythmic (12), Pro female singer bright (26) / warm (25:
+  split at the median 8 - 12.5 kHz), Pro female rap / rhythmic (35), Pro average (143). Male = f0 < 190 Hz, female
+  > 230; singer = held >= 30 %. tailDb -120 (space can't be measured on 7 s clips: follows the style). MUSDB has few
+  real rap tracks, so "rap / rhythmic" means rhythmic delivery; the user's own picks fill the trap gap.
+- ReferenceProfile gained about / builtin. Plug-in: every vocal file loaded with REF is measured once and saved as
+  JSON in Documents/Voxology/References (userReferenceFolder()); listReferences / selectReference / deleteReference
+  native functions; the file picker starts in Downloads and remembers the last folder.
+- UI: REF opens a menu: BUILT-IN (finished pro vocals), YOURS (with ✕ to remove), + Add a vocal file…, No reference.
+  Checked in Chromium with mock.js (no errors); solid background. Plug-in compiled on Linux (VST3) before pushing.
+- Test "Built-in references: six pro groups, usable by Auto-Edit". 84 cases.

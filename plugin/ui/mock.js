@@ -53,7 +53,7 @@
   // Simulated Auto-Edit (listening runs 3x faster than the real 12 s). Values from the engine's own
   // report on the synthetic test vocal (tools/report.cpp).
   const um = { selected: "" };
-  const ref = { json: JSON.stringify({ state: "none" }), version: 0 };
+  const ref = { json: JSON.stringify({ state: "none" }), version: 0, yours: ["My Favorite Hook (Acapella)"] };
   const ae = { state: 0, progress: 0, undo: false, version: 0, report: "", snapshot: null };
   function aeFinish() {
     ae.snapshot = { sliders: JSON.parse(JSON.stringify(sliders)), toggles: { ...toggles }, combos: JSON.parse(JSON.stringify(combos)) };
@@ -110,7 +110,7 @@
 
   window.__JUCE__ = {
     initialisationData: {
-      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "chooseReference", "clearReference", "getReference", "getUnmaskSources", "setUnmaskSource"],
+      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource"],
       __juce__registeredGlobalEventIds: [], __juce__sliders: Object.keys(sliders), __juce__toggles: Object.keys(toggles), __juce__comboBoxes: Object.keys(combos),
     },
     postMessage(message) {
@@ -140,6 +140,13 @@
           setTimeout(() => { ref.json = JSON.stringify({ state: "ok", name: "Favorite Artist - Hook (Acapella)", seconds: 41, problem: "", warning: "" }); ref.version++; }, 1200); }
         if (payload.name === "clearReference") { ref.json = JSON.stringify({ state: "none" }); ref.version++; }
         if (payload.name === "getReference") result = ref.json;
+        if (payload.name === "listReferences") result = JSON.stringify({ builtin: [
+            { name: "Pro male singer", about: "Low voices that mostly sing" }, { name: "Pro male rap / rhythmic", about: "Low voices that rap" },
+            { name: "Pro female singer, bright", about: "Airy, open top" }, { name: "Pro female singer, warm", about: "Smooth, soft top" },
+            { name: "Pro female rap / rhythmic", about: "Present mids" }, { name: "Pro average (all voices)", about: "Neutral" } ],
+          yours: ref.yours.map((n) => ({ name: n })), folder: "C:\\Users\\you\\Documents\\Voxology\\References", current: (JSON.parse(ref.json).name || "") });
+        if (payload.name === "selectReference") { const n = payload.params[1]; ref.json = JSON.stringify({ state: "ok", name: n, seconds: 60, problem: "", warning: "" }); ref.version++; }
+        if (payload.name === "deleteReference") { ref.yours = ref.yours.filter((n) => n !== payload.params[0]); ref.version++; }
         if (payload.name === "getUnmaskSources") result = JSON.stringify({ sources: [{ name: "Lead Vocal" }, { name: "Ad-libs" }], selected: um.selected });
         if (payload.name === "setUnmaskSource") um.selected = (payload.params && payload.params[0]) || "";
         if (payload.name === "undoAutoEdit") {

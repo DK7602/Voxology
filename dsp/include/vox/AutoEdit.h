@@ -31,6 +31,8 @@ struct ReferenceProfile
     double tailDb = -120.0;            // space after phrases; -120 = unknown
     double voicedSeconds = 0.0;
     double f0Median = 0.0;             // the reference singer's median pitch (Hz); 0 = unknown (older saved profiles)
+    std::string about;                 // a line on what it sounds like (built-in references)
+    bool builtin = false;              // from the built-in library (ReferenceLibrary.cpp), not a file
 };
 
 struct AutoEditSettings
@@ -106,6 +108,9 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
 /** Measures a reference vocal. It should be the vocal on its own: a full song (beat + vocal) reads ~7 dB
     off the real vocal's tone (measured on 144 pro songs), so that gets a warning (it still works, roughly). */
 ReferenceProfile analyseReference (const std::vector<std::vector<float>>& audio, double sampleRate, const std::string& name);
+
+/** The built-in reference library: finished pro vocals (measurements only), by voice and delivery. */
+const std::vector<ReferenceProfile>& builtinReferences();
 
 /** Listens to the vocal, decides every module and explains each choice. */
 AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sampleRate, const AutoEditSettings& settings);

@@ -87,6 +87,13 @@ public:
     juce::String getReferenceJson() const;            // for the UI: state, name, problem, warning
     juce::String getReferenceForSaving() const;       // the measurements (no audio)
     void restoreReference (const juce::String& saved);
+
+    /** The reference library: the built-in pro references, plus every vocal file you've loaded (its measurements are
+        saved as a small .json in userReferenceFolder(), so it's there in every project). */
+    static juce::File userReferenceFolder();
+    juce::String listReferencesJson() const;          // { builtin: [{name, about}], yours: [{name}], folder }
+    void selectReference (bool builtin, const juce::String& name);
+    void deleteUserReference (const juce::String& name);
     int getReferenceVersion() const noexcept { return refVersion.load(); }
 
     State getState() const noexcept           { return static_cast<State> (stateFlag.load()); }
