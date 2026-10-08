@@ -963,3 +963,4 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
 - UI: REF opens a menu: BUILT-IN (finished pro vocals), YOURS (with ✕ to remove), + Add a vocal file…, No reference.
   Checked in Chromium with mock.js (no errors); solid background. Plug-in compiled on Linux (VST3) before pushing.
 - Test "Built-in references: six pro groups, usable by Auto-Edit". 84 cases.
+- CI green: Actions run 37768426720 (v0.20.0, commit 05d5317).
