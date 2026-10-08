@@ -834,6 +834,7 @@ Tool: tools/audit/dyneq_audit.cpp (+ a scratch batch over the 143 MUSDB18 pro vo
   long-take effect); Don Mud / Nasal off, Harsh 5.5 -> 2 dB @ 2.5 kHz; Don & Lysette all off. Before / after clips sent.
 - Test "Auto-Edit leaves the Dynamic EQ off for word-to-word changes a finished vocal also has" (12 dB bloom: off;
   v0.19.0 cut it 3 dB; 18 dB still caught). 79 cases.
+- CI green: Actions run 37715221627 (v0.19.1, commit de9409a).
 
 ## v0.19.2 De-Esser: Auto-Edit checks the "s" again after the compressor (2026-10-08)
 - Audit (tools/audit/deess_audit.cpp): the module itself is fine. On Don & Lysette (18 % at 6.8 kHz) it cut 97 % of
