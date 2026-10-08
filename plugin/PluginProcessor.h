@@ -57,6 +57,7 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState parameters;
+    std::atomic<bool> uiRed { false };   // the logo easter egg: red instead of blue (saved with the project)
 
     struct Meters
     {

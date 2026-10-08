@@ -90,6 +90,12 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
             if (args.size() >= 1) audioProcessor.autoEdit.deleteUserReference (args[0].toString());
             complete (true);
         })
+        .withNativeFunction ("getUiRed", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.uiRed.load()); })
+        .withNativeFunction ("setUiRed", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            if (args.size() >= 1) audioProcessor.uiRed.store (static_cast<bool> (args[0]));
+            complete (true);
+        })
         .withNativeFunction ("clearReference", [this] (const juce::Array<juce::var>&, auto complete) { audioProcessor.autoEdit.clearReference(); complete (true); })
         .withNativeFunction ("getUnmaskSources", [this] (const juce::Array<juce::var>&, auto complete)
         {

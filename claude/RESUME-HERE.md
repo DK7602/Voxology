@@ -1073,7 +1073,7 @@ User OK'd all four audit items.
 
 ## v0.23.0 Easter egg: click the logo, blue turns red (2026-10-08, "Voxology UI easter egg" thread)
 - User: "click the logo: all the blue parts turn red (background, buttons, glows...), other colours stay; click again =
-  blue." Session only (opening the plug-in again starts blue); not saved in the project.
+  blue." Saved with the project (v0.23.1, below).
 - CSS: every blue now lives in :root vars (--blue*, --glow*, --midi-rgb, --knob-arc / --knob-track, --art-* image urls);
   :root.red overrides them (same lightness, hue -> red; --blue-deep red is darker, #7d1520, so button text reads).
 - Art: tools/ui/make_red_assets.py makes *_red.webp twins (honeycomb, logo, title, marble_blue / blue2 / cream, 5 knobs):
@@ -1083,3 +1083,12 @@ User OK'd all four audit items.
 - Honest limits: in red mode the calm (blue) Learn tips turn red too, so they look closer to the warnings; the red
   "REC" text sits on a red button. Checked in Chromium (mock.js + JUCE's index.js served over http): no errors,
   blue -> red -> blue. Plug-in not compiled locally (UI-only; assets come in through the existing glob): CI builds it.
+
+## v0.23.1 Red mode: dark red streaks in the background + saved with the project (2026-10-08)
+- User (screenshot of the red knobs): "Background red is mostly pink. Add dark red streaks like the knobs throughout the
+  background; it should save the colour choice with the project."
+- make_red_assets.py: per-file (boost, deep). honeycomb deep = 1: the stronger the blue streak (sat 0.07 - 0.24), the
+  closer it goes to the knobs' red (sat 0.88, hue 359, 28 % darker); pale areas stay light. Button marble unchanged.
+- Saved: processor uiRed (atomic bool), state attribute "uiRed"; native functions getUiRed / setUiRed (mock.js too).
+  The UI asks on open and turns red if saved red. Checked in Chromium: click -> saved, click again -> cleared, opening
+  with red saved starts red; no errors. Voxology_VST3 compiled on Linux.

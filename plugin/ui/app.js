@@ -35,15 +35,24 @@ function readPalette() {
   PAL.grey = css.getPropertyValue("--blue-grey").trim().replace(/^#(..)(..)(..)$/, (_, r, g, b) => [r, g, b].map((h) => parseInt(h, 16)).join(","));
 }
 readPalette();
-$("logo").addEventListener("click", () => {
-  document.documentElement.classList.toggle("red");
+const uiRedGet = Juce.getNativeFunction("getUiRed");
+const uiRedSet = Juce.getNativeFunction("setUiRed");
+function setRed(red) {
+  document.documentElement.classList.toggle("red", red);
   for (const img of document.querySelectorAll('img[src^="assets/"]')) {
     const name = img.getAttribute("src").slice(7, -5).replace(/_red$/, "");
     if (RED_ART.includes(name)) img.src = art(name);
   }
   readPalette();
   draw();
+}
+// Saved with the project: the plug-in keeps the choice, the UI asks for it when it opens.
+$("logo").addEventListener("click", () => {
+  const red = !document.documentElement.classList.contains("red");
+  setRed(red);
+  uiRedSet(red);
 });
+uiRedGet().then((red) => { if (red) setRed(true); }).catch(() => {});
 
 // ---------------------------------------------------------------------------------------------
 // Parameters

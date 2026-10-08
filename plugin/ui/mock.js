@@ -110,7 +110,7 @@
 
   window.__JUCE__ = {
     initialisationData: {
-      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource"],
+      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed"],
       __juce__registeredGlobalEventIds: [], __juce__sliders: Object.keys(sliders), __juce__toggles: Object.keys(toggles), __juce__comboBoxes: Object.keys(combos),
     },
     postMessage(message) {
@@ -140,6 +140,8 @@
           setTimeout(() => { ref.json = JSON.stringify({ state: "ok", name: "Favorite Artist - Hook (Acapella)", seconds: 41, problem: "", warning: "" }); ref.version++; }, 1200); }
         if (payload.name === "clearReference") { ref.json = JSON.stringify({ state: "none" }); ref.version++; }
         if (payload.name === "getReference") result = ref.json;
+        if (payload.name === "getUiRed") result = !!window.__mockRed;
+        if (payload.name === "setUiRed") window.__mockRed = !!payload.params[0];
         if (payload.name === "listReferences") result = JSON.stringify({ builtin: [
             { name: "Pro male singer", about: "Low voices that mostly sing" }, { name: "Pro male rap / rhythmic", about: "Low voices that rap" },
             { name: "Pro female singer, bright", about: "Airy, open top" }, { name: "Pro female singer, warm", about: "Smooth, soft top" },

@@ -436,6 +436,7 @@ void VoxologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
         xml->setAttribute ("aeReference", autoEdit.getReferenceForSaving());
         xml->setAttribute ("umSource", unmaskSourceName);
         xml->setAttribute ("midiLearned", midiLearned.load());
+        xml->setAttribute ("uiRed", uiRed.load() ? 1 : 0);
         copyXmlToBinary (*xml, destData);
     }
 }
@@ -453,7 +454,9 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
             setUnmaskSourceByName (xml->getStringAttribute ("umSource"));
             midiLearned.store (xml->getIntAttribute ("midiLearned", 0) & 0xFFF);
             xml->removeAttribute ("umSource");
+            uiRed.store (xml->getIntAttribute ("uiRed", 0) != 0);
             xml->removeAttribute ("midiLearned");
+            xml->removeAttribute ("uiRed");
             parameters.replaceState (juce::ValueTree::fromXml (*xml));
             autoEdit.onStateRestored (savedReport);
         }
