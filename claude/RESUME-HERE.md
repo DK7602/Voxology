@@ -1058,3 +1058,15 @@ User OK'd all four audit items.
   back to v0.11's meaning: glowsRed = Original ? wasOff : off (where it lands). Snap's fixes = gold, no glow. Legend
   "in key / off-key / tuned into key" (red ring only on off-key). The original "no red" report was this working as
   designed with Snap 100 %. Test updated (Snap 100 % = no red; Snap 0 % = sung-off red; dragged off-key = red). 88 cases.
+
+## Thread handoff (2026-10-08): "Honey Tune audit" thread -> "Voxology UI easter egg" thread
+- State: v0.22.1 pushed (commit 243a1b3; CI check pending when this was written - the old thread has a reminder
+  for it). Honey Tune audit done this thread: v0.21.0 (project key via ARA, KEY UNSURE warning, sample-rate fix),
+  v0.22.0 (Voxology's beat key shared to Honey Tune via the host process environment, vox::keyshare), v0.22.1 (red =
+  will play off-key only). Not verified in Cubase yet: project key signature from Cubase; user confirmed the beat key works.
+- Advice given: on a vocal tuned in Honey Tune, switch Voxology's Pitch off (Amount 0) - Voxology re-tunes its input.
+  Offered later: Voxology could notice an already-tuned vocal and leave pitch alone.
+- Next thread: "Voxology UI easter egg" - the user hasn't described it yet: ask what they want before changing code.
+  UI lives in plugin/ui (index.html, app.js; WebView editor), mock.js for checking in Chromium.
+- Linux build here needed: libx11 / xrandr / xinerama / xcursor / freetype / fontconfig / asound / gtk-3 /
+  webkit2gtk-4.1 dev packages; build with --parallel 3.
