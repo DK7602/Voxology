@@ -921,6 +921,7 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
   floor: Gallas 2.7, Schaf 3.4, Don 2.7, Don & Lysette 2.9).
 - Test "Auto-Edit doesn't flatten a vocal that's already compressed (a second pass keeps the punch)" (v0.19.3 took the
   test take to 1.7 dB on the first pass; now 2.65, second pass 2.65). 82 cases.
+- CI green: Actions run 37727725597 (v0.19.4, commit ece62d5).
 
 ## v0.19.5 Reference Match: disciplined fit + reference low end moved to your pitch (2026-10-08)
 - Check (scratch refcheck: MUSDB rap stems "Little Chicago's Finest - My Own", "PR - Oh No" as references on Gallas /
