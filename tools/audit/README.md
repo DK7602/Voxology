@@ -15,6 +15,7 @@ Compile each against the engine: `g++ -std=c++20 -O2 -Idsp/include tools/audit/<
 | `eq_batch.cpp a.f64 ...` | Auto-Edit's Tone EQ gains on many vocals ("do no harm" check on finished vocals) |
 | `render_autoedit.cpp in.f64 style out.f32` | the whole Auto-Edit chain rendered, for before / after clips |
 | `dyneq_audit.cpp in.f64 style [all]` | Dynamic EQ: Auto-Edit's settings, then per band how much of the singing it cuts, how deep, and whether the cuts follow the melody |
+| `deess_audit.cpp in.f64 style` | De-Esser: Auto-Edit's settings, then how much of the "s" frames it cuts, whether it touches vowels, and whether "s" onsets slip through |
 | `honey_tune_audit.cpp in.f64` | Honey Tune: snap every note, keep drift + vibrato, re-analyse: lands within, shape kept, pitch glitches |
 
 Results and history: claude/RESUME-HERE.md (v0.17.0).

@@ -1223,6 +1223,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
 
     // ---------------------------------------------------------------------------------------- 05 De-Esser
     Signal afterEq;
+    double sibTargetDb = 0.0;   // where the "s" should sit vs the voice (checked again at the end of the chain)
     {
         ChainParams q = p;
         afterEq = renderMono (raw, sr, q);
@@ -1233,6 +1234,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         const auto s = sibilance (afterEq, sr, mask, f.hop, voice);
         const double target = ref != nullptr && ref->sibilanceDb > -100.0 ? std::clamp (ref->sibilanceDb, -10.0, 0.0)
                                                                           : spec.sibTarget - (intensity == 2 ? 1.0 : intensity == 0 ? -1.0 : 0.0);
+        sibTargetDb = target;
         if (s.levelDb <= target || s.levelDb <= -100.0)
         {
             p.deEsser.amount = 0.0;
@@ -1403,6 +1405,77 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         reason ("sat", "Mode", modes[mi], std::string ("For ") + kStyleNames[static_cast<size_t> (style)] + ", " + modes[mi] + " adds " + feel[mi] + ".");
         reason ("sat", "Drive", db (s.driveDb) + ", Mix 50 %",
                 "Set so the added harmonics sit around " + db (target) + " under your voice: felt more than heard. It makes the vocal sound finished and helps it stay audible on phone speakers.");
+    }
+
+    // ---------------------------------------------------------------------------------------- 05 De-Esser, second look
+    {
+        // The rider and compressor bring quiet sounds up, and an "s" is quieter than the vowels around it, so
+        // after them the "s" sits about 1 - 2 dB brighter than where the De-Esser was set (measured on the
+        // user's songs). Listen again at the end of the inserts and turn the De-Esser up until it's on target.
+        // The chain up to the De-Esser is rendered once; each try runs only De-Esser -> Rider -> Compressor on it
+        // (Saturation doesn't move the "s" vs the voice: measured, so it's left out to keep Auto-Edit quick).
+        ChainParams front = p;
+        front.deEsser.amount = 0.0;
+        front.rider.enabled = false;
+        front.comp.enabled = false;
+        front.saturation.enabled = false;
+        const Signal pre = renderMono (raw, sr, front);
+        auto atEnd = [&] (double amount, double hz, double* sibHz)
+        {
+            DeEsserParams dp = p.deEsser;
+            dp.amount = amount;
+            dp.freqHz = hz;
+            DeEsser de;
+            Rider rd;
+            VocalCompressor cp;
+            de.prepare (sr, 1); de.setParams (dp);
+            rd.prepare (sr, 1); rd.setParams (p.rider);
+            cp.prepare (sr, 1); cp.setParams (p.comp);
+            Signal y = pre;
+            for (size_t s0 = 0; s0 < y.size(); s0 += 512)
+            {
+                double* ptr = y.data() + s0;
+                const int len = static_cast<int> (std::min<size_t> (512, y.size() - s0));
+                de.process (&ptr, 1, len);
+                rd.process (&ptr, 1, len);
+                cp.process (&ptr, 1, len);
+            }
+            const Frames f = frames (highPass (y, 80.0, sr), sr);
+            double thr = 0.0;
+            const auto mask = activeMask (f, thr);
+            const auto sb = sibilance (y, sr, mask, f.hop, activeRmsDb (y, mask, f.hop));
+            if (sibHz != nullptr) *sibHz = sb.hz;
+            return sb.levelDb;
+        };
+        double sibHz = 0.0;
+        const double was = p.deEsser.amount;
+        const double now = atEnd (was, p.deEsser.freqHz, &sibHz);
+        if (now > -100.0 && now > sibTargetDb + 0.5)
+        {
+            if (was < 0.05) p.deEsser.freqHz = std::clamp (sibHz > 0.0 ? sibHz * 0.85 : 6000.0, 3500.0, 10000.0);
+            p.deEsser.sensitivity = 50.0;
+            const double fHz = p.deEsser.freqHz;
+            double lo = was, hi = 100.0;
+            const double atMax = atEnd (100.0, fHz, nullptr);
+            if (atMax > sibTargetDb) lo = 100.0;
+            else
+                    for (int it = 0; it < 5; ++it)
+                {
+                    const double mid = 0.5 * (lo + hi);
+                    if (atEnd (mid, fHz, nullptr) > sibTargetDb) lo = mid; else hi = mid;
+                }
+            p.deEsser.amount = std::clamp (std::round (hi), 10.0, 100.0);
+            const double after = atEnd (p.deEsser.amount, fHz, nullptr);
+            r.kept[static_cast<size_t> (Module::deEsser)] = false;
+            for (auto& rs : r.reasons)
+                if (rs.module == "deess" && rs.control == "Amount")
+                {
+                    rs.value = pct (p.deEsser.amount) + " at " + hz (fHz);
+                    rs.why = "After the compressor (it brings quieter sounds up, \"s\" included) your loudest \"s\" and \"t\" sounds peak at " + signedDb (now) +
+                             " vs your voice (around " + hz (sibHz) + "), sharp on headphones and earbuds. " + pct (p.deEsser.amount) + " brings them to " + signedDb (after) +
+                             ", where " + aimed + " sits, and only while they happen.";
+                }
+        }
     }
 
     // ---------------------------------------------------------------------------------------- 07-09 Space

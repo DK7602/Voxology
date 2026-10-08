@@ -834,3 +834,19 @@ Tool: tools/audit/dyneq_audit.cpp (+ a scratch batch over the 143 MUSDB18 pro vo
   long-take effect); Don Mud / Nasal off, Harsh 5.5 -> 2 dB @ 2.5 kHz; Don & Lysette all off. Before / after clips sent.
 - Test "Auto-Edit leaves the Dynamic EQ off for word-to-word changes a finished vocal also has" (12 dB bloom: off;
   v0.19.0 cut it 3 dB; 18 dB still caught). 79 cases.
+
+## v0.19.2 De-Esser: Auto-Edit checks the "s" again after the compressor (2026-10-08)
+- Audit (tools/audit/deess_audit.cpp): the module itself is fine. On Don & Lysette (18 % at 6.8 kHz) it cut 97 % of
+  "s" frames (avg 2.1 dB), touched only 5 % of vowel frames (avg 0.13 dB), and caught "s" onsets (first 5 ms -1.1 dB
+  vs -1.2 later: no leak). Targets vs pros: pro "s" median -5.1 dB vs voice (rap-like -4.4); targets Rap / Trap -4,
+  Melodic / Pop -5, R&B / Folk / Natural -6: sensible.
+- PROBLEM: Auto-Edit judged the "s" before the rider and compressor, which bring the quieter "s" up 0.6 - 1.4 dB
+  (saturation: 0). So it left the De-Esser off on Gallas, Schaf and Don, and the chain's output "s" ended 1 - 2 dB over
+  target.
+- Fix: "De-Esser, second look" after Saturation is decided: render the chain up to the De-Esser once, then run De-Esser
+  -> Rider -> Compressor on it (modules directly, Saturation skipped: it doesn't move the "s"), and binary-search the
+  amount until the "s" is on target. Auto-Edit time +27 % (Don 105 s: 46 -> 59 s; a full-chain version was +130 %).
+- User's songs (Auto-Edit): Gallas 0 -> 10 %, Schaf 0 -> 22 %, Don 0 -> 28 %, Don & Lysette 18 -> 54 %. Pros: on for
+  78 / 143 (was 53), median 55 % (Voxology's own compression lifts their "s" too).
+- Test "Auto-Edit's De-Esser keeps the s on target at the end of the inserts (after the compressor)" (fails on
+  v0.19.1: s ended at -0.2 / +0.5 dB vs the -4 target). 80 cases. Before / after clips sent.

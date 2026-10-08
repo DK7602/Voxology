@@ -1,5 +1,6 @@
 #include "Signals.h"
 #include "vox/AutoEdit.h"
+#include "vox/VocalChain.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -143,4 +144,22 @@ TEST_CASE ("Auto-Edit Tone EQ: target from pro vocals follows the voice's pitch;
     // The boomy one gets its low end trimmed, more than the plain one.
     CHECK (boomy.params.eq.gainDb[0] < 0.0);
     CHECK (boomy.params.eq.gainDb[0] < plain.params.eq.gainDb[0]);
+}
+
+TEST_CASE ("Auto-Edit's De-Esser keeps the s on target at the end of the inserts (after the compressor)", "[autoedit][deess]")
+{
+    // The rider and compressor bring the quieter "s" up; Auto-Edit checks again after them.
+    for (double sibDb : { -10.0, -6.0, -2.0 })
+    {
+        const auto x = testsig::vocal (kSr, 14.0, -70.0, sibDb, 5);
+        const auto r = autoEdit ({ x }, kSr, { 1, 1, 0.0 });   // Rap: the "s" may sit up to -4 dB vs the voice
+        REQUIRE (r.ok);
+        ChainParams p = r.params;
+        p.doubler.amount = 0.0; p.delay.mix = 0.0; p.reverb.mix = 0.0;
+        const auto y = VocalChain::render ({ x }, kSr, p);
+        const double end = analyseVocal ({ y[0] }, kSr).sibilanceDb;
+        INFO ("s at " << sibDb << " dB in: de-esser " << p.deEsser.amount << " %, s at the end " << end << " dB");
+        CHECK (end <= -4.0 + 1.5);
+        checkNotes (r);
+    }
 }
