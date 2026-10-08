@@ -164,36 +164,48 @@ public:
         for (auto* region : getPlaybackRegions())
         {
             const auto songRange = region->getSampleRange (sampleRate, ARAPlaybackRegion::IncludeHeadAndTail::no);
-            auto renderRange = blockRange.getIntersectionWith (songRange);
-            if (renderRange.isEmpty())
-                continue;
-            const Range<int64> modRange { region->getStartInAudioModificationSamples(), region->getEndInAudioModificationSamples() };
-            const auto offset = modRange.getStart() - songRange.getStart();
-            renderRange = renderRange.getIntersectionWith (modRange.movedToStartAt (songRange.getStart()));
+            const auto renderRange = blockRange.getIntersectionWith (songRange);
             if (renderRange.isEmpty())
                 continue;
 
+            // The recording's own sample rate can differ from the song's (a clip that wasn't converted on
+            // import): read it at the matching speed (cubic) instead of playing nothing.
             auto* source = static_cast<HoneyAudioSource*> (region->getAudioModification()->getAudioSource());
-            source->state->playPosition = static_cast<double> (renderRange.getStart() + offset);   // for the editor's playhead
+            const double ratio = source->getSampleRate() > 0.0 ? source->getSampleRate() / sampleRate : 1.0;
+            const bool sameRate = std::abs (ratio - 1.0) < 1.0e-9;
+            const double srcAtSongStart = region->getStartInAudioModificationTime() * source->getSampleRate();
+            const double srcStart = srcAtSongStart + static_cast<double> (renderRange.getStart() - songRange.getStart()) * ratio;
+            source->state->playPosition = srcStart;   // for the editor's playhead
             source->state->playStamp = Time::getMillisecondCounter();
             auto rendered = source->state->getPlayback();
-            if (rendered == nullptr || rendered->empty() || std::abs (source->getSampleRate() - sampleRate) > 0.5)
+            if (rendered == nullptr || rendered->empty())
             {
-                ok = false;   // not ready (or a sample-rate mismatch): the host plays the clip as it is
+                ok = false;   // not read yet (or swapping this instant)
                 continue;
             }
             const auto& chans = *rendered;
             const int start = static_cast<int> (renderRange.getStart() - blockStart);
-            const auto srcStart = renderRange.getStart() + offset;
             const int len = static_cast<int> (renderRange.getLength());
             for (int c = 0; c < buffer.getNumChannels(); ++c)
             {
                 const auto& ch = chans[static_cast<size_t> (std::min<int> (c, static_cast<int> (chans.size()) - 1))];
+                const auto size = static_cast<int64> (ch.size());
+                auto sample = [&ch, size] (int64 k) { return k >= 0 && k < size ? ch[static_cast<size_t> (k)] : 0.0f; };
                 auto* out = buffer.getWritePointer (c, start);
+                if (sameRate)
+                {
+                    const auto first = static_cast<int64> (std::llround (srcStart));
+                    for (int i = 0; i < len; ++i) out[i] += sample (first + i);
+                    continue;
+                }
                 for (int i = 0; i < len; ++i)
                 {
-                    const auto s = srcStart + i;
-                    out[i] += (s >= 0 && s < static_cast<int64> (ch.size())) ? ch[static_cast<size_t> (s)] : 0.0f;
+                    const double pos = srcStart + i * ratio;
+                    const auto k = static_cast<int64> (std::floor (pos));
+                    const auto f = static_cast<float> (pos - static_cast<double> (k));
+                    const float ym1 = sample (k - 1), y0 = sample (k), y1 = sample (k + 1), y2 = sample (k + 2);
+                    const float c1 = 0.5f * (y1 - ym1), c2 = ym1 - 2.5f * y0 + 2.0f * y1 - 0.5f * y2, c3 = 0.5f * (y2 - ym1) + 1.5f * (y0 - y1);
+                    out[i] += ((c3 * f + c2) * f + c1) * f + y0;
                 }
             }
         }
@@ -215,6 +227,31 @@ public:
     ~HoneyDocumentController() override { *controllerAlive = false; pool.removeAllJobs (true, 60000); }
 
     Settings getSettings() const { const ScopedLock sl (settingsLock); return settings; }
+    honeyui::HostKey getHostKey() const { const ScopedLock sl (settingsLock); return hostKey; }
+
+    /** The song's key from the host (its key signature / scale track: the first one), for Auto. Message thread. */
+    void refreshHostKey()
+    {
+        honeyui::HostKey found;
+        for (auto* context : getDocumentController()->getDocument<ARADocument>()->getMusicalContexts<ARAMusicalContext>())
+        {
+            const ARA::PlugIn::HostContentReader<ARA::kARAContentTypeKeySignatures> reader (context);
+            if (! reader || reader.getEventCount() <= 0) continue;
+            const auto sig = reader.getDataForEvent (0);
+            bool used[12];
+            for (int i = 0; i < 12; ++i) used[i] = sig.intervals[i] != ARA::kARAKeySignatureIntervalUnused;
+            found = honeyui::hostKeyFromSignature (static_cast<int> (sig.root), used);
+            break;
+        }
+        {
+            const ScopedLock sl (settingsLock);
+            if (found == hostKey) return;
+            hostKey = found;
+        }
+        for (auto* src : sources())
+            requestRender (src->state);
+        changes.sendChangeMessage();
+    }
     void setSettings (const Settings& s)
     {
         {
@@ -237,7 +274,7 @@ public:
         honeyui::Snapshot snap;
         {
             const ScopedLock sl (st->dataLock);
-            snap = honeyui::makeSnapshot (st->track, st->notes, st->edits, st->guess, s);
+            snap = honeyui::makeSnapshot (st->track, st->notes, st->edits, st->guess, s, getHostKey());
         }
         snap.status = st->status;
         snap.name = st->name;
@@ -290,6 +327,29 @@ public:
     ChangeBroadcaster changes;   // a clip finished listening / rendering (the editor listens)
 
 protected:
+    ARAMusicalContext* doCreateMusicalContext (ARADocument* document, ARA::ARAMusicalContextHostRef hostRef) noexcept override
+    {
+        auto* context = new ARAMusicalContext (document, hostRef);
+        context->addListener (this);   // to hear when the song's key changes
+        return context;
+    }
+
+    void doUpdateMusicalContextContent (ARAMusicalContext*, ARAContentUpdateScopes scopeFlags) override
+    {
+        if (scopeFlags.affectHarmonies())
+            refreshHostKey();
+    }
+
+    void willDestroyMusicalContext (ARAMusicalContext* context) override
+    {
+        context->removeListener (this);
+    }
+
+    void didEndEditing (ARADocument*) override
+    {
+        refreshHostKey();   // musical contexts added / removed
+    }
+
     ARAAudioSource* doCreateAudioSource (ARADocument* document, ARA::ARAAudioSourceHostRef hostRef) noexcept override
     {
         auto* src = new HoneyAudioSource (document, hostRef);
@@ -413,6 +473,7 @@ private:
     /** Read the whole recording (now: sample access is enabled for this call), then analyse it in the background. */
     void listen (HoneyAudioSource* src)
     {
+        refreshHostKey();
         auto state = src->state;
         state->status = 1;
         state->samplesChanged = false;
@@ -491,7 +552,7 @@ private:
             const ScopedLock sl (st.dataLock);
             if (st.track == nullptr) return false;
             int key = 0, scale = 0;
-            honeyui::resolveKey (s, st.guess, key, scale);
+            honeyui::resolveKey (s, st.guess, key, scale, getHostKey());
             track = st.track;
             notes = honeyui::applyEdits (st.notes, st.edits, s, key, scale, st.sampleRate);
         }
@@ -549,6 +610,7 @@ private:
     std::shared_ptr<std::atomic<bool>> controllerAlive = std::make_shared<std::atomic<bool>> (true);
     mutable CriticalSection settingsLock;
     Settings settings;
+    honeyui::HostKey hostKey;   // the song's key from the host (settingsLock)
     std::atomic<bool> playOriginal { false };
     ThreadPool pool { 1 };
 };

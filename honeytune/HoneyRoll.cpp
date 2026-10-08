@@ -412,6 +412,7 @@ void HoneyRoll::drawCell (Graphics& g, int index)
     const bool off = original ? v.wasOff
                               : std::abs (target - honeyui::keyNote (target, snap.key, snap.scale)) > 0.25;   // where it lands
     const bool filled = ! original && v.wasOff && ! off;   // was off-key, now on a note of the key
+    const bool red = honeyui::glowsRed (v.wasOff, off, original);   // sung off-key (or will play off-key)
 
     // Where it was sung (dashed ghost) when it has moved.
     if (moved)
@@ -427,9 +428,10 @@ void HoneyRoll::drawCell (Graphics& g, int index)
     const auto cell = cellPath (index, target);
     const auto b = cell.getBounds();
 
-    // A glow behind every note, like the knobs: red when it will sound off-key, cream when in key.
-    const Colour glowOuter = off ? Colour (0xffe0242c) : Colour (0xfffff0c8);   // red = off-key
-    const Colour glowInner = off ? Colour (0xffff8a80) : Colour (0xfffffbee);
+    // A glow behind every note, like the knobs: red when it was sung off-key (gold body = now tuned into the
+    // key) or will play off-key, cream when in key.
+    const Colour glowOuter = red ? Colour (0xffe0242c) : Colour (0xfffff0c8);   // red = off-key
+    const Colour glowInner = red ? Colour (0xffff8a80) : Colour (0xfffffbee);
     for (int k = 0; k < 2; ++k)
         DropShadow (glowOuter, 16, {}).drawForPath (g, cell);
     DropShadow (glowInner, 6, {}).drawForPath (g, cell);

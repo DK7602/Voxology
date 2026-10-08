@@ -41,11 +41,60 @@ struct NoteEdit
     bool isDefault() const { return ! moved && drift < 0.0 && vibrato < 0.0 && ! timed() && std::abs (formant) < 1.0e-6; }
 };
 
-/** The key and scale actually used: "Auto" takes the detected key (and its scale when sure enough). */
-inline void resolveKey (const Settings& s, const vox::KeyGuess& guess, int& key, int& scale)
+/** The song's key as the host knows it (its key signature / scale track), when it shares one. */
+struct HostKey
 {
+    bool valid = false;
+    int key = 0;     // 0 = C ... 11 = B
+    int scale = 1;   // vox::kScaleNames
+    bool operator== (const HostKey& o) const { return valid == o.valid && (! valid || (key == o.key && scale == o.scale)); }
+};
+
+/** A host key signature (ARA: root on the circle of fifths, 0 = C, 1 = G, -1 = F; which of the 12 intervals
+    above the root are used) as a key and the closest of our scales. */
+inline HostKey hostKeyFromSignature (int circleOfFifths, const bool (&used)[12])
+{
+    HostKey h;
+    h.valid = true;
+    h.key = ((circleOfFifths * 7) % 12 + 12) % 12;
+    int best = 1 << 20;
+    for (int sc = 1; sc < vox::kScales; ++sc)   // never Chromatic: a key signature always has a scale
+    {
+        int miss = 0;
+        for (size_t i = 0; i < 12; ++i) miss += vox::kScaleMasks[static_cast<size_t> (sc)][i] != used[i] ? 1 : 0;
+        if (miss < best) { best = miss; h.scale = sc; }
+    }
+    return h;
+}
+
+/** Under this the voice alone can't tell the key (Auto then snaps to the nearest note, any note). */
+constexpr double kSureEnough = 0.45;
+
+/** The key and scale actually used: "Auto" takes the host's key when it has one, else the detected key
+    (and its scale when sure enough). */
+inline void resolveKey (const Settings& s, const vox::KeyGuess& guess, int& key, int& scale, const HostKey& host = {})
+{
+    if (s.key == kAutoKey && host.valid)
+    {
+        key = host.key;
+        scale = s.scale == 0 ? host.scale : s.scale;
+        return;
+    }
     key = s.key == kAutoKey ? guess.key : s.key;
-    scale = s.key == kAutoKey && s.scale == 0 && guess.confidence >= 0.45 ? (guess.minor ? 2 : 1) : s.scale;
+    scale = s.key == kAutoKey && s.scale == 0 && guess.confidence >= kSureEnough ? (guess.minor ? 2 : 1) : s.scale;
+}
+
+/** "Auto" fell back to any note because the voice alone wasn't clear (the editor asks you to pick the key). */
+inline bool keyUnsure (const Settings& s, const vox::KeyGuess& guess, const HostKey& host = {})
+{
+    return s.key == kAutoKey && ! host.valid && s.scale == 0 && guess.confidence < kSureEnough;
+}
+
+/** The red glow: the note was SUNG off the key (in either view), or it will play off the key (Tuned).
+    Snap pulls sung-off notes onto the key, so judging only where they land would never show any red. */
+inline bool glowsRed (bool wasOff, bool offWhereItLands, bool originalView)
+{
+    return wasOff || (! originalView && offWhereItLands);
 }
 
 /** Where the key / scale puts a note (the nearest allowed note, MIDI). */
@@ -121,16 +170,21 @@ struct Snapshot
     std::vector<NoteView> notes;
     int key = 0, scale = 0;
     vox::KeyGuess guess;
+    bool keyFromHost = false;  // the key came from the host's project
+    bool keyUnsure = false;    // Auto couldn't tell the key from the voice: snapping to any note
     double seconds = 0.0;
 };
 
 inline Snapshot makeSnapshot (std::shared_ptr<const vox::honey::Track> track, const std::vector<vox::honey::Note>& notes,
-                              const std::vector<NoteEdit>& edits, const vox::KeyGuess& guess, const Settings& s)
+                              const std::vector<NoteEdit>& edits, const vox::KeyGuess& guess, const Settings& s,
+                              const HostKey& host = {})
 {
     Snapshot snap;
     snap.track = track;
     snap.guess = guess;
-    resolveKey (s, guess, snap.key, snap.scale);
+    resolveKey (s, guess, snap.key, snap.scale, host);
+    snap.keyFromHost = s.key == kAutoKey && host.valid;
+    snap.keyUnsure = keyUnsure (s, guess, host);
     if (track != nullptr && ! track->time.empty())
         snap.seconds = track->time.back() / track->sampleRate;
     const auto sounding = applyEdits (notes, edits, s, snap.key, snap.scale, track != nullptr ? track->sampleRate : 48000.0);

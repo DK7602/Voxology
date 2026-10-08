@@ -163,11 +163,17 @@ void HoneyPanel::refresh()
         fixed += n.fixed ? 1 : 0;
         edited += n.edit.isDefault() ? 0 : 1;
     }
+    statusWarning = s.status == 2 && s.keyUnsure;
     switch (s.status)
     {
         case 2:
-            status = String (s.notes.size()) + " notes  |  key " + vox::kNoteNames[static_cast<size_t> (s.key)] + " "
-                   + vox::kScaleNames[static_cast<size_t> (s.scale)] + "  |  sung off-key " + String (sungOff) + ", fixed " + String (fixed)
+            status = (s.keyUnsure ? String ("KEY UNSURE: pick your song's key in KEY (heard ") + vox::kNoteNames[static_cast<size_t> (s.guess.key)]
+                                        + (s.guess.minor ? " minor" : " major")
+                                        + (s.guess.ambiguous ? String (" or ") + vox::kNoteNames[static_cast<size_t> (s.guess.altKey)] + (s.guess.altMinor ? " minor" : " major") : String())
+                                        + "); until then notes snap to the nearest note, any note  |  "
+                                  : String())
+                   + String (s.notes.size()) + " notes  |  key " + vox::kNoteNames[static_cast<size_t> (s.key)] + " "
+                   + vox::kScaleNames[static_cast<size_t> (s.scale)] + (s.keyFromHost ? " (from the project)" : "") + "  |  sung off-key " + String (sungOff) + ", fixed " + String (fixed)
                    + ", still off-key " + String (off) + "  |  " + String (edited) + " changed by hand  |  heard " + vox::kNoteNames[static_cast<size_t> (s.guess.key)]
                    + (s.guess.minor ? " minor" : " major")
                    + (s.guess.ambiguous ? String (" or ") + vox::kNoteNames[static_cast<size_t> (s.guess.altKey)] + (s.guess.altMinor ? " minor" : " major") : String())
@@ -287,13 +293,13 @@ void HoneyPanel::paint (Graphics& g)
         auto legend = legendArea.reduced (8.0f, 5.0f);
         g.setFont (FontOptions (11.0f, Font::bold));
         int k = 0;
-        for (const auto* text : { "in key", "off-key", "fixed" })
+        for (const auto* text : { "in key", "sung off-key", "tuned into key" })
         {
             auto row = legend.removeFromTop (legend.getHeight() / (float) (3 - k));
             auto sw = row.removeFromLeft (24.0f).withSizeKeepingCentre (20.0f, 10.0f);
             Path p;
             p.addRoundedRectangle (sw, 3.0f);
-            if (k == 1) { g.setColour (Colour (0xffe0242c).withAlpha (0.75f)); g.strokePath (p, PathStrokeType (4.0f)); }
+            if (k >= 1) { g.setColour (Colour (0xffe0242c).withAlpha (0.75f)); g.strokePath (p, PathStrokeType (4.0f)); }
             if (k == 2) fillGold (g, p, sw); else fillMarble (g, p, 5, 0.3f);
             g.setColour (goldDeep);
             g.strokePath (p, PathStrokeType (1.2f));
@@ -325,7 +331,7 @@ void HoneyPanel::paint (Graphics& g)
     g.setColour (ink);
     g.setFont (FontOptions (13.0f, Font::bold));
     g.drawFittedText (noteInfo, noteInfoArea.reduced (10.0f, 0.0f).toNearestInt(), Justification::centredLeft, 1);
-    g.setColour (navy);
+    g.setColour (statusWarning ? Colour (0xffc0161e) : navy);
     g.setFont (FontOptions (11.5f, Font::bold));
     g.drawFittedText (status, statusArea.reduced (10.0f, 0.0f).toNearestInt(), Justification::centredLeft, 1);
 
@@ -386,7 +392,7 @@ void HoneyPanel::resized()
     // The logo only when there's room; the controls come first.
     logoArea = getWidth() >= 1320 ? top.removeFromRight (120.0f) : Rectangle<float>();
     top.removeFromRight (6.0f);
-    legendArea = top.removeFromRight (92.0f);
+    legendArea = top.removeFromRight (122.0f);
     cards.push_back (legendArea);
     top.removeFromRight (10.0f);
     fit.setBounds (top.removeFromRight (52.0f).withSizeKeepingCentre (52.0f, 28.0f).translated (0.0f, 8.0f).toNearestInt());

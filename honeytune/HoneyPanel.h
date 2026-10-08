@@ -44,4 +44,5 @@ private:
                      undoBtn { "Undo" }, redoBtn { "Redo" };
     juce::Label keyLabel, scaleLabel, snapLabel, driftLabel, vibratoLabel, noteDriftLabel, noteVibratoLabel, noteFormantLabel;
     juce::String status, noteInfo;
+    bool statusWarning = false;   // the status line is a warning (red)
 };

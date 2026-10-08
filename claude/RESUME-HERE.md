@@ -1014,3 +1014,22 @@ scratch keyck.cpp (Auto key per vocal). 85 tests pass.
   context; Cubase sends it when the project has one) for Auto; when unsure, keep Chromatic snapping but say so plainly
   in red ("Key unsure: pick your song's key") with the two candidates; 3) sample-rate mismatch: play the recording
   untouched (or resample) instead of silence; 4) test for the red rule.
+
+## v0.21.0 Honey Tune: red = sung off-key, project key for Auto, "key unsure" warning, sample-rate fix (2026-10-08)
+User OK'd all four audit items.
+- Red glow: honeyui::glowsRed (wasOff, offWhereItLands, original) = wasOff || (Tuned && off). Gold body = fixed (unchanged).
+  Legend: in key / sung off-key (red ring) / tuned into key (gold + red ring); legend card 122 px.
+- Auto key: HostKey from ARA kARAContentTypeKeySignatures (first key signature of the first musical context;
+  root on the circle of fifths -> pitch class (root x 7) mod 12; intervals -> closest of our scales, never Chromatic).
+  Controller refreshHostKey() on listen(), didEndEditing, doUpdateMusicalContextContent (affectHarmonies; we create
+  the musical contexts and listen to them); change -> re-render all + editor refresh. resolveKey(s, guess, key, scale,
+  host): Auto + host key wins (a picked Key wins over it). Status says "(from the project)". NOT verified in Cubase:
+  unknown whether Cubase sends a key signature (Melodyne docs say Cubase / Studio One share chord / key info).
+- keyUnsure (Auto, no host key, voice < 45 %): status line turns red: "KEY UNSURE: pick your song's key in KEY (heard
+  X or Y); until then notes snap to the nearest note, any note".
+- Playback renderer: reads the clip at its own sample rate (cubic) when it differs from the song's instead of silence;
+  same rate = identical to before (srcStart = mod start + offset).
+- Test file tests/test_honey_view.cpp (2 cases; vox_tests now includes honeytune/ for HoneyView.h). 87 cases pass.
+  HoneyTune_VST3 + HoneyPreview built on Linux. Preview: Gallas Auto = red warning + red glows; E minor = 125 red-glow gold.
+- User question: does Voxology re-tune after Honey Tune? Yes - no link between them; Voxology (insert) processes Honey
+  Tune's output. Advice: Pitch off / Amount 0 in Voxology on a track tuned with Honey Tune.

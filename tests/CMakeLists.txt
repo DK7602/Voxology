@@ -17,10 +17,12 @@ add_executable(vox_tests
     test_autoedit.cpp
     test_pitch.cpp
     test_honey.cpp
+    test_honey_view.cpp
     test_beatkey.cpp
     test_clipwatch.cpp)
 
 target_link_libraries(vox_tests PRIVATE vox_dsp Catch2::Catch2WithMain)
+target_include_directories(vox_tests PRIVATE ${CMAKE_SOURCE_DIR}/honeytune)   # HoneyView.h (the editor's rules, no JUCE)
 set_target_properties(vox_tests PROPERTIES FOLDER "Voxology")
 
 include(Catch)
