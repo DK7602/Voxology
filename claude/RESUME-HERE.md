@@ -1051,3 +1051,10 @@ User OK'd all four audit items.
 - Test "Voxology's beat key reaches Honey Tune (fresh only); the project's key comes first". 88 cases.
   Voxology_VST3 + HoneyTune_VST3 compiled on Linux (needed libgtk-3-dev / libwebkit2gtk-4.1-dev here).
 - CI green: Actions run 37794074158 (v0.22.0, commit afd843d).
+
+## v0.22.1 Red = will PLAY off-key only (2026-10-08)
+- User (Cubase screenshot, v0.22.0: "key D Major (from Voxology's beat)" works): "Notes should only glow red if they are
+  off key. If I move a note to an off-key note it should turn red, but no red glow when in key." So the red rule goes
+  back to v0.11's meaning: glowsRed = Original ? wasOff : off (where it lands). Snap's fixes = gold, no glow. Legend
+  "in key / off-key / tuned into key" (red ring only on off-key). The original "no red" report was this working as
+  designed with Snap 100 %. Test updated (Snap 100 % = no red; Snap 0 % = sung-off red; dragged off-key = red). 88 cases.

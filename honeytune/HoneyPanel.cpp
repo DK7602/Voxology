@@ -293,13 +293,13 @@ void HoneyPanel::paint (Graphics& g)
         auto legend = legendArea.reduced (8.0f, 5.0f);
         g.setFont (FontOptions (11.0f, Font::bold));
         int k = 0;
-        for (const auto* text : { "in key", "sung off-key", "tuned into key" })
+        for (const auto* text : { "in key", "off-key", "tuned into key" })
         {
             auto row = legend.removeFromTop (legend.getHeight() / (float) (3 - k));
             auto sw = row.removeFromLeft (24.0f).withSizeKeepingCentre (20.0f, 10.0f);
             Path p;
             p.addRoundedRectangle (sw, 3.0f);
-            if (k >= 1) { g.setColour (Colour (0xffe0242c).withAlpha (0.75f)); g.strokePath (p, PathStrokeType (4.0f)); }
+            if (k == 1) { g.setColour (Colour (0xffe0242c).withAlpha (0.75f)); g.strokePath (p, PathStrokeType (4.0f)); }
             if (k == 2) fillGold (g, p, sw); else fillMarble (g, p, 5, 0.3f);
             g.setColour (goldDeep);
             g.strokePath (p, PathStrokeType (1.2f));

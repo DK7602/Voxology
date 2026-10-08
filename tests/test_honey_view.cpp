@@ -17,7 +17,7 @@ vox::honey::Note note (double pitch, double startSeconds)
 }
 }
 
-TEST_CASE ("Honey Tune: notes sung off-key glow red even after Snap pulls them into the key", "[honey][view]")
+TEST_CASE ("Honey Tune: red = will play off-key (Snap's fixes turn gold, a note moved off the key turns red)", "[honey][view]")
 {
     // C major: C4 sung 40 cents sharp, D4 in tune, C#4 (not in the key at all).
     const std::vector<vox::honey::Note> notes { note (60.4, 0.0), note (62.0, 0.5), note (61.0, 1.0) };
@@ -29,17 +29,20 @@ TEST_CASE ("Honey Tune: notes sung off-key glow red even after Snap pulls them i
     const auto snap = makeSnapshot (nullptr, notes, edits, {}, s);
     REQUIRE (snap.notes.size() == 3);
 
-    // Snap fixed both off-key notes (they will play in key)...
+    // Snap fixed both off-key notes: gold (fixed), no red glow.
     CHECK (snap.notes[0].wasOff);
-    CHECK_FALSE (snap.notes[0].off);
     CHECK (snap.notes[0].fixed);
-    CHECK (snap.notes[2].wasOff);
-    CHECK_FALSE (snap.notes[2].off);
-    // ...and they still glow red in the Tuned view (the old rule, "will play off-key", showed none at Snap 100 %).
-    CHECK (glowsRed (snap.notes[0].wasOff, snap.notes[0].off, false));
-    CHECK (glowsRed (snap.notes[2].wasOff, snap.notes[2].off, false));
-    CHECK_FALSE (glowsRed (snap.notes[1].wasOff, snap.notes[1].off, false));
-    // Original view: red = sung off-key.
+    CHECK (snap.notes[2].fixed);
+    for (const auto& v : snap.notes)
+        CHECK_FALSE (glowsRed (v.wasOff, v.off, false));
+    // With Snap off they play as sung: the off-key ones glow red.
+    s.snap = 0.0;
+    const auto asSung = makeSnapshot (nullptr, notes, edits, {}, s);
+    CHECK (glowsRed (asSung.notes[0].wasOff, asSung.notes[0].off, false));
+    CHECK (glowsRed (asSung.notes[2].wasOff, asSung.notes[2].off, false));
+    CHECK_FALSE (glowsRed (asSung.notes[1].wasOff, asSung.notes[1].off, false));
+    s.snap = 1.0;
+    // Original view: red = sung off-key (that's how it plays there).
     for (const auto& v : snap.notes)
         CHECK (glowsRed (v.wasOff, v.off, true) == v.wasOff);
 

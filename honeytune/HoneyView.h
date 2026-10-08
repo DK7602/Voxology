@@ -101,11 +101,11 @@ inline bool keyUnsure (const Settings& s, const vox::KeyGuess& guess, const Host
     return s.key == kAutoKey && ! host.valid && s.scale == 0 && guess.confidence < kSureEnough;
 }
 
-/** The red glow: the note was SUNG off the key (in either view), or it will play off the key (Tuned).
-    Snap pulls sung-off notes onto the key, so judging only where they land would never show any red. */
+/** The red glow: the note will PLAY off the key (Tuned: where it lands, e.g. moved onto an off-key note;
+    Original: as sung). Notes Snap pulled into the key don't glow (they turn gold). */
 inline bool glowsRed (bool wasOff, bool offWhereItLands, bool originalView)
 {
-    return wasOff || (! originalView && offWhereItLands);
+    return originalView ? wasOff : offWhereItLands;
 }
 
 /** Where the key / scale puts a note (the nearest allowed note, MIDI). */
