@@ -1126,24 +1126,33 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             use[i] = ef > 0.0 && energyDb (eh / ef) < -6.0;
         }
         struct Run { double p95 = 0.0, share = 0.0; };
+        // The loudest moments (95th percentile of the cut, at 50 % Sensitivity) measured per 7 s piece and the
+        // median taken, so a long take reads like the 7 s pro clips it is compared with.
+        const auto piece = static_cast<size_t> (std::lround (7.0 * sr / f.hop));
         auto runBand = [&] (const DynEqParams& d, int band)
         {
             DynamicEq de;
             de.prepare (sr, 1);
             de.setParams (d);
             Signal y = afterTone;
-            std::vector<double> cuts;
+            std::vector<double> cuts, pieceCuts, pieceP95;
             size_t frame = 0;
             for (size_t s0 = 0; s0 < y.size(); s0 += static_cast<size_t> (f.hop), ++frame)
             {
                 double* ptr = y.data() + s0;
                 de.process (&ptr, 1, static_cast<int> (std::min<size_t> (static_cast<size_t> (f.hop), y.size() - s0)));
                 const double c = -de.takeCutDb()[static_cast<size_t> (band)];
-                if (frame < use.size() && use[frame]) cuts.push_back (c);
+                if (frame < use.size() && use[frame]) { cuts.push_back (c); pieceCuts.push_back (c); }
+                if ((frame + 1) % piece == 0)
+                {
+                    if (pieceCuts.size() >= 100) pieceP95.push_back (percentile (pieceCuts, 95.0));
+                    pieceCuts.clear();
+                }
             }
+            if (pieceCuts.size() >= 100) pieceP95.push_back (percentile (pieceCuts, 95.0));
             Run r2;
             if (cuts.empty()) return r2;
-            r2.p95 = percentile (cuts, 95.0);
+            r2.p95 = pieceP95.empty() ? percentile (cuts, 95.0) : percentile (pieceP95, 50.0);
             r2.share = 100.0 * static_cast<double> (std::count_if (cuts.begin(), cuts.end(), [] (double c) { return c > 1.0; })) / static_cast<double> (cuts.size());
             return r2;
         };
@@ -1179,18 +1188,24 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             d.freqHz[bi] = bestHz;
             const std::string name = info.name;
             // Only clear, occasional jumps count: a spot that's over its normal much of the time is
-            // just how the voice moves (or a steady excess, Tone EQ's job), not a problem moment.
-            if (best.p95 < 2.5 || best.share > 20.0)
+            // just how the voice moves (or a steady excess, Tone EQ's job), not a problem moment. And only
+            // jumps bigger than finished pro vocals have: on 143 of them (MUSDB18, same measure) the band's
+            // jumps read kProJumpMedian typically and kProJumpHigh in the top quarter; vowels changing from
+            // word to word are normal, so below that the band stays off.
+            static constexpr std::array<double, kDynBands> kProJumpMedian { 3.8, 4.2, 4.5, 4.3 }, kProJumpHigh { 4.8, 5.8, 5.2, 4.9 };
+            if (best.p95 < kProJumpHigh[bi] || best.share > 20.0)
             {
                 reason ("dyneq", name, "Off", "Your " + std::string (b == 0 ? "low end" : b == 1 ? "low mids" : b == 2 ? "mids" : "upper mids") +
-                        " (" + hz (zones[bi][0]) + " - " + hz (zones[bi][1]) + ") stay steady from word to word, so there's nothing to catch here.");
+                        " (" + hz (zones[bi][0]) + " - " + hz (zones[bi][1]) + ") change from word to word no more than a finished pro vocal's do, so there's nothing to catch here.");
                 continue;
             }
-            d.maxCutDb[bi] = std::clamp (std::round (best.p95 * scale * 2.0) / 2.0, 2.0, 6.0);
+            // Max Cut: what it takes to bring the jumps back to a typical pro's.
+            d.maxCutDb[bi] = std::clamp (std::round (1.5 * (best.p95 - kProJumpMedian[bi]) * scale * 2.0) / 2.0, 2.0, 6.0);
             ++used;
+            const double rise = DynamicEq::thresholdDb (50.0) + best.p95 / DynamicEq::kSlope;   // the measure is the cut at 50 %: back to the rise
             reason ("dyneq", name, "up to " + db (-d.maxCutDb[bi]) + " at " + hz (bestHz),
-                    "Some words jump out around " + hz (bestHz) + ": " + sounds[bi] + ". The loudest of those moments rise about " + num (best.p95) +
-                    " dB past your voice's normal there (about " + num (best.share, 0) + " % of the time). The band cuts up to " + num (d.maxCutDb[bi]) +
+                    "Some words jump out around " + hz (bestHz) + ": " + sounds[bi] + ". The loudest of those moments rise about " + num (rise) +
+                    " dB past your voice's normal there, more than in finished pro vocals. The band cuts up to " + num (d.maxCutDb[bi]) +
                     " dB only while that happens; the rest of the time it does nothing.");
         }
         if (used == 0)

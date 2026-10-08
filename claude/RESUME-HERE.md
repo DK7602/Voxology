@@ -805,6 +805,7 @@ Tool: tools/audit/eq_audit.cpp. Same 4 vocals / styles as the Cleanup audit.
   raw-vocal robustness tests if the user downloads some; not finished vocals. Asked the user for their own finished
   vocal stems (best genre-matched target data).
 - Test "Auto-Edit Tone EQ: target from pro vocals follows the voice's pitch; moves stay in their jobs". 78 cases.
+- CI green: Actions run 37711674326 (v0.19.0, commit c199333).
 
 ## Dynamic EQ audit (2026-10-08) - findings only, no code changed yet
 Tool: tools/audit/dyneq_audit.cpp (+ a scratch batch over the 143 MUSDB18 pro vocals).
@@ -822,3 +823,14 @@ Tool: tools/audit/dyneq_audit.cpp (+ a scratch batch over the 143 MUSDB18 pro vo
 - Proposed plan: switch a band on only when its jumps are beyond the pros' upper quarter (measured per 7 s so long
   takes compare fairly); Max Cut = the excess over a typical pro; fix the text; re-run on pros ("do no harm") + the
   user's songs; clips.
+
+## v0.19.1 Dynamic EQ: only jumps beyond finished pro vocals (2026-10-08)
+- Auto-Edit's measure (p95 of the band's cut at 50 % Sensitivity, best third-octave in the zone, share <= 20 %) is now
+  taken per 7 s piece and the median used (fair vs the 7 s pro clips; a long take otherwise reads higher). A band is
+  switched on only above the pros' top quarter (Boom 4.8, Mud 5.8, Nasal 5.2, Harsh 4.9; pros' typical 3.8 / 4.2 /
+  4.5 / 4.3). Max Cut = 1.5 x (jump - pro typical), 2 - 6 dB. Reason text now gives the real rise (thr + cut / 1.5).
+- Do no harm on 143 pros: bands on per vocal 1.99 -> 0.49; none on 19 -> 92 of 143.
+- User's songs: Gallas Mud 4.5 -> off; Schaf Mud 6 -> off (per 7 s its jumps are normal; the whole-clip 7.8 was the
+  long-take effect); Don Mud / Nasal off, Harsh 5.5 -> 2 dB @ 2.5 kHz; Don & Lysette all off. Before / after clips sent.
+- Test "Auto-Edit leaves the Dynamic EQ off for word-to-word changes a finished vocal also has" (12 dB bloom: off;
+  v0.19.0 cut it 3 dB; 18 dB still caught). 79 cases.

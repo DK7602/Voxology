@@ -200,3 +200,15 @@ TEST_CASE ("Auto-Edit finds a blooming spot and sets the Dynamic EQ there; a ste
     for (double c : steady.params.dynEq.maxCutDb) CHECK (c == 0.0);
     CHECK (steady.kept[static_cast<size_t> (Module::dynEq)]);
 }
+
+TEST_CASE ("Auto-Edit leaves the Dynamic EQ off for word-to-word changes a finished vocal also has", "[dyneq][autoedit]")
+{
+    // A moderate bloom (a 12 dB bell, jumps the size finished pro vocals have) is normal: no band (v0.19.0 cut it
+    // 3 dB). A big one (18 dB) still gets caught.
+    const auto mild = autoEdit ({ bloomingVoice (-20.0, 400.0, 12.0, 16.0, 2.4) }, kSr, { 0, 1, 0.0 });
+    REQUIRE (mild.ok);
+    for (double c : mild.params.dynEq.maxCutDb) CHECK (c == 0.0);
+    const auto big = autoEdit ({ bloomingVoice (-20.0, 400.0, 18.0, 16.0, 2.4) }, kSr, { 0, 1, 0.0 });
+    REQUIRE (big.ok);
+    CHECK (big.params.dynEq.maxCutDb[1] > mild.params.dynEq.maxCutDb[1]);
+}
