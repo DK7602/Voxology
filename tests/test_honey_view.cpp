@@ -1,5 +1,6 @@
 // Honey Tune editor rules (honeytune/HoneyView.h: no JUCE): what glows red, and which key Auto uses.
 #include "HoneyView.h"
+#include "vox/KeyShare.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -98,4 +99,45 @@ TEST_CASE ("Honey Tune: Auto takes the project's key; an unsure voice key is fla
     vox::KeyGuess sure = unsure;
     sure.confidence = 0.9;
     CHECK_FALSE (keyUnsure (Settings {}, sure));
+}
+
+TEST_CASE ("Honey Tune: Voxology's beat key reaches Honey Tune (fresh only); the project's key comes first", "[honey][view]")
+{
+    using namespace vox::keyshare;
+    BeatKeyShare k;
+    REQUIRE (decode (encode ({ 4, 2, 0.83, 123456 }), k));
+    CHECK (k.key == 4);
+    CHECK (k.scale == 2);
+    CHECK (k.confidence > 0.82);
+    CHECK (k.ms == 123456);
+    CHECK_FALSE (decode ("rubbish", k));
+    CHECK_FALSE (decode ("v1 12 2 0.5 1", k));   // no such key
+
+    // Gallas's beat: E minor, written now -> read back.
+    publish (4, 2, 0.9);
+    BeatKeyShare got;
+    REQUIRE (read (got));
+    CHECK (got.key == 4);
+    CHECK (got.scale == 2);
+    // Written 6 s ago (that Voxology is gone): ignored.
+    publish (4, 2, 0.9, nowMs() - 6000);
+    CHECK_FALSE (read (got));
+
+    // Order: the project's key, else the beat's; a key you pick beats both; the voice is last.
+    HostKey beat;
+    beat.valid = true; beat.key = 4; beat.scale = 2; beat.fromBeat = true;
+    HostKey project;
+    CHECK (outsideKey (project, beat) == beat);
+    project.valid = true; project.key = 7; project.scale = 1;
+    CHECK (outsideKey (project, beat) == project);
+
+    vox::KeyGuess voice;   // "D major, 40 % sure"
+    voice.key = 2; voice.minor = false; voice.confidence = 0.4;
+    const std::vector<vox::honey::Note> notes { note (60.0, 0.0) };
+    const auto snap = makeSnapshot (nullptr, notes, std::vector<NoteEdit> (1), voice, Settings {}, outsideKey ({}, beat));
+    CHECK (snap.key == 4);
+    CHECK (snap.scale == 2);
+    CHECK (snap.keyFromBeat);
+    CHECK_FALSE (snap.keyFromHost);
+    CHECK_FALSE (snap.keyUnsure);
 }

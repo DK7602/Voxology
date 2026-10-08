@@ -8,6 +8,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include "HoneyPanel.h"
+#include "vox/KeyShare.h"
 
 #include <ARA_Library/Utilities/ARATimelineConversion.h>
 
@@ -224,13 +225,49 @@ class HoneyDocumentController final : public ARADocumentControllerSpecialisation
 {
 public:
     using ARADocumentControllerSpecialisation::ARADocumentControllerSpecialisation;
-    ~HoneyDocumentController() override { *controllerAlive = false; pool.removeAllJobs (true, 60000); }
+    ~HoneyDocumentController() override { beatKeyPoll.stopTimer(); *controllerAlive = false; pool.removeAllJobs (true, 60000); }
 
     Settings getSettings() const { const ScopedLock sl (settingsLock); return settings; }
     honeyui::HostKey getHostKey() const { const ScopedLock sl (settingsLock); return hostKey; }
 
     /** The song's key from the host (its key signature / scale track: the first one), for Auto. Message thread. */
     void refreshHostKey()
+    {
+        projectKey = readProjectKey();
+        useOutsideKey();
+    }
+
+    /** Voxology on the beat (this host, written in the last few seconds), for Auto. Message thread, once a second. */
+    void pollBeatKey()
+    {
+        honeyui::HostKey k;
+        if (vox::keyshare::BeatKeyShare b; vox::keyshare::read (b))
+        {
+            k.valid = true;
+            k.key = b.key;
+            k.scale = b.scale;
+            k.fromBeat = true;
+        }
+        if (k == beatKey) return;
+        beatKey = k;
+        useOutsideKey();
+    }
+
+    /** The key from outside the clip: the project's, else the beat's. A change re-tunes every clip. */
+    void useOutsideKey()
+    {
+        const auto use = honeyui::outsideKey (projectKey, beatKey);
+        {
+            const ScopedLock sl (settingsLock);
+            if (use == hostKey) return;
+            hostKey = use;
+        }
+        for (auto* src : sources())
+            requestRender (src->state);
+        changes.sendChangeMessage();
+    }
+
+    honeyui::HostKey readProjectKey()
     {
         honeyui::HostKey found;
         for (auto* context : getDocumentController()->getDocument<ARADocument>()->getMusicalContexts<ARAMusicalContext>())
@@ -243,14 +280,7 @@ public:
             found = honeyui::hostKeyFromSignature (static_cast<int> (sig.root), used);
             break;
         }
-        {
-            const ScopedLock sl (settingsLock);
-            if (found == hostKey) return;
-            hostKey = found;
-        }
-        for (auto* src : sources())
-            requestRender (src->state);
-        changes.sendChangeMessage();
+        return found;
     }
     void setSettings (const Settings& s)
     {
@@ -474,6 +504,8 @@ private:
     void listen (HoneyAudioSource* src)
     {
         refreshHostKey();
+        pollBeatKey();
+        if (! beatKeyPoll.isTimerRunning()) beatKeyPoll.startTimer (1000);
         auto state = src->state;
         state->status = 1;
         state->samplesChanged = false;
@@ -610,7 +642,9 @@ private:
     std::shared_ptr<std::atomic<bool>> controllerAlive = std::make_shared<std::atomic<bool>> (true);
     mutable CriticalSection settingsLock;
     Settings settings;
-    honeyui::HostKey hostKey;   // the song's key from the host (settingsLock)
+    honeyui::HostKey hostKey;   // the song's key from outside the clip, in use (settingsLock)
+    honeyui::HostKey projectKey, beatKey;   // message thread
+    TimedCallback beatKeyPoll { [this] { pollBeatKey(); } };
     std::atomic<bool> playOriginal { false };
     ThreadPool pool { 1 };
 };

@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "vox/KeyShare.h"
 #include "VoxWebEditor.h"
 
 VoxologyAudioProcessor::VoxologyAudioProcessor()
@@ -76,6 +77,15 @@ void VoxologyAudioProcessor::resolveUnmaskSource()
 void VoxologyAudioProcessor::timerCallback()
 {
     resolveUnmaskSource();   // a saved choice: wait for that vocal's Voxology to appear (project loading)
+
+    // Share a Voxology-on-the-beat's key with Honey Tune in this host (it can't see the link: another plug-in file).
+    const auto bk = vox::UnmaskLink::instance().readBeatKey (-1);
+    if (bk.present && bk.beat.ready && bk.beat.confidence >= kBeatKeySure)
+    {
+        int key = 0, scale = 1;
+        vox::followBeatKey (bk.beat, 0, key, scale);
+        vox::keyshare::publish (key, scale, bk.beat.confidence);
+    }
 }
 
 void VoxologyAudioProcessor::updateTrackProperties (const TrackProperties& properties)

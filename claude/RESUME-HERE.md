@@ -1033,3 +1033,20 @@ User OK'd all four audit items.
   HoneyTune_VST3 + HoneyPreview built on Linux. Preview: Gallas Auto = red warning + red glows; E minor = 125 red-glow gold.
 - User question: does Voxology re-tune after Honey Tune? Yes - no link between them; Voxology (insert) processes Honey
   Tune's output. Advice: Pitch off / Amount 0 in Voxology on a track tuned with Honey Tune.
+- CI green: Actions run 37790294525 (v0.21.0, commit 5f94307).
+
+## v0.22.0 Honey Tune takes Voxology's beat key (2026-10-08)
+- User: "Voxology can determine key by beat, isn't it more accurate?" Yes (Gallas: beat E minor = right; voice D major
+  40 % = wrong). Honey Tune only gets its clip, and the two plug-in files share no memory (UnmaskLink is a static inside
+  each binary), so: vox::keyshare (dsp KeyShare.h / .cpp) puts "VOXOLOGY_BEAT_KEY" = "v1 key scale conf steadyMs" in the
+  HOST PROCESS's environment (Windows: Set/GetEnvironmentVariableA - the static CRT gives each DLL its own getenv
+  table; POSIX setenv / getenv). Voxology's 1 Hz processor timer publishes the surest ready BEAT-mode key (conf >= 0.5,
+  followBeatKey(..., 0) = the beat's own mode). Honey Tune polls once a second (TimedCallback started in listen()),
+  ignores it when > 5 s old. Same process only: another program never sees it.
+- Order for Auto: Key you pick > project key signature (ARA) > Voxology's beat key > voice (red KEY UNSURE when < 45 %).
+  honeyui::outsideKey(project, beat); HostKey.fromBeat; status "(from Voxology's beat)". A change re-tunes every clip.
+- Limits: the beat key appears once Voxology (BEAT) has heard ~6 s of the song playing (after a project reload too);
+  until then Honey Tune uses the voice, then re-tunes. The beat's open note (extraNotes) isn't used by Honey Tune.
+  Two projects open in one Cubase could share a beat key (status line shows where it came from).
+- Test "Voxology's beat key reaches Honey Tune (fresh only); the project's key comes first". 88 cases.
+  Voxology_VST3 + HoneyTune_VST3 compiled on Linux (needed libgtk-3-dev / libwebkit2gtk-4.1-dev here).

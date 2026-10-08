@@ -41,13 +41,18 @@ struct NoteEdit
     bool isDefault() const { return ! moved && drift < 0.0 && vibrato < 0.0 && ! timed() && std::abs (formant) < 1.0e-6; }
 };
 
-/** The song's key as the host knows it (its key signature / scale track), when it shares one. */
+/** The song's key from outside the clip: the host's project (its key signature / scale track), else what a
+    Voxology on the beat hears (shared through vox::keyshare). */
 struct HostKey
 {
     bool valid = false;
-    int key = 0;     // 0 = C ... 11 = B
-    int scale = 1;   // vox::kScaleNames
-    bool operator== (const HostKey& o) const { return valid == o.valid && (! valid || (key == o.key && scale == o.scale)); }
+    int key = 0;            // 0 = C ... 11 = B
+    int scale = 1;          // vox::kScaleNames
+    bool fromBeat = false;  // Voxology's beat key (else the project's)
+    bool operator== (const HostKey& o) const
+    {
+        return valid == o.valid && (! valid || (key == o.key && scale == o.scale && fromBeat == o.fromBeat));
+    }
 };
 
 /** A host key signature (ARA: root on the circle of fifths, 0 = C, 1 = G, -1 = F; which of the 12 intervals
@@ -67,11 +72,17 @@ inline HostKey hostKeyFromSignature (int circleOfFifths, const bool (&used)[12])
     return h;
 }
 
+/** Which key from outside the clip Auto uses: the project's (you set it in the host), else the beat's. */
+inline HostKey outsideKey (const HostKey& project, const HostKey& beat)
+{
+    return project.valid ? project : beat;
+}
+
 /** Under this the voice alone can't tell the key (Auto then snaps to the nearest note, any note). */
 constexpr double kSureEnough = 0.45;
 
-/** The key and scale actually used: "Auto" takes the host's key when it has one, else the detected key
-    (and its scale when sure enough). */
+/** The key and scale actually used: "Auto" takes the key from outside the clip when there is one (the
+    project's, else Voxology's beat key), else the one detected from the voice (and its scale when sure enough). */
 inline void resolveKey (const Settings& s, const vox::KeyGuess& guess, int& key, int& scale, const HostKey& host = {})
 {
     if (s.key == kAutoKey && host.valid)
@@ -171,6 +182,7 @@ struct Snapshot
     int key = 0, scale = 0;
     vox::KeyGuess guess;
     bool keyFromHost = false;  // the key came from the host's project
+    bool keyFromBeat = false;  // ... from Voxology on the beat
     bool keyUnsure = false;    // Auto couldn't tell the key from the voice: snapping to any note
     double seconds = 0.0;
 };
@@ -183,7 +195,8 @@ inline Snapshot makeSnapshot (std::shared_ptr<const vox::honey::Track> track, co
     snap.track = track;
     snap.guess = guess;
     resolveKey (s, guess, snap.key, snap.scale, host);
-    snap.keyFromHost = s.key == kAutoKey && host.valid;
+    snap.keyFromHost = s.key == kAutoKey && host.valid && ! host.fromBeat;
+    snap.keyFromBeat = s.key == kAutoKey && host.valid && host.fromBeat;
     snap.keyUnsure = keyUnsure (s, guess, host);
     if (track != nullptr && ! track->time.empty())
         snap.seconds = track->time.back() / track->sampleRate;

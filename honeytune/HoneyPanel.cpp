@@ -173,7 +173,7 @@ void HoneyPanel::refresh()
                                         + "); until then notes snap to the nearest note, any note  |  "
                                   : String())
                    + String (s.notes.size()) + " notes  |  key " + vox::kNoteNames[static_cast<size_t> (s.key)] + " "
-                   + vox::kScaleNames[static_cast<size_t> (s.scale)] + (s.keyFromHost ? " (from the project)" : "") + "  |  sung off-key " + String (sungOff) + ", fixed " + String (fixed)
+                   + vox::kScaleNames[static_cast<size_t> (s.scale)] + (s.keyFromHost ? " (from the project)" : s.keyFromBeat ? " (from Voxology's beat)" : "") + "  |  sung off-key " + String (sungOff) + ", fixed " + String (fixed)
                    + ", still off-key " + String (off) + "  |  " + String (edited) + " changed by hand  |  heard " + vox::kNoteNames[static_cast<size_t> (s.guess.key)]
                    + (s.guess.minor ? " minor" : " major")
                    + (s.guess.ambiguous ? String (" or ") + vox::kNoteNames[static_cast<size_t> (s.guess.altKey)] + (s.guess.altMinor ? " minor" : " major") : String())
