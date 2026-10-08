@@ -24,6 +24,28 @@ window.addEventListener("resize", fit);
 fit();
 
 // ---------------------------------------------------------------------------------------------
+// Easter egg: click the logo and every blue turns red (click again: blue). CSS does the colours and the
+// art behind them (html.red); this swaps the <img> art for its *_red.webp twin and the spectrum colours.
+const RED_ART = ["logo", "title", "knob_blank", "knob_db", "knob_hz", "knob_q", "knob_switch"];
+const PAL = {};
+const art = (name) => `assets/${name}${document.documentElement.classList.contains("red") && RED_ART.includes(name) ? "_red" : ""}.webp`;
+function readPalette() {
+  const css = getComputedStyle(document.documentElement);
+  PAL.deep = css.getPropertyValue("--blue-deep-rgb").trim();
+  PAL.grey = css.getPropertyValue("--blue-grey").trim().replace(/^#(..)(..)(..)$/, (_, r, g, b) => [r, g, b].map((h) => parseInt(h, 16)).join(","));
+}
+readPalette();
+$("logo").addEventListener("click", () => {
+  document.documentElement.classList.toggle("red");
+  for (const img of document.querySelectorAll('img[src^="assets/"]')) {
+    const name = img.getAttribute("src").slice(7, -5).replace(/_red$/, "");
+    if (RED_ART.includes(name)) img.src = art(name);
+  }
+  readPalette();
+  draw();
+});
+
+// ---------------------------------------------------------------------------------------------
 // Parameters
 const NOTES_C = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
@@ -421,12 +443,12 @@ function knobSvg(face, glyph) {
   const f = FACES[face], g = `kg${gradId++}`, r = (f.R + f.outer) / 2;
   const p = (a, rad) => [f.cx + rad * Math.sin((a * Math.PI) / 180), f.cy - rad * Math.cos((a * Math.PI) / 180)];
   const arc = (a0, a1) => { const [x0, y0] = p(a0, r), [x1, y1] = p(a1, r); return `M ${x0} ${y0} A ${r} ${r} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} 1 ${x1} ${y1}`; };
-  return `<img src="assets/knob_${face}.webp" alt="" draggable="false">
+  return `<img src="${art(`knob_${face}`)}" alt="" draggable="false">
   <svg viewBox="0 0 ${f.w} ${f.h}">
     <defs><filter id="${g}g" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
     <linearGradient id="${g}t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6cf"/><stop offset="0.5" stop-color="#e2b453"/><stop offset="1" stop-color="#9a6d1f"/></linearGradient></defs>
-    <path d="${arc(-ARC, ARC)}" fill="none" stroke="rgba(20,40,70,0.22)" stroke-width="11" stroke-linecap="round"/>
-    <path class="k-val" d="" fill="none" stroke="#7cc4ff" stroke-width="8" stroke-linecap="round" filter="url(#${g}g)"/>
+    <path d="${arc(-ARC, ARC)}" fill="none" style="stroke: var(--knob-track)" stroke-width="11" stroke-linecap="round"/>
+    <path class="k-val" d="" fill="none" style="stroke: var(--knob-arc)" stroke-width="8" stroke-linecap="round" filter="url(#${g}g)"/>
     ${glyph ? `<text x="${f.cx}" y="${f.cy + 16}" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="${glyph.length > 1 ? 46 : 54}"
       fill="rgba(235,225,195,0.22)" stroke="#5e420f" stroke-width="7" stroke-linejoin="round">${glyph}</text>
     <text x="${f.cx}" y="${f.cy + 16}" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="${glyph.length > 1 ? 46 : 54}"
@@ -675,7 +697,7 @@ const hexes = MODULES.map((m, i) => {
   const row = Math.floor(i / 2), col = i % 2;   // 12 cells in a honeycomb, two per row
   const h = document.createElement("div");
   h.className = "hex";
-  h.style.setProperty("--tex", `linear-gradient(160deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 45%), url("assets/${["marble_blue", "marble_cream", "marble_blue2", "marble_cream2"][(i * 3 + row) % 4]}.webp") center / cover`);
+  h.style.setProperty("--tex", `linear-gradient(160deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 45%), var(--art-${["marble-blue", "marble-cream", "marble-blue2", "marble-cream2"][(i * 3 + row) % 4]}) center / cover`);
   h.style.left = `${col * 110 + (row % 2) * 55 + 22}px`;
   h.style.top = `${row * 92 + 2}px`;
   h.innerHTML = `<div class="rim"></div><div class="face"><span class="num">${String(i + 1).padStart(2, "0")}</span>
@@ -859,8 +881,8 @@ function draw() {
     ctx.strokeStyle = "rgba(141,100,31,0.16)"; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, PH); ctx.stroke();
     ctx.fillStyle = "rgba(86,97,112,0.8)"; ctx.fillText(f >= 1000 ? `${f / 1000}k` : `${f}`, x + 3, PH - 5);
   }
-  ctx.strokeStyle = "rgba(36,97,143,0.25)"; ctx.beginPath(); ctx.moveTo(0, yEq(0) + 0.5); ctx.lineTo(PW, yEq(0) + 0.5); ctx.stroke();
-  drawSpectrum(M.in, null, "rgba(157,182,201,0.45)");
+  ctx.strokeStyle = `rgba(${PAL.deep},0.25)`; ctx.beginPath(); ctx.moveTo(0, yEq(0) + 0.5); ctx.lineTo(PW, yEq(0) + 0.5); ctx.stroke();
+  drawSpectrum(M.in, null, `rgba(${PAL.grey},0.45)`);
   drawSpectrum(M.out, "#c9973a", null);
   if (beat) {
     // The dips Unmask is making right now (orange), and where the vocal is (dots on the 0 dB line).
@@ -885,7 +907,7 @@ function draw() {
       const a = M.umLink > 0 ? clamp((v - (peak - 30)) / 30, 0, 1) : 0;
       if (a <= 0) return;
       ctx.beginPath(); ctx.arc(xFor(b.hz), yEq(0), 4 + 7 * a, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(36,97,143,${0.25 + 0.55 * a})`; ctx.fill();
+      ctx.fillStyle = `rgba(${PAL.deep},${0.25 + 0.55 * a})`; ctx.fill();
     });
     nodes.forEach((n) => (n.hidden = true));
     dynNodes.forEach((n) => (n.hidden = true));
@@ -914,7 +936,7 @@ function draw() {
   // Tone EQ curve
   ctx.beginPath();
   for (let x = 0; x <= PW; x += 3) { const y = yEq(eqResponse(fFor(x))); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-  ctx.strokeStyle = on("eqOn") ? (page ? "rgba(36,97,143,0.45)" : "#24618f") : "rgba(36,97,143,0.35)"; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.strokeStyle = on("eqOn") ? `rgba(${PAL.deep},${page ? 0.45 : 1})` : `rgba(${PAL.deep},0.35)`; ctx.lineWidth = 2.5; ctx.stroke();
   nodes.forEach((n, i) => {
     n.hidden = page;
     n.style.left = `${(xFor(eqFreq(i)) / PW) * 100}%`;

@@ -1070,3 +1070,16 @@ User OK'd all four audit items.
   UI lives in plugin/ui (index.html, app.js; WebView editor), mock.js for checking in Chromium.
 - Linux build here needed: libx11 / xrandr / xinerama / xcursor / freetype / fontconfig / asound / gtk-3 /
   webkit2gtk-4.1 dev packages; build with --parallel 3.
+
+## v0.23.0 Easter egg: click the logo, blue turns red (2026-10-08, "Voxology UI easter egg" thread)
+- User: "click the logo: all the blue parts turn red (background, buttons, glows...), other colours stay; click again =
+  blue." Session only (opening the plug-in again starts blue); not saved in the project.
+- CSS: every blue now lives in :root vars (--blue*, --glow*, --midi-rgb, --knob-arc / --knob-track, --art-* image urls);
+  :root.red overrides them (same lightness, hue -> red; --blue-deep red is darker, #7d1520, so button text reads).
+- Art: tools/ui/make_red_assets.py makes *_red.webp twins (honeycomb, logo, title, marble_blue / blue2 / cream, 5 knobs):
+  only blue-ish pixels change (hue 75 - 280, any colour at all), gold / ivory / white untouched. Re-run it if the art changes.
+- app.js: logo click toggles html.red, swaps <img> art (logo, title, knobs) via art(), re-reads PAL (spectrum canvas
+  colours) and redraws. Hive tiles use var(--art-marble-*).
+- Honest limits: in red mode the calm (blue) Learn tips turn red too, so they look closer to the warnings; the red
+  "REC" text sits on a red button. Checked in Chromium (mock.js + JUCE's index.js served over http): no errors,
+  blue -> red -> blue. Plug-in not compiled locally (UI-only; assets come in through the existing glob): CI builds it.

@@ -12,17 +12,44 @@
   --gold: #c9973a;
   --gold-hi: #f2d37c;
   --gold-deep: #8d641f;
-  --blue: #5d9fd3;
-  --blue-deep: #24618f;
-  --blue-pale: #dcebf6;
+  /* Every blue in the UI lives here (and in the *_red.webp twins of the art), so the easter egg (click the
+     logo: html.red) can swap them all for red. Gold, ivory and the warning reds never change. */
+  --blue: #5d9fd3; --blue-rgb: 93, 159, 211;
+  --blue-deep: #24618f; --blue-deep-rgb: 36, 97, 143;
+  --blue-pale: #dcebf6; --blue-pale-rgb: 220, 235, 246;
+  --blue-mist-rgb: 232, 242, 250;
+  --blue-hi: #bfe1ff; --blue-grey: #9db6c9; --blue-calm: #eaf3fb;
+  --glow-rgb: 110, 185, 255; --glow-hi-rgb: 130, 200, 255; --glow-core-rgb: 60, 140, 230; --midi-rgb: 77, 155, 224;
+  --knob-arc: #7cc4ff; --knob-track: rgba(20, 40, 70, 0.22);
+  --art-honeycomb: url("assets/honeycomb.webp");
+  --art-marble-blue: url("assets/marble_blue.webp");
+  --art-marble-blue2: url("assets/marble_blue2.webp");
+  --art-marble-cream: url("assets/marble_cream.webp");
+  --art-marble-cream2: url("assets/marble_cream2.webp");
   --ink: #1d2733;
   --ink-soft: #566170;
   --dim: #8a8f96;
   --warn: #b8432f;
   --ok: #2f7d5b;
   --gold-grad: linear-gradient(135deg, #8d641f 0%, #e8c66d 22%, #fff1b8 38%, #c9973a 55%, #f2d37c 72%, #8d641f 100%);
-  --marble: linear-gradient(160deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 45%), url("assets/marble_blue.webp") center / cover;
+  --marble: linear-gradient(160deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 45%), var(--art-marble-blue) center / cover;
   --marble-cream: linear-gradient(160deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 45%), url("assets/marble_cream2.webp") center / cover;
+}
+
+
+/* Easter egg: the logo toggles html.red - every blue turns red (same lightness), nothing else changes. */
+:root.red {
+  --blue: #d95762; --blue-rgb: 217, 87, 98;
+  --blue-deep: #7d1520; --blue-deep-rgb: 125, 21, 32;
+  --blue-pale: #f7dbdd; --blue-pale-rgb: 247, 219, 221;
+  --blue-mist-rgb: 251, 231, 233;
+  --blue-hi: #ffbfc4; --blue-grey: #cb9b9f; --blue-calm: #fce9eb;
+  --glow-rgb: 255, 110, 120; --glow-hi-rgb: 255, 130, 140; --glow-core-rgb: 239, 51, 63; --midi-rgb: 231, 70, 82;
+  --knob-arc: #ff7c86; --knob-track: rgba(73, 17, 20, 0.22);
+  --art-honeycomb: url("assets/honeycomb_red.webp");
+  --art-marble-blue: url("assets/marble_blue_red.webp");
+  --art-marble-blue2: url("assets/marble_blue2_red.webp");
+  --art-marble-cream: url("assets/marble_cream_red.webp");
 }
 
 * { box-sizing: border-box; }
@@ -37,7 +64,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #viewport { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
 #stage {
   position: relative; width: 1600px; height: 900px; flex: none; transform-origin: center center;
-  background: url("assets/honeycomb.webp") center / cover no-repeat;
+  background: var(--art-honeycomb) center / cover no-repeat;
 }
 .veil { position: absolute; inset: 0; background: radial-gradient(120% 100% at 50% 45%, rgba(255, 250, 240, 0.10), rgba(70, 48, 10, 0.28)); }
 
@@ -64,7 +91,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .h-group { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
 .h-label { font-size: 11px; letter-spacing: 0.16em; font-weight: 700; color: var(--gold-deep); text-shadow: 0 0 4px #fff, 0 0 2px #fff; }
 .picker { display: flex; align-items: center; height: 40px; border-radius: 20px; background: var(--marble);
-  box-shadow: inset 0 0 0 2px var(--gold), inset 0 2px 6px rgba(36, 97, 143, 0.2); }
+  box-shadow: inset 0 0 0 2px var(--gold), inset 0 2px 6px rgba(var(--blue-deep-rgb), 0.2); }
 .picker button { width: 34px; height: 40px; border: 0; background: none; font-size: 26px; line-height: 1; color: var(--blue-deep); }
 .picker span { width: 108px; text-align: center; font-weight: 700; font-size: 17px; color: var(--blue-deep); white-space: nowrap; }
 .picker span.long { font-size: 13px; letter-spacing: -0.01em; }
@@ -79,7 +106,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .ref-row { display: flex; gap: 4px; width: 176px; }
 .ref-chip { flex: 1; min-width: 0; height: 24px; border: 0; border-radius: 12px; padding: 0 10px; background: var(--marble-cream); color: var(--ink-soft);
   font-weight: 700; font-size: 11px; letter-spacing: 0.08em; box-shadow: inset 0 0 0 1.5px var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
-.ref-chip.ok { background: var(--marble); color: var(--blue-deep); box-shadow: inset 0 0 0 2px var(--gold), 0 0 8px rgba(110, 185, 255, 0.8); letter-spacing: 0.02em; font-size: 12px; }
+.ref-chip.ok { background: var(--marble); color: var(--blue-deep); box-shadow: inset 0 0 0 2px var(--gold), 0 0 8px rgba(var(--glow-rgb), 0.8); letter-spacing: 0.02em; font-size: 12px; }
 .ref-chip.warn { color: var(--warn); }
 .ref-x { width: 24px; height: 24px; border: 0; border-radius: 12px; background: var(--marble-cream); color: var(--ink-soft); font-size: 11px; box-shadow: inset 0 0 0 1.5px var(--gold); cursor: pointer; }
 .chip:disabled { opacity: 0.4; cursor: default; }
@@ -90,12 +117,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .auto-edit { position: relative; overflow: hidden; flex-shrink: 0; width: 226px; height: 76px; border: 0; border-radius: 38px; padding: 0 18px;
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 40%), var(--gold-grad); color: #3b2a07; box-shadow: 0 0 0 2px #8d641f, 0 6px 14px rgba(80, 56, 14, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.55);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; margin-left: 8px; }
-.auto-edit .ae-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, rgba(93, 159, 211, 0.55), rgba(220, 235, 246, 0.75)); transition: width 0.15s; }
+.auto-edit .ae-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, rgba(var(--blue-rgb), 0.55), rgba(var(--blue-pale-rgb), 0.75)); transition: width 0.15s; }
 .auto-edit .ae-text { position: relative; font-weight: 700; font-size: 24px; letter-spacing: 0.12em; }
 .auto-edit .ae-sub { position: relative; font-size: 12px; font-weight: 600; opacity: 0.8; }
 .auto-edit.busy .ae-text { font-size: 19px; }
 .auto-edit.pulse { animation: pulse 1.2s ease-in-out infinite; }
-@keyframes pulse { 50% { box-shadow: 0 0 0 2px #8d641f, 0 0 22px rgba(93, 159, 211, 0.9); } }
+@keyframes pulse { 50% { box-shadow: 0 0 0 2px #8d641f, 0 0 22px rgba(var(--blue-rgb), 0.9); } }
 
 /* ---------------------------------------------------------------- honeycomb chain */
 #chain { left: 16px; top: 150px; width: 344px; height: 686px; --glass: rgba(255, 250, 240, 0.22); }
@@ -105,7 +132,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .hex .rim { position: absolute; inset: 0; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
   background: linear-gradient(200deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 35%), var(--gold-grad); }
 .hex .face { position: absolute; inset: 5px; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); background: var(--tex, var(--marble));
-  box-shadow: inset 0 0 14px rgba(36, 97, 143, 0.35);
+  box-shadow: inset 0 0 14px rgba(var(--blue-deep-rgb), 0.35);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; }
 .hex .num { font-family: "Plex"; font-size: 12px; color: var(--gold-deep); font-weight: 600; }
 .hex .name { font-weight: 700; font-size: 14px; letter-spacing: 0.08em; color: var(--ink); line-height: 1.05; padding: 0 12px;
@@ -113,13 +140,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .hex .stat, .hex .num { text-shadow: 0 0 3px rgba(255, 255, 255, 0.95); }
 .hex .stat { font-family: "Plex"; font-size: 12px; color: var(--blue-deep); min-height: 16px; }
 .hex .dot { width: 14px; height: 14px; border-radius: 50%; margin-top: 4px; border: 0; padding: 0;
-  background: radial-gradient(circle at 35% 35%, #bfe1ff, var(--blue) 60%, var(--blue-deep)); box-shadow: 0 0 0 2px var(--gold), 0 0 8px rgba(93, 159, 211, 0.8); }
+  background: radial-gradient(circle at 35% 35%, var(--blue-hi), var(--blue) 60%, var(--blue-deep)); box-shadow: 0 0 0 2px var(--gold), 0 0 8px rgba(var(--blue-rgb), 0.8); }
 .hex.off .dot { background: #d9d2c4; box-shadow: 0 0 0 2px var(--gold); }
 .hex.off .face { background: var(--marble-cream); filter: grayscale(0.7) brightness(1.04); }
 .hex.off .name, .hex.off .stat { color: var(--dim); }
 .hex.idle .stat { color: var(--dim); }
 .hex:hover { transform: scale(1.04); }
-.hex.sel { filter: drop-shadow(0 0 12px rgba(255, 226, 140, 1)) drop-shadow(0 0 4px rgba(93, 159, 211, 0.9)); z-index: 2; }
+.hex.sel { filter: drop-shadow(0 0 12px rgba(255, 226, 140, 1)) drop-shadow(0 0 4px rgba(var(--blue-rgb), 0.9)); z-index: 2; }
 .hex.sel .face { inset: 7px; }
 .chain-foot { position: absolute; bottom: 12px; color: var(--ink-soft); text-shadow: 0 0 4px #fff; left: 0; right: 0; text-align: center; font-size: 12px; }
 
@@ -127,9 +154,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #visual { left: 376px; top: 150px; width: 752px; height: 282px; }
 .legend { margin-left: auto; font-size: 13px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; }
 .legend .sw { display: inline-block; width: 18px; height: 4px; border-radius: 2px; margin-left: 10px; }
-.sw.in { background: #9db6c9; } .sw.out { background: var(--gold); } .sw.eq { background: var(--blue-deep); } .sw.dyn { background: #c8642c; }
+.sw.in { background: var(--blue-grey); } .sw.out { background: var(--gold); } .sw.eq { background: var(--blue-deep); } .sw.dyn { background: #c8642c; }
 #plot { position: absolute; left: 14px; right: 14px; top: 54px; bottom: 14px; border-radius: 12px; overflow: hidden;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(220, 235, 246, 0.62)); box-shadow: inset 0 0 0 2px rgba(201, 151, 58, 0.7), inset 0 0 20px rgba(36, 97, 143, 0.15); }
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(var(--blue-pale-rgb), 0.62)); box-shadow: inset 0 0 0 2px rgba(201, 151, 58, 0.7), inset 0 0 20px rgba(var(--blue-deep-rgb), 0.15); }
 #spec { position: absolute; inset: 0; width: 100%; height: 100%; }
 #eq-nodes { position: absolute; inset: 0; }
 .node { position: absolute; width: 26px; height: 30px; margin: -15px 0 0 -13px; cursor: grab;
@@ -184,13 +211,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .l-h:first-child { margin-top: 0; }
 .l-p { margin: 0 0 8px; color: var(--ink); }
 .l-meta { margin: -2px 0 8px; font-size: 13px; color: var(--ink-soft); }
-.l-item { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: rgba(232, 242, 250, 0.8); box-shadow: inset 3px 0 0 var(--gold), inset 0 0 0 1px rgba(201, 151, 58, 0.45); }
+.l-item { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: rgba(var(--blue-mist-rgb), 0.8); box-shadow: inset 3px 0 0 var(--gold), inset 0 0 0 1px rgba(201, 151, 58, 0.45); }
 .l-item .l-top { display: flex; justify-content: space-between; gap: 10px; font-weight: 700; }
 .l-item .l-val { font-family: "Plex"; font-weight: 600; color: var(--blue-deep); font-size: 13px; text-align: right; }
 .l-item .l-why { margin-top: 3px; color: var(--ink-soft); font-size: 14px; }
 .tip { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: #fff6e6; box-shadow: inset 0 0 0 2px var(--gold); }
 .tip.warn { background: #fdece6; box-shadow: inset 0 0 0 1.5px var(--warn); }
-.tip.calm { background: #eaf3fb; box-shadow: inset 0 0 0 1.5px var(--blue); }
+.tip.calm { background: var(--blue-calm); box-shadow: inset 0 0 0 1.5px var(--blue); }
 .tip .t-title { font-weight: 700; letter-spacing: 0.08em; font-size: 13px; margin-bottom: 3px; }
 .tip.warn .t-title { color: var(--warn); }
 .tip.calm .t-title { color: var(--blue-deep); }
@@ -221,7 +248,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The honeycomb art itself as the panel surface (Signal Chain and the module panel). */
 #chain, #module {
   background: linear-gradient(rgba(255, 250, 240, 0.10), rgba(255, 250, 240, 0.10)) padding-box,
-              url("assets/honeycomb.webp") center / cover padding-box,
+              var(--art-honeycomb) center / cover padding-box,
               var(--gold-grad) border-box;
   backdrop-filter: none; -webkit-backdrop-filter: none;
 }
@@ -241,14 +268,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
     url("assets/marble_cream_panel.webp") center / cover padding-box,
     var(--gold-grad) border-box;
   backdrop-filter: none; -webkit-backdrop-filter: none;
-  box-shadow: 0 12px 28px rgba(60, 40, 6, 0.40), inset 0 0 14px rgba(36, 97, 143, 0.35);
+  box-shadow: 0 12px 28px rgba(60, 40, 6, 0.40), inset 0 0 14px rgba(var(--blue-deep-rgb), 0.35);
 }
 #learn .card-head { background: none; }
 #learn .l-item { background: rgba(255, 252, 245, 0.72); }
 
 /* Blue glow around every knob so it stands off the honeycomb. */
-.knob img { filter: drop-shadow(0 0 7px rgba(110, 185, 255, 0.95)) drop-shadow(0 0 2px rgba(60, 140, 230, 0.9)) drop-shadow(0 4px 4px rgba(60, 40, 6, 0.35)); }
-.knob:hover img { filter: drop-shadow(0 0 11px rgba(130, 200, 255, 1)) drop-shadow(0 0 3px rgba(60, 140, 230, 1)) drop-shadow(0 4px 4px rgba(60, 40, 6, 0.35)) brightness(1.05); }
+.knob img { filter: drop-shadow(0 0 7px rgba(var(--glow-rgb), 0.95)) drop-shadow(0 0 2px rgba(var(--glow-core-rgb), 0.9)) drop-shadow(0 4px 4px rgba(60, 40, 6, 0.35)); }
+.knob:hover img { filter: drop-shadow(0 0 11px rgba(var(--glow-hi-rgb), 1)) drop-shadow(0 0 3px rgba(var(--glow-core-rgb), 1)) drop-shadow(0 4px 4px rgba(60, 40, 6, 0.35)) brightness(1.05); }
 
 /* EQ page: two rows must fit. The knob face already says +dB or Hz, so the "gain" / "frequency" line goes. */
 #cells[data-cols="5"] { padding-top: 8px; gap: 14px 3px; }
@@ -270,7 +297,7 @@ body.beat #header .title { margin-left: 0; }
 #beat-card .hex.big { position: relative; width: 200px; height: 230px; }
 #beat-card .hex.big .name { font-size: 22px; }
 #beat-card .hex.big .num, #beat-card .hex.big .stat { font-size: 13px; }
-#beat-card .hex.big .face { background: linear-gradient(160deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 45%), url("assets/marble_blue.webp") center / cover; }
+#beat-card .hex.big .face { background: linear-gradient(160deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 45%), var(--art-marble-blue) center / cover; }
 .beat-text { margin: 0 22px; font-size: 14px; line-height: 1.45; color: var(--ink); text-align: center; background: rgba(255, 250, 240, 0.86); padding: 10px 12px; border-radius: 12px; box-shadow: inset 0 0 0 1.5px var(--gold); }
 .src-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; width: 176px; max-height: 150px; overflow-y: auto; }
 .src-list button { height: 28px; border: 0; border-radius: 14px; font-size: 12px; font-weight: 700; background: var(--ivory); color: var(--ink-soft); box-shadow: inset 0 0 0 1.5px var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 10px; }
@@ -296,14 +323,14 @@ body.beat #header .title { margin-left: 0; }
 .cell .vseg.list { gap: 3px; margin-top: 6px; width: 112px; }
 .cell .vseg.list button { height: 22px; font-size: 11.5px; }
 .pitch-face { margin-top: 12px; width: 112px; padding: 8px 6px; border-radius: 14px; background: rgba(255, 250, 240, 0.94);
-  box-shadow: inset 0 0 0 2px var(--gold), 0 0 10px rgba(110, 185, 255, 0.8); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  box-shadow: inset 0 0 0 2px var(--gold), 0 0 10px rgba(var(--glow-rgb), 0.8); display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .pf-row { display: flex; align-items: baseline; gap: 4px; font-family: Georgia, serif; font-weight: 700; }
 .pf-sung { font-size: 20px; color: var(--ink-soft); }
 .pf-arrow { font-size: 14px; color: var(--gold-deep); }
 .pf-target { font-size: 26px; color: var(--blue-deep); }
 .pf-bar { position: relative; width: 96px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #e9a184, #f6e7c2 35%, #cfe6c6 50%, #f6e7c2 65%, #e9a184); box-shadow: inset 0 0 0 1px var(--gold); }
 .pf-zero { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--gold-deep); }
-.pf-dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 6px rgba(93, 159, 211, 0.9); transition: left 0.08s; }
+.pf-dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 6px rgba(var(--blue-rgb), 0.9); transition: left 0.08s; }
 .pf-dot.idle { opacity: 0.3; }
 .pf-cents { font-size: 10.5px; color: var(--ink-soft); }
 #cells[data-page="pitch"] { padding-left: 4px; padding-right: 4px; gap: 4px 2px; }
@@ -367,7 +394,7 @@ body.beat #header .title { margin-left: 0; }
 .note-grid button { height: 21px; padding: 0; border: 0; border-radius: 10px; font-size: 10.5px; font-weight: 700; background: var(--ivory); color: var(--dim); box-shadow: inset 0 0 0 1px var(--gold); }
 .note-grid button.in { background: var(--marble); color: var(--blue-deep); box-shadow: inset 0 0 0 1.5px var(--gold); }
 .note-grid button.off { color: #b0533c; text-decoration: line-through; background: #f3e6dc; box-shadow: inset 0 0 0 1.5px #c98b6b; }
-.note-grid button.midi { box-shadow: inset 0 0 0 2px #4d9be0, 0 0 7px rgba(77, 155, 224, 0.9); }
+.note-grid button.midi { box-shadow: inset 0 0 0 2px rgb(var(--midi-rgb)), 0 0 7px rgba(var(--midi-rgb), 0.9); }
 .midi-src { margin-top: 5px; }
 .midi-src button { padding: 0 7px; }
 .tp { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
