@@ -851,6 +851,7 @@ Tool: tools/audit/dyneq_audit.cpp (+ a scratch batch over the 143 MUSDB18 pro vo
   78 / 143 (was 53), median 55 % (Voxology's own compression lifts their "s" too).
 - Test "Auto-Edit's De-Esser keeps the s on target at the end of the inserts (after the compressor)" (fails on
   v0.19.1: s ended at -0.2 / +0.5 dB vs the -4 target). 80 cases. Before / after clips sent.
+- CI green: Actions run 37720067094 (v0.19.2, commit fbebd37).
 
 ## Rider audit (2026-10-08) - findings only, no code changed yet
 Tool: tools/audit/rider_audit.cpp (optional range override to test the module itself).
@@ -885,6 +886,7 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
   also passes it on long steady lines; the real-song numbers above are the proof). 81 cases.
 - User request: style "Ad-libs" is now "Robot" (index 3 unchanged, so saved projects keep it): kStyleNames, app.js,
   mock.js, Learn text, Auto-Edit reasons / suggestion ("Try Robot style on your ad-lib track").
+- CI green: Actions run 37724525642 (v0.19.3, commit 942c3d4).
 
 ## Compressor audit (2026-10-08): no change
 - tools/audit/comp_audit.cpp. Distortion on a loud 110 Hz note: THD+N -66 .. -79 dB (inaudible). Auto-Edit's fixed
