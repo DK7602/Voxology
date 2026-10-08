@@ -370,13 +370,29 @@ std::vector<double> smoothedTone (const std::vector<double>& t)
     return out;
 }
 
-ToneFit fitTone (const std::vector<double>& haveRaw, const std::vector<double>& wantRaw, double lowMin, double lowMax, double sr)
+/** Gain limits per band and the lowest band that counts (bands under the voice's lowest notes say nothing
+    about its tone). Defaults: Reference Match's. */
+struct ToneFitLimits
+{
+    std::array<double, kEqBands> lo { -8.0, -9.0, -9.0, -8.0, -8.0 }, hi { 8.0, 3.0, 3.0, 8.0, 8.0 };   // Mud / Nasal: mostly cuts
+    std::array<double, kEqBands> fLo { 0, 0, 0, 0, 0 }, fHi { 1e9, 1e9, 1e9, 1e9, 1e9 };   // inside each band's own range
+    double fromHz = 0.0;
+    double costPerDb2 = 0.0;   // each band's gain squared costs this much (in error dB^2): moves must earn their keep
+    bool skipEss = false;   // 5 - 8 kHz counts little: "s" sounds fill it, and the De-Esser handles them only when they hit
+};
+
+ToneFit fitTone (const std::vector<double>& haveRaw, const std::vector<double>& wantRaw, double lowMin, double lowMax, double sr,
+                 const ToneFitLimits& lim = {})
 {
     const auto have = smoothedTone (haveRaw), want = smoothedTone (wantRaw);
     const auto& bands = analysisBands();
     const size_t nb = std::min ({ bands.size(), have.size(), want.size() });
     std::vector<double> w (nb);
-    for (size_t b = 0; b < nb; ++b) w[b] = bands[b] >= 160.0 && bands[b] <= 10000.0 ? 1.0 : 0.4;
+    for (size_t b = 0; b < nb; ++b)
+    {
+        w[b] = bands[b] < lim.fromHz ? 0.0 : bands[b] >= 160.0 && bands[b] <= 10000.0 ? 1.0 : 0.4;
+        if (lim.skipEss && bands[b] > 4500.0 && bands[b] < 9000.0) w[b] = bands[b] > 5500.0 && bands[b] < 7500.0 ? 0.0 : 0.3;
+    }
     auto lowCutDb = [] (double fc, double f) { return fc <= Cleanup::kLowCutOffHz ? 0.0 : -20.0 * std::log10 (1.0 + std::pow (fc / f, 4.0)); };
     std::array<std::vector<double>, kEqBands> bandResp;
     for (auto& r : bandResp) r.assign (nb, 0.0);
@@ -397,6 +413,13 @@ ToneFit fitTone (const std::vector<double>& haveRaw, const std::vector<double>& 
         return std::sqrt (e / ws);
     };
     ToneFit fit;
+    auto cost = [&] ()
+    {
+        const double e = error();
+        double g2 = 0.0;
+        for (double g : fit.eq.gainDb) g2 += g * g;
+        return e * e + lim.costPerDb2 * g2;
+    };
     fit.eq.gainDb = { 0, 0, 0, 0, 0 };
     fit.lowCutHz = lowMin;
     for (size_t b = 0; b < nb; ++b) lcResp[b] = lowCutDb (lowMin, bands[b]);
@@ -410,15 +433,17 @@ ToneFit fitTone (const std::vector<double>& haveRaw, const std::vector<double>& 
         for (int k = 0; k < kEqBands; ++k)
         {
             const auto& info = kEqBandInfo[static_cast<size_t> (k)];
-            const double gLo = (k == 1 || k == 2) ? -9.0 : -8.0, gHi = (k == 1 || k == 2) ? 3.0 : 8.0;   // Mud / Nasal: mostly cuts
+            const double gLo = lim.lo[static_cast<size_t> (k)], gHi = lim.hi[static_cast<size_t> (k)];
             double bestE = 1.0e9, bestG = fit.eq.gainDb[static_cast<size_t> (k)], bestF = fit.eq.freqHz[static_cast<size_t> (k)];
+            const double fLo = std::max (info.lo, lim.fLo[static_cast<size_t> (k)]), fHi = std::min (info.hi, lim.fHi[static_cast<size_t> (k)]);
             for (int fi = 0; fi < 12; ++fi)
             {
-                const double f = info.lo * std::pow (info.hi / info.lo, fi / 11.0);
+                const double f = fLo * std::pow (fHi / fLo, fi / 11.0);
                 for (double g = gLo; g <= gHi + 1.0e-9; g += 0.5)
                 {
                     setBand (k, g, f);
-                    const double e = error();
+                    fit.eq.gainDb[static_cast<size_t> (k)] = g;
+                    const double e = cost();
                     if (e < bestE - 1.0e-9) { bestE = e; bestG = g; bestF = f; }
                 }
             }
@@ -542,22 +567,38 @@ const std::vector<double>& analysisBands()
     return b;
 }
 
-std::vector<double> styleTarget (int style)
+std::vector<double> styleTarget (int style, double f0Hz)
 {
-    // A finished modern vocal, third-octave energy vs its 500 Hz - 2 kHz average.
-    static const std::vector<double> base { -9, -6, -3.5, -2, -1, 0, 0, 0, -0.5, -1, -2, -3, -4, -5,
-                                            -5.5, -6, -7, -8.5, -10, -12, -14, -17, -22 };
+    // A finished vocal, third-octave energy vs its 500 Hz - 2 kHz average: the median of 143 pro vocal stems
+    // (MUSDB18, the vocals as they sit in the released mix, measured with analyseVocal). Above 630 Hz pro
+    // vocals agree whatever the voice; below it the balance follows the voice's pitch (a low voice's
+    // fundamental and chest sit there), so those bands come from voices of similar pitch (median f0 148,
+    // 193, 255 and 335 Hz), blended by this singer's pitch.
+    static const std::vector<double> upper { 2.0, 0.5, -1.0, -2.5, -3.0, -6.0, -6.5, -7.0, -10.0, -14.0, -13.0, -13.5, -15.0, -19.5, -28.0 };   // 630 Hz - 16 kHz
+    static constexpr std::array<double, 4> centreHz { 148.0, 193.0, 255.0, 335.0 };
+    static constexpr std::array<std::array<double, 8>, 4> lower {{   // 100 - 500 Hz
+        { -18.5, -9.0, -2.5, -1.5, -2.0, 2.0, 3.5, 3.0 },
+        { -30.0, -20.5, -4.0, 1.0, -3.5, 2.0, 4.0, 1.0 },
+        { -34.0, -30.0, -16.0, -5.0, -1.0, -3.5, -1.0, 1.5 },
+        { -37.5, -36.5, -32.5, -22.5, -11.0, -3.0, -4.5, -3.5 },
+    }};
+    const double lf = std::log (std::clamp (f0Hz > 0.0 ? f0Hz : 200.0, centreHz.front(), centreHz.back()));
+    size_t g = 0;
+    while (g + 2 < centreHz.size() && lf > std::log (centreHz[g + 1])) ++g;
+    const double t = std::clamp ((lf - std::log (centreHz[g])) / (std::log (centreHz[g + 1]) - std::log (centreHz[g])), 0.0, 1.0);
+
     const auto& s = kSpecs[static_cast<size_t> (std::clamp (style, 0, kStyles - 1))];
     const auto& bands = analysisBands();
-    std::vector<double> t = base;
+    std::vector<double> out (bands.size());
     for (size_t k = 0; k < bands.size(); ++k)
     {
         const double f = bands[k];
-        if (f >= 100 && f <= 250) t[k] += s.bodyOff;
-        if (f >= 2500 && f <= 5000) t[k] += s.presOff;
-        if (f >= 8000) t[k] += s.airOff;
+        out[k] = k < 8 ? (1.0 - t) * lower[g][k] + t * lower[g + 1][k] : upper[k - 8];
+        if (f >= 100 && f <= 250) out[k] += s.bodyOff;
+        if (f >= 2500 && f <= 5000) out[k] += s.presOff;
+        if (f >= 8000) out[k] += s.airOff;
     }
-    return t;
+    return out;
 }
 
 VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double sr)
@@ -985,88 +1026,83 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
     }
     else
     {
-        const auto target = ref != nullptr ? ref->bandDb : styleTarget (style);
-        // Matching a reference you chose: correct more of the difference than the generic style does.
-        const double kq = ref != nullptr ? std::min (1.35 * kq, 1.35) : k;
-        const auto& bands = analysisBands();
-        auto diffAt = [&] (double lo, double hi, double& peakHz, bool wantExcess)
+        // Fit all five bands at once toward a finished vocal of this style (measured from pro vocals, matched to
+        // your pitch), going part of the way: Intensity sets how far. Only your voice's own range counts.
+        const auto target = styleTarget (style, a.f0Median);
+        const double strength = std::clamp (0.75 * k / 0.85, 0.0, 1.0);
+        // Pro vocals differ from each other (that's character, not a problem), so only the part of the difference
+        // beyond the normal spread is corrected: half the middle 50 % of the same 143 pro vocals, per band, after
+        // matching voice pitch. Wide in the lows and the top, tight at 500 Hz - 1.6 kHz where pros agree.
+        static constexpr std::array<double, 23> kToneToleranceDb { 5.9, 5.8, 4.5, 3.8, 3.6, 3.0, 1.9, 1.3, 0.9, 0.8, 1.2, 1.4,
+                                                                   1.9, 2.0, 3.0, 2.9, 3.6, 3.0, 4.1, 4.6, 4.4, 4.2, 4.5 };
+        const auto haveShape = smoothedTone (a.bandDb), targetShape = smoothedTone (target);
+        std::vector<double> want (a.bandDb.size());
+        for (size_t b = 0; b < want.size(); ++b)
         {
-            double sum = 0.0, best = -1.0e9; int n = 0;
-            for (size_t b = 0; b < bands.size(); ++b)
-            {
-                if (bands[b] < lo || bands[b] > hi || bands[b] < p.cleanup.lowCutHz * 1.3) continue;
-                const double d = a.bandDb[b] - target[b];   // + = more than the target
-                sum += d; ++n;
-                const double score = wantExcess ? d : -d;
-                if (score > best) { best = score; peakHz = bands[b]; }
-            }
-            return n ? sum / n : 0.0;
-        };
-        auto& eq = p.eq;
-        double pk = 0.0;
+            const double d = targetShape[b] - haveShape[b];
+            const double tol = b < kToneToleranceDb.size() ? kToneToleranceDb[b] : 3.0;
+            want[b] = haveShape[b] + strength * std::copysign (std::max (0.0, std::abs (d) - tol), d);
+        }
+        ToneFitLimits lim;
+        // Mud / Nasal cut only; Air capped on a hissy take. The pro vocals are mostly rock / indie mixes, darker on top
+        // than modern rap, trap and pop, so Presence and Air only ease down a little; Presence stays on the words
+        // (2 - 5 kHz), the "s" above is the De-Esser's.
+        lim.lo = { -4.0, -6.0, -5.0, -2.0, -1.5 };
+        lim.hi = { 3.0, 0.0, 0.0, 5.0, a.noiseFloorDb > -60.0 ? 2.0 : 6.0 };
+        lim.fHi[3] = 5000.0;
+        lim.fLo[1] = 200.0;    // under that is Body's
+        lim.fLo[4] = 8000.0;   // air, not the "s" zone
+        lim.fromHz = std::max (1.3 * p.cleanup.lowCutHz, a.f0Low);
+        lim.fLo[0] = lim.fromHz;   // Body works on the voice's own range, not under it
+        lim.skipEss = true;
+        lim.costPerDb2 = 0.02;   // on 143 finished pro vocals: median total move 7.5 dB (was 8.1 with the old rules)
+        auto fit = fitTone (a.bandDb, want, p.cleanup.lowCutHz, p.cleanup.lowCutHz, sr, lim);
+        for (auto& g : fit.eq.gainDb) { g = std::round (g * 2.0) / 2.0; if (std::abs (g) < 0.5) g = 0.0; }
+        p.eq = fit.eq;
+        p.eq.enabled = true;
 
-        // Body (low shelf)
-        const double body = diffAt (100, 250, pk, true);
-        eq.gainDb[0] = std::clamp (-body * 0.5 * kq, -4.0, 3.0);
-        eq.freqHz[0] = style == 3 ? 250.0 : 180.0;
-        if (std::abs (eq.gainDb[0]) < 0.5) eq.gainDb[0] = 0.0;
-        reason ("eq", "Body", eq.gainDb[0] == 0.0 ? "0 dB" : signedDb (eq.gainDb[0]) + " at " + hz (eq.freqHz[0]),
-                eq.gainDb[0] == 0.0 ? "The weight of your voice (100 - 250 Hz) is already right for " + (ref != nullptr ? std::string ("the reference") : std::string (kStyleNames[static_cast<size_t> (style)])) + "."
-                : eq.gainDb[0] < 0.0 ? "Your voice has " + num (body) + " dB more low weight than " + aimed + " (often the mic's proximity effect: singing very close). Trimming it keeps the vocal from fighting the 808."
-                                     : "Your voice is " + num (-body) + " dB thinner down low than " + aimed + ", so a little body adds warmth and weight.");
+        const auto& bands = analysisBands();
+        const auto tShape = smoothedTone (target), myShape = smoothedTone (a.bandDb);
+        auto diffNear = [&] (double f)   // finished vocal minus yours at the nearest analysis band (dB, overall shape)
+        {
+            size_t best = 0;
+            for (size_t b2 = 1; b2 < bands.size(); ++b2) if (std::abs (std::log (bands[b2] / f)) < std::abs (std::log (bands[best] / f))) best = b2;
+            return tShape[best] - myShape[best];
+        };
+        static constexpr std::array<const char*, kEqBands> zone { "low weight", "boxy low-mids", "honky mids", "presence (where the words live)", "air on top" };
+        static constexpr std::array<const char*, kEqBands> whyCut {
+            " (often the mic's proximity effect: singing very close). Trimming it keeps the vocal from fighting the 808.",
+            ", which makes it sound boxy or cloudy. A cut there cleans it without thinning the voice.",
+            ", a honky, phone-like sound. Cutting it makes the voice fuller and less pinched.",
+            ", which can sound harsh or shouty on headphones. A gentle cut smooths it.",
+            ", so it's eased down a little to avoid fizz." };
+        static constexpr std::array<const char*, kEqBands> whyBoost {
+            ", so a little body adds warmth and weight.", "", "",
+            ". This lifts it so lyrics are clear over the beat.",
+            ". Air adds the breathy, expensive sheen modern vocals have." };
+        for (int k2 = 0; k2 < kEqBands; ++k2)
+        {
+            const auto kb = static_cast<size_t> (k2);
+            const double g = p.eq.gainDb[kb], f = p.eq.freqHz[kb], d = diffNear (f);
+            std::string why = g == 0.0 ? std::string ("Your ") + zone[kb] + " already sit close to " + aimed + "'s."
+                                       : "Your vocal has " + num (std::abs (d)) + " dB " + (d < 0.0 ? "more " : "less ") + zone[kb] + " than " + aimed + " around " + hz (f)
+                                             + (g < 0.0 ? whyCut[kb] : whyBoost[kb]);
+            if (k2 == 4 && g > 0.0 && a.noiseFloorDb > -60.0) why += " Capped at +2 dB because it would also lift the hiss in your recording.";
+            reason ("eq", kEqBandInfo[kb].name, g == 0.0 ? "0 dB" : signedDb (g) + (k2 == 4 ? " above " : " at ") + hz (f), why);
+        }
+        reason ("eq", "Tone match", num (fit.errBefore) + " \xE2\x86\x92 " + num (fit.errAfter) + " dB",
+                "How far your vocal's tone is from " + aimed + " (measured from pro vocals with a voice like yours), averaged across your voice's range, before and after these moves."
+                " Intensity sets how far it goes: " + pct (100.0 * strength) + " of the way, so your own sound stays.");
+        // Low weight well over a finished vocal: say why and how to avoid it next time.
+        double body = 0.0; int nb2 = 0;
+        for (size_t b2 = 0; b2 < bands.size(); ++b2)
+            if (bands[b2] >= 100 && bands[b2] <= 250 && bands[b2] >= lim.fromHz) { body += a.bandDb[b2] - target[b2]; ++nb2; }
+        if (nb2 > 0) body /= nb2;
         if (body > 6.0)
-            r.notes.push_back ("BOOMY MIC: your recording has a lot of low weight (" + num (body) + " dB over the target), usually from singing right on the mic."
+            r.notes.push_back ("BOOMY MIC: your recording has a lot of low weight (" + num (body) + " dB over a finished vocal), usually from singing right on the mic."
                                "\nNEED: No. The Body band takes care of it."
                                "\nSTEP: Next take, back off to about a fist's distance (10 - 15 cm) from the mic.");
 
-        // Mud and Nasal: cuts only, aimed at the worst third-octave.
-        double mudHz = 300.0;
-        const double mudAvg = diffAt (200, 630, mudHz, true);   // Nasal starts at 800 Hz: no overlap
-        double mudPeak = 0.0;
-        for (size_t b = 0; b < bands.size(); ++b) if (bands[b] == mudHz) mudPeak = a.bandDb[b] - target[b];
-        const double mudEx = std::max (mudAvg, 0.6 * mudPeak);
-        eq.gainDb[1] = mudEx > 1.5 ? -std::clamp ((mudEx - 1.0) * 0.6 * kq, 0.0, 6.0) : 0.0;
-        eq.freqHz[1] = std::clamp (mudHz, 150.0, 800.0);
-        if (eq.gainDb[1] > -0.5) eq.gainDb[1] = 0.0;
-        reason ("eq", "Mud", eq.gainDb[1] == 0.0 ? "0 dB" : signedDb (eq.gainDb[1]) + " at " + hz (eq.freqHz[1]),
-                eq.gainDb[1] == 0.0 ? "No mud build-up (200 - 630 Hz): your vocal is clear there."
-                                    : "There's a build-up around " + hz (eq.freqHz[1]) + " (" + num (mudEx) + " dB over a finished vocal) that makes it sound boxy or cloudy. A narrow cut there cleans it without thinning the voice.");
-
-        double nasHz = 900.0;
-        const double nasAvg = diffAt (800, 1600, nasHz, true);
-        double nasPeak = 0.0;
-        for (size_t b = 0; b < bands.size(); ++b) if (bands[b] == nasHz) nasPeak = a.bandDb[b] - target[b];
-        const double nasEx = std::max (nasAvg, 0.6 * nasPeak);
-        eq.gainDb[2] = nasEx > 2.0 ? -std::clamp ((nasEx - 1.5) * 0.6 * kq, 0.0, 5.0) : 0.0;
-        eq.freqHz[2] = std::clamp (nasHz, 500.0, 2000.0);
-        if (eq.gainDb[2] > -0.5) eq.gainDb[2] = 0.0;
-        reason ("eq", "Nasal", eq.gainDb[2] == 0.0 ? "0 dB" : signedDb (eq.gainDb[2]) + " at " + hz (eq.freqHz[2]),
-                eq.gainDb[2] == 0.0 ? "No honky / nasal peak (800 Hz - 1.6 kHz)."
-                                    : "A honky, phone-like peak sits around " + hz (eq.freqHz[2]) + " (" + num (nasEx) + " dB over). Cutting it makes the voice sound fuller and less pinched.");
-
-        // Presence and Air: boost or cut toward the style.
-        double presHz = 4000.0;
-        const double pres = diffAt (2500, 5000, presHz, true);
-        eq.gainDb[3] = std::clamp (-pres * 0.6 * kq, -4.0, 5.0);
-        eq.freqHz[3] = pres > 0.0 ? std::clamp (presHz, 2000.0, 8000.0) : (style == 4 || style == 6 || style == 7 ? 3500.0 : 4000.0);
-        if (std::abs (eq.gainDb[3]) < 0.5) eq.gainDb[3] = 0.0;
-        reason ("eq", "Presence", eq.gainDb[3] == 0.0 ? "0 dB" : signedDb (eq.gainDb[3]) + " at " + hz (eq.freqHz[3]),
-                eq.gainDb[3] == 0.0 ? "Your words already cut through (2.5 - 5 kHz is on target)."
-                : eq.gainDb[3] > 0.0 ? "Your vocal is " + num (-pres) + " dB short of " + aimed + " in the presence range, where the words live. This lifts it so lyrics are clear over the beat."
-                                     : "Your vocal is " + num (pres) + " dB hotter than the target around " + hz (eq.freqHz[3]) + ", which can sound harsh or shouty on headphones. A gentle cut smooths it.");
-
-        double airHz = 12000.0;
-        const double air = diffAt (8000, 12500, airHz, true);
-        double airGain = std::clamp (-air * 0.6 * kq, -3.0, 6.0);
-        if (a.noiseFloorDb > -60.0) airGain = std::min (airGain, 2.0);
-        if (std::abs (airGain) < 0.5) airGain = 0.0;
-        eq.gainDb[4] = airGain;
-        eq.freqHz[4] = intensity == 2 ? 10000.0 : 12000.0;
-        reason ("eq", "Air", airGain == 0.0 ? "0 dB" : signedDb (airGain) + " above " + hz (eq.freqHz[4]),
-                airGain == 0.0 ? "The top end (8 - 12.5 kHz) is already where a finished vocal sits."
-                : airGain > 0.0 ? "Your vocal is " + num (-air) + " dB darker on top than " + aimed + ". Air adds the breathy, expensive sheen modern vocals have."
-                                    + (a.noiseFloorDb > -60.0 ? " Capped at +2 dB because it would also lift the hiss in your recording." : "")
-                                : "Your top end is " + num (air) + " dB brighter than the target, so it's eased down a little to avoid fizz.");
         }
     }
 

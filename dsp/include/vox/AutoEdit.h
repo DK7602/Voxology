@@ -96,8 +96,9 @@ struct AutoEditResult
 
 /** Third-octave band centres used by the analysis and the style targets. */
 const std::vector<double>& analysisBands();
-/** The style's target balance at the analysis bands (dB vs the 500 Hz - 2 kHz average). */
-std::vector<double> styleTarget (int style);
+/** The style's target balance at the analysis bands (dB vs the 500 Hz - 2 kHz average), for a voice whose
+    median pitch is f0Hz (0 = unknown: a typical 200 Hz voice). Measured from finished pro vocals. */
+std::vector<double> styleTarget (int style, double f0Hz = 0.0);
 
 VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double sampleRate);
 

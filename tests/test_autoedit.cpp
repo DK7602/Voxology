@@ -113,3 +113,34 @@ TEST_CASE ("Auto-Edit asks for more voice when it heard too little", "[autoedit]
     CHECK_FALSE (r.ok);
     CHECK_FALSE (r.tip.empty());
 }
+
+TEST_CASE ("Auto-Edit Tone EQ: target from pro vocals follows the voice's pitch; moves stay in their jobs", "[autoedit][eq]")
+{
+    // Below 630 Hz the target follows the voice (a low voice has its fundamental there); above it, one curve.
+    const auto low = styleTarget (1, 140.0), high = styleTarget (1, 330.0);
+    const auto& bands = analysisBands();
+    for (size_t b = 0; b < bands.size(); ++b)
+    {
+        if (bands[b] == 125.0) CHECK (low[b] > high[b] + 15.0);
+        if (bands[b] >= 630.0) CHECK (low[b] == high[b]);
+    }
+
+    const auto boomy = autoEdit ({ testsig::vocal (kSr, 14.0, -70.0, -14.0, 9, 140.0, true) }, kSr, { 1, 1, 0.0 });
+    const auto plain = autoEdit ({ testsig::vocal (kSr, 14.0, -70.0, -14.0, 9, 140.0, false) }, kSr, { 1, 1, 0.0 });
+    for (const auto* r : { &boomy, &plain })
+    {
+        REQUIRE (r->ok);
+        const auto& eq = r->params.eq;
+        CHECK (eq.gainDb[1] <= 0.0);   // Mud and Nasal only cut
+        CHECK (eq.gainDb[2] <= 0.0);
+        if (eq.gainDb[0] != 0.0) CHECK (eq.freqHz[0] >= std::max (1.3 * r->params.cleanup.lowCutHz, r->analysis.f0Low) - 1.0);   // on the voice, not under it
+        if (eq.gainDb[3] != 0.0) CHECK (eq.freqHz[3] <= 5000.0);   // the words, not the "s"
+        if (eq.gainDb[4] != 0.0) CHECK (eq.freqHz[4] >= 8000.0);
+        CHECK (eq.gainDb[3] >= -2.0);
+        CHECK (eq.gainDb[4] >= -1.5);
+        checkNotes (*r);
+    }
+    // The boomy one gets its low end trimmed, more than the plain one.
+    CHECK (boomy.params.eq.gainDb[0] < 0.0);
+    CHECK (boomy.params.eq.gainDb[0] < plain.params.eq.gainDb[0]);
+}

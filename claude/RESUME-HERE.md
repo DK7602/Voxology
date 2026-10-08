@@ -782,3 +782,26 @@ Tool: tools/audit/eq_audit.cpp. Same 4 vocals / styles as the Cleanup audit.
   "boxy" could partly be the target. Any fix should be A/B'd by ear.
 - Proposed plan: Mud searches 250 - 630 Hz and cuts a bit more of the excess; Presence boosts where the dip actually
   is; Body only judges bands at / above the lowest notes. Re-run the audit + tests, send before / after clips.
+
+## v0.19.0 Tone EQ from pro vocals (2026-10-08)
+- Pro data: MUSDB18 7-second preview set (github.com/sigsep/sigsep-mus-db releases v0.4.0, MUSDB18-7-STEMS.zip, 144
+  released songs, vocals = stream 4 of each .stem.mp4; research / non-commercial: measurements only in the code, audio
+  NOT committed). 143 usable. Mostly rock / indie (few rap): their top end is darker than modern rap / trap.
+- Finding: above 630 Hz pro vocals agree (spread +-1 dB at 500 Hz - 1.6 kHz); below it the tone follows the voice's
+  pitch. So styleTarget (style, f0) = pro median above 630 Hz + pitch-matched medians below (voices at 148 / 193 /
+  255 / 335 Hz, blended by the singer's f0Median) + the style's body / presence / air offsets.
+- Auto-Edit Tone EQ (no reference) now uses fitTone (Reference Match's fitter) for all 5 bands, toward a partial
+  target: only the part of the gap beyond the normal pro spread (half the IQR per band, after pitch matching:
+  5.9 dB at 100 Hz .. 0.8 at 800 Hz .. 4.5 at 16 kHz) is corrected, 75 % of the way at medium Intensity. Limits:
+  Body -4..+3 and only from the voice's lowest note up; Mud (>= 200 Hz) / Nasal cut only; Presence 2 - 5 kHz, -2..+5;
+  Air >= 8 kHz, -1.5..+6 (+2 on a hissy take); 5.5 - 7.5 kHz not judged (the De-Esser's "s" zone); each dB^2 of gain
+  costs 0.02 in the fit (stops bands cancelling each other to chase tiny errors). Reference Match path unchanged.
+- "Do no harm" on the 143 finished pro vocals (style Rap if mostly rapped, else Pop): total EQ move median 7.5 dB
+  (old rules 8.1); first tries without the tolerance / cost moved them MORE (13 dB) - kept as the reason for both.
+- The user's vocals mostly sit inside the pro range: the moves are now gentler and better aimed (Gallas Body -1.5 @
+  325, Schaf Body -1.5 @ 400, Don Mud -1.5 @ 548, Don & Lysette Mud -2 @ 483). Before / after clips (Auto-Edit whole
+  chain, 20 s, loudness within 0.1 LU) sent to the user.
+- Cambridge-MT (user's link) is behind a Cloudflare check (no automated download) and is RAW multitracks: good for
+  raw-vocal robustness tests if the user downloads some; not finished vocals. Asked the user for their own finished
+  vocal stems (best genre-matched target data).
+- Test "Auto-Edit Tone EQ: target from pro vocals follows the voice's pitch; moves stay in their jobs". 78 cases.
