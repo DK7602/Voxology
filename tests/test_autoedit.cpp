@@ -163,3 +163,24 @@ TEST_CASE ("Auto-Edit's De-Esser keeps the s on target at the end of the inserts
         checkNotes (r);
     }
 }
+
+TEST_CASE ("Auto-Edit doesn't flatten a vocal that's already compressed (a second pass keeps the punch)", "[autoedit][comp]")
+{
+    // First pass: a raw take, compressed to the style's amount. Second pass on that result: the compressor must
+    // back off instead of squeezing it again (punch floor: finished pro vocals' bottom quarter).
+    const auto x = testsig::vocal (kSr, 14.0, -70.0, -14.0, 9);
+    auto once = [] (const std::vector<float>& in)
+    {
+        const auto r = autoEdit ({ in }, kSr, { 1, 1, 0.0 });
+        ChainParams p = r.params;
+        p.doubler.amount = 0.0; p.delay.mix = 0.0; p.reverb.mix = 0.0;
+        return VocalChain::render ({ in }, kSr, p)[0];
+    };
+    const auto first = once (x);
+    const auto second = once (first);
+    const double p1 = analyseVocal ({ first }, kSr).microDynDb, p2 = analyseVocal ({ second }, kSr).microDynDb;
+    INFO ("punch: raw " << analyseVocal ({ x }, kSr).microDynDb << ", first pass " << p1 << ", second pass " << p2 << " dB");
+    CHECK (p1 > 2.2);   // v0.19.3 flattened this take to 1.7 dB on the first pass
+    CHECK (p2 > 2.2);
+    CHECK (p2 > p1 - 0.6);
+}

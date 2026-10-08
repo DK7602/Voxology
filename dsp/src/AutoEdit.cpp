@@ -1363,6 +1363,47 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             }
             c.thrDb = std::round (0.5 * (tlo + thi) * 2.0) / 2.0;
         }
+        // Never squeeze the punch below finished pro vocals' (143 MUSDB18 stems: loud moments stand 3.5 dB over the
+        // middle typically, 2.7 in their bottom quarter). A take that's already controlled (or a finished vocal) would
+        // otherwise be flattened by the style's fixed squeeze: on the pros the chain took them from 3.5 to 2.2 dB.
+        // Only ever relaxes: the leveler first, then the peak stage.
+        double punchFloor = 0.0;
+        if (ref == nullptr)
+        {
+            punchFloor = 2.7 + (intensity == 0 ? 0.4 : intensity == 2 ? -0.4 : 0.0);
+            auto punchWith = [&] (const CompParams& q) { return punchDb (frames (highPass (runComp (afterRider, sr, q, f.hop).out, 80.0, sr), sr), mask); };
+            const double inPunch = punchDb (frames (highPass (afterRider, 80.0, sr), sr), mask);
+            if (punchWith (c) < std::min (punchFloor, inPunch))
+            {
+                const double floorNow = std::min (punchFloor, inPunch);
+                CompParams q = c;
+                q.ratio = 1.0;
+                if (punchWith (q) >= floorNow)
+                {
+                    double tlo = c.thrDb, thi = 0.0;   // raise the leveler's threshold until the punch is back
+                    for (int it = 0; it < 10; ++it)
+                    {
+                        CompParams t = c;
+                        t.thrDb = 0.5 * (tlo + thi);
+                        if (punchWith (t) < floorNow) tlo = t.thrDb; else thi = t.thrDb;
+                    }
+                    c.thrDb = std::round (thi * 2.0) / 2.0;
+                }
+                else
+                {
+                    c.ratio = 1.0;                      // the leveler off, and the peak stage eased too
+                    c.thrDb = 0.0;
+                    double plo = c.peakThrDb, phi = 0.0;
+                    for (int it = 0; it < 10; ++it)
+                    {
+                        CompParams t = c;
+                        t.peakThrDb = 0.5 * (plo + phi);
+                        if (punchWith (t) < floorNow) plo = t.peakThrDb; else phi = t.peakThrDb;
+                    }
+                    c.peakThrDb = std::round (phi * 2.0) / 2.0;
+                }
+            }
+        }
         const auto run = runComp (afterRider, sr, c, f.hop);
         const double before = activeRmsDb (afterRider, mask, f.hop), after = activeRmsDb (run.out, mask, f.hop);
         c.makeupDb = std::clamp (std::round ((before - after) * 2.0) / 2.0, 0.0, 18.0);
@@ -1375,10 +1416,14 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                     "Matched to the reference's punch: its loud moments stand " + num (ref->microDynDb) + " dB over the middle of its level (yours: " + num (refPunchFrom) +
                     " dB before compression, " + num (punchDb (frames (highPass (run.out, 80.0, sr), sr), mask)) + " dB after). That takes about " + num (gotLevel) +
                     " dB of smoothing on average" + (gotLevel > 9.5 ? ", the most Auto-Edit allows: the reference is squeezed harder than that." : "."));
+        else if (c.ratio < 1.005)
+            reason ("comp", "Level", "Off", "Your take is already as controlled as a finished vocal (its loud moments stand only " +
+                    num (punchDb (frames (highPass (afterRider, 80.0, sr), sr), mask)) + " dB over the middle), so the leveler stays off to keep its punch.");
         else
             reason ("comp", "Level", db (c.thrDb) + ", " + num (c.ratio, 1) + ":1",
                     "Smooths the whole performance by about " + num (gotLevel) + " dB on average, the amount a " + kStyleNames[static_cast<size_t> (style)] +
-                    " vocal usually gets so it sits at one steady level " + (style == 1 ? "and every word punches through." : "on top of the beat."));
+                    " vocal usually gets so it sits at one steady level " + (style == 1 ? "and every word punches through." : "on top of the beat.")
+                    + (gotLevel < wantLevel - 1.0 ? " (Less than usual: more would flatten your punch below a finished pro vocal's.)" : ""));
         reason ("comp", "Makeup", signedDb (c.makeupDb), "Puts back the level the compressor took away, so you compare tone, not loudness.");
     }
 

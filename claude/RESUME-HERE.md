@@ -900,3 +900,22 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
   -39 dB). Note: the curve is level-dependent (bends relative to full scale, Polisher's design); the user's float
   acapellas reach it peaking +5 .. +9 dBFS, so Auto-Edit picks low Drive (1 - 3 dB). Re-run Auto-Edit after changing
   the vocal's level before Voxology.
+
+## Doubler / Delay / Reverb / Output audits (2026-10-08): no change
+- Doubler (12 / 17.5 ms copies, slow drift): comb ripple vs the lead at Auto-Edit's amounts 20 - 50 %: std dev 0.5 -
+  1.2 dB in one ear, 0.4 - 1.0 dB in mono (100 %: 2.2 / 1.8): normal double-track character. Delay / Reverb: tests
+  cover beat grid, ducking, decay; space after phrases on the user's Auto-Edit outputs -22.4 .. -29.7 dB vs pros -25.6
+  median (only 10 of 143 7 s clips measurable). Output: loudness-matched to the input (no limiter: a channel plug-in).
+
+## v0.19.4 Whole-chain "do no harm": Compressor punch floor (2026-10-08)
+- tools/audit/whole_chain.cpp: Auto-Edit's whole insert chain (space off) on the 143 pro vocals: tone change median
+  1.9 dB, "s" kept, loudness matched, but punch 3.5 -> 2.2 dB (below the pros' bottom quarter 2.7): the style's fixed
+  squeeze flattened already-compressed vocals.
+- Fix (Auto-Edit compressor, no reference): after the style's squeeze, if the punch (Auto-Edit's punchDb) falls below
+  min (2.7 +-0.4 by Intensity, the take's own punch), relax: raise the leveler threshold until it's back, or if the
+  leveler alone can't, turn it off and ease the peak stage. Reason text says so ("Off: already as controlled as a
+  finished vocal" / "Less than usual ...").
+- Pros now: punch 3.5 -> 2.7 (p10 2.1), tone change 1.7 dB. User's songs unchanged (their squeeze stays above the
+  floor: Gallas 2.7, Schaf 3.4, Don 2.7, Don & Lysette 2.9).
+- Test "Auto-Edit doesn't flatten a vocal that's already compressed (a second pass keeps the punch)" (v0.19.3 took the
+  test take to 1.7 dB on the first pass; now 2.65, second pass 2.65). 82 cases.
