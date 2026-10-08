@@ -964,3 +964,17 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
   Checked in Chromium with mock.js (no errors); solid background. Plug-in compiled on Linux (VST3) before pushing.
 - Test "Built-in references: six pro groups, usable by Auto-Edit". 84 cases.
 - CI green: Actions run 37768426720 (v0.20.0, commit 05d5317).
+
+## v0.20.1 Wet references kept sane + built-in "Trap rap, finished (male)" (2026-10-08)
+- User link: slooply.com sample packs (royalty-free). Only page 1 of each pack's sample list is public (page 2+ = 403
+  without login: respected). Public preview MP3s (cdn.slooply.com demo files). Rapper Vocals Vol. 1 (Trap Music, The
+  Drum Bank) has the same 144 s song as Dry and Wet; Top Chart Vocals = dry male melodic only (raw: not a target).
+  Audio kept in the scratchpad only, never committed.
+- Wet trap stem vs pros: low end cut hard (-41 dB at 100 Hz), brighter (8 kHz -11.7 vs -13.5), s +1.7 dB (pros -5),
+  much louder / compressed than its dry; its echoes made punch read 7.9 and tail -11 dB.
+- Found: a wet reference (most online acapellas) made Auto-Edit set 60 % reverb, switch the compressor off and skip
+  de-essing. Fix: refWet = tail > -18 dB or punch > 5.5 or s > -2 dB; then only tone + s (s target clamped -10 .. -2)
+  are taken, space and compression follow the style (punch floor applies); reverb match capped at 40 %; a WET
+  REFERENCE note explains it. Gallas / Schaf with the wet trap stem: EQ toward it, comp as the style, reverb 7 %.
+- Built-in #7 "Trap rap, finished (male)": that stem's tone (f0 146), s stored -2, punch 0 (= style), no tail.
+- Test "A wet reference (echoes baked in) gives its tone, not 60 % reverb and no compression". 85 cases.

@@ -739,6 +739,12 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
     VocalAnalysis& a = r.analysis;
     a = analyseVocal (audio, sr);
     const ReferenceProfile* ref = settings.reference != nullptr && settings.reference->ok ? settings.reference : nullptr;
+    // What Auto-Edit takes from a reference stays inside what finished pro vocals do (143 MUSDB18 stems): an acapella
+    // with its reverb, delay and throws baked in (most online acapellas are "wet") reads very spacious, punchy (echoes
+    // fill the gaps) and bright, which would mean 60 % reverb, no compression and no de-essing. Its tone still counts.
+    const double refPunch = ref != nullptr ? std::clamp (ref->microDynDb, 2.5, 5.5) : 0.0;
+    const double refTail = ref != nullptr && ref->tailDb > -100.0 ? std::min (ref->tailDb, -18.0) : -120.0;
+    const bool refWet = ref != nullptr && ((ref->tailDb > -100.0 && ref->tailDb > -18.0) || ref->microDynDb > 5.5 || ref->sibilanceDb > -2.0);
     const std::string aimed = ref != nullptr ? "the reference (" + ref->name + ")"
                                              : std::string ("a finished ") + kStyleNames[static_cast<size_t> (style)] + " vocal";
     if (a.voicedSeconds < 3.0)
@@ -1254,7 +1260,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         const auto mask = activeMask (f, thr);
         const double voice = activeRmsDb (afterEq, mask, f.hop);
         const auto s = sibilance (afterEq, sr, mask, f.hop, voice);
-        const double target = ref != nullptr && ref->sibilanceDb > -100.0 ? std::clamp (ref->sibilanceDb, -10.0, 0.0)
+        const double target = ref != nullptr && ref->sibilanceDb > -100.0 ? std::clamp (ref->sibilanceDb, -10.0, -2.0)
                                                                           : spec.sibTarget - (intensity == 2 ? 1.0 : intensity == 0 ? -1.0 : 0.0);
         sibTargetDb = target;
         if (s.levelDb <= target || s.levelDb <= -100.0)
@@ -1365,9 +1371,9 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         }
         c.thrDb = std::round (0.5 * (lo + hi) * 2.0) / 2.0;
         double refPunchFrom = 0.0;
-        if (ref != nullptr && ref->microDynDb > 0.5)
+        if (ref != nullptr && ref->microDynDb > 0.5 && ! refWet)
         {
-            // Match the reference's punch (how far its loud moments stand over the middle): move the
+            // Match the reference's punch (kept within finished pros' range, see refPunch) (how far its loud moments stand over the middle): move the
             // leveler until the compressed vocal measures the same, within 0.5 - 10 dB of average squeeze.
             auto punchOf = [&] (const CompParams& q)
             {
@@ -1381,7 +1387,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                 CompParams q = c;
                 q.thrDb = 0.5 * (tlo + thi);
                 const auto [punch, squeeze] = punchOf (q);
-                if (punch > ref->microDynDb && squeeze < 10.0) thi = q.thrDb; else tlo = q.thrDb;
+                if (punch > refPunch && squeeze < 10.0) thi = q.thrDb; else tlo = q.thrDb;
             }
             c.thrDb = std::round (0.5 * (tlo + thi) * 2.0) / 2.0;
         }
@@ -1390,7 +1396,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         // otherwise be flattened by the style's fixed squeeze: on the pros the chain took them from 3.5 to 2.2 dB.
         // Only ever relaxes: the leveler first, then the peak stage.
         double punchFloor = 0.0;
-        if (ref == nullptr)
+        if (ref == nullptr || refWet)
         {
             punchFloor = 2.7 + (intensity == 0 ? 0.4 : intensity == 2 ? -0.4 : 0.0);
             auto punchWith = [&] (const CompParams& q) { return punchDb (frames (highPass (runComp (afterRider, sr, q, f.hop).out, 80.0, sr), sr), mask); };
@@ -1433,9 +1439,9 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         p.comp = c;
         const double gotPeak = meanOfDeepest (run.peakGr, mask, 0.05), gotLevel = meanActive (run.levelGr, mask);
         reason ("comp", "Peak", db (c.peakThrDb), "Catches the sudden loud syllables: about " + num (gotPeak) + " dB off the loudest 5 % of moments, so nothing jumps out of the beat.");
-        if (ref != nullptr && ref->microDynDb > 0.5)
+        if (ref != nullptr && ref->microDynDb > 0.5 && ! refWet)
             reason ("comp", "Level", db (c.thrDb) + ", " + num (c.ratio, 1) + ":1",
-                    "Matched to the reference's punch: its loud moments stand " + num (ref->microDynDb) + " dB over the middle of its level (yours: " + num (refPunchFrom) +
+                    "Matched to the reference's punch: its loud moments stand " + num (refPunch) + " dB over the middle of its level (yours: " + num (refPunchFrom) +
                     " dB before compression, " + num (punchDb (frames (highPass (run.out, 80.0, sr), sr), mask)) + " dB after). That takes about " + num (gotLevel) +
                     " dB of smoothing on average" + (gotLevel > 9.5 ? ", the most Auto-Edit allows: the reference is squeezed harder than that." : "."));
         else if (c.ratio < 1.005)
@@ -1589,7 +1595,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         reason ("reverb", "Decay", num (spec.rvDecay) + " s, Pre-delay " + std::to_string (static_cast<int> (spec.rvPre)) + " ms",
                 std::string ("A ") + (spec.rvDecay < 1.2 ? "short room" : spec.rvDecay < 2.0 ? "medium plate" : "long, lush plate") +
                     " that gives the vocal a place to live. The pre-delay keeps the start of each word dry and clear.");
-        if (ref != nullptr && ref->tailDb > -100.0)
+        if (ref != nullptr && refTail > -100.0 && ! refWet)
         {
             // Match the reference's space: what rings on after a phrase ends, measured the same way on
             // the finished chain while the reverb mix moves.
@@ -1597,23 +1603,23 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             ChainParams q = p;
             q.reverb.mix = 0.0;
             double dry = tailWith (q);
-            if (dry > ref->tailDb + 2.0 && q.delay.mix > 0.0) { p.delay.mix = q.delay.mix = 0.0; dry = tailWith (q); }
-            if (dry >= ref->tailDb - 1.0 || dry <= -100.0)
+            if (dry > refTail + 2.0 && q.delay.mix > 0.0) { p.delay.mix = q.delay.mix = 0.0; dry = tailWith (q); }
+            if (dry >= refTail - 1.0 || dry <= -100.0)
                 p.reverb.mix = 0.0;
             else
             {
-                double mlo = 0.0, mhi = 60.0;
+                double mlo = 0.0, mhi = 40.0;   // a vocal reverb past 40 % washes the words out
                 for (int it = 0; it < 8; ++it)
                 {
                     q.reverb.mix = 0.5 * (mlo + mhi);
-                    if (tailWith (q) < ref->tailDb) mlo = q.reverb.mix; else mhi = q.reverb.mix;
+                    if (tailWith (q) < refTail) mlo = q.reverb.mix; else mhi = q.reverb.mix;
                 }
                 p.reverb.mix = std::round (0.5 * (mlo + mhi));
             }
             reason ("reverb", "Mix", pct (p.reverb.mix),
-                    p.reverb.mix == 0.0 ? "The reference is about as dry as your recording already is (what rings on after its phrases sits " + num (-ref->tailDb, 0) +
+                    p.reverb.mix == 0.0 ? "The reference is about as dry as your recording already is (what rings on after its phrases sits " + num (-refTail, 0) +
                                               " dB down), so no reverb is added" + std::string (p.delay.mix == 0.0 ? " and the delay is off too." : ".")
-                                        : "Matched to the reference's space: after its phrases end, " + num (-ref->tailDb, 0) + " dB of tail rings on. " + pct (p.reverb.mix) +
+                                        : "Matched to the reference's space: after its phrases end, " + num (-refTail, 0) + " dB of tail rings on. " + pct (p.reverb.mix) +
                                               " reverb gives your vocal the same, measured on the finished chain.");
         }
         else
@@ -1647,6 +1653,12 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         r.summary = "Listened to " + num (a.voicedSeconds) + " s of voice and matched it to your reference, \"" + ref->name + "\": its tone, how bright its \"s\" sounds are, its punch and its space. "
                     "Your vocal came in at " + num (a.inputLufs) + " LUFS with peaks at " + db (a.peakDb) + ". Pitch, clean-up and saturation still follow " +
                     kStyleNames[static_cast<size_t> (style)] + ". Every change is explained below.";
+        if (refWet)
+            r.notes.push_back ("WET REFERENCE: \"" + ref->name + "\" has its effects baked in (reverb, delay or echo throws), so its space, punch and s brightness read more extreme than any finished dry vocal. "
+                               "Auto-Edit took its tone and s brightness (kept within what finished pro vocals do); space and compression follow your STYLE."
+                               "\nNEED: No. The match still follows its sound."
+                               "\nSTEP: For a closer match, use a dry acapella of it if you can find one (no reverb or echoes)."
+                               "\nSTEP: If you want more space, raise the Reverb or Delay Mix yourself.");
         if (! ref->warning.empty())
             r.notes.push_back ("REFERENCE IS A FULL SONG: " + ref->warning +
                                "\nNEED: Yes, for a close match. It still works, roughly."

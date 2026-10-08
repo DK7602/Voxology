@@ -112,10 +112,10 @@ TEST_CASE ("Reference Match keeps each band on its job (no stacking, nothing und
     CHECK (r.params.cleanup.lowCutHz <= 0.86 * r.analysis.f0Low + 5.0);
 }
 
-TEST_CASE ("Built-in references: six pro groups, usable by Auto-Edit", "[reference]")
+TEST_CASE ("Built-in references: six pro groups + a trap vocal, usable by Auto-Edit", "[reference]")
 {
     const auto& lib = builtinReferences();
-    REQUIRE (lib.size() == 6);
+    REQUIRE (lib.size() == 7);
     const auto mine = testsig::vocal (kSr, 14.0, -80.0, -14.0, 3, 150.0);
     for (const auto& ref : lib)
     {
@@ -126,11 +126,36 @@ TEST_CASE ("Built-in references: six pro groups, usable by Auto-Edit", "[referen
         CHECK (ref.bandDb.size() == analysisBands().size());
         CHECK (ref.f0Median > 100.0);
         CHECK (ref.sibilanceDb > -15.0);
-        CHECK (ref.microDynDb > 2.0);
+        CHECK ((ref.microDynDb > 2.0 || ref.microDynDb == 0.0));
         AutoEditSettings s { 1, 1, 0.0, &ref };
         const auto r = autoEdit ({ mine }, kSr, s);
         REQUIRE (r.ok);
         CHECK (r.summary.find (ref.name) != std::string::npos);
         for (double g : r.params.eq.gainDb) CHECK (std::abs (g) <= 8.0);
+    }
+}
+
+TEST_CASE ("A wet reference (echoes baked in) gives its tone, not 60 % reverb and no compression", "[reference]")
+{
+    // The reference: a vocal with loud echoes (every 300 ms, -4 dB per repeat) filling its gaps, like most online acapellas.
+    auto wet = testsig::vocal (kSr, 14.0, -80.0, -14.0, 8, 150.0);
+    const auto d = static_cast<size_t> (0.3 * kSr);
+    for (size_t i = d; i < wet.size(); ++i) wet[i] += 0.63f * wet[i - d];
+    const auto ref = analyseReference ({ wet }, kSr, "Wet Ref");
+    REQUIRE (ref.ok);
+    const auto mine = testsig::vocal (kSr, 14.0, -80.0, -14.0, 3, 140.0);
+    const auto plain = autoEdit ({ mine }, kSr, { 1, 1, 0.0, nullptr });
+    const auto r = autoEdit ({ mine }, kSr, { 1, 1, 0.0, &ref });
+    REQUIRE (r.ok);
+    INFO ("ref tail " << ref.tailDb << " punch " << ref.microDynDb << " s " << ref.sibilanceDb << "; reverb " << r.params.reverb.mix << " % (style " << plain.params.reverb.mix
+          << " %), comp threshold " << r.params.comp.thrDb << " (style " << plain.params.comp.thrDb << ")");
+    CHECK (r.params.reverb.mix <= 40.0);
+    if (ref.tailDb > -18.0 || ref.microDynDb > 5.5)
+    {
+        CHECK (r.params.reverb.mix == Catch::Approx (plain.params.reverb.mix).margin (0.5));   // space follows the style
+        CHECK (r.params.comp.thrDb == Catch::Approx (plain.params.comp.thrDb).margin (0.5));
+        bool note = false;
+        for (const auto& n : r.notes) note |= n.rfind ("WET REFERENCE", 0) == 0;
+        CHECK (note);
     }
 }
