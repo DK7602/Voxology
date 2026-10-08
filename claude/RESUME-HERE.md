@@ -1050,3 +1050,4 @@ User OK'd all four audit items.
   Two projects open in one Cubase could share a beat key (status line shows where it came from).
 - Test "Voxology's beat key reaches Honey Tune (fresh only); the project's key comes first". 88 cases.
   Voxology_VST3 + HoneyTune_VST3 compiled on Linux (needed libgtk-3-dev / libwebkit2gtk-4.1-dev here).
+- CI green: Actions run 37794074158 (v0.22.0, commit afd843d).
