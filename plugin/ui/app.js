@@ -67,7 +67,7 @@ let learnTab = "module";
 
 // ---------------------------------------------------------------------------------------------
 // Modules
-const STYLES = ["Trap Lead", "Rap", "Melodic", "Ad-libs", "R&B", "Pop", "Folk", "Natural Singer"];
+const STYLES = ["Trap Lead", "Rap", "Melodic", "Robot", "R&B", "Pop", "Folk", "Natural Singer"];
 const INTENSITIES = ["Light", "Balanced", "Strong"];
 const DELAYS = ["1/4", "1/8", "1/8 dot", "1/4 dot", "1/16", "1/2"];
 const EQ_BANDS = [
@@ -1183,7 +1183,7 @@ function renderReport() {
   if (!report) {
     body.append(head("AUTO-EDIT"), para("Auto-Edit listens to your vocal, sets every module for the style you pick and explains each choice here."));
     const ol = el("ol", "l-list");
-    ["Pick a STYLE (Trap Lead, Rap, Melodic, Ad-libs, R&B, Pop, Folk, Natural Singer) and an INTENSITY.", "Press AUTO-EDIT, then play a part of the song where you're rapping or singing.",
+    ["Pick a STYLE (Trap Lead, Rap, Melodic, Robot, R&B, Pop, Folk, Natural Singer) and an INTENSITY.", "Press AUTO-EDIT, then play a part of the song where you're rapping or singing.",
       "After about 12 seconds of voice it sets everything. Read why here, compare with A / B, and press UNDO if you don't like it."].forEach((s) => ol.append(el("li", "", s)));
     body.append(ol);
     return;

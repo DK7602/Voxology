@@ -29,7 +29,8 @@ int main (int argc, char** argv)
     s.style = std::atoi (argv[2]);
     const auto r = autoEdit ({ x }, sr, s);
     auto rp = r.params.rider;
-    if (argc > 3) { rp.rangeDb = std::atof (argv[3]); if (rp.targetDb == -20.0) rp.targetDb = -20.0; }
+    if (argc > 3) rp.rangeDb = std::atof (argv[3]);
+    if (argc > 4) rp.speed = std::atoi (argv[4]);
     std::printf ("%s  style %s: Rider range %.1f dB, target %.0f dB, speed %d\n", argv[1], kStyleNames[static_cast<size_t> (s.style)], rp.rangeDb, rp.targetDb, rp.speed);
     for (const auto& rs : r.reasons) if (rs.module == "rider") std::printf ("  [%s] %s\n", rs.control.c_str(), rs.value.c_str());
     if (rp.rangeDb < 0.05) return 0;
@@ -75,7 +76,29 @@ int main (int argc, char** argv)
         }
         return pct (w, 90) - pct (w, 10);
     };
-    std::printf ("LINES: loud vs quiet (400 ms, P90 - P10) %.1f dB -> %.1f dB\n", spread (lin), spread (lout));
+    // Phrases: stretches of voice split by >= 250 ms gaps; each phrase's level (frames within 20 dB of the voice).
+    auto phrases = [&] (const std::vector<double>& L)
+    {
+        std::vector<double> w;
+        int f = 0;
+        while (f < nf)
+        {
+            while (f < nf && lin[static_cast<size_t> (f)] < voice - 25) ++f;
+            int quiet = 0; double e = 0; int k = 0;
+            while (f < nf && quiet < 25)
+            {
+                const auto fi = static_cast<size_t> (f);
+                if (lin[fi] < voice - 25) ++quiet; else quiet = 0;
+                if (lin[fi] > voice - 20) { e += std::pow (10, L[fi] / 10); ++k; }
+                ++f;
+            }
+            if (k >= 30) w.push_back (10 * std::log10 (e / k));
+        }
+        return w;
+    };
+    const auto pin = phrases (lin), pout = phrases (lout);
+    std::printf ("LINES: loud vs quiet (400 ms, P90 - P10) %.1f dB -> %.1f dB; phrase to phrase (%zu phrases, P90 - P10) %.1f -> %.1f dB\n",
+                 spread (lin), spread (lout), pin.size(), pct (pin, 90) - pct (pin, 10), pct (pout, 90) - pct (pout, 10));
     // Gain on words vs on breaths / quiet airy bits (12 - 30 dB under the voice, more 1.5k+ than <800 Hz).
     std::vector<double> gw, gb, gq;
     for (int f = 0; f < nf; ++f)

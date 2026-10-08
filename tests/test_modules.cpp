@@ -162,3 +162,53 @@ TEST_CASE ("De-Esser: no click when an s starts (the cut must start from the cur
         CHECK (peakOut <= peakIn * 1.05);
     }
 }
+
+TEST_CASE ("Rider evens loud and quiet lines and doesn't lift the breaths between them", "[modules][rider]")
+{
+    // Lines of a buzzy voice (220 Hz, harmonics), 2 s each, alternating -10 / -22 dB RMS, with a 0.4 s gap
+    // holding an airy breath (2 - 5 kHz noise) at -34 dB.
+    std::mt19937 rng (7);
+    std::normal_distribution<double> w (0.0, 1.0);
+    Biquad b1, b2;
+    design::apply (b1, design::butterworth (true, 2000.0, kSr));
+    design::apply (b2, design::butterworth (false, 5000.0, kSr));
+    std::vector<float> x;
+    std::vector<std::pair<size_t, size_t>> lines, breaths;
+    double ph = 0.0;
+    for (int k = 0; k < 8; ++k)
+    {
+        const double amp = std::pow (10.0, (k % 2 == 0 ? -10.0 : -22.0) / 20.0) * 1.1;
+        lines.push_back ({ x.size(), x.size() + static_cast<size_t> (2.0 * kSr) });
+        for (int i = 0; i < static_cast<int> (2.0 * kSr); ++i)
+        {
+            ph += 220.0 / kSr;
+            double s = 0.0;
+            for (int h = 1; h <= 8; ++h) s += std::sin (2.0 * std::numbers::pi * h * ph) / h;
+            x.push_back (static_cast<float> (amp * s));
+        }
+        breaths.push_back ({ x.size() + 4800, x.size() + 14400 });
+        for (int i = 0; i < static_cast<int> (0.4 * kSr); ++i)
+        {
+            const double env = (i > 4800 && i < 14400) ? 1.0 : 0.0;
+            x.push_back (static_cast<float> (env * 0.06 * b2.process (b1.process (w (rng)))));
+        }
+    }
+    RiderParams p; p.rangeDb = 6.0; p.targetDb = -16.0; p.speed = 1;
+    Rider r;
+    const auto y = run (r, p, x);
+    auto lineDb = [&] (const std::vector<double>& v, size_t a, size_t b) { return rmsDb (v, a + static_cast<size_t> (0.5 * kSr), b); };
+    const std::vector<double> xd (x.begin(), x.end());
+    // Skip the first pair (it starts from the first word).
+    const double inDiff = lineDb (xd, lines[2].first, lines[2].second) - lineDb (xd, lines[3].first, lines[3].second);
+    const double outDiff = lineDb (y, lines[2].first, lines[2].second) - lineDb (y, lines[3].first, lines[3].second);
+    INFO ("loud - quiet line: " << inDiff << " dB in, " << outDiff << " dB out");
+    CHECK (outDiff < inDiff - 6.0);
+    // Each breath keeps its level vs the line before it (the rider held still on it).
+    for (size_t k = 2; k + 1 < breaths.size(); ++k)
+    {
+        const double before = rmsDb (xd, breaths[k].first, breaths[k].second) - lineDb (xd, lines[k].first, lines[k].second);
+        const double after = rmsDb (y, breaths[k].first, breaths[k].second) - lineDb (y, lines[k].first, lines[k].second);
+        INFO ("breath " << k << ": " << before << " -> " << after << " dB vs its line");
+        CHECK (after < before + 1.5);
+    }
+}

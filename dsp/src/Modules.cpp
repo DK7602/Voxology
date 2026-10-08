@@ -320,14 +320,21 @@ void Rider::prepare (double sampleRate, int numChannels)
     channels = std::clamp (numChannels, 1, kMaxChannels);
     hpCoeff = std::exp (-2.0 * std::numbers::pi * 100.0 / sr);
     msCoeff = onePole (0.150, sr);
+    fastCoeff = onePole (0.030, sr);
+    peakFall = onePole (2.0, sr);
+    design::apply (bodyLp, design::butterworth (false, 800.0, sr));
+    design::apply (airHp, design::butterworth (true, 1500.0, sr));
     reset();
 }
 
 void Rider::reset() noexcept
 {
     hpState = hpPrev = 0.0;
-    ms = 0.0;
+    ms = bodyMs = airMs = line = recentPeak = 0.0;
+    bodyLp.reset();
+    airHp.reset();
     gain = 1.0;
+    primed = false;
 }
 
 void Rider::process (double* const* ch, int nch, int n) noexcept
@@ -335,14 +342,18 @@ void Rider::process (double* const* ch, int nch, int n) noexcept
     nch = std::min (nch, channels);
     if (isNeutral (params))
     {
-        gain = 1.0;
-        ms = 0.0;
+        if (gain != 1.0 || primed) reset();
         return;
     }
-    static constexpr double kSpeedSeconds[3] = { 0.8, 0.4, 0.2 };
-    const double glide = onePole (kSpeedSeconds[std::clamp (params.speed, 0, 2)], sr);
+    // How long the line's level is averaged over (voiced time only), and how fast the fader follows it.
+    static constexpr double kLineSeconds[3] = { 0.8, 0.4, 0.25 };
+    static constexpr double kGlideSeconds[3] = { 0.25, 0.12, 0.08 };
+    const auto sp = static_cast<size_t> (std::clamp (params.speed, 0, 2));
+    const double lineCoeff = onePole (kLineSeconds[sp], sr), glide = onePole (kGlideSeconds[sp], sr);
     const double voiceMs = std::pow (10.0, (std::max (params.targetDb - kVoiceBelowTargetDb, -60.0)) / 10.0);
+    const double targetMs = std::pow (10.0, params.targetDb / 10.0);
     const double lo = fromDb (-params.rangeDb), hi = fromDb (params.rangeDb);
+    const double underRecent = fromDb (-2.0 * kUnderRecentDb);   // energy ratio
 
     for (int i = 0; i < n; ++i)
     {
@@ -352,12 +363,20 @@ void Rider::process (double* const* ch, int nch, int n) noexcept
         // One-pole high-pass at 100 Hz so rumble doesn't count as voice.
         hpState = hpCoeff * (hpState + mono - hpPrev);
         hpPrev = mono;
-        ms += (hpState * hpState - ms) * msCoeff;
+        const double sq = hpState * hpState;
+        ms += (sq - ms) * msCoeff;
+        const double b = bodyLp.process (hpState), a = airHp.process (hpState);
+        bodyMs += (b * b - bodyMs) * fastCoeff;
+        airMs += (a * a - airMs) * fastCoeff;
 
-        if (ms > voiceMs)
+        recentPeak = ms > recentPeak ? ms : recentPeak + (ms - recentPeak) * peakFall;
+        // Sung / spoken sound, loud enough to be a word (not a fading tail): it teaches the line's level.
+        // Anything else holds.
+        if (ms > voiceMs && bodyMs >= airMs && ms > recentPeak * underRecent)
         {
-            // Mean square of a sine is half its peak^2; RMS target in dBFS -> energy.
-            const double want = std::clamp (std::sqrt (std::pow (10.0, params.targetDb / 10.0) / ms), lo, hi);
+            if (! primed) { line = ms; primed = true; }   // the first word: start from it, not from silence
+            line += (sq - line) * lineCoeff;
+            const double want = std::clamp (std::sqrt (targetMs / std::max (line, 1.0e-20)), lo, hi);
             gain *= std::pow (want / gain, glide);
         }
         for (int c = 0; c < nch; ++c)

@@ -537,7 +537,7 @@ const std::array<StyleSpec, kStyles> kSpecs {{
     // Melodic
     { 0.5, 0.0, 1.5,   35, 70,  3, 32, 18, 5500, 50, true,   2.2, 35, 18, 7000, 30,  SaturationMode::tape, -38,  4.0, 3.0, 3.0,  9, 0.8, 0,   -5.0,
       "smooth and airy, with a wider space for the sung notes to ring" },
-    // Ad-libs
+    // Robot (made for ad-libs and effect vocals)
     { -3.0, 2.0, 1.0,  50, 100, 1, 30, 22, 4500, 40, true,   1.6, 20, 18, 6000, 20,  SaturationMode::clip, -28,  6.0, 6.0, 5.0,  15, 0.6, 1,  -3.0,
       "thinner, wider and more effected so they sit around the lead, not on top of it" },
     // R&B
@@ -863,7 +863,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         reason ("cleanup", "Low Cut", hz (hpf),
                 a.f0Low > 0.0
                     ? "Your lowest notes sit around " + hz (a.f0Low) + ", so everything under " + hz (hpf) + " is rumble, mic handling and pops, not voice. Cutting it cleans the low end for the 808 and kick."
-                          + (style == 3 ? " Ad-libs get a higher cut so they stay out of the lead's way." : "")
+                          + (style == 3 ? " Robot style gets a higher cut so ad-libs and effect vocals stay out of the lead's way." : "")
                     : "No clear pitch was found, so a safe " + hz (hpf) + " cut removes rumble without thinning the voice.");
         if (a.rumbleDb > -18.0 && ! fewPitches)
             r.notes.push_back ("RUMBLE: there's strong energy under 60 Hz (" + db (a.rumbleDb) + " vs the voice), usually AC, traffic, a desk or footsteps through the mic stand."
@@ -967,7 +967,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             }
         }
         const double breathDb = breathSamples ? energyDb (breathEnergy / static_cast<double> (breathSamples)) - a.voiceRmsDb : -120.0;
-        static constexpr std::array<double, kStyles> breathBase { 9.0, 10.0, 6.0, 12.0, 5.0, 7.0, 3.0, 4.0 };   // Trap Lead, Rap, Melodic, Ad-libs, R&B, Pop, Folk, Natural Singer
+        static constexpr std::array<double, kStyles> breathBase { 9.0, 10.0, 6.0, 12.0, 5.0, 7.0, 3.0, 4.0 };   // Trap Lead, Rap, Melodic, Robot, R&B, Pop, Folk, Natural Singer
         if (breathCount >= 2 && breathDb > -36.0)
         {
             const double amt = std::clamp (std::round (breathBase[static_cast<size_t> (style)] * k / 0.85), 3.0, 18.0);
@@ -1290,7 +1290,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         const auto mask = activeMask (f, thr);
         double phraseLevel = -120.0;
         const double spread = rangeDb (highPass (afterDs, 80.0, sr), sr, thr, &phraseLevel);
-        double range = std::clamp ((spread - 6.0) * 0.5, 0.0, 6.0) * spec.riderScale * k / 0.85;
+        double range = std::clamp ((spread - 6.0) * 0.75, 0.0, 6.0) * spec.riderScale * k / 0.85;   // v0.19.3: the rider now evens lines (it made them less even before), so it may do a bit more
         range = std::round (range * 2.0) / 2.0;
         if (range < 1.0)
         {
@@ -1566,7 +1566,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
     // ---------------------------------------------------------------------------------------- Suggestions
     r.suggestions.push_back ("Compare with A / B and MATCH on: MATCH plays both at the same loudness, so you judge the tone, not the volume.");
     if (style == 0 || style == 2)
-        r.suggestions.push_back ("Try Ad-libs style on your ad-lib track and Trap Lead on the main vocal: different roles, different chains.");
+        r.suggestions.push_back ("Try Robot style on your ad-lib track and Trap Lead on the main vocal: different roles, different chains.");
     if (p.reverb.mix > 0.0 || p.delay.mix > 0.0)
         r.suggestions.push_back ("Several vocal tracks? Turn Delay and Reverb off here and use one shared FX send instead: it glues the stack together and saves CPU.");
     if (p.pitch.amount > 0.0)

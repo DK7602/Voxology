@@ -11,7 +11,7 @@ namespace vox {
 
 /** Vocal styles Auto-Edit can aim for (what "finished" sounds like). */
 inline constexpr int kStyles = 8;
-inline constexpr std::array<const char*, kStyles> kStyleNames { "Trap Lead", "Rap", "Melodic", "Ad-libs", "R&B", "Pop", "Folk", "Natural Singer" };
+inline constexpr std::array<const char*, kStyles> kStyleNames { "Trap Lead", "Rap", "Melodic", "Robot", "R&B", "Pop", "Folk", "Natural Singer" };
 /** Styles that are sung rather than rapped (a little breath stays, a softer presence). */
 inline constexpr bool isSungStyle (int style) noexcept { return style == 2 || style >= 4; }
 inline constexpr int kIntensities = 3;

@@ -870,3 +870,18 @@ Tool: tools/audit/rider_audit.cpp (optional range override to test the module it
 Order: Rider fix -> Compressor -> Saturation -> Voices (doubler / harmonies) -> Delay -> Reverb -> Output / loudness ->
 Auto-Edit whole-chain check on the pros + user's songs. Each module: audit tool in tools/audit/, fix, tests, version
 bump, commit + push, notes here. If usage runs low: commit what's done, note where to resume here.
+
+## v0.19.3 Rider follows the line on voiced sound only + "Ad-libs" style renamed "Robot" (2026-10-08)
+- Rider rebuilt: the gain follows the LINE's level (voiced sound only, averaged 0.8 / 0.4 / 0.25 s for Slow / Medium /
+  Fast, fader glide 0.25 / 0.12 / 0.08 s) instead of a 150 ms RMS chased with a 0.8 - 0.2 s lag. Only sung / spoken
+  sound teaches it: more energy under 800 Hz than over 1.5 kHz (breaths, "s" hold it) and within 15 dB of the recent
+  loud words (fading tails hold it); first word primes the level. Tried: very fast (0.3 / 0.15 / 0.08 + 0.1 - 0.03
+  glide) evened most but pumped (3 dB per 50 ms) and lifted breaths again; slow (1.6 s) kept the old lag problem.
+- Result with +-6 dB (rider_audit, override): Don 400 ms spread 8.0 -> 7.4 (medium) / 6.9 (fast), phrase to phrase
+  3.6 -> 1.7 / 1.4 dB (old module: 8.0 -> 9.1, i.e. worse). Don & Lysette (already very even, 6 phrases): 0.7 ->
+  1.2 - 1.6 phrase (small). With Auto-Edit's own settings: Don phrases 3.6 -> 2.6, Don & Lysette 0.7 -> 0.4.
+- Auto-Edit range: (spread - 6) x 0.75 (was x 0.5) x style scale; still off on Gallas / Schaf (lines 4 - 5 dB apart).
+- Test "Rider evens loud and quiet lines and doesn't lift the breaths between them" (a behaviour lock: the old rider
+  also passes it on long steady lines; the real-song numbers above are the proof). 81 cases.
+- User request: style "Ad-libs" is now "Robot" (index 3 unchanged, so saved projects keep it): kStyleNames, app.js,
+  mock.js, Learn text, Auto-Edit reasons / suggestion ("Try Robot style on your ad-lib track").

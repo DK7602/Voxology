@@ -175,9 +175,12 @@ private:
 };
 
 // ------------------------------------------------------------------------------------------------
-/** Vocal Rider: rides the vocal's level like an engineer on a fader, so quiet words come up and
-    loud ones go down toward Target before the compressor (which then works less and sounds more
-    natural). It never boosts the gaps between phrases (gain holds while you're not singing). */
+/** Vocal Rider: rides the vocal's level like an engineer on a fader, so quiet lines come up and loud
+    ones go down toward Target before the compressor (which then works less and sounds more natural).
+    It follows the level of the LINE (voiced sound averaged over about a second, Speed sets how long),
+    not each syllable: chasing syllables with a fader's lag made lines less even, not more. It listens
+    only to sung / spoken sound (more body under 800 Hz than air at 1.5 - 6 kHz), so breaths, "s"
+    sounds, word tails and the gaps never move it, and it holds its gain while you're not singing. */
 struct RiderParams
 {
     bool enabled = true;
@@ -190,6 +193,7 @@ class Rider
 {
 public:
     static constexpr double kVoiceBelowTargetDb = 24.0;   // quieter than this = a gap: hold
+    static constexpr double kUnderRecentDb = 15.0;        // this far under the recent loud words = a tail / breath: hold
     void prepare (double sampleRate, int numChannels);
     void reset() noexcept;
     void setParams (const RiderParams& p) noexcept { params = p; }
@@ -204,6 +208,11 @@ private:
     int channels = 2;
     double hpState = 0.0, hpPrev = 0.0, hpCoeff = 0.0;
     double ms = 0.0, msCoeff = 0.0, gain = 1.0;
+    Biquad bodyLp, airHp;                         // under 800 Hz / over 1.5 kHz: voiced or airy?
+    double bodyMs = 0.0, airMs = 0.0, fastCoeff = 0.0;
+    double line = 0.0;                            // the line's level (energy), voiced sound only
+    double recentPeak = 0.0, peakFall = 0.0;      // the recent loud words (energy): fading word tails don't count
+    bool primed = false;
 };
 
 // ------------------------------------------------------------------------------------------------
