@@ -851,3 +851,17 @@ Tool: tools/audit/dyneq_audit.cpp (+ a scratch batch over the 143 MUSDB18 pro vo
   78 / 143 (was 53), median 55 % (Voxology's own compression lifts their "s" too).
 - Test "Auto-Edit's De-Esser keeps the s on target at the end of the inserts (after the compressor)" (fails on
   v0.19.1: s ended at -0.2 / +0.5 dB vs the -4 target). 80 cases. Before / after clips sent.
+
+## Rider audit (2026-10-08) - findings only, no code changed yet
+Tool: tools/audit/rider_audit.cpp (optional range override to test the module itself).
+- As Auto-Edit sets it: Off on Gallas / Schaf (lines only ~4 - 5 dB apart), +-2 dB slow on Don, +-1 dB on Don & Lysette:
+  no measurable effect (line spread 8.0 -> 8.0, 7.7 -> 7.9). The compressor does all the evening.
+- The module with real room (+-6 dB, Auto-Edit's target / speed): it makes lines LESS even (Don 8.0 -> 9.1 dB, Don &
+  Lysette 7.7 -> 8.7) and lifts breaths / airy bits (p90 +1.9 .. +3.1 dB) and quiet voiced bits (p90 +3.1 .. +4.3).
+  Causes: (1) it holds its gain through gaps, then glides at 0.4 - 0.8 s, so each new line starts with the LAST line's
+  gain (lines last 1 - 3 s: the lag dominates); (2) anything within 24 dB of the target counts as voice, so breaths,
+  word tails and quiet consonants are turned up toward the target.
+- Proposed plan: (1) ride on voiced sound only (body vs air like Breath Control: breaths / "s" / tails hold the gain);
+  (2) phrase-start catch-up: after a gap, set the gain from the new line's first ~150 ms quickly instead of carrying
+  the last line's (use the 32 ms free look-ahead from Pitch's latency too); then re-run (+-6 dB must make lines more
+  even, not less) and only then let Auto-Edit use bigger ranges where lines really are uneven.
