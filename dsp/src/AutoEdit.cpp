@@ -714,6 +714,7 @@ ReferenceProfile analyseReference (const std::vector<std::vector<float>>& audio,
     r.sibilanceDb = a.sibilanceDb;
     r.microDynDb = a.microDynDb;
     r.tailDb = a.tailDb;
+    r.f0Median = a.f0Median;
     if (a.voicedSeconds < 3.0)
         r.problem = "Only " + num (a.voicedSeconds) + " s of voice in it. Pick a file with at least a verse or a hook of vocals (10 s or more is best).";
     else if (fullSong (a))
@@ -991,8 +992,29 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
     {
         // Fit Tone EQ + Low Cut to the reference's tone (the low cut may rise, never past your lowest notes).
         const double lowMin = p.cleanup.lowCutHz;
-        const double lowMax = a.f0Low > 0.0 ? std::max (lowMin, std::min (0.95 * a.f0Low, 250.0)) : std::max (lowMin, 150.0);
-        auto fit = fitTone (a.bandDb, ref->bandDb, lowMin, lowMax, sr);
+        const double lowMax = a.f0Low > 0.0 ? std::max (lowMin, std::min (0.85 * a.f0Low, 250.0)) : std::max (lowMin, 150.0);   // 0.85: the lowest notes keep their fundamental (-0.5 dB)
+        // Below 630 Hz a voice's balance follows its pitch (measured on pro vocals): carry the reference's character
+        // over to your pitch instead of copying its singer's fundamental (a deeper or higher voice than yours).
+        std::vector<double> want = ref->bandDb;
+        if (ref->f0Median > 0.0 && a.f0Median > 0.0)
+        {
+            const auto mine = styleTarget (style, a.f0Median), theirs = styleTarget (style, ref->f0Median);
+            for (size_t b = 0; b < want.size() && b < mine.size() && analysisBands()[b] < 630.0; ++b) want[b] += mine[b] - theirs[b];
+        }
+        // Same discipline as the style fit (v0.19.0), a little more room since matching is the point: each band on
+        // its own job, the "s" zone left to the De-Esser, Body only on your voice's range, and every dB has to
+        // earn its place (without it the fit slammed bands to +-8 dB and stacked two at one frequency).
+        ToneFitLimits lim;
+        lim.lo = { -6.0, -8.0, -6.0, -4.0, -3.0 };
+        lim.hi = { 4.0, 1.0, 1.0, 6.0, a.noiseFloorDb > -60.0 ? 2.0 : 6.0 };
+        lim.fromHz = std::max (1.3 * lowMin, a.f0Low);
+        lim.fLo[0] = lim.fromHz;
+        lim.fLo[1] = 200.0;
+        lim.fHi[3] = 5000.0;
+        lim.fLo[4] = 8000.0;
+        lim.skipEss = true;
+        lim.costPerDb2 = 0.02;
+        auto fit = fitTone (a.bandDb, want, lowMin, lowMax, sr, lim);
         const double strength = intensity == 0 ? 0.7 : 1.0;
         for (auto& g : fit.eq.gainDb) { g = std::round (g * strength * 2.0) / 2.0; if (std::abs (g) < 0.5) g = 0.0; }
         p.eq = fit.eq;

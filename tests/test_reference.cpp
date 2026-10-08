@@ -88,3 +88,26 @@ TEST_CASE ("Reference Match: a full song gets a warning; too little voice is ref
     CHECK_FALSE (tiny.ok);
     CHECK_FALSE (tiny.problem.empty());
 }
+
+TEST_CASE ("Reference Match keeps each band on its job (no stacking, nothing under the voice or in the s zone)", "[reference]")
+{
+    // A reference far from the take (dark, boomy, a deeper singer): the fit must still use sane moves.
+    const auto mine = testsig::vocal (kSr, 14.0, -80.0, -14.0, 3, 180.0);
+    const auto refAudio = through (testsig::vocal (kSr, 14.0, -80.0, -14.0, 8, 110.0), 9.0, -8.0);
+    const auto ref = analyseReference ({ refAudio }, kSr, "Dark Ref");
+    REQUIRE (ref.ok);
+    CHECK (ref.f0Median > 0.0);
+    AutoEditSettings s { 1, 1, 0.0, &ref };
+    const auto r = autoEdit ({ mine }, kSr, s);
+    REQUIRE (r.ok);
+    const auto& e = r.params.eq;
+    double total = 0.0;
+    for (double g : e.gainDb) { CHECK (std::abs (g) <= 8.0); total += std::abs (g); }
+    INFO ("EQ " << e.gainDb[0] << "@" << e.freqHz[0] << " " << e.gainDb[1] << "@" << e.freqHz[1] << " " << e.gainDb[2] << "@" << e.freqHz[2] << " "
+                << e.gainDb[3] << "@" << e.freqHz[3] << " " << e.gainDb[4] << "@" << e.freqHz[4] << ", low cut " << r.params.cleanup.lowCutHz);
+    CHECK (total < 26.0);
+    if (e.gainDb[0] != 0.0) CHECK (e.freqHz[0] >= std::max (1.3 * r.params.cleanup.lowCutHz, r.analysis.f0Low) - 1.0);
+    if (e.gainDb[3] != 0.0) CHECK (e.freqHz[3] <= 5000.0);
+    if (e.gainDb[4] != 0.0) CHECK (e.freqHz[4] >= 8000.0);
+    CHECK (r.params.cleanup.lowCutHz <= 0.86 * r.analysis.f0Low + 5.0);
+}

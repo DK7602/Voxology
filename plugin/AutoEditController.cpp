@@ -338,6 +338,7 @@ juce::String AutoEditController::getReferenceForSaving() const
     o->setProperty ("punch", r->microDynDb);
     o->setProperty ("tail", r->tailDb);
     o->setProperty ("voiced", r->voicedSeconds);
+    o->setProperty ("f0", r->f0Median);
     juce::Array<juce::var> bands;
     for (double v : r->bandDb) bands.add (v);
     o->setProperty ("bands", bands);
@@ -359,6 +360,7 @@ void AutoEditController::restoreReference (const juce::String& saved)
         r->microDynDb = o->getProperty ("punch");
         r->tailDb = o->getProperty ("tail");
         r->voicedSeconds = o->getProperty ("voiced");
+        r->f0Median = o->hasProperty ("f0") ? static_cast<double> (o->getProperty ("f0")) : 0.0;
         if (auto* arr = o->getProperty ("bands").getArray())
             for (const auto& b : *arr) r->bandDb.push_back (b);
         if (r->bandDb.size() != vox::analysisBands().size()) r->ok = false;   // from an older version: re-load it

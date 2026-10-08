@@ -30,6 +30,7 @@ struct ReferenceProfile
     double microDynDb = 0.0;           // word-to-word punch (see VocalAnalysis)
     double tailDb = -120.0;            // space after phrases; -120 = unknown
     double voicedSeconds = 0.0;
+    double f0Median = 0.0;             // the reference singer's median pitch (Hz); 0 = unknown (older saved profiles)
 };
 
 struct AutoEditSettings

@@ -921,3 +921,16 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
   floor: Gallas 2.7, Schaf 3.4, Don 2.7, Don & Lysette 2.9).
 - Test "Auto-Edit doesn't flatten a vocal that's already compressed (a second pass keeps the punch)" (v0.19.3 took the
   test take to 1.7 dB on the first pass; now 2.65, second pass 2.65). 82 cases.
+
+## v0.19.5 Reference Match: disciplined fit + reference low end moved to your pitch (2026-10-08)
+- Check (scratch refcheck: MUSDB rap stems "Little Chicago's Finest - My Own", "PR - Oh No" as references on Gallas /
+  Don): the reference fit slammed bands to +-8 dB (total 25 - 37 dB), stacked Presence +3 and Air +8 at 8 kHz, boosted
+  Body +8 at 80 Hz under a 120 Hz low cut, and copied the reference SINGER's low end (pitch-dependent).
+- Fix: ReferenceProfile.f0Median (saved in the plug-in state as "f0"; older saves = 0 = no pitch move). Under 630 Hz the
+  wanted tone = reference + (pro target at your pitch - pro target at theirs). Fit limits like the style fit with a bit
+  more room: Body -6..+4 from your lowest note up, Mud (>= 200 Hz) / Nasal -8..+1, Presence 2 - 5 kHz -4..+6, Air >= 8 kHz
+  -3..+6 (+2 if hissy), 5.5 - 7.5 kHz not judged, cost 0.02 / dB^2. Low cut may rise only to 0.85 x your lowest notes
+  (was 0.95: the fit leaned on it once EQ moves cost something).
+- Result: totals 17 - 23 dB, no stacking, nothing under the low cut; tone match about as close (2.5 - 3.1 dB left vs
+  2.0 - 3.4 before).
+- Test "Reference Match keeps each band on its job (no stacking, nothing under the voice or in the s zone)". 83 cases.
