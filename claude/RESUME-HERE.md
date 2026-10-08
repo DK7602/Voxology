@@ -885,3 +885,11 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
   also passes it on long steady lines; the real-song numbers above are the proof). 81 cases.
 - User request: style "Ad-libs" is now "Robot" (index 3 unchanged, so saved projects keep it): kStyleNames, app.js,
   mock.js, Learn text, Auto-Edit reasons / suggestion ("Try Robot style on your ad-lib track").
+
+## Compressor audit (2026-10-08): no change
+- tools/audit/comp_audit.cpp. Distortion on a loud 110 Hz note: THD+N -66 .. -79 dB (inaudible). Auto-Edit's fixed
+  squeeze per style leaves punch (microDyn) at 2.7 - 3.4 dB vs pros 3.5 typical (middle half 2.7 - 5.0): inside the pro
+  range, slightly on the tight side, and evens lines well (Don 10.5 -> 5.6, Don & Lysette 8.9 -> 5.5 dB).
+- Tried and reverted: aiming the leveler at the pros' punch (3.5 dB) like Reference Match does: the leveler then
+  barely works (thresholds -0 .. -5.5 dB) because the peak stage alone brings the punch down, and lines got less even
+  (Don 5.6 -> 8.1 dB). Pros' line-to-line range can't be measured on 7 s clips, so the evidence doesn't support it.
