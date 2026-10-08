@@ -805,3 +805,20 @@ Tool: tools/audit/eq_audit.cpp. Same 4 vocals / styles as the Cleanup audit.
   raw-vocal robustness tests if the user downloads some; not finished vocals. Asked the user for their own finished
   vocal stems (best genre-matched target data).
 - Test "Auto-Edit Tone EQ: target from pro vocals follows the voice's pitch; moves stay in their jobs". 78 cases.
+
+## Dynamic EQ audit (2026-10-08) - findings only, no code changed yet
+Tool: tools/audit/dyneq_audit.cpp (+ a scratch batch over the 143 MUSDB18 pro vocals).
+- DSP: fine. Detector = the bell's own slice vs the rest of the voice, learned 60th-percentile normal, "s" hold for
+  Harsh; envelopes smooth enough down to 80 Hz; exact pass-through. Cuts do NOT follow the melody (a low harmonic in
+  the bell: 70 - 85 % of singing vs 78 - 87 % of cut moments: barely above chance).
+- PROBLEM 1 (Auto-Edit): it switches bands on for normal vowel-to-vowel variation. On the 143 finished pro vocals it
+  turns on ~2 bands each (Boom 22 %, Mud 64 %, Nasal 66 %, Harsh 46 %; only 19 get none). The user's jumps (Auto-Edit's
+  p95 cut at 50 %: Mud 4.4 - 7.8, Nasal 4.7, Harsh 4.0 - 5.6) are about the pros' (median 4.2 - 4.5, p75 4.8 - 5.8);
+  only Schaf's Mud (7.8, about the pros' p90) stands out. (Pros are 7 s clips, the user's 35 - 105 s: longer audio
+  reads a little higher, so the user's are even less unusual.)
+- PROBLEM 2 (behaviour once on): each band cuts 13 - 19 % of the singing, usually all the way to its max (p90 = max).
+- Text bug: the reason says "rise about X dB past your normal" but X is the p95 CUT at 50 % sensitivity (the rise is
+  ~4 dB + X / 1.5).
+- Proposed plan: switch a band on only when its jumps are beyond the pros' upper quarter (measured per 7 s so long
+  takes compare fairly); Max Cut = the excess over a typical pro; fix the text; re-run on pros ("do no harm") + the
+  user's songs; clips.
