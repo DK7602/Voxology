@@ -935,8 +935,17 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
 - Result: totals 17 - 23 dB, no stacking, nothing under the low cut; tone match about as close (2.5 - 3.1 dB left vs
   2.0 - 3.4 before).
 - Test "Reference Match keeps each band on its job (no stacking, nothing under the voice or in the s zone)". 83 cases.
+- CI green: Actions run 37729920905 (v0.19.5, commit 3674eaf).
 
 ## Unmask quick check (2026-10-08): no change
 - Gallas beat (stereo) + Gallas acapella, Amount 100 %, centre only (scratch unmask_check): average dip while singing
   200 Hz -2.0, 400 -3.4, 800 -4.6, 1.6k -5.5, 3.2k -5.6, 6.3k -3.3 dB (follows kUnmaskWeight); while silent -0.2 ..
   -0.5 dB (lets go); side (L - R) untouched (-300 dB). Works as designed; 100 % is deep, 30 - 60 % is the usual range.
+
+## Thread handoff (2026-10-08): overnight audit COMPLETE (v0.19.5, CI green)
+- Every module audited this thread: Cleanup (v0.18.2), Tone EQ (v0.19.0), Dynamic EQ (v0.19.1), De-Esser (v0.19.2),
+  Rider + "Robot" rename (v0.19.3), Compressor (no change, then punch floor v0.19.4), Saturation / Doubler / Delay /
+  Reverb / Output / Unmask (no change), Reference Match (v0.19.5). Pitch / Honey Tune / key: earlier threads.
+- Clips for the user: tonight's START (v0.18.2) vs NOW (v0.19.4 = v0.19.5 without a reference), Auto-Edit whole chain.
+- Open: user to listen and report; user's own finished vocal stems would sharpen the pro targets for trap / rap
+  (MUSDB18 is mostly rock / indie). Cambridge-MT needs the user to download (Cloudflare blocks automation).
