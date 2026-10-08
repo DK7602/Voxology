@@ -865,3 +865,8 @@ Tool: tools/audit/rider_audit.cpp (optional range override to test the module it
   (2) phrase-start catch-up: after a gap, set the gain from the new line's first ~150 ms quickly instead of carrying
   the last line's (use the 32 ms free look-ahead from Pitch's latency too); then re-run (+-6 dB must make lines more
   even, not less) and only then let Auto-Edit use bigger ranges where lines really are uneven.
+
+## Overnight run plan (2026-10-08, user asleep: "continue with audits and edits until all are complete")
+Order: Rider fix -> Compressor -> Saturation -> Voices (doubler / harmonies) -> Delay -> Reverb -> Output / loudness ->
+Auto-Edit whole-chain check on the pros + user's songs. Each module: audit tool in tools/audit/, fix, tests, version
+bump, commit + push, notes here. If usage runs low: commit what's done, note where to resume here.
