@@ -978,3 +978,4 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
   REFERENCE note explains it. Gallas / Schaf with the wet trap stem: EQ toward it, comp as the style, reverb 7 %.
 - Built-in #7 "Trap rap, finished (male)": that stem's tone (f0 146), s stored -2, punch 0 (= style), no tail.
 - Test "A wet reference (echoes baked in) gives its tone, not 60 % reverb and no compression". 85 cases.
+- CI green: Actions run 37777844119 (v0.20.1, commit 28fb33f).
