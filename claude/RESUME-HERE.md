@@ -979,3 +979,16 @@ bump, commit + push, notes here. If usage runs low: commit what's done, note whe
 - Built-in #7 "Trap rap, finished (male)": that stem's tone (f0 146), s stored -2, punch 0 (= style), no tail.
 - Test "A wet reference (echoes baked in) gives its tone, not 60 % reverb and no compression". 85 cases.
 - CI green: Actions run 37777844119 (v0.20.1, commit 28fb33f).
+
+## Thread handoff (2026-10-08): "Voxology audit" thread -> "Honey Tune audit" thread
+- State: v0.20.1 (CI green, run 37777844119). Voxology insert chain audited end to end this thread (see the sections
+  above); reference library (7 built-ins + YOURS) shipped.
+- Next: Honey Tune audit (the standalone note editor / ARA-style tuner in honeytune/). Earlier Honey Tune checks:
+  v0.12.1 undo/redo, v0.13.0 move / stretch / per-note formant, v0.15.0 CREPE check, v0.16.2 whole-step tone fix,
+  v0.17.0 audit (notes land within 0.2 - 0.4 c median, shape kept 4 - 7 c rms). tools/audit/honey_tune_audit.cpp exists.
+- Method that worked here: an audit tool in tools/audit/ per area, real songs (test-audio/) + MUSDB18 pro stems
+  (scratch only: github.com/sigsep/sigsep-mus-db releases v0.4.0 MUSDB18-7-STEMS.zip, vocals = stream 4), "do no
+  harm" checks, a test that fails on the old code, before / after clips, version bump, commit + push, CI check.
+- User prefs (unchanged): short replies, plain language, honest assessments, a plan with every warning; Actions link
+  when green + Chrome Ctrl+J -> Keep; keep this file updated; push to claude/voxology; no PRs. Linux builds:
+  --parallel 2 - 3. Repo is PUBLIC until the user makes it private (Nov 1).
