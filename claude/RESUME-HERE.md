@@ -1111,6 +1111,7 @@ User OK'd all four audit items.
   Pro pop singer (female) 26, Pro electronic singer (female) 13. Stems look processed (low end cut, rms ~-30 dBFS).
   Stored s capped at -2 (male pop measured -0.5) and electronic punch 5.7 stored as 0 (= style), so they aren't
   treated as wet references. Test: 11 built-ins, all usable (EQ within 8 dB). 88 cases pass. Voxology_VST3 compiled.
+- CI green: Actions run 37883627931 (v0.24.0, commit 6ee36e8).
 - Licence note told to the user: MUSDB18 and MoisesDB are research / non-commercial; only measurements are stored. Get a
   quick legal check before selling Voxology.
 
