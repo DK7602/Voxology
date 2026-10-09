@@ -145,6 +145,8 @@
         if (payload.name === "listReferences") result = JSON.stringify({ builtin: [
             { name: "Pro male singer", about: "Low voices that mostly sing" }, { name: "Pro male rap / rhythmic", about: "Low voices that rap" },
             { name: "Pro female singer, bright", about: "Airy, open top" }, { name: "Pro female singer, warm", about: "Smooth, soft top" },
+            { name: "Pro rap, full songs (male)", about: "17 released rap vocals" }, { name: "Pro pop singer (male)", about: "15 released pop vocals" },
+            { name: "Pro pop singer (female)", about: "26 released pop vocals" }, { name: "Pro electronic singer (female)", about: "13 dance vocals" },
             { name: "Pro female rap / rhythmic", about: "Present mids" }, { name: "Pro average (all voices)", about: "Neutral" } ],
           yours: ref.yours.map((n) => ({ name: n })), folder: "C:\\Users\\you\\Documents\\Voxology\\References", current: (JSON.parse(ref.json).name || "") });
         if (payload.name === "selectReference") { const n = payload.params[1]; ref.json = JSON.stringify({ state: "ok", name: n, seconds: 60, problem: "", warning: "" }); ref.version++; }

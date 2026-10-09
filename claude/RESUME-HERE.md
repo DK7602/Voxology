@@ -1092,3 +1092,18 @@ User OK'd all four audit items.
 - Saved: processor uiRed (atomic bool), state attribute "uiRed"; native functions getUiRed / setUiRed (mock.js too).
   The UI asks on open and turns red if saved red. Checked in Chromium: click -> saved, click again -> cleared, opening
   with red saved starts red; no errors. Voxology_VST3 compiled on Linux.
+
+## v0.24.0 Four more built-in references from MoisesDB (2026-10-09)
+- User wanted free pro male / female singing, rap and trap references. Selekt Audio (Vercel bot check) and Slooply (sample
+  API now needs login, 401) were blocked: respected, not worked around. Paid packs found (Function Loops Male Pop Vocals,
+  Loopmasters Aylene New Wave Trap Vocals, Function Loops Female Trap...) if the user ever buys some.
+- MoisesDB (music.ai/research, form -> signed R2 link valid 7 days, 88 GB zip, CC BY-NC-SA 4.0): read over HTTP ranges
+  (zip directory + 240 metadata JSONs + only the chosen lead vocal WAVs, 3.6 GB; scratch only, deleted after). Genres:
+  rock 105, singer_songwriter 45, pop 39, rap 17, electronic 14 ... No female rap, no trap label.
+- Measured whole songs with tools/audit/tone_profile.cpp (mono, 44.1 -> 48 kHz). Medians per group -> 4 built-ins:
+  Pro rap, full songs (male) 17 (f0 238: energetic delivery, higher than MUSDB's 158), Pro pop singer (male) 15,
+  Pro pop singer (female) 26, Pro electronic singer (female) 13. Stems look processed (low end cut, rms ~-30 dBFS).
+  Stored s capped at -2 (male pop measured -0.5) and electronic punch 5.7 stored as 0 (= style), so they aren't
+  treated as wet references. Test: 11 built-ins, all usable (EQ within 8 dB). 88 cases pass. Voxology_VST3 compiled.
+- Licence note told to the user: MUSDB18 and MoisesDB are research / non-commercial; only measurements are stored. Get a
+  quick legal check before selling Voxology.
