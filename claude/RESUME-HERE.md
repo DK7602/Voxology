@@ -1092,6 +1092,7 @@ User OK'd all four audit items.
 - Saved: processor uiRed (atomic bool), state attribute "uiRed"; native functions getUiRed / setUiRed (mock.js too).
   The UI asks on open and turns red if saved red. Checked in Chromium: click -> saved, click again -> cleared, opening
   with red saved starts red; no errors. Voxology_VST3 compiled on Linux.
+- CI green: Actions run 37840666127 (v0.23.1, commit 49976ed).
 
 ## v0.24.0 Four more built-in references from MoisesDB (2026-10-09)
 - User wanted free pro male / female singing, rap and trap references. Selekt Audio (Vercel bot check) and Slooply (sample
