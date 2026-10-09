@@ -35,6 +35,7 @@ juce_add_binary_data(VoxologyUIData
     NAMESPACE   VoxologyUI
     SOURCES
         ${VOX_UI_FILES}
+        "${CMAKE_CURRENT_SOURCE_DIR}/../docs/MANUAL.md"
         "${juce_SOURCE_DIR}/modules/juce_gui_extra/native/javascript/index.js"
         "${juce_SOURCE_DIR}/modules/juce_gui_extra/native/javascript/check_native_interop.js")
 set_target_properties(VoxologyUIData PROPERTIES POSITION_INDEPENDENT_CODE ON)

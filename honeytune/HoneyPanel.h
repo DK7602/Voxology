@@ -3,6 +3,20 @@
 #include "HoneyRoll.h"
 #include "HoneyTheme.h"
 
+/** The manual (docs/MANUAL.md, built into the plug-in), shown over the editor by the ? button. */
+class HoneyManual final : public juce::Component
+{
+public:
+    HoneyManual();
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    std::function<void()> onClose;
+
+private:
+    juce::TextEditor text;
+    juce::TextButton close { "Close" };
+};
+
 /** The whole Honey Tune window: key / scale / clip-wide amounts on top, the honeycomb roll in the
     middle, the selected note's controls at the bottom. */
 class HoneyPanel final : public juce::Component
@@ -41,7 +55,8 @@ private:
     juce::ComboBox key, scale;
     juce::Slider snap, drift, vibrato, noteDrift, noteVibrato, noteFormant;
     juce::TextButton snapNote { "Snap note to key" }, resetNote { "Reset note" }, resetAll { "Reset all notes" }, fit { "Fit" }, original { "Original" }, tuned { "Tuned" },
-                     undoBtn { "Undo" }, redoBtn { "Redo" };
+                     undoBtn { "Undo" }, redoBtn { "Redo" }, help { "?" };
+    HoneyManual manual;
     juce::Label keyLabel, scaleLabel, snapLabel, driftLabel, vibratoLabel, noteDriftLabel, noteVibratoLabel, noteFormantLabel;
     juce::String status, noteInfo;
     bool statusWarning = false;   // the status line is a warning (red)

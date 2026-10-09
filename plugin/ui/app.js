@@ -55,6 +55,66 @@ $("logo").addEventListener("click", () => {
 uiRedGet().then((red) => { if (red) setRed(true); }).catch(() => {});
 
 // ---------------------------------------------------------------------------------------------
+// Manual: docs/MANUAL.md, built into the plug-in, shown in an overlay (? MANUAL in the Learn card).
+function markdownToHtml(md) {
+  const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  const cells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  const lines = md.replace(/\r/g, "").split("\n"), out = [];
+  let i = 0, h2 = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+    let m;
+    if ((m = /^(#{1,3}) (.*)$/.exec(line))) {
+      const n = m[1].length;
+      out.push(n === 2 ? `<h2 id="man-${h2++}">${inline(m[2])}</h2>` : `<h${n}>${inline(m[2])}</h${n}>`);
+      i++;
+    } else if (line.trim().startsWith("|")) {
+      const rows = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) rows.push(lines[i++]);
+      const body = rows.filter((r, k) => !(k === 1 && /^[\s|:-]+$/.test(r)));
+      out.push("<table><tr>" + cells(body[0]).map((c) => `<th>${inline(c)}</th>`).join("") + "</tr>"
+        + body.slice(1).map((r) => "<tr>" + cells(r).map((c) => `<td>${inline(c)}</td>`).join("") + "</tr>").join("") + "</table>");
+    } else if (/^(\d+\.|-) /.test(line)) {
+      const ordered = /^\d+\./.test(line), tag = ordered ? "ol" : "ul", items = [];
+      while (i < lines.length && (ordered ? /^\d+\. / : /^- /).test(lines[i])) items.push(lines[i++].replace(/^(\d+\.|-) /, ""));
+      out.push(`<${tag}>` + items.map((t) => `<li>${inline(t)}</li>`).join("") + `</${tag}>`);
+    } else {
+      const para = [];
+      while (i < lines.length && lines[i].trim() && !/^(#{1,3} |\||\d+\. |- )/.test(lines[i].trim())) para.push(lines[i++]);
+      out.push(`<p>${inline(para.join(" "))}</p>`);
+    }
+  }
+  return out.join("\n");
+}
+const manual = $("manual");
+let manualLoaded = false;
+async function openManual() {
+  manual.hidden = false;
+  if (manualLoaded) return;
+  const body = $("manual-body"), toc = $("manual-toc");
+  try {
+    body.innerHTML = markdownToHtml(await (await fetch("MANUAL.md")).text());
+    manualLoaded = true;
+  } catch (e) {
+    body.textContent = "The manual couldn't be loaded.";
+    return;
+  }
+  toc.innerHTML = "";
+  body.querySelectorAll("h2").forEach((h) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = h.textContent;
+    b.addEventListener("click", () => { body.scrollTop = h.offsetTop - 8; toc.querySelectorAll("button").forEach((x) => x.classList.toggle("sel", x === b)); });
+    toc.append(b);
+  });
+}
+$("manual-btn").addEventListener("click", openManual);
+$("manual-close").addEventListener("click", () => { manual.hidden = true; });
+window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !manual.hidden) manual.hidden = true; });
+
+// ---------------------------------------------------------------------------------------------
 // Parameters
 const NOTES_C = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",

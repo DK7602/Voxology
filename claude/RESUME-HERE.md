@@ -22,6 +22,11 @@ allocation, exact pass-through when neutral), fresh-eyes review before big relea
 with A / B + MATCH), later blind loudness-matched shoot-outs vs Nectar 4 and others.
 Learn rule: every warning carries "Do I need to fix it?" + numbered steps; "No / Optional" shows calm
 (blue). Auto-Edit notes use "TITLE: text" + "\nNEED: ..." + "\nSTEP: ..." lines; a test enforces it.
+MANUAL (standing rule, user 2026-10-09): docs/MANUAL.md is the user manual built into BOTH plug-ins (Voxology: round ?
+next to LEARN -> overlay; Honey Tune: ? in the top bar). Every user-facing change updates it in the same commit, plus its
+"Manual for version X" line and the "VOXOLOGY vX" example; test "Manual: ..." fails if the version, a style or a
+built-in reference name is missing. The Claude Doc copy (claude.ai/code/artifact/8da63cdc-2b07-4c1f-b358-b40673285014)
+was the first draft; the repo file is the master.
 
 ## Status: v0.1.0 (2026-10-05) - first build (v0.2.0 adds Pitch, below)
 Chain: Cleanup (low cut 24 dB/oct + gate w/ hysteresis + hold) -> Tone EQ (5 bands) -> De-Esser
@@ -1108,3 +1113,13 @@ User OK'd all four audit items.
   treated as wet references. Test: 11 built-ins, all usable (EQ within 8 dB). 88 cases pass. Voxology_VST3 compiled.
 - Licence note told to the user: MUSDB18 and MoisesDB are research / non-commercial; only measurements are stored. Get a
   quick legal check before selling Voxology.
+
+## v0.25.0 Manual built into both plug-ins (2026-10-09)
+- User asked for a manual (made as a Claude Doc first), then: "add the manual to the plug-in and update when changes are
+  made". docs/MANUAL.md = master. Voxology: VoxologyUIData embeds it (served as MANUAL.md, text/markdown), round ? next
+  to LEARN opens an overlay (contents list left, markdownToHtml in app.js: headings, lists, pipe tables, **bold**,
+  `code`; Esc / CLOSE). Honey Tune: HoneyAssets embeds it (MANUAL_md), ? button left of Fit opens HoneyManual (read-only
+  styled TextEditor: headings, bullets, tables as "first cell - rest" lines; Close / Esc). HoneyPreview: HONEY_MANUAL=1.
+- tests/test_manual.cpp: version line + VOXOLOGY vX in the manual and index.html, every style and built-in reference
+  named. 89 cases pass. Voxology_VST3 + HoneyTune_VST3 compiled on Linux; both manuals checked by screenshot.
+- Pre-existing, not changed: at 1200 px wide Honey Tune's "KEEP VIBRATO" label is clipped (sliders at their 120 px min).

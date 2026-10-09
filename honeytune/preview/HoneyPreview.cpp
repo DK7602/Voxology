@@ -79,6 +79,11 @@ int main (int argc, char** argv)
     panel.roll.setSelected (static_cast<int> (m.notes.size() / 3));
     panel.setPlayhead (2.5);
 
+    if (std::getenv ("HONEY_MANUAL"))   // show the manual (the ? button)
+        for (auto* c : panel.getChildren())
+            if (auto* b = dynamic_cast<TextButton*> (c); b != nullptr && b->getButtonText() == "?" && b->onClick)
+                b->onClick();
+
     if (std::getenv ("HONEY_DEBUG"))
         for (auto* c : panel.getChildren())
             if (auto* sl = dynamic_cast<Slider*> (c))

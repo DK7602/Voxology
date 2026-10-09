@@ -19,10 +19,15 @@ add_executable(vox_tests
     test_honey.cpp
     test_honey_view.cpp
     test_beatkey.cpp
-    test_clipwatch.cpp)
+    test_clipwatch.cpp
+    test_manual.cpp)
 
 target_link_libraries(vox_tests PRIVATE vox_dsp Catch2::Catch2WithMain)
 target_include_directories(vox_tests PRIVATE ${CMAKE_SOURCE_DIR}/honeytune)   # HoneyView.h (the editor's rules, no JUCE)
+target_compile_definitions(vox_tests PRIVATE
+    VOX_MANUAL_PATH="${CMAKE_SOURCE_DIR}/docs/MANUAL.md"
+    VOX_UI_INDEX="${CMAKE_SOURCE_DIR}/plugin/ui/index.html"
+    VOX_VERSION="${PROJECT_VERSION}")
 set_target_properties(vox_tests PROPERTIES FOLDER "Voxology")
 
 include(Catch)

@@ -97,6 +97,7 @@
   <aside id="learn" class="card">
     <div class="card-head">
       <span class="caps">LEARN</span>
+      <button type="button" id="manual-btn" class="manual-btn" title="Open the manual: how to use Voxology and Honey Tune">?</button>
       <span class="grow"></span>
       <div class="seg tabs" id="learn-tabs">
         <button type="button" data-tab="module" class="sel">THIS MODULE</button>
@@ -112,8 +113,20 @@
     <div class="meter"><span class="m-label">OUT</span><div class="bar"><i id="out-bar"></i></div><span class="mono" id="out-text">−inf</span></div>
     <span class="grow"></span>
     <span class="mono dim" id="status"></span>
-    <span class="mono dim">VOXOLOGY v0.24.0</span>
+    <span class="mono dim">VOXOLOGY v0.25.0</span>
   </footer>
+
+  <!-- MANUAL (docs/MANUAL.md, built into the plug-in) -->
+  <section id="manual" class="card" hidden>
+    <div class="card-head">
+      <span class="caps">MANUAL</span>
+      <span class="dim m-sub">Voxology &amp; Honey Tune</span>
+      <span class="grow"></span>
+      <button type="button" id="manual-close" class="chip" title="Close the manual (Esc)">CLOSE &#10005;</button>
+    </div>
+    <nav id="manual-toc"></nav>
+    <div id="manual-body"></div>
+  </section>
 </div>
 </div>
 </body>

@@ -22,7 +22,7 @@ juce_add_plugin(HoneyTune
     AU_MAIN_TYPE                kAudioUnitType_Effect)
 
 juce_add_binary_data(HoneyAssets HEADER_NAME HoneyAssets.h NAMESPACE HoneyAssets
-    SOURCES assets/marble_blue_white.jpg assets/gold.jpg assets/logo.png assets/title.png
+    SOURCES assets/marble_blue_white.jpg assets/gold.jpg assets/logo.png assets/title.png ../docs/MANUAL.md
             assets/drip_a.png assets/drip_b.png assets/drip_c.png assets/marble_cream_panel.jpg)
 set_target_properties(HoneyAssets PROPERTIES POSITION_INDEPENDENT_CODE ON)
 

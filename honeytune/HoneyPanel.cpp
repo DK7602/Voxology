@@ -1,4 +1,5 @@
 #include "HoneyPanel.h"
+#include "HoneyAssets.h"
 
 #include "HoneyTheme.h"
 
@@ -62,7 +63,11 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     for (auto* c : { &key, &scale }) addAndMakeVisible (*c);
     for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
         l->setVisible (false);   // painted in gold by the panel
-    for (auto* b : { &snapNote, &resetNote, &resetAll, &fit, &original, &tuned, &undoBtn, &redoBtn }) addAndMakeVisible (*b);
+    for (auto* b : { &snapNote, &resetNote, &resetAll, &fit, &original, &tuned, &undoBtn, &redoBtn, &help }) addAndMakeVisible (*b);
+    help.setTooltip ("Open the manual: how to use Honey Tune and Voxology");
+    help.onClick = [this] { manual.setVisible (true); manual.toFront (true); };
+    addChildComponent (manual);
+    manual.onClose = [this] { manual.setVisible (false); };
     undoBtn.setTooltip ("Undo the last edit (Ctrl + Z)");
     redoBtn.setTooltip ("Redo (Ctrl + Y)");
     undoBtn.onClick = [this] { if (model != nullptr && model->undo()) { roll.refresh(); refresh(); } };
@@ -380,6 +385,7 @@ void HoneyPanel::resized()
     bottomBar = r.removeFromBottom (78.0f);
     r.removeFromBottom (kSeparator);
     roll.setBounds (r.toNearestInt());
+    manual.setBounds (inner.toNearestInt());
     cards.clear();
 
     // Top: title | key | scale | snap | drift | vibrato | fit ... legend | logo
@@ -395,6 +401,8 @@ void HoneyPanel::resized()
     legendArea = top.removeFromRight (122.0f);
     cards.push_back (legendArea);
     top.removeFromRight (10.0f);
+    help.setBounds (top.removeFromRight (30.0f).withSizeKeepingCentre (30.0f, 28.0f).translated (0.0f, 8.0f).toNearestInt());
+    top.removeFromRight (6.0f);
     fit.setBounds (top.removeFromRight (52.0f).withSizeKeepingCentre (52.0f, 28.0f).translated (0.0f, 8.0f).toNearestInt());
     top.removeFromRight (6.0f);
     auto abArea = top.removeFromRight (148.0f).withSizeKeepingCentre (148.0f, 28.0f).translated (0.0f, 8.0f);
@@ -447,4 +455,109 @@ void HoneyPanel::resized()
     redoBtn.setBounds (row.removeFromRight (62.0f).toNearestInt());
     row.removeFromRight (6.0f);
     undoBtn.setBounds (row.removeFromRight (62.0f).toNearestInt());
+}
+
+//==============================================================================
+// The manual: docs/MANUAL.md drawn as styled text (headings, lists, tables as lines).
+HoneyManual::HoneyManual()
+{
+    const Colour paper (0xfffffaf0), ink (0xff1d2733), goldDeep (0xff8d641f), blueDeep (0xff24618f);
+    text.setMultiLine (true, true);
+    text.setReadOnly (true);
+    text.setCaretVisible (false);
+    text.setScrollbarsShown (true);
+    text.setColour (TextEditor::backgroundColourId, paper);
+    text.setColour (TextEditor::outlineColourId, Colours::transparentBlack);
+    text.setColour (TextEditor::focusedOutlineColourId, Colours::transparentBlack);
+    text.setIndents (24, 16);
+    addAndMakeVisible (text);
+    close.setTooltip ("Back to the notes (Esc)");
+    close.onClick = [this] { if (onClose) onClose(); };
+    text.onEscapeKey = [this] { if (onClose) onClose(); };
+    addAndMakeVisible (close);
+
+    // Plain text with **bold** spans; ` marks dropped.
+    auto put = [this] (const String& s, float size, bool bold, Colour colour, Colour boldColour)
+    {
+        bool on = false;
+        String run;
+        auto flush = [&]
+        {
+            if (run.isEmpty()) return;
+            text.setFont (FontOptions (size, (bold || on) ? Font::bold : Font::plain));
+            text.setColour (TextEditor::textColourId, on ? boldColour : colour);
+            text.insertTextAtCaret (run);
+            run.clear();
+        };
+        for (int i = 0; i < s.length(); ++i)
+        {
+            const auto c = s[i];
+            if (c == '`') continue;
+            if (c == '*' && i + 1 < s.length() && s[i + 1] == '*') { flush(); on = ! on; ++i; continue; }
+            run << String::charToString (c);
+        }
+        flush();
+    };
+    const auto md = String::fromUTF8 (HoneyAssets::MANUAL_md, HoneyAssets::MANUAL_mdSize);
+    const auto lines = StringArray::fromLines (md);
+    for (int i = 0; i < lines.size(); ++i)
+    {
+        const auto line = lines[i].trimEnd();
+        const auto t = line.trimStart();
+        if (t.isEmpty()) continue;
+        if (t.startsWith ("# "))
+            put (t.substring (2) + "\n\n", 24.0f, true, goldDeep, goldDeep);
+        else if (t.startsWith ("## "))
+        {
+            put ("\n" + t.substring (3).toUpperCase() + "\n", 18.0f, true, goldDeep, goldDeep);
+            put ("\n", 6.0f, false, ink, ink);
+        }
+        else if (t.startsWith ("|"))
+        {
+            const auto isRule = [] (const String& l) { return l.trim().startsWith ("|") && l.containsOnly ("|-: "); };
+            if (isRule (t)) continue;
+            auto cells = StringArray::fromTokens (t.substring (1, t.endsWithChar ('|') ? t.length() - 1 : t.length()), "|", {});
+            cells.trim();
+            const bool header = i + 1 < lines.size() && isRule (lines[i + 1]);
+            if (header)
+                put (cells.joinIntoString ("  /  ").toUpperCase() + "\n", 12.0f, true, goldDeep, goldDeep);
+            else
+            {
+                put ("   " + cells[0], 15.0f, true, blueDeep, blueDeep);
+                cells.remove (0);
+                put ("  -  " + cells.joinIntoString ("  -  ") + "\n", 15.0f, false, ink, blueDeep);
+            }
+            if (i + 1 >= lines.size() || ! lines[i + 1].trimStart().startsWith ("|")) put ("\n", 8.0f, false, ink, ink);
+        }
+        else if (t.startsWith ("- ") || (t.initialSectionContainingOnly ("0123456789").isNotEmpty()
+                                         && t.fromFirstOccurrenceOf (".", false, false).startsWithChar (' ')))
+        {
+            const auto item = t.startsWith ("- ") ? String::charToString ((juce_wchar) 0x2022) + "  " + t.substring (2) : t;
+            put ("   " + item + "\n", 15.0f, false, ink, blueDeep);
+            if (i + 1 >= lines.size() || lines[i + 1].trim().isEmpty()) put ("\n", 8.0f, false, ink, ink);   // gap after the list
+        }
+        else
+            put (t + "\n\n", 15.0f, false, ink, blueDeep);
+    }
+    text.moveCaretToTop (false);
+}
+
+void HoneyManual::paint (Graphics& g)
+{
+    auto r = getLocalBounds().toFloat();
+    g.setColour (Colour (0xfffffaf0));
+    g.fillRoundedRectangle (r, 10.0f);
+    g.setColour (Colour (0xffc9973a));
+    g.drawRoundedRectangle (r.reduced (1.5f), 10.0f, 3.0f);
+    g.setColour (Colour (0xff8d641f));
+    g.setFont (FontOptions (16.0f, Font::bold));
+    g.drawText ("MANUAL  " + String::charToString ((juce_wchar) 0x00b7) + "  Honey Tune & Voxology", r.removeFromTop (44.0f).reduced (20.0f, 0.0f), Justification::centredLeft);
+}
+
+void HoneyManual::resized()
+{
+    auto r = getLocalBounds().reduced (6);
+    auto head = r.removeFromTop (38);
+    close.setBounds (head.removeFromRight (90).reduced (4, 6));
+    text.setBounds (r);
 }
