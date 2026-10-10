@@ -1184,3 +1184,7 @@ User OK'd all four audit items.
   Don & Lysette A, Schaf F#m). A stricter first try (any disagreement = unsure) broke those two: near-ties must count as agree.
 - Test "Key detection: never sure of a key one note off" (Not Mine / Away note shares; fails on the old code). 90 cases.
 - Manual: 2 new built-ins in the table (13), troubleshooting row "sample-pack names are often wrong about the key".
+- CI green: Actions run 38075164832 (v0.27.0, commit a8d9f2f). v0.26.0 green: run 38060744752. Both on branch
+  claude/upbeat-faraday-iyzicv (this session could only push there), not yet on claude/voxology: ask the user.
+- Next: user is digging for MALE vocals in their packs (acapellas or dry / wet stems, 5+ per group): male trap / rap and
+  male R&B / melodic references. Female rap / trap still missing too.
