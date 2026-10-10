@@ -20,6 +20,7 @@ Compile each against the engine: `g++ -std=c++20 -O2 -Idsp/include tools/audit/<
 | `comp_audit.cpp in.f64 style` | Compressor: Auto-Edit's settings, punch (microDyn) and line spread before / after, THD+N on a loud 110 Hz note |
 | `sat_audit.cpp in.f64 style` | Saturation: estimated vs real harmonics on the vocal, aliasing with a loud 9 kHz tone |
 | `whole_chain.cpp a.f64 ...` | the whole Auto-Edit insert chain on many vocals ("do no harm" on finished ones): tone change, punch, "s", loudness, as CSV |
+| `keybench.cpp f64dir test-audio/cymatics/labels.csv` | the voice key (Auto-Edit's guess and the live AUTO key) vs the sung keys of 54 labelled pro vocals: right / wrong / unsure |
 | `honey_tune_audit.cpp in.f64` | Honey Tune: snap every note, keep drift + vibrato, re-analyse: lands within, shape kept, pitch glitches |
 
 Results and history: claude/RESUME-HERE.md (v0.17.0).

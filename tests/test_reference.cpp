@@ -112,10 +112,10 @@ TEST_CASE ("Reference Match keeps each band on its job (no stacking, nothing und
     CHECK (r.params.cleanup.lowCutHz <= 0.86 * r.analysis.f0Low + 5.0);
 }
 
-TEST_CASE ("Built-in references: pro groups (MUSDB18, MoisesDB) + a trap vocal, usable by Auto-Edit", "[reference]")
+TEST_CASE ("Built-in references: pro groups (MUSDB18, MoisesDB, Cymatics) + a trap vocal, usable by Auto-Edit", "[reference]")
 {
     const auto& lib = builtinReferences();
-    REQUIRE (lib.size() == 11);
+    REQUIRE (lib.size() == 13);
     const auto mine = testsig::vocal (kSr, 14.0, -80.0, -14.0, 3, 150.0);
     for (const auto& ref : lib)
     {

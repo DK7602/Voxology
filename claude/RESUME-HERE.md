@@ -1157,3 +1157,30 @@ User OK'd all four audit items.
   Compressor, Reverb, Output, Pitch (+ Transpose), Tone EQ, Dynamic EQ and BEAT/Unmask pages, all as expected.
 - Manual: "The 12 modules" knob list (double-click knob = default, double-click number = type) + Honey Tune slider line.
 - To check in Cubase: typing goes to the box, not to Cubase's key commands (click the box first).
+
+## v0.27.0 Cymatics vocals: 2 built-in references, labelled test set, Auto-Edit key fix (2026-10-10)
+- User uploaded 54 vocals from Cymatics sample packs they own (royalty-free; mixed male / female, unlabelled): 25 loops,
+  13 acapellas + "Deliberation" (wet lead + dry lead / adlib / background stems, dry and wet), 10 wet hooks. Saved as mono
+  MP3 in test-audio/cymatics/ (14 MB), named with the key actually sung; labels.csv + README there. Keep the repo private.
+- Keys: 24 of 54 pack names are a semitone off what's sung (e.g. Burial "C Min" = C# minor). Labelled by an independent
+  method (harmonic-sum FFT pitch -> note histogram -> best 7-note set; sets within 3 % = "also fits"), cross-checked with
+  YIN, re-checked on the MP3s. Held (mostly rapped) = unclear.
+- Male / female: formant spacing (LPC F1-F4, dF > 1120 female, < 1060 male): acapellas 11 female, 1 male (Too Easy),
+  2 unclear; unreliable on high / pitched loops (marked).
+- References (ReferenceLibrary.cpp, 13 built-ins now): "Pro R&B singer (female), modern" (13 acapellas; Deliberation from
+  its dry stem; f0 233, s -2.7, punch 3.9; nearest old built-in: electronic female 2.7 dB) and "Sung hooks, finished (mostly
+  female)" (10 wet hooks; s -4.7 = median of the 7 where an s was heard, punch 7.5 stored 0; darker: Auto-Edit cuts ~300 Hz
+  and 4-8 kHz up to 6 dB on the user's vocals). Loops NOT used: filtered for background (-40 dB at 8 kHz, -35 at 200 Hz).
+  On the user's vocals with the R&B reference: EQ within +-3 dB, tone distance 2.8-4.9 dB.
+- Deliberation dry -> wet (the producer's own before / after; the dry stem is already EQ'd + compressed, wet = + space):
+  Auto-Edit with the wet as reference: tail -24.5 vs the producer's -24.1 dB, tone within 0.4 dB; style only -21.6.
+- Key benchmark tools/audit/keybench.cpp (45 labelled vocals). Live AUTO key (VoiceKey): 24 right, 1 wrong (No More:
+  D vs D# barely sung, flagged open note), 20 unsure. Auto-Edit's detectKey (Key / Scale fallback + Honey Tune's voice
+  fallback) was sure and WRONG on 11 (one note off: Krumhansl profiles lean on resting notes). Fix in detectKey: cross-check
+  with the note-set method (noteSetOf = VoiceKey's: 10-cent histogram, singer offset out, pickNoteSet); sure only if both
+  agree (profile's set within 3 % of the best set's share) or the set is clear alone (>= 60 %, 5+ notes, no tie, not
+  unclear: then it decides); else ambiguous (alt = the set's key), confidence <= 0.4. Result: 22 right, 2 wrong (near-ties),
+  21 unsure. User's own vocals (Don_Birthday, Don & Lysette, Gallas, Schaf): unchanged (Honey Tune still sure + right on
+  Don & Lysette A, Schaf F#m). A stricter first try (any disagreement = unsure) broke those two: near-ties must count as agree.
+- Test "Key detection: never sure of a key one note off" (Not Mine / Away note shares; fails on the old code). 90 cases.
+- Manual: 2 new built-ins in the table (13), troubleshooting row "sample-pack names are often wrong about the key".

@@ -213,6 +213,30 @@ TEST_CASE ("Key detection from sung notes", "[pitch]")
     CHECK (g.offCents < 12.0);
 }
 
+TEST_CASE ("Key detection: never sure of a key one note off (real pro vocals' note shares)", "[pitch]")
+{
+    // How much of the singing sits on each note (C .. B, %), from two Cymatics vocals (test-audio/cymatics): "Not Mine"
+    // sings D minor (Bb, not B), "Away" G dorian (the notes of F major: Bb and E). Before v0.27 the profile method was
+    // 100 % sure of A minor on both (B instead of Bb): it leans on the notes a melody rests on (A, C, G, E).
+    struct Case { const char* name; std::array<int, 12> share; int setRoot; bool mustBeSure; };
+    const Case cases[] = {
+        { "Not Mine", { 15, 1, 7, 2, 11, 9, 2, 15, 2, 29, 6, 2 }, 5, true },
+        { "Away", { 10, 1, 7, 2, 17, 11, 3, 7, 4, 26, 12, 1 }, 5, false },
+    };
+    for (const auto& c : cases)
+    {
+        std::vector<double> notes;
+        for (int k = 0; k < 12; ++k)
+            for (int i = 0; i < 10 * c.share[static_cast<size_t> (k)]; ++i) notes.push_back (60 + k + 0.1 * std::sin (0.7 * i));
+        const auto g = detectKey (notes);
+        const bool sure = g.confidence >= 0.6 && ! g.ambiguous;
+        const int set = g.minor ? (g.key + 3) % 12 : g.key;
+        INFO (c.name << ": " << kNoteNames[static_cast<size_t> (g.key)] << (g.minor ? " minor" : " major") << " conf " << g.confidence << (g.ambiguous ? " (ambiguous)" : ""));
+        CHECK ((! sure || set == c.setRoot));
+        if (c.mustBeSure) CHECK (sure);
+    }
+}
+
 TEST_CASE ("Pitch: Natural fixes each note's centre and keeps the vibrato", "[pitch]")
 {
     // G3 sung 35 cents sharp with a +-40 cent vibrato (a 5.5 Hz wobble).

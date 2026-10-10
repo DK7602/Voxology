@@ -1,4 +1,5 @@
 #include "vox/PitchCorrector.h"
+#include "vox/BeatKey.h"
 
 #include "vox/FilterDesign.h"
 
@@ -718,6 +719,42 @@ void PitchCorrector::processLow (double* const* ch, int nch, int i, bool neutral
 }
 
 // ------------------------------------------------------------------------------------------------
+namespace
+{
+/** The live AUTO key's note-set method (VoiceKey) on a list of readings: a 10-cent histogram with the singer's
+    overall sharp / flat taken out, then the 7-note set holding most of it. clear = sure (>= 60 %), 5+ different
+    notes, no near-tie with another set. */
+struct NoteSet { int root = 0, tonicOffset = 0; double confidence = 0.0; bool clear = false; std::array<double, 12> share {}; };
+NoteSet noteSetOf (const std::vector<double>& midiNotes)
+{
+    std::array<double, 120> fine {};
+    for (double m : midiNotes)
+        fine[static_cast<size_t> (((std::lround (m * 10.0) % 120) + 120) % 120)] += 1.0;
+    double re = 0.0, im = 0.0;
+    for (size_t b = 0; b < fine.size(); ++b)
+    {
+        const double ang = 2.0 * std::numbers::pi * static_cast<double> (b % 10) / 10.0;
+        re += fine[b] * std::cos (ang);
+        im += fine[b] * std::sin (ang);
+    }
+    const double offset = std::atan2 (im, re) / (2.0 * std::numbers::pi);
+    std::array<double, 12> chroma {};
+    for (size_t b = 0; b < fine.size(); ++b)
+        chroma[static_cast<size_t> (((std::lround (static_cast<double> (b) / 10.0 - offset) % 12) + 12) % 12)] += fine[b];
+    BeatKey::Result res;
+    int current = -1;
+    const int ties = pickNoteSet (chroma, 0.0, 0.68, 0.88, current, res);
+    const double sum = std::accumulate (chroma.begin(), chroma.end(), 0.0);
+    int notes = 0;
+    for (double c : chroma) if (c >= 0.03 * sum) ++notes;
+    NoteSet out { res.setRoot, res.tonicOffset, res.confidence, res.confidence >= 0.6 && ties < 2 && notes >= 5 && ! res.unclear, {} };
+    static constexpr std::array<int, 7> major { 0, 2, 4, 5, 7, 9, 11 };
+    for (int r = 0; r < 12; ++r)
+        for (int step : major) out.share[static_cast<size_t> (r)] += chroma[static_cast<size_t> ((r + step) % 12)] / std::max (sum, 1e-12);
+    return out;
+}
+}
+
 KeyGuess detectKey (const std::vector<double>& midiNotes)
 {
     if (midiNotes.size() < 20) return {};
@@ -725,6 +762,34 @@ KeyGuess detectKey (const std::vector<double>& midiNotes)
     for (double m : midiNotes)
         hist[static_cast<size_t> (((static_cast<int> (std::lround (m)) % 12) + 12) % 12)] += 1.0;
     KeyGuess g = keyFromHistogram (hist);
+
+    // Cross-check with the note-set method. The profile method can be sure of a key one note off (it leans on the
+    // notes a melody rests on); on 45 labelled pro vocals it was sure and wrong on 11. Sure now means: both agree,
+    // or the note set is clear on its own (then it decides). Otherwise it's a toss-up (Chromatic).
+    const auto set = noteSetOf (midiNotes);
+    const int profileSet = g.minor ? (g.key + 3) % 12 : g.key;
+    const bool profileSure = g.confidence >= 0.6 && ! g.ambiguous;
+    const bool setMinor = set.tonicOffset == 9 || set.tonicOffset == 2 || set.tonicOffset == 4;   // minor, dorian, phrygian home
+    const int setKey = setMinor ? (set.root + 9) % 12 : set.root;                                // same notes, named major / minor
+    // Agree = the profile's notes hold about as much of the singing as the best set (within 3 %: one barely sung note).
+    const bool agree = set.share[static_cast<size_t> (profileSet)] >= set.share[static_cast<size_t> (set.root)] - 0.03;
+    if (! (profileSure && agree))
+    {
+        if (set.clear)
+        {
+            g.key = setKey;
+            g.minor = setMinor;
+            g.confidence = set.confidence;
+            g.ambiguous = false;
+        }
+        else if (profileSure)
+        {
+            g.ambiguous = true;
+            g.altKey = setKey;
+            g.altMinor = setMinor;
+            g.confidence = std::min (g.confidence, 0.4);
+        }
+    }
     const int scale = g.minor ? 2 : 1;
     double off = 0.0;
     for (double m : midiNotes)

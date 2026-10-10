@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.26.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.27.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.26.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.27.0**).
 
 Where each one goes in Cubase:
 
@@ -97,7 +97,7 @@ How to read a warning card:
 
 A reference makes Auto-Edit aim at the tone of a real finished vocal instead of the style's target. Click **+ REFERENCE** (it shows the reference's name once one is loaded) to open the menu:
 
-- **BUILT-IN**: 11 measured groups of finished pro vocals. Only measurements are stored, never audio.
+- **BUILT-IN**: 13 measured groups of finished pro vocals. Only measurements are stored, never audio.
 - **YOURS**: every vocal file you've added. Click ✕ to remove one.
 - **+ Add a vocal file…**: pick a WAV, AIFF, FLAC, MP3 or OGG file. It's measured once and saved in Documents\Voxology\References, so it's there in every project.
 - **No reference**: back to the style's own target.
@@ -114,6 +114,8 @@ A reference makes Auto-Edit aim at the tone of a real finished vocal instead of 
 | Pro pop singer (male) | 15 (MoisesDB) |
 | Pro pop singer (female) | 26 (MoisesDB) |
 | Pro electronic singer (female) | 13 (MoisesDB) |
+| Pro R&B singer (female), modern | 13 R&B / pop acapellas (Cymatics sample packs) |
+| Sung hooks, finished (mostly female) | 10 finished hooks, effects baked in (Cymatics) |
 | Pro average (all voices) | 143 (MUSDB18) |
 
 After picking a reference, press **AUTO-EDIT** again so it re-aims.
@@ -196,6 +198,7 @@ Quick rule: a fast trap or robot effect = Voxology's Pitch alone (Robot or Class
 | Auto-Edit says TRY AGAIN | It didn't hear enough voice. Play a part with singing or rapping for at least 12 seconds |
 | Crackle or harsh distortion | Look at Cleanup: "clipped in!" means the recording itself is clipped. Record again with the mic gain lower |
 | Pitch sounds off-key | Check the key on the Pitch page. Send the beat to the side-chain, or pick the key under MANUAL |
+| A sample-pack vocal or beat sounds off-key | Pack file names are often wrong about the key (in one tested pack, 24 of 54 were a semitone off). Leave Key on AUTO, or check the key by ear or with a key app |
 | Honey Tune says KEY UNSURE | Pick the song's key in KEY, or put a Voxology on the beat (BEAT mode) and play the song for about 6 s |
 | Honey Tune isn't in Audio > Extensions | Your Cubase edition needs ARA (Artist or Pro). Elements doesn't have it |
 | The vocal sounds tuned twice or warbly | Voxology's Pitch is on after Honey Tune. Switch Pitch off on that track |
