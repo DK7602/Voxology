@@ -1124,3 +1124,19 @@ User OK'd all four audit items.
 - tests/test_manual.cpp: version line + VOXOLOGY vX in the manual and index.html, every style and built-in reference
   named. 89 cases pass. Voxology_VST3 + HoneyTune_VST3 compiled on Linux; both manuals checked by screenshot.
 - Pre-existing, not changed: at 1200 px wide Honey Tune's "KEEP VIBRATO" label is clipped (sliders at their 120 px min).
+- CI green: Actions run 37982646791 (v0.25.0, commit 7aae106).
+
+## Thread handoff (2026-10-10): "Voxology UI easter egg" thread -> "Voxology manual values" thread
+- State: v0.25.0 (CI green, run 37982646791). This thread: v0.23.0 / v0.23.1 logo easter egg (blue -> red, dark red
+  streaks, saved with the project), v0.24.0 four MoisesDB built-in references (11 built-ins), v0.25.0 manual built into
+  both plug-ins (docs/MANUAL.md = master, ? buttons, test_manual.cpp keeps it in step: see the MANUAL standing rule).
+- Open with the user: 1) confirm the Honey Tune menu path in Cubase (manual says Audio > Extensions > Honey Tune; the
+  Claude Doc has a comment asking); 2) offered: fix the clipped "KEEP VIBRATO" label at Honey Tune's smallest width;
+  3) female trap / female rap references still missing (paid packs or the user's own files).
+- Next thread: "Voxology manual values" - the user hasn't said what it means yet. Likely: knob ranges / defaults /
+  typical values per module in the manual. Ask before changing code or the manual.
+- Selekt Audio (bot check) and Slooply (API login) are blocked: respected. MoisesDB signed link expired after 7 days
+  (2026-10-16); any new download needs the user to fill the form again.
+- User prefs (unchanged): short replies, plain language, honest assessments, a plan with every warning; Actions link when
+  green + Chrome Ctrl+J -> Keep; keep this file AND docs/MANUAL.md updated; push to claude/voxology; no PRs. Linux builds:
+  --parallel 3 (apt: X11 / freetype / fontconfig / asound / gtk-3 / webkit2gtk-4.1 dev packages).
