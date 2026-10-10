@@ -1140,3 +1140,20 @@ User OK'd all four audit items.
 - User prefs (unchanged): short replies, plain language, honest assessments, a plan with every warning; Actions link when
   green + Chrome Ctrl+J -> Keep; keep this file AND docs/MANUAL.md updated; push to claude/voxology; no PRs. Linux builds:
   --parallel 3 (apt: X11 / freetype / fontconfig / asound / gtk-3 / webkit2gtk-4.1 dev packages).
+
+## v0.26.0 Type exact values (2026-10-10, "Voxology manual values" thread)
+- "Manual values" = the user wants to double-click a value and type it (Polisher got the same on 2026-10-10, branch
+  claude/eloquent-einstein-sscadx, commit d054c5c). Voxology: double-click the number under ANY knob (all go through
+  knob() in app.js) or press Enter on a focused knob -> text box (typeIn): Enter sets, Esc cancels, clicking away sets,
+  unchanged text = no change; one host undo step (sliderDragStarted / Ended). Double-click on the knob still resets.
+  The Pitch page's Transpose readout works the same way.
+- parseTyped: "−3" / "-3 dB", "1.2k" / "1.2 kHz", "4:1", "250 ms" / "0.25 s" (converted to the knob's unit), "50 %", the
+  knob's own words ("off", "flat", "as sung": matched against its formatter at start / end / default / 0); a Hz knob
+  reads "8" as 8 kHz when 8 Hz is below its range; one-way knobs ignore the sign (Breaths "-6" = 6, Threshold "18" =
+  -18); clamped to the range; no number = no change.
+- Honey Tune: its slider number boxes were already click-to-type (JUCE TextBoxRight, editable). Fixed: text without a
+  number used to set 0; now keeps the value (valueFromTextFunction), Unicode minus and decimal comma accepted.
+- Checked: browser preview (mock.js + JUCE 8.0.15 javascript) with Playwright, 34 typed-value cases on Cleanup, De-Esser,
+  Compressor, Reverb, Output, Pitch (+ Transpose), Tone EQ, Dynamic EQ and BEAT/Unmask pages, all as expected.
+- Manual: "The 12 modules" knob list (double-click knob = default, double-click number = type) + Honey Tune slider line.
+- To check in Cubase: typing goes to the box, not to Cubase's key commands (click the box first).

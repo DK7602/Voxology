@@ -60,6 +60,14 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     noteFormant.setDoubleClickReturnValue (true, 0.0);
     noteFormant.setTooltip ("This note's tone: + thinner / younger, - deeper (the pitch stays). Double-click: back to 0.");
     addAndMakeVisible (noteFormant);
+    // Typed values (click a number box): text without a number keeps the value instead of jumping to 0;
+    // the Unicode minus and a decimal comma work too.
+    for (auto* s : { &snap, &drift, &vibrato, &noteDrift, &noteVibrato, &noteFormant })
+        s->valueFromTextFunction = [s] (const String& text)
+        {
+            const auto t = text.replaceCharacter ((juce_wchar) 0x2212, '-').replaceCharacter (',', '.').retainCharacters ("0123456789.+-");
+            return t.containsAnyOf ("0123456789") ? t.getDoubleValue() : s->getValue();
+        };
     for (auto* c : { &key, &scale }) addAndMakeVisible (*c);
     for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
         l->setVisible (false);   // painted in gold by the panel

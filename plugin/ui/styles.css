@@ -184,6 +184,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .cell-sub { font-size: 11px; color: var(--dim); margin-top: -2px; }
 .cell-value { position: relative; z-index: 2; font-family: "Plex"; font-size: 13px; color: var(--blue-deep); margin-top: 2px;
   padding: 1px 9px; border-radius: 10px; background: rgba(255, 250, 240, 0.92); box-shadow: inset 0 0 0 1.5px var(--gold); }
+.knob + .cell-value, .tp-v { cursor: text; }
+.value-input { position: relative; z-index: 2; box-sizing: border-box; margin-top: 2px; padding: 1px 6px; border: 0; border-radius: 10px; outline: none;
+  font-family: "Plex"; font-size: 13px; text-align: center; color: var(--blue-deep); background: #fff;
+  box-shadow: inset 0 0 0 2px var(--gold), 0 0 0 3px rgba(var(--blue-rgb), 0.4); user-select: text; -webkit-user-select: text; }
+.value-input::selection { background: rgba(var(--blue-rgb), 0.35); }
+.tp .value-input { margin-top: 0; font-size: 11px; color: var(--ink); }
 .knob { width: 86px; height: 100px; position: relative; cursor: ns-resize; margin-top: 2px; z-index: 1; }
 .knob img { width: 86px; display: block; filter: drop-shadow(0 4px 4px rgba(60, 40, 6, 0.45)); pointer-events: none; }
 .knob svg { position: absolute; left: 0; top: 0; width: 86px; height: auto; overflow: visible; pointer-events: none; }
@@ -282,7 +288,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #cells[data-cols="5"] .cell { height: 150px; }
 #cells[data-cols="5"] .cell-sub { display: none; }
 #cells[data-cols="5"] .knob { height: 96px; margin-top: 4px; }
-#cells[data-cols="5"] .cell-value { margin-top: 4px; }
+#cells[data-cols="5"] .cell-value, #cells[data-cols="5"] .value-input { margin-top: 4px; }
 
 /* VOCAL / BEAT switch and BEAT mode. */
 .seg.mode { margin-left: auto; }

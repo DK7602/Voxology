@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.25.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.26.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.25.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.26.0**).
 
 Where each one goes in Cubase:
 
@@ -55,7 +55,13 @@ The round **?** next to LEARN opens this manual (Esc or CLOSE to go back). The b
 
 ## The 12 modules
 
-The honeycomb on the left is the chain, run top to bottom: click a cell to open it, click its dot to switch it on or off. Every knob: drag up / down, mouse wheel for small steps (Shift = finer), double-click = back to default.
+The honeycomb on the left is the chain, run top to bottom: click a cell to open it, click its dot to switch it on or off.
+
+Every knob:
+
+- Drag up / down, or use the mouse wheel for small steps (hold **Shift** for finer).
+- **Double-click the knob**: back to its default.
+- **Double-click the number** under it: type an exact value, then press **Enter** (**Esc** cancels, clicking away keeps it). Units are optional: `-3`, `120` (Hz), `1.2k` (1.2 kHz), `4` (4:1), `250 ms`, `off`. A knob that only goes one way doesn't need the minus (Threshold `18` = −18 dB). Values past the end stop at the end. With a knob selected, **Enter** opens the box too. Transpose on the Pitch page works the same way.
 
 | # | Module | What it does | Main controls |
 | --- | --- | --- | --- |
@@ -163,6 +169,7 @@ Honey Tune shows each sung note as a honeycomb cell on a piano roll, so you can 
 - Drag the middle sideways: move it in time. Drag an end: make it longer or shorter.
 - Double-click: snap it to the key. **Delete**: reset it. Arrow keys: up / down = one semitone, left / right = next note.
 - Bottom bar for the selected note: **NOTE DRIFT**, **NOTE VIBRATO**, **NOTE FORMANT** (+ thinner, − deeper; pitch stays), **Snap note to key**, **Reset note**, **Reset all notes**.
+- Every slider (top and bottom bar): click the number box next to it to type an exact value, then press **Enter**.
 - **Ctrl+Z** undo, **Ctrl+Y** redo. Click the ruler to move the playhead. Mouse wheel scrolls; Ctrl+wheel or + / − zooms.
 
 Your edits are saved with the Cubase project.

@@ -152,6 +152,64 @@ function scaledToNorm(state, v) {
 }
 function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 
+/** A typed value -> the control's own units, kept in range (null = nothing to set). Takes "−3", "-3 dB", "1.2k" /
+    "1.2 kHz" (a Hz knob also reads "6" as 6 kHz when 6 Hz is below its range), "2.5:1", "120 ms" / "0.12 s", "50 %",
+    and the words the knob shows ("off", "flat", "as sung"). A knob that only goes one way from 0 ignores the sign:
+    Breaths "-6" = 6 dB down, Threshold "20" = -20 dB. */
+function parseTyped(text, s, fmt, def) {
+  const { start, end } = s.properties;
+  const lo = Math.min(start, end), hi = Math.max(start, end);
+  const t = String(text).trim().toLowerCase().replace(/−/g, "-").replace(",", ".");
+  const word = [start, end, def, 0].find((x) => x >= lo && x <= hi && fmt(x).toLowerCase() === t);
+  if (word !== undefined) return word;
+  const m = /([-+]?\d*\.?\d+)\s*(khz|k|ms|s(?!t))?/.exec(t);
+  if (!m) return null;
+  let v = parseFloat(m[1]);
+  if (!Number.isFinite(v)) return null;
+  const unit = fmt(hi);   // how the knob shows values: "... kHz", "... ms", "... s"
+  if (m[2] === "khz" || m[2] === "k") v *= 1000;
+  else if (m[2] === "ms" && / s$/.test(unit)) v /= 1000;
+  else if (m[2] === "s" && / ms$/.test(unit)) v *= 1000;
+  else if (!m[2] && /Hz$/.test(unit) && v < lo && v * 1000 <= hi) v *= 1000;
+  if (lo >= 0) v = Math.abs(v);
+  else if (hi <= 0) v = -Math.abs(v);
+  return clamp(v, lo, hi);
+}
+
+/** Type a value into a box over its readout: Enter sets it, Esc cancels, clicking away sets it. One host undo step.
+    after() redraws the control. */
+function typeIn(valEl, id, fmt, def, after, refocus) {
+  if (valEl.hidden) return;
+  const s = P[id], shown = valEl.textContent;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "value-input";
+  input.value = shown;
+  input.spellcheck = false;
+  input.setAttribute("aria-label", "Type a value");
+  input.style.width = `${Math.max(70, valEl.offsetWidth + 12)}px`;
+  valEl.hidden = true;
+  valEl.after(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = (commit, key) => {
+    if (done) return;
+    done = true;
+    const v = commit && input.value.trim() !== shown ? parseTyped(input.value, s, fmt, def) : null;
+    input.remove();
+    valEl.hidden = false;
+    if (v !== null) { s.sliderDragStarted(); s.setNormalisedValue(scaledToNorm(s, v)); s.sliderDragEnded(); after(); }
+    if (key && refocus) refocus.focus();
+  };
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); finish(true, true); }
+    else if (e.key === "Escape") { e.preventDefault(); finish(false, true); }
+    e.stopPropagation();
+  });
+  input.addEventListener("blur", () => finish(true, false));
+}
+
 // Latest meter frame.
 const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, clipNow: 0, clipTotal: 0, overNow: 0, hotPeak: -100, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1],
@@ -256,9 +314,12 @@ function notesCell() {
     return b;
   });
   const tpv = cell.querySelector(".tp-v");
+  const tpText = (v) => { const t = Math.round(v); return t === 0 ? "transpose 0" : `transpose ${t > 0 ? "+" : MINUS}${Math.abs(t)}`; };
   const step = (d) => { setScaled("ptTranspose", clamp(Math.round(val("ptTranspose")) + d, -12, 12)); cell.update(); anyEdited(); };
   cell.querySelector(".tp-dn").addEventListener("click", () => step(-1));
   cell.querySelector(".tp-up").addEventListener("click", () => step(1));
+  tpv.title = "Double-click to type a value";
+  tpv.addEventListener("dblclick", () => typeIn(tpv, "ptTranspose", tpText, 0, () => { cell.update(); anyEdited(); }));
   cell.update = () => {
     const midi = choice("ptMidi");
     notes.forEach((b, k) => {
@@ -268,8 +329,7 @@ function notesCell() {
       b.classList.toggle("midi", midi > 0 && ((M.midiNotes >> k) & 1) === 1);
     });
     midiBtns.forEach((b, i) => b.classList.toggle("sel", i === midi));
-    const t = Math.round(val("ptTranspose"));
-    tpv.textContent = t === 0 ? "transpose 0" : `transpose ${t > 0 ? "+" : MINUS}${Math.abs(t)}`;
+    tpv.textContent = tpText(val("ptTranspose"));
   };
   liveMeters.push(cell);
   [...PT_RM, "ptMidi", "ptTranspose"].forEach((id) => P[id].valueChangedEvent.addListener(cell.update));
@@ -564,10 +624,15 @@ function knob(id, label, sub, fmt, def, bipolar = false) {
   k.addEventListener("pointercancel", end);
   k.addEventListener("dblclick", () => { s.sliderDragStarted(); setNorm(scaledToNorm(s, def)); s.sliderDragEnded(); });
   k.addEventListener("wheel", (e) => { e.preventDefault(); s.sliderDragStarted(); setNorm(s.getNormalisedValue() + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 0.002 : 0.01)); s.sliderDragEnded(); }, { passive: false });
+  // Double-click the number (or Enter on the knob) to type an exact value.
+  const type = () => typeIn(valEl, id, fmt, def, () => { refresh(); anyEdited(); }, k);
+  valEl.title = "Double-click to type a value";
+  valEl.addEventListener("dblclick", type);
   k.addEventListener("keydown", (e) => {
     const step = e.shiftKey ? 0.002 : 0.01;
     if (e.key === "ArrowUp" || e.key === "ArrowRight") setNorm(s.getNormalisedValue() + step);
     else if (e.key === "ArrowDown" || e.key === "ArrowLeft") setNorm(s.getNormalisedValue() - step);
+    else if (e.key === "Enter") type();
     else return;
     e.preventDefault();
   });
