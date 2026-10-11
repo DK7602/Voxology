@@ -1252,3 +1252,4 @@ User OK'd all four audit items.
   with Sample Snagger (sample-site preview audio, not licensed to the user). Kept OUT of the repo on purpose (session
   scratch only); only averaged measurements ship. Add to the legal check before selling (with MUSDB18 / MoisesDB). Clean
   option: user buys trap vocal packs -> rebuild both references from those (and they can go in test-audio).
+- CI green: Actions run 38176808096 (v0.31.0, commit 46f3de3; includes v0.30.0, whose own run was cancelled by the newer push).
