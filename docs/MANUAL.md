@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.28.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.29.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.28.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.29.0**).
 
 Where each one goes in Cubase:
 
@@ -102,22 +102,24 @@ A reference makes Auto-Edit aim at the tone of a real finished vocal instead of 
 - **+ Add a vocal file…**: pick a WAV, AIFF, FLAC, MP3 or OGG file. It's measured once and saved in Documents\Voxology\References, so it's there in every project.
 - **No reference**: back to the style's own target.
 
-| Section | Built-in | Measured from |
-| --- | --- | --- |
-| Male | Male pop singer | 15 released pop songs (MoisesDB) |
-| Male | Male R&B singer | 7 R&B lead vocals (Cymatics sample packs, mostly dry stems) |
-| Male | Male singer, rock / indie | 18 finished mixes (MUSDB18) |
-| Male | Male rap, released songs | 17 released rap songs (MoisesDB) |
-| Male | Male rap, rhythmic | 12 finished mixes (MUSDB18) |
-| Male | Male trap rap, wet stem | 1 trap vocal (sample pack, wet stem) |
-| Female | Female pop singer | 26 released pop songs (MoisesDB) |
-| Female | Female R&B singer | 4 R&B acapellas (Cymatics sample packs) |
-| Female | Female singer, bright | 26 finished mixes, the brighter half (MUSDB18) |
-| Female | Female singer, warm | 25 finished mixes, the warmer half (MUSDB18) |
-| Female | Female electronic singer | 13 released electronic / dance songs (MoisesDB) |
-| Female | Female rap, rhythmic | 35 finished mixes (MUSDB18) |
-| Mixed | Sung hooks, wet | 11 finished hooks, male and female, effects baked in (Cymatics) |
-| Mixed | All voices, pro average | all 143 MUSDB18 vocals |
+| Section | Built-in | Pitch | Measured from |
+| --- | --- | --- | --- |
+| Male | Male pop singer | *Natural* | 15 released pop songs (MoisesDB) |
+| Male | Male R&B singer | *Natural* | 7 R&B lead vocals (Cymatics sample packs, mostly dry stems) |
+| Male | Male singer, rock / indie | *Natural* | 18 finished mixes (MUSDB18) |
+| Male | Male rap, released songs | *Off* | 17 released rap songs (MoisesDB) |
+| Male | Male rap, rhythmic | *Off* | 12 finished mixes (MUSDB18) |
+| Male | Male trap rap, wet stem | *Off* | 1 trap vocal (sample pack, wet stem) |
+| Female | Female pop singer | *Natural* | 26 released pop songs (MoisesDB) |
+| Female | Female R&B singer | *Natural* | 4 R&B acapellas (Cymatics sample packs) |
+| Female | Female singer, bright | *Natural* | 26 finished mixes, the brighter half (MUSDB18) |
+| Female | Female singer, warm | *Natural* | 25 finished mixes, the warmer half (MUSDB18) |
+| Female | Female electronic singer | *Natural* | 13 released electronic / dance songs (MoisesDB) |
+| Female | Female rap, rhythmic | *Off* | 35 finished mixes (MUSDB18) |
+| Mixed | Sung hooks, wet | *Natural* | 11 finished hooks, male and female, effects baked in (Cymatics) |
+| Mixed | All voices, pro average | *Natural* | all 143 MUSDB18 vocals |
+
+The *Pitch* tag after each name (in italics in the menu) says how tuned that reference sounds, as one of Voxology's Pitch modes, so you can pick one that fits your mix. *Natural* = notes centred on pitch with the voice's own movement kept; *Off* = rapped, no audible tuning. Measured on the vocals themselves (MUSDB18 and Cymatics); the MoisesDB groups and the trap stem are labelled by kind. None of the built-ins sounds like Classic or Robot: for that sound, set Pitch's Mode (or pick the Robot style). The tag is a guide only: Pitch still follows your STYLE.
 
 After picking a reference, press **AUTO-EDIT** again so it re-aims.
 

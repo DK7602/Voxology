@@ -160,7 +160,7 @@ TEST_CASE ("A wet reference (echoes baked in) gives its tone, not 60 % reverb an
     }
 }
 
-TEST_CASE ("Built-in references: Male, Female, Mixed sections in order; names from older versions still found", "[reference]")
+TEST_CASE ("Built-in references: Male, Female, Mixed sections in order, a Pitch hint each; names from older versions still found", "[reference]")
 {
     const auto& lib = builtinReferences();
     const std::string order[] { "Male", "Female", "Mixed" };
@@ -172,6 +172,7 @@ TEST_CASE ("Built-in references: Male, Female, Mixed sections in order; names fr
         REQUIRE (at < 3);                                   // a known section, never back to an earlier one
         if (at < 2) CHECK (ref.name.rfind (ref.section + " ", 0) == 0);   // "Male ..." / "Female ..."
         CHECK (findBuiltinReference (ref.name) == &ref);
+        CHECK ((ref.pitch == "Natural" || ref.pitch == "Classic" || ref.pitch == "Robot" || ref.pitch == "Off"));
     }
     for (const char* old : { "Pro male singer", "Pro male rap / rhythmic", "Pro female singer, bright", "Pro female singer, warm",
                              "Pro female rap / rhythmic", "Trap rap, finished (male)", "Pro rap, full songs (male)", "Pro pop singer (male)",

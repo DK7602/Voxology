@@ -34,6 +34,7 @@ struct ReferenceProfile
     std::string about;                 // a line on what it sounds like (built-in references)
     bool builtin = false;              // from the built-in library (ReferenceLibrary.cpp), not a file
     std::string section;               // built-in menu section: "Male", "Female" or "Mixed" (empty for your own files)
+    std::string pitch;                 // built-in: the Pitch mode its tuning sounds like ("Natural", or "Off" for rap), shown in the menu
 };
 
 struct AutoEditSettings

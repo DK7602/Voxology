@@ -1207,3 +1207,17 @@ User OK'd all four audit items.
   29 unsure; live 35 / 1 / 23.
 - Tests: built-ins 14; new "sections in order, Male / Female name prefixes, old names still found". 91 cases.
   Voxology_VST3 + HoneyTune_VST3 compiled on Linux. Manual: reference table by section, rename note; version 0.28.0.
+- v0.28.0 CI green: Actions run 38099336496 (commit c8518f5).
+
+## v0.29.0 Pitch tag on every built-in reference (2026-10-11)
+- User asked for an italic "Pitch: Natural / Robot ..." tag after each reference title, to pick a sound that fits the mix.
+  ReferenceProfile.pitch (listReferences "pitch"); menu shows it as an italic span (.ref-pitch); manual table column +
+  explanation; both manual viewers now render *italic* (app.js markdownToHtml <em>, HoneyManual Font::italic).
+- MEASURED, not guessed (scratch tool tunedness.cpp): per note >= 0.25 s (Honey Tune analysis, singer's offset removed)
+  the centre's distance from the nearest semitone and the pitch movement inside the note (std over its middle 60 %).
+  Calibrated on Cymatics dry leads rendered through Pitch: Natural (25 ms) ~10-14 c movement, Classic (10 ms) ~7-10,
+  Robot ~3-6. Cymatics "dry" leads are already tuned (centres 2-4 c; the user's raw Don_Birthday 21 c).
+  MUSDB18-7 re-downloaded (zenodo 3270814, STEMS 147 MB, scratch only): singers centres 9-14 c, movement 17-23 -> Natural;
+  rap groups few held notes, movement 37-91 -> Off. Cymatics R&B / hooks: centres 2-5 c, movement 11-20 -> Natural.
+  No built-in sounds like Classic or Robot (said in the manual). MoisesDB (link expired) + the trap stem: by kind.
+- Tags: Natural for all singers, hooks and pro average; Off for the 4 rap references. Test: every built-in has a valid tag.

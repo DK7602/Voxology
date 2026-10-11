@@ -91,7 +91,7 @@ public:
     /** The reference library: the built-in pro references, plus every vocal file you've loaded (its measurements are
         saved as a small .json in userReferenceFolder(), so it's there in every project). */
     static juce::File userReferenceFolder();
-    juce::String listReferencesJson() const;          // { builtin: [{name, about, section}], yours: [{name}], folder, current }
+    juce::String listReferencesJson() const;          // { builtin: [{name, about, section, pitch}], yours: [{name}], folder, current }
     void selectReference (bool builtin, const juce::String& name);
     void deleteUserReference (const juce::String& name);
     int getReferenceVersion() const noexcept { return refVersion.load(); }

@@ -484,15 +484,15 @@ HoneyManual::HoneyManual()
     text.onEscapeKey = [this] { if (onClose) onClose(); };
     addAndMakeVisible (close);
 
-    // Plain text with **bold** spans; ` marks dropped.
+    // Plain text with **bold** and *italic* spans; ` marks dropped.
     auto put = [this] (const String& s, float size, bool bold, Colour colour, Colour boldColour)
     {
-        bool on = false;
+        bool on = false, italic = false;
         String run;
         auto flush = [&]
         {
             if (run.isEmpty()) return;
-            text.setFont (FontOptions (size, (bold || on) ? Font::bold : Font::plain));
+            text.setFont (FontOptions (size, ((bold || on) ? Font::bold : Font::plain) | (italic ? Font::italic : Font::plain)));
             text.setColour (TextEditor::textColourId, on ? boldColour : colour);
             text.insertTextAtCaret (run);
             run.clear();
@@ -502,6 +502,7 @@ HoneyManual::HoneyManual()
             const auto c = s[i];
             if (c == '`') continue;
             if (c == '*' && i + 1 < s.length() && s[i + 1] == '*') { flush(); on = ! on; ++i; continue; }
+            if (c == '*') { flush(); italic = ! italic; continue; }
             run << String::charToString (c);
         }
         flush();

@@ -416,6 +416,7 @@ juce::String AutoEditController::listReferencesJson() const
         o->setProperty ("name", juce::String::fromUTF8 (r.name.c_str()));
         o->setProperty ("about", juce::String::fromUTF8 (r.about.c_str()));
         o->setProperty ("section", juce::String::fromUTF8 (r.section.c_str()));
+        o->setProperty ("pitch", juce::String::fromUTF8 (r.pitch.c_str()));
         builtin.add (juce::var (o));
     }
     auto files = userReferenceFolder().findChildFiles (juce::File::findFiles, false, "*.json");

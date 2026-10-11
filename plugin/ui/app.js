@@ -58,7 +58,7 @@ uiRedGet().then((red) => { if (red) setRed(true); }).catch(() => {});
 // Manual: docs/MANUAL.md, built into the plug-in, shown in an overlay (? MANUAL in the Learn card).
 function markdownToHtml(md) {
   const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const inline = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  const inline = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>");
   const cells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
   const lines = md.replace(/\r/g, "").split("\n"), out = [];
   let i = 0, h2 = 0;
@@ -1482,9 +1482,10 @@ async function openRefMenu() {
   let lib = { builtin: [], yours: [], folder: "", current: "" };
   try { lib = Object.assign(lib, JSON.parse((await refList()) || "{}")); } catch { /* keep the empty library */ }
   const m = el("div", "ref-menu");
-  const item = (label, title, onPick, current, onDelete) => {
+  const item = (label, title, onPick, current, onDelete, pitch) => {
     const row = el("div", "ref-item" + (current ? " current" : ""));
     const b = el("button", "ref-pick", (current ? "\u266A " : "") + label);
+    if (pitch) b.append(el("span", "ref-pitch", `Pitch: ${pitch}`));   // how tuned it sounds, as a Pitch mode
     b.type = "button";
     if (title) b.title = title;
     b.addEventListener("click", async () => { closeRefMenu(); await onPick(); fetchReference(); });
@@ -1502,7 +1503,7 @@ async function openRefMenu() {
   let section = null;
   for (const r of lib.builtin) {
     if (r.section && r.section !== section) { section = r.section; m.append(el("div", "ref-section", section.toUpperCase())); }
-    item(r.name, r.about, () => refSelect(true, r.name), r.name === lib.current, null);
+    item(r.name, r.about, () => refSelect(true, r.name), r.name === lib.current, null, r.pitch);
   }
   m.append(el("div", "ref-head", "YOURS"));
   if (!lib.yours.length) m.append(el("div", "ref-hint", "Vocals you add are saved here for every project."));
