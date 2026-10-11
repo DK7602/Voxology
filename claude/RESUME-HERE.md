@@ -1221,3 +1221,16 @@ User OK'd all four audit items.
   rap groups few held notes, movement 37-91 -> Off. Cymatics R&B / hooks: centres 2-5 c, movement 11-20 -> Natural.
   No built-in sounds like Classic or Robot (said in the manual). MoisesDB (link expired) + the trap stem: by kind.
 - Tags: Natural for all singers, hooks and pro average; Off for the 4 rap references. Test: every built-in has a valid tag.
+
+## v0.30.0 Male trap references: "Male trap, melodic" (Pitch: Classic) + "Male trap rap" (2026-10-11)
+- User sent 33 wet male trap vocals (hash / "stream_N" / "demo_N" file names, source not stated; NOT added to test-audio:
+  ask the user where they're from first; audio kept in session scratch only). Sorted by measurement (scratch scripts
+  trap_ingest.sh / trap_groups.py / trap_update.py): melodic = held notes >= 30 % and centred within 5 c (3+ notes);
+  rap = held < 30 %; left out: one filtered like a background loop (-48 dB at 8 kHz), sung but loosely tuned / < 3 notes.
+- "Male trap, melodic" (7 clips, 118 s voiced, f0 196, s -3.7, punch 3.2): Pitch measured CLASSIC (centres 0.7 - 4 c,
+  movement 5.5 - 11.6, median 9.8; two near Robot): the first non-Natural tag. Thin low mids (-11..-14 dB at 200-250 Hz):
+  on the user's vocals Auto-Edit cuts 6-8 dB there + up to +4.5 dB at 2 kHz (that IS the sound; tone 6.0-8.9 -> 4.2-5.6 dB).
+- "Male trap rap" (22 clips, 383 s, f0 192, s -2.7, punch 4.0, Pitch Off): replaces v0.28's
+  one-stem "Male trap rap, wet stem" (alias kept, plus "Trap rap, finished (male)"). Nearest old built-in "Male rap,
+  released songs" ~2.7 dB. On the user's vocals: EQ <= 6 dB, tone 4.1-5.6 -> 2.5-3.3 dB.
+- Built-ins 15. Manual table + Pitch text (Classic explained); mock.js. Female trap / rap still missing.

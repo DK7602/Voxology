@@ -115,7 +115,7 @@ TEST_CASE ("Reference Match keeps each band on its job (no stacking, nothing und
 TEST_CASE ("Built-in references: pro groups (MUSDB18, MoisesDB, Cymatics) + a trap vocal, usable by Auto-Edit", "[reference]")
 {
     const auto& lib = builtinReferences();
-    REQUIRE (lib.size() == 14);
+    REQUIRE (lib.size() == 15);
     const auto mine = testsig::vocal (kSr, 14.0, -80.0, -14.0, 3, 150.0);
     for (const auto& ref : lib)
     {
@@ -177,7 +177,7 @@ TEST_CASE ("Built-in references: Male, Female, Mixed sections in order, a Pitch 
     for (const char* old : { "Pro male singer", "Pro male rap / rhythmic", "Pro female singer, bright", "Pro female singer, warm",
                              "Pro female rap / rhythmic", "Trap rap, finished (male)", "Pro rap, full songs (male)", "Pro pop singer (male)",
                              "Pro pop singer (female)", "Pro electronic singer (female)", "Pro R&B singer (female), modern",
-                             "Sung hooks, finished (mostly female)", "Pro average (all voices)" })
+                             "Sung hooks, finished (mostly female)", "Pro average (all voices)", "Male trap rap, wet stem" })
     {
         INFO (old);
         CHECK (findBuiltinReference (old) != nullptr);

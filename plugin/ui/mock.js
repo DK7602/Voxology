@@ -143,11 +143,11 @@
         if (payload.name === "getUiRed") result = !!window.__mockRed;
         if (payload.name === "setUiRed") window.__mockRed = !!payload.params[0];
         if (payload.name === "listReferences") result = JSON.stringify({ builtin: [
-            ["Male", "Male pop singer", "15 released pop vocals"], ["Male", "Male R&B singer", "7 R&B leads"], ["Male", "Male singer, rock / indie", "Warm, full low mids"],
-            ["Male", "Male rap, released songs", "17 released rap vocals"], ["Male", "Male rap, rhythmic", "Forward mids"], ["Male", "Male trap rap, wet stem", "Very bright"],
+            ["Male", "Male pop singer", "15 released pop vocals"], ["Male", "Male R&B singer", "7 R&B leads"], ["Male", "Male trap, melodic", "7 hard-tuned trap vocals"], ["Male", "Male singer, rock / indie", "Warm, full low mids"],
+            ["Male", "Male rap, released songs", "17 released rap vocals"], ["Male", "Male rap, rhythmic", "Forward mids"], ["Male", "Male trap rap", "22 trap rap vocals"],
             ["Female", "Female pop singer", "26 released pop vocals"], ["Female", "Female R&B singer", "4 R&B leads"], ["Female", "Female singer, bright", "Airy, open top"],
             ["Female", "Female singer, warm", "Smooth, soft top"], ["Female", "Female electronic singer", "13 dance vocals"], ["Female", "Female rap, rhythmic", "Present mids"],
-            ["Mixed", "Sung hooks, wet", "11 hooks"], ["Mixed", "All voices, pro average", "Neutral"] ].map(([section, name, about]) => ({ section, name, about, pitch: /rap/.test(name) ? "Off" : "Natural" })),
+            ["Mixed", "Sung hooks, wet", "11 hooks"], ["Mixed", "All voices, pro average", "Neutral"] ].map(([section, name, about]) => ({ section, name, about, pitch: /rap/.test(name) ? "Off" : /melodic/.test(name) ? "Classic" : "Natural" })),
           yours: ref.yours.map((n) => ({ name: n })), folder: "C:\\Users\\you\\Documents\\Voxology\\References", current: (JSON.parse(ref.json).name || "") });
         if (payload.name === "selectReference") { const n = payload.params[1]; ref.json = JSON.stringify({ state: "ok", name: n, seconds: 60, problem: "", warning: "" }); ref.version++; }
         if (payload.name === "deleteReference") { ref.yours = ref.yours.filter((n) => n !== payload.params[0]); ref.version++; }
