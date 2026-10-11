@@ -1248,3 +1248,7 @@ User OK'd all four audit items.
   sub-labels "left voice" / "right voice"; Learn text; CHROMATIC KEY tip ignores Unison (can't clash). Manual Voices row.
 - Test "Voices: Unison = a second voice on the lead's own notes, a few cents off and a little later". 92 cases.
 - v0.30.0 (Male trap references) pushed before this: Actions run 38175753932.
+- LICENCE NOTE (2026-10-11): the 33 trap clips behind "Male trap, melodic" / "Male trap rap" were captured by the user
+  with Sample Snagger (sample-site preview audio, not licensed to the user). Kept OUT of the repo on purpose (session
+  scratch only); only averaged measurements ship. Add to the legal check before selling (with MUSDB18 / MoisesDB). Clean
+  option: user buys trap vocal packs -> rebuild both references from those (and they can go in test-audio).
