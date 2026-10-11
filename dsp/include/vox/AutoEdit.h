@@ -33,6 +33,7 @@ struct ReferenceProfile
     double f0Median = 0.0;             // the reference singer's median pitch (Hz); 0 = unknown (older saved profiles)
     std::string about;                 // a line on what it sounds like (built-in references)
     bool builtin = false;              // from the built-in library (ReferenceLibrary.cpp), not a file
+    std::string section;               // built-in menu section: "Male", "Female" or "Mixed" (empty for your own files)
 };
 
 struct AutoEditSettings
@@ -109,8 +110,10 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
     off the real vocal's tone (measured on 144 pro songs), so that gets a warning (it still works, roughly). */
 ReferenceProfile analyseReference (const std::vector<std::vector<float>>& audio, double sampleRate, const std::string& name);
 
-/** The built-in reference library: finished pro vocals (measurements only), by voice and delivery. */
+/** The built-in reference library: finished pro vocals (measurements only), in menu order: Male, Female, Mixed. */
 const std::vector<ReferenceProfile>& builtinReferences();
+/** A built-in reference by name; also finds the names used before v0.28 (saved in older projects). nullptr = none. */
+const ReferenceProfile* findBuiltinReference (const std::string& name);
 
 /** Listens to the vocal, decides every module and explains each choice. */
 AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sampleRate, const AutoEditSettings& settings);

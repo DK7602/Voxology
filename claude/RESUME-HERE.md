@@ -1188,3 +1188,22 @@ User OK'd all four audit items.
   claude/upbeat-faraday-iyzicv (this session could only push there), not yet on claude/voxology: ask the user.
 - Next: user is digging for MALE vocals in their packs (acapellas or dry / wet stems, 5+ per group): male trap / rap and
   male R&B / melodic references. Female rap / trap still missing too.
+
+## v0.28.0 Male / Female / Mixed reference sections, Male R&B singer, voices by the user's labels (2026-10-11)
+- User sent 8 male sets (Cymatics: Deliberation, In My Life, Ja Ja, Make Love, No Good Reason, Reminisce lead 1, Light,
+  hook Our Love; dry + wet, Reminisce wet only) and labelled 4 acapellas female (Wake Up, Make Me Crazy, Not Mine, What I
+  Do). LESSON: formant spacing (LPC dF) can't tell male from female on these processed R&B voices: 5 male singers read
+  1123-1153 Hz ("female"), Reminisce lead 1 (male) 1196. Use the user's labels only; labels.csv `voice` column now = user.
+- v0.27.0's "Pro R&B singer (female), modern" had 5 male voices in it: replaced by "Female R&B singer" (4 songs, f0 260,
+  s -2.4, punch 3.6) + new "Male R&B singer" (7 leads, mostly dry stems, 367 s voiced, f0 221, s -5.2, punch 3.2; nearest
+  old built-in 2.3 dB). Hooks: + Our Love -> 11 ("Sung hooks, wet", s -4.7, punch 0).
+- Renamed for consistent naming, in sections (ReferenceProfile.section; menu headers MALE / FEMALE / MIXED):
+  Male pop singer, Male R&B singer, Male singer rock / indie, Male rap released songs, Male rap rhythmic, Male trap rap wet
+  stem | Female pop singer, Female R&B singer, Female singer bright, Female singer warm, Female electronic singer, Female
+  rap rhythmic | Sung hooks wet, All voices pro average. findBuiltinReference(name) also takes the pre-v0.28 names;
+  restoreReference swaps a saved built-in for today's (new name + updated measurements); selectReference uses it too.
+- Test-audio: +14 male files (68 total, 21 MB). Dry -> wet with the wet as reference: space within 0.4 dB of the producer's
+  on all 4 measurable pairs (style alone 1.5 - 3.9 dB off). Key benchmark (59 labelled): Auto-Edit 27 right / 3 wrong /
+  29 unsure; live 35 / 1 / 23.
+- Tests: built-ins 14; new "sections in order, Male / Female name prefixes, old names still found". 91 cases.
+  Voxology_VST3 + HoneyTune_VST3 compiled on Linux. Manual: reference table by section, rename note; version 0.28.0.

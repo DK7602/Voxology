@@ -115,7 +115,7 @@ TEST_CASE ("Reference Match keeps each band on its job (no stacking, nothing und
 TEST_CASE ("Built-in references: pro groups (MUSDB18, MoisesDB, Cymatics) + a trap vocal, usable by Auto-Edit", "[reference]")
 {
     const auto& lib = builtinReferences();
-    REQUIRE (lib.size() == 13);
+    REQUIRE (lib.size() == 14);
     const auto mine = testsig::vocal (kSr, 14.0, -80.0, -14.0, 3, 150.0);
     for (const auto& ref : lib)
     {
@@ -158,4 +158,28 @@ TEST_CASE ("A wet reference (echoes baked in) gives its tone, not 60 % reverb an
         for (const auto& n : r.notes) note |= n.rfind ("WET REFERENCE", 0) == 0;
         CHECK (note);
     }
+}
+
+TEST_CASE ("Built-in references: Male, Female, Mixed sections in order; names from older versions still found", "[reference]")
+{
+    const auto& lib = builtinReferences();
+    const std::string order[] { "Male", "Female", "Mixed" };
+    size_t at = 0;
+    for (const auto& ref : lib)
+    {
+        INFO (ref.name << " in " << ref.section);
+        while (at < 3 && ref.section != order[at]) ++at;
+        REQUIRE (at < 3);                                   // a known section, never back to an earlier one
+        if (at < 2) CHECK (ref.name.rfind (ref.section + " ", 0) == 0);   // "Male ..." / "Female ..."
+        CHECK (findBuiltinReference (ref.name) == &ref);
+    }
+    for (const char* old : { "Pro male singer", "Pro male rap / rhythmic", "Pro female singer, bright", "Pro female singer, warm",
+                             "Pro female rap / rhythmic", "Trap rap, finished (male)", "Pro rap, full songs (male)", "Pro pop singer (male)",
+                             "Pro pop singer (female)", "Pro electronic singer (female)", "Pro R&B singer (female), modern",
+                             "Sung hooks, finished (mostly female)", "Pro average (all voices)" })
+    {
+        INFO (old);
+        CHECK (findBuiltinReference (old) != nullptr);
+    }
+    CHECK (findBuiltinReference ("Not a reference") == nullptr);
 }

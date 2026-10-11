@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.27.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.28.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.27.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.28.0**).
 
 Where each one goes in Cubase:
 
@@ -97,26 +97,27 @@ How to read a warning card:
 
 A reference makes Auto-Edit aim at the tone of a real finished vocal instead of the style's target. Click **+ REFERENCE** (it shows the reference's name once one is loaded) to open the menu:
 
-- **BUILT-IN**: 13 measured groups of finished pro vocals. Only measurements are stored, never audio.
+- **BUILT-IN**: 14 measured groups of finished pro vocals, in three sections: MALE, FEMALE and MIXED. Only measurements are stored, never audio. Projects saved with an older version keep their reference (renamed to today's name).
 - **YOURS**: every vocal file you've added. Click ✕ to remove one.
 - **+ Add a vocal file…**: pick a WAV, AIFF, FLAC, MP3 or OGG file. It's measured once and saved in Documents\Voxology\References, so it's there in every project.
 - **No reference**: back to the style's own target.
 
-| Built-in | Measured from |
-| --- | --- |
-| Pro male singer | 18 finished vocals (MUSDB18) |
-| Pro male rap / rhythmic | 12 (MUSDB18) |
-| Pro female singer, bright | 26 (MUSDB18) |
-| Pro female singer, warm | 25 (MUSDB18) |
-| Pro female rap / rhythmic | 35 (MUSDB18) |
-| Trap rap, finished (male) | 1 trap vocal (sample pack, wet stem) |
-| Pro rap, full songs (male) | 17 released songs (MoisesDB) |
-| Pro pop singer (male) | 15 (MoisesDB) |
-| Pro pop singer (female) | 26 (MoisesDB) |
-| Pro electronic singer (female) | 13 (MoisesDB) |
-| Pro R&B singer (female), modern | 13 R&B / pop acapellas (Cymatics sample packs) |
-| Sung hooks, finished (mostly female) | 10 finished hooks, effects baked in (Cymatics) |
-| Pro average (all voices) | 143 (MUSDB18) |
+| Section | Built-in | Measured from |
+| --- | --- | --- |
+| Male | Male pop singer | 15 released pop songs (MoisesDB) |
+| Male | Male R&B singer | 7 R&B lead vocals (Cymatics sample packs, mostly dry stems) |
+| Male | Male singer, rock / indie | 18 finished mixes (MUSDB18) |
+| Male | Male rap, released songs | 17 released rap songs (MoisesDB) |
+| Male | Male rap, rhythmic | 12 finished mixes (MUSDB18) |
+| Male | Male trap rap, wet stem | 1 trap vocal (sample pack, wet stem) |
+| Female | Female pop singer | 26 released pop songs (MoisesDB) |
+| Female | Female R&B singer | 4 R&B acapellas (Cymatics sample packs) |
+| Female | Female singer, bright | 26 finished mixes, the brighter half (MUSDB18) |
+| Female | Female singer, warm | 25 finished mixes, the warmer half (MUSDB18) |
+| Female | Female electronic singer | 13 released electronic / dance songs (MoisesDB) |
+| Female | Female rap, rhythmic | 35 finished mixes (MUSDB18) |
+| Mixed | Sung hooks, wet | 11 finished hooks, male and female, effects baked in (Cymatics) |
+| Mixed | All voices, pro average | all 143 MUSDB18 vocals |
 
 After picking a reference, press **AUTO-EDIT** again so it re-aims.
 

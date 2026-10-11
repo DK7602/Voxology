@@ -1499,7 +1499,11 @@ async function openRefMenu() {
     m.append(row);
   };
   m.append(el("div", "ref-head", "BUILT-IN \u00B7 finished pro vocals"));
-  for (const r of lib.builtin) item(r.name, r.about, () => refSelect(true, r.name), r.name === lib.current, null);
+  let section = null;
+  for (const r of lib.builtin) {
+    if (r.section && r.section !== section) { section = r.section; m.append(el("div", "ref-section", section.toUpperCase())); }
+    item(r.name, r.about, () => refSelect(true, r.name), r.name === lib.current, null);
+  }
   m.append(el("div", "ref-head", "YOURS"));
   if (!lib.yours.length) m.append(el("div", "ref-hint", "Vocals you add are saved here for every project."));
   for (const r of lib.yours) item(r.name, "", () => refSelect(false, r.name), r.name === lib.current, () => refDelete(r.name));

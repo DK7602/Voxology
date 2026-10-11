@@ -392,6 +392,9 @@ juce::String AutoEditController::getReferenceForSaving() const
 void AutoEditController::restoreReference (const juce::String& saved)
 {
     std::shared_ptr<vox::ReferenceProfile> r = saved.isEmpty() ? nullptr : profileFromJson (saved);
+    // A built-in saved by an older version: today's version of it (renamed in v0.28, measurements may be updated).
+    if (r != nullptr && r->builtin)
+        if (const auto* b = vox::findBuiltinReference (r->name); b != nullptr) r = std::make_shared<vox::ReferenceProfile> (*b);
     {
         const juce::ScopedLock sl (refLock);
         reference = std::move (r);
@@ -412,6 +415,7 @@ juce::String AutoEditController::listReferencesJson() const
         auto* o = new juce::DynamicObject();
         o->setProperty ("name", juce::String::fromUTF8 (r.name.c_str()));
         o->setProperty ("about", juce::String::fromUTF8 (r.about.c_str()));
+        o->setProperty ("section", juce::String::fromUTF8 (r.section.c_str()));
         builtin.add (juce::var (o));
     }
     auto files = userReferenceFolder().findChildFiles (juce::File::findFiles, false, "*.json");
@@ -441,8 +445,8 @@ void AutoEditController::selectReference (bool builtin, const juce::String& name
     std::shared_ptr<vox::ReferenceProfile> r;
     if (builtin)
     {
-        for (const auto& b : vox::builtinReferences())
-            if (juce::String::fromUTF8 (b.name.c_str()) == name) r = std::make_shared<vox::ReferenceProfile> (b);
+        if (const auto* b = vox::findBuiltinReference (name.toStdString()); b != nullptr)
+            r = std::make_shared<vox::ReferenceProfile> (*b);
     }
     else if (const auto f = userRefFile (name); f.existsAsFile())
         r = profileFromJson (f.loadFileAsString());
