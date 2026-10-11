@@ -1234,3 +1234,17 @@ User OK'd all four audit items.
   one-stem "Male trap rap, wet stem" (alias kept, plus "Trap rap, finished (male)"). Nearest old built-in "Male rap,
   released songs" ~2.7 dB. On the user's vocals: EQ <= 6 dB, tone 4.1-5.6 -> 2.5-3.3 dB.
 - Built-ins 15. Manual table + Pitch text (Classic explained); mock.js. Female trap / rap still missing.
+
+## v0.31.0 Voices: Unison (a second singer on the lead's own notes) (2026-10-11)
+- User: Voice 1 / 2 only offered harmonies (3rd / 5th / octave up or down): wanted voices that keep the same octave.
+  kHarmonyIntervals += "Unison" (index 8 = kHarmonyUnison, appended so saved hv1 / hv2 choices keep their meaning;
+  kHarmonies 9). Harmony mode with steps 0 = the lead's own snapped note.
+- So it isn't a copy combing with the lead: HarmonyVoices::kUnisonCents { +9, -9 } (voice 1 up, voice 2 down, via
+  PitchParams.tuneCents) and kUnisonMs { 19, 27 } (a per-voice delay line, only for Unison; cleared when the interval
+  changes). Measured: on a sung A3 voice 1 221.25 Hz, voice 2 218.75 Hz; onset ~15 ms after the lead; level ~-7.5 dB.
+- Also: the voices now follow the beat's tuning (lead.tuneCents) like the lead (before they ignored it: a beat tuned
+  30 cents flat put harmonies 30 cents off the lead).
+- UI: grids show Off | Unison, then up | down rows, octaves together on the last row (seg / grid take an `order`, -1 = gap);
+  sub-labels "left voice" / "right voice"; Learn text; CHROMATIC KEY tip ignores Unison (can't clash). Manual Voices row.
+- Test "Voices: Unison = a second voice on the lead's own notes, a few cents off and a little later". 92 cases.
+- v0.30.0 (Male trap references) pushed before this: Actions run 38175753932.

@@ -12,6 +12,8 @@
     Timing: they're made from the chain's INPUT (before Pitch), which is Pitch's latency ahead of the
     lead; each voice's own pitch shifter has that same latency, so they land in time with the lead.
     A short delay (Saturation's latency) lines them up exactly with the finished lead.
+    Unison: the lead's own notes, tuned onto them, as a second singer: kUnisonCents off the lead (voice 1 up,
+    voice 2 down) and kUnisonMs later (like a double), so it widens the lead instead of combing with it.
     Sound: each voice is a PitchCorrector in harmony mode (full shift, no scoop, formant control),
     then the lead's own clean-up low cut, Tone EQ and De-Esser, then its level follows the finished
     lead's (so the voices get the lead's compression and never jump out), times Level. Voice 1 sits
@@ -31,6 +33,8 @@ class HarmonyVoices
 public:
     static constexpr double kFollowSeconds = 0.030;
     static constexpr double kMaxFollowDb = 24.0;
+    static constexpr std::array<double, 2> kUnisonCents { 9.0, -9.0 };
+    static constexpr std::array<double, 2> kUnisonMs { 19.0, 27.0 };
 
     void prepare (double sampleRate);
     void reset() noexcept;
@@ -58,6 +62,8 @@ private:
     std::vector<double> align;                       // Saturation's latency, so they match the finished lead
     int alignPos = 0;
     std::array<double, 2> voiceMs {};
+    std::array<std::vector<double>, 2> late;        // Unison: each voice a little after the lead
+    std::array<int, 2> latePos {}, lateLen {};
     double leadMs = 0.0, leadPeak = 0.0, peakFall = 0.0, follow = 0.0, followCoeff = 0.0, gain = 0.0, gainCoeff = 0.0;
     std::array<double, 2> panL {}, panR {};
     bool running = false;

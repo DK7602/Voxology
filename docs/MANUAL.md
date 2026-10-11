@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.30.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.31.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.30.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.31.0**).
 
 Where each one goes in Cubase:
 
@@ -73,7 +73,7 @@ Every knob:
 | 06 | Rider | Rides the level word by word, like a hand on the fader | Target, Range, Speed (Slow, Med, Fast) |
 | 07 | Compressor | Evens the performance | Peak (catches spikes), Threshold + Ratio (smooth leveler), Makeup, Mix (parallel blend) |
 | 08 | Saturation | Adds harmonics: warmth, density, presence | Mode (Tape, Tube, Clip), Drive, Mix |
-| 09 | Voices | Doubles and harmonies in key | Double, Width, Voice 1 (left) + Voice 2 (right) harmony: 3rd, 5th or octave, up or down, Level, Formant |
+| 09 | Voices | Doubles, extra voices and harmonies in key | Double, Width, Voice 1 (left) + Voice 2 (right): **Unison** (a second singer on your own notes, same octave) or a harmony: 3rd, 5th or octave, up or down, Level, Formant |
 | 10 | Delay | Echoes locked to the song's tempo | Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong |
 | 11 | Reverb | A vocal plate: a space for the voice | Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps) |
 | 12 | Output | Final level into your mix | Output gain |

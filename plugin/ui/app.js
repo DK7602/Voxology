@@ -13,8 +13,11 @@ const fmtHz = (f) => (f >= 1000 ? `${(f / 1000).toFixed(1)} kHz` : `${Math.round
 const fmtPct = (v) => `${Math.round(v)} %`;
 const fmtMs = (v) => `${Math.round(v)} ms`;
 const fmtSt = (v) => (Math.abs(v) < 0.05 ? "0 st" : `${v > 0 ? "+" : MINUS}${Math.abs(v).toFixed(1)} st`);
-const INTERVALS = ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down"];
-const INTERVALS_SHORT = ["Off", "3rd \u2191", "5th \u2191", "8ve \u2191", "3rd \u2193", "4th \u2193", "5th \u2193", "8ve \u2193"];
+const INTERVALS = ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison"];
+const INTERVALS_SHORT = ["Off", "3rd \u2191", "5th \u2191", "8ve \u2191", "3rd \u2193", "4th \u2193", "5th \u2193", "8ve \u2193", "Unison"];
+// Shown in this order (Unison was added last to the parameter, so saved projects keep their choices): Off | Unison, then
+// up | down in rows, octaves together on the last row (-1 = an empty slot).
+const INTERVAL_ORDER = [0, 8, 1, 4, 2, 5, -1, 6, 3, 7];
 
 // ---------------------------------------------------------------------------------------------
 // Scale the fixed 1600x900 design to the window.
@@ -497,12 +500,12 @@ const MODULES = [
       meter("Harmonics", "added now", () => M.satHarm, 60, true, (v) => (v <= -99 ? "none" : fmtDb(v)), -70),
     ],
     stat: () => (val("saDrive") < 0.05 || val("saMix") < 0.05 ? ["idle", false] : [["Tape", "Tube", "Clip"][choice("saMode")] + ` ${fmtNum(val("saDrive"), 0)} dB`, true]) },
-  { key: "double", name: "VOICES", onId: "dbOn", what: "doubles and harmonies: stacked takes and backing voices in key",
+  { key: "double", name: "VOICES", onId: "dbOn", what: "doubles, unison voices and harmonies: stacked takes and backing voices in key",
     cells: () => [
       knob("dbAmount", "Double", "stacked take", fmtPct, 0),
       knob("dbWidth", "Width", "how far apart", fmtPct, 70),
-      grid("hv1", "Voice 1", "harmony (left)", INTERVALS_SHORT, 2),
-      grid("hv2", "Voice 2", "harmony (right)", INTERVALS_SHORT, 2),
+      grid("hv1", "Voice 1", "left voice", INTERVALS_SHORT, 2, INTERVAL_ORDER),
+      grid("hv2", "Voice 2", "right voice", INTERVALS_SHORT, 2, INTERVAL_ORDER),
       knob("hvLevel", "Level", "voices vs lead", fmtPct, 50),
       knob("hvFormant", "Formant", "voices' tone", fmtSt, 0, true),
     ],
@@ -643,20 +646,22 @@ function knob(id, label, sub, fmt, def, bipolar = false) {
   return cell;
 }
 
-function seg(id, label, sub, labels, vertical = false) {
+function seg(id, label, sub, labels, vertical = false, order = null) {
   const s = P[id];
   const cell = document.createElement("div");
   cell.className = "cell";
   cell.innerHTML = `<span class="cell-label">${label}</span><span class="cell-sub">${sub}</span><div class="${vertical ? "vseg" : "seg"}"></div>`;
   const box = cell.querySelector(vertical ? ".vseg" : ".seg");
-  const btns = labels.map((t, i) => {
+  const shown = order || labels.map((_, i) => i);   // choice indices, in the order the buttons appear (-1 = a gap)
+  const btns = shown.map((i) => {
+    if (i < 0) { const gap = document.createElement("span"); box.appendChild(gap); return gap; }
     const b = document.createElement("button");
-    b.type = "button"; b.textContent = t;
+    b.type = "button"; b.textContent = labels[i];
     b.addEventListener("click", () => { s.setChoiceIndex(i); refresh(); anyEdited(); });
     box.appendChild(b);
     return b;
   });
-  const refresh = () => btns.forEach((b, i) => b.classList.toggle("sel", i === s.getChoiceIndex()));
+  const refresh = () => btns.forEach((b, k) => b.classList.toggle("sel", shown[k] === s.getChoiceIndex()));
   s.valueChangedEvent.addListener(refresh);
   s.propertiesChangedEvent.addListener(refresh);
   refresh();
@@ -665,8 +670,8 @@ function seg(id, label, sub, labels, vertical = false) {
 }
 const vseg = (id, label, sub, labels) => seg(id, label, sub, labels, true);
 /** A grid of choice buttons with a set number of columns (Key: 4 x 3, Scale: one column). */
-function grid(id, label, sub, labels, cols) {
-  const cell = seg(id, label, sub, labels, true);
+function grid(id, label, sub, labels, cols, order = null) {
+  const cell = seg(id, label, sub, labels, true, order);
   const box = cell.querySelector(".vseg");
   box.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
   box.classList.add(cols === 1 ? "list" : "keys");
@@ -1264,15 +1269,15 @@ const LEARN = {
       return t;
     } },
   double: {
-    does: "Backing vocals from your own voice. Double stacks two slightly late copies left and right, like a second take. Voice 1 and Voice 2 sing harmonies with you, a 3rd, 5th or octave away, always in the key and scale set in the Pitch module, so they never clash. They get your lead's EQ and de-essing, follow its level, and go into the delay and reverb too.",
+    does: "Backing vocals from your own voice. Double stacks two slightly late copies left and right, like a second take. Voice 1 and Voice 2 are extra singers: Unison sings your own notes (same octave, tuned onto them, a few cents off you and a moment later, like a second singer), or they sing harmonies with you, a 3rd, 5th or octave away, always in the key and scale set in the Pitch module, so they never clash. They get your lead's EQ and de-essing, follow its level, and go into the delay and reverb too.",
     how: ["Set Key and Scale in the Pitch module first (your beat's key): the harmonies use it. Chromatic gives plain intervals that can clash.",
-      "Voice 1 / Voice 2: a 3rd up is the classic harmony; add a 5th down or an octave down for a full stack. Octave down is the deep ad-lib voice.",
+      "Voice 1 / Voice 2: Unison on both = a wide, stacked lead in your own octave (try Formant a little - or + so they sound like other singers). A 3rd up is the classic harmony; add a 5th down or an octave down for a full stack. Octave down is the deep ad-lib voice.",
       "Level: 30 - 50 % keeps them behind you. Width spreads Voice 1 left and Voice 2 right (and the double).",
       "Formant: - makes the voices deeper and darker (a different singer behind you), + thinner and brighter.",
       "Use harmonies on hooks and ad-libs rather than whole verses: automate the module's ON button in Cubase."],
     live: () => {
       const t = [];
-      if ((choice("hv1") > 0 || choice("hv2") > 0) && choice("ptScale") === 0) t.push(tip("CHROMATIC KEY", "The Pitch module's scale is Chromatic, so the harmonies use plain intervals (a major 3rd), which can clash with a minor beat.", "warn",
+      if ([choice("hv1"), choice("hv2")].some((i) => i > 0 && i !== 8) && choice("ptScale") === 0) t.push(tip("CHROMATIC KEY", "The Pitch module's scale is Chromatic, so the harmonies use plain intervals (a major 3rd), which can clash with a minor beat.", "warn",
         { need: "Yes, if the harmonies sound sour.", steps: ["Open 01 PITCH and set Key and Scale to your beat's key.", "Run Auto-Edit on a sung part: it suggests a key in its report."] }));
       return t;
     } },

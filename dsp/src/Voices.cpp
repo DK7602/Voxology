@@ -3,6 +3,7 @@
 #include "vox/Saturation.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace vox {
 
@@ -18,6 +19,11 @@ void HarmonyVoices::prepare (double sampleRate)
     eq.prepare (sr, 2);
     deEsser.prepare (sr, 2);
     align.assign (static_cast<size_t> (Saturation::kLatency + 1) * 2, 0.0);
+    for (size_t k = 0; k < 2; ++k)
+    {
+        lateLen[k] = static_cast<int> (std::lround (kUnisonMs[k] / 1000.0 * sr));
+        late[k].assign (static_cast<size_t> (lateLen[k]), 0.0);
+    }
     followCoeff = onePole (kFollowSeconds, sr);
     gainCoeff = onePole (0.020, sr);
     peakFall = onePole (2.0, sr);
@@ -35,6 +41,8 @@ void HarmonyVoices::reset() noexcept
     deEsser.reset();
     std::fill (align.begin(), align.end(), 0.0);
     alignPos = 0;
+    for (auto& l : late) std::fill (l.begin(), l.end(), 0.0);
+    latePos.fill (0);
     voiceMs.fill (0.0);
     leadMs = leadPeak = 0.0;
     follow = 0.0;
@@ -44,6 +52,8 @@ void HarmonyVoices::reset() noexcept
 
 void HarmonyVoices::setParams (const VoicesParams& v, const PitchParams& lead, double lowCut_, const EqParams& eqp, const DeEsserParams& ds) noexcept
 {
+    for (size_t k = 0; k < 2; ++k)
+        if (v.interval[k] != params.interval[k]) { std::fill (late[k].begin(), late[k].end(), 0.0); latePos[k] = 0; }   // no stale unison audio
     params = v;
     for (size_t k = 0; k < voice.size(); ++k)
     {
@@ -56,6 +66,8 @@ void HarmonyVoices::setParams (const VoicesParams& v, const PitchParams& lead, d
         p.humanize = lead.humanize;
         p.formant = std::clamp (v.formant, -kMaxFormant, kMaxFormant);
         p.harmony = std::clamp (v.interval[k], 0, kHarmonies - 1);
+        // In the beat's tuning like the lead; a unison voice sits a few cents off it (a second singer, not a copy).
+        p.tuneCents = lead.tuneCents + (p.harmony == kHarmonyUnison ? kUnisonCents[k] : 0.0);
         voice[k].setParams (p);
     }
     lowCutHz = lowCut_;
@@ -114,6 +126,18 @@ void HarmonyVoices::process (const double* side, double* const* ch, int nch, dou
             std::copy (side + start, side + start + len, b.begin());
             double* p = b.data();
             voice[k].process (&p, 1, len);
+            if (params.interval[k] == kHarmonyUnison && lateLen[k] > 0)
+            {
+                auto& d = late[k];
+                for (int i = 0; i < len; ++i)
+                {
+                    const auto ii = static_cast<size_t> (i), at = static_cast<size_t> (latePos[k]);
+                    const double y = d[at];
+                    d[at] = b[ii];
+                    b[ii] = y;
+                    latePos[k] = (latePos[k] + 1) % lateLen[k];
+                }
+            }
         }
         for (int i = 0; i < len; ++i)
         {

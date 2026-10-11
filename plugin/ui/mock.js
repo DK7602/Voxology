@@ -41,8 +41,8 @@
     dlTime: { choices: ["1/4", "1/8", "1/8 dot", "1/4 dot", "1/16", "1/2"], value: 0 },
     mode: { choices: ["Vocal", "Beat"], value: location.hash === "#beat" ? 1 : 0 },
     umFocus: { choices: ["Centre", "Full"], value: 0 },
-    hv1: { choices: ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down"], value: 1 / 7 },
-    hv2: { choices: ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down"], value: 6 / 7 },
+    hv1: { choices: ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison"], value: 1 },
+    hv2: { choices: ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison"], value: 6 / 8 },
   };
 
   const send = (id, obj) => setTimeout(() => window.__JUCE__.backend && window.__JUCE__.backend.emitByBackend(id, JSON.stringify(obj)), 0);

@@ -164,3 +164,41 @@ TEST_CASE ("Formant: the lead's tone moves, its note doesn't", "[voices]")
     const auto out = VocalChain::render ({ x }, kSr, up);
     for (float v : out[0]) REQUIRE (std::isfinite (v));
 }
+
+TEST_CASE ("Voices: Unison = a second voice on the lead's own notes, a few cents off and a little later", "[voices]")
+{
+    REQUIRE (std::string (kHarmonyIntervals[static_cast<size_t> (kHarmonyUnison)].name) == "Unison");
+    const auto x = sungA (6.0);
+    const double a3 = 220.0;
+    // Voice 1 alone sits 9 cents above the note, voice 2 alone 9 cents below: the lead's note, not a harmony.
+    const auto v1 = voicesOnly (x, harmonyIn (kHarmonyUnison, 0)), v2 = voicesOnly (x, harmonyIn (0, kHarmonyUnison));
+    const double f1 = pitchHz (v1, static_cast<size_t> (2.1 * kSr)), f2 = pitchHz (v2, static_cast<size_t> (2.1 * kSr));
+    INFO ("voice 1 " << f1 << " Hz, voice 2 " << f2 << " Hz");
+    CHECK (f1 == Approx (a3 * std::pow (2.0, 9.0 / 1200.0)).margin (0.6));
+    CHECK (f2 == Approx (a3 * std::pow (2.0, -9.0 / 1200.0)).margin (0.6));
+    CHECK (f1 > f2 + 1.0);
+    // Both: heard at a backing level, starting ~20 - 30 ms after the lead (a double, not a copy on top of it).
+    auto p = harmonyIn (kHarmonyUnison, kHarmonyUnison);
+    const auto v = voicesOnly (x, p);
+    ChainParams leadOnly = p;
+    leadOnly.voices.interval = { 0, 0 };
+    const auto lead = mono (VocalChain::render ({ x }, kSr, leadOnly));
+    const auto a = static_cast<size_t> (2.3 * kSr), b = static_cast<size_t> (3.0 * kSr);
+    CHECK (rmsDb (v, a, b) - rmsDb (lead, a, b) == Approx (-7.5).margin (3.5));
+    auto onset = [&] (const std::vector<double>& s)
+    {
+        const auto n0 = static_cast<size_t> (2.0 * kSr) - 2400;
+        const double ref = std::pow (10.0, rmsDb (s, a, b) / 20.0) * 0.5;
+        double e = 0.0;
+        for (size_t i = n0; i < n0 + 9600; ++i)
+        {
+            e += (s[i] * s[i] - e) * 0.02;
+            if (std::sqrt (e) > ref) return static_cast<double> (i - n0) / kSr;
+        }
+        return 1.0;
+    };
+    const double lag = onset (v) - onset (lead);
+    INFO ("lag " << lag * 1000.0 << " ms");
+    CHECK (lag > 0.012);
+    CHECK (lag < 0.040);
+}
