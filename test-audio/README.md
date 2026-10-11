@@ -24,6 +24,8 @@ Do not share or publish. All MP3, 44.1 kHz stereo.
 
 | DMinor_Test_2026_Clip_Music_Vox.mp3 | vocal + beat, 28 s (user's "Test for Claude" WAV, 48 kHz float) | the v0.18 key case: user's Key Compass says D minor; Voxology (vocal only) fell back to A Chromatic. BeatKey on this mix: notes of C major (Bb open), home D (dorian / minor), conf 1, tune -4 c. Auto-Edit's voice key on it: D minor but only 40 % sure (ambiguous with D major) |
 
+`trap-measurements/`: numbers only (no audio) for the 33 trap vocals behind the two trap references; see its README.
+
 `cymatics/`: 54 pro vocals from royalty-free sample packs the user owns (acapellas, dry / wet stems, hooks, loops), each named
 with the key it's actually sung in (the pack's names are often a semitone off); see `cymatics/README.md` and `cymatics/labels.csv`.
 
