@@ -14,6 +14,7 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
     // The gate, pops and breaths listen to the chain's input, which is Pitch's latency ahead of them: free look-ahead.
     cleanup.prepare (sr, chanCount, pitch.latencySamples(), kChunk);
     pops.prepare (sr, chanCount, pitch.latencySamples());
+    declick.prepare (sr, chanCount, pitch.latencySamples());   // (Record mode: too little look-ahead, it stays off)
     breaths.prepare (sr, chanCount, pitch.latencySamples());
     side.assign (kChunk, 0.0);
     eq.prepare (sr, chanCount);
@@ -42,6 +43,7 @@ void VocalChain::reset() noexcept
     pitch.reset();
     cleanup.reset();
     pops.reset();
+    declick.reset();
     breaths.reset();
     eq.reset();
     dynEq.reset();
@@ -69,6 +71,7 @@ void VocalChain::setParams (const ChainParams& p) noexcept
     cleanup.setParams (p.cleanup);
     denoise.setParams (p.cleanup.enabled ? DenoiseParams { p.cleanup.noiseDb, p.cleanup.roomPct } : DenoiseParams {});
     pops.setParams ({ p.cleanup.enabled ? p.cleanup.popAmount : 0.0 });
+    declick.setParams ({ p.cleanup.enabled ? p.cleanup.clickAmount : 0.0 });
     breaths.setParams ({ p.cleanup.enabled ? p.cleanup.breathDb : 0.0 });
     eq.setParams (p.eq);
     dynEq.setParams (p.dynEq);
@@ -92,6 +95,8 @@ ChainMeters VocalChain::takeMeters() noexcept
     m.gateDb = cleanup.takeGateDb();
     m.noiseDb = denoise.takeReductionDb();
     m.popDb = pops.takeCutDb();
+    m.clickDb = declick.takeCutDb();
+    m.clicks = declick.takeClicks();
     m.breathDb = breaths.takeGainDb();
     m.dynEqDb = dynEq.takeCutDb();
     m.deEssDb = deEsser.takeCutDb();
@@ -152,6 +157,7 @@ void VocalChain::processChunk (int nch, int len) noexcept
         pitch.process (ch.data(), nch, len);
         cleanup.process (ch.data(), nch, len);
         pops.process (ch.data(), nch, len, side.data());
+        declick.process (ch.data(), nch, len, side.data());
         breaths.process (ch.data(), nch, len, side.data());
         eq.process (ch.data(), nch, len);
         dynEq.process (ch.data(), nch, len);

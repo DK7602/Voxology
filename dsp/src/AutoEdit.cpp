@@ -1,5 +1,6 @@
 #include "vox/AutoEdit.h"
 #include "vox/ClipWatch.h"
+#include "vox/DeClick.h"
 
 #include "vox/DynamicEq.h"
 #include "vox/Fft.h"
@@ -1291,6 +1292,41 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             reason ("cleanup", "Pops", "60 %", "No \"p\" or \"b\" pops hit the mic in the part Auto-Edit heard, but other parts of the song may have them. "
                     "The remover only acts when a pop actually hits, so it stays on at a light 60 % as a safety net and does nothing the rest of the time.");
         }
+
+        // Mouth clicks: the de-clicker run at its middle setting over the cleaned vocal (it listens ahead, as in the chain).
+        int clickCount = 0;
+        {
+            const int la = static_cast<int> (std::lround (0.034 * sr));
+            DeClick dc;
+            dc.prepare (sr, 1, la);
+            dc.setParams ({ 60.0 });
+            Signal delayed (cleaned.size() + static_cast<size_t> (la), 0.0), side = cleaned;
+            std::copy (cleaned.begin(), cleaned.end(), delayed.begin() + la);
+            side.resize (delayed.size(), 0.0);
+            for (size_t s0 = 0; s0 < delayed.size(); s0 += 512)
+            {
+                double* ptr = delayed.data() + s0;
+                dc.process (&ptr, 1, static_cast<int> (std::min<size_t> (512, delayed.size() - s0)), side.data() + s0);
+            }
+            clickCount = dc.takeClicks();
+        }
+        const double clicksPerMinute = static_cast<double> (clickCount) / minutes;
+        if (clickCount >= 3 && clicksPerMinute >= 4.0)
+        {
+            static constexpr std::array<double, kIntensities> clickAmounts { 40.0, 60.0, 80.0 };
+            p.cleanup.clickAmount = clickAmounts[static_cast<size_t> (intensity)];
+            reason ("cleanup", "Clicks", pct (p.cleanup.clickAmount),
+                    "Auto-Edit heard " + std::to_string (clickCount) + " mouth clicks (lip smacks, tongue clicks: a few ms each) in " + num (a.seconds, 0) +
+                    " s. Clicks turns those few milliseconds down and leaves \"t\", \"k\" and \"s\" alone; inside a word, where your voice covers them, it barely touches anything.");
+            if (clicksPerMinute > 20.0)
+                r.notes.push_back ("DRY MOUTH: " + std::to_string (clickCount) + " mouth clicks in " + num (a.seconds, 0) + " s, usually a dry mouth or lips close to the mic."
+                                   "\nNEED: No. Clicks takes most of them out."
+                                   "\nSTEP: Next take, sip water (room temperature) between takes; a bite of green apple helps a lot."
+                                   "\nSTEP: Keep about a fist's distance from the mic so lip noise doesn't get close-up.");
+        }
+        else
+            reason ("cleanup", "Clicks", "Off", clickCount == 0 ? "Auto-Edit heard no mouth clicks in this part, so the de-clicker stays off."
+                                                                : "Only " + std::to_string (clickCount) + " mouth click" + (clickCount == 1 ? "" : "s") + " in this part, too few to need it (turn Clicks up if you hear them).");
 
         int breathCount = 0;
         double breathSeconds = 0.0, breathEnergy = 0.0;

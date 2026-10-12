@@ -64,7 +64,8 @@ public:
         std::atomic<float> inShort { -100.0f }, outShort { -100.0f };     // LUFS
         std::atomic<float> inPeak { -100.0f }, outPeak { -100.0f };       // dBFS, held until read
         std::atomic<float> gate { 0.0f }, deEss { 0.0f }, rider { 0.0f };  // dB
-        std::atomic<float> pops { 0.0f }, breath { 0.0f }, noise { 0.0f };  // dB, held until read
+        std::atomic<float> pops { 0.0f }, breath { 0.0f }, noise { 0.0f }, click { 0.0f };  // dB, held until read
+        std::atomic<int> clicks { 0 };                                      // mouth clicks fixed since the editor opened
         std::atomic<int> clipRuns { 0 }, overs { 0 };                      // incoming vocal: clipped stretches, samples over 0 dBFS (running totals)
         std::array<std::atomic<float>, vox::kDynBands> dynEq {};            // dB per band, held until read
         std::atomic<float> peakGr { 0.0f }, levelGr { 0.0f };             // dB, held until read

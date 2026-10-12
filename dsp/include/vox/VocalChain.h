@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ClipWatch.h"
+#include "DeClick.h"
 #include "Denoise.h"
 #include "DynamicEq.h"
 #include "Modules.h"
@@ -46,6 +47,8 @@ struct ChainMeters
     double gateDb = 0.0;        // deepest gate turn-down (<= 0)
     double noiseDb = 0.0;       // noise / room reduction: how far the sound was turned down on average (<= 0)
     double popDb = 0.0;         // deepest plosive cut (<= 0)
+    double clickDb = 0.0;       // deepest mouth-click cut (<= 0)
+    int clicks = 0;             // mouth clicks fixed
     double breathDb = 0.0;      // deepest breath turn-down (<= 0)
     std::array<double, kDynBands> dynEqDb {};   // deepest Dynamic EQ cut per band (<= 0)
     double deEssDb = 0.0;       // deepest de-esser cut (<= 0)
@@ -59,7 +62,7 @@ struct ChainMeters
 
 /** Voxology's vocal chain:
       Noise / Room reduction (Cleanup's, first so everything after hears the cleaner vocal) ->
-      Pitch -> Cleanup (low cut, gate, pops, breaths) -> Tone EQ -> Dynamic EQ -> De-Esser -> Rider -> Compressor -> Saturation      (inserts, linked)
+      Pitch -> Cleanup (low cut, gate, pops, mouth clicks, breaths) -> Tone EQ -> Dynamic EQ -> De-Esser -> Rider -> Compressor -> Saturation      (inserts, linked)
       -> Doubler -> Delay -> Reverb (added to the vocal, stereo) -> Output gain
     Constant latency (the noise reducer's frame + Pitch look-ahead + Saturation oversampling; Record mode: no noise reducer). Framework-free: the plug-in, Auto-Edit and the
     tests all run this same class. prepare() allocates; process() never does (any block size). */
@@ -112,6 +115,7 @@ private:
     PitchCorrector pitch;
     Cleanup cleanup;
     PopRemover pops;
+    DeClick declick;
     BreathControl breaths;
     VocalEQ eq;
     DynamicEq dynEq;

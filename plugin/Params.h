@@ -16,7 +16,7 @@ namespace VoxParams
 
     inline juce::StringArray sliderIds()
     {
-        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom" };
+        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "clClicks" };
         for (int b = 0; b < vox::kEqBands; ++b) { ids.add (n ("eqGain", b)); ids.add (n ("eqFreq", b)); }
         ids.add ("dqSens");
         for (int b = 0; b < vox::kDynBands; ++b) { ids.add (n ("dqCut", b)); ids.add (n ("dqFreq", b)); }
@@ -111,6 +111,8 @@ namespace VoxParams
                 [] (float v, int) { return v < 0.05f ? String ("Off") : String (roundToInt (v)) + " %"; });
         slider ("clBreath", "Breath Reduction", NormalisableRange<float> (0.0f, static_cast<float> (vox::BreathControl::kMaxReductionDb), 0.1f), 0.0f, "dB",
                 [] (float v, int) { return v < 0.05f ? String ("Off") : String (-v, 1) + " dB"; });
+        slider ("clClicks", "Mouth De-click", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%",
+                [] (float v, int) { return v < 0.05f ? String ("Off") : String (roundToInt (v)) + " %"; });
         slider ("clNoise", "Noise Reduction", NormalisableRange<float> (0.0f, static_cast<float> (vox::Denoiser::kMaxNoiseDb), 0.1f), 0.0f, "dB",
                 [] (float v, int) { return v < 0.05f ? String ("Off") : String (-v, 1) + " dB"; });
         slider ("clRoom", "Room Reduction", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%",
@@ -206,6 +208,7 @@ namespace VoxParams
         set ("clPops", static_cast<float> (p.cleanup.popAmount));
         set ("clBreath", static_cast<float> (p.cleanup.breathDb));
         set ("clNoise", static_cast<float> (p.cleanup.noiseDb));
+        set ("clClicks", static_cast<float> (p.cleanup.clickAmount));
         set ("clRoom", static_cast<float> (p.cleanup.roomPct));
         set ("eqOn", 1.0f);
         for (int b = 0; b < vox::kEqBands; ++b)
@@ -286,7 +289,7 @@ namespace VoxParams
             p.voices.level = d ("hvLevel");
             p.voices.formant = d ("hvFormant");
             p.voices.width = d ("dbWidth");
-            p.cleanup = { on ("clOn"), d ("clLowCut"), d ("clGateThr"), d ("clGateRange"), d ("clPops"), d ("clBreath"), d ("clNoise"), d ("clRoom") };
+            p.cleanup = { on ("clOn"), d ("clLowCut"), d ("clGateThr"), d ("clGateRange"), d ("clPops"), d ("clBreath"), d ("clNoise"), d ("clRoom"), d ("clClicks") };
             p.eq.enabled = on ("eqOn");
             for (size_t b = 0; b < static_cast<size_t> (vox::kEqBands); ++b)
             {

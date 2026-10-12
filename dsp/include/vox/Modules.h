@@ -37,6 +37,7 @@ struct CleanupParams
     double breathDb = 0.0;      // breath control: how far breaths go down, 0..24 dB (BreathControl); 0 = off
     double noiseDb = 0.0;       // noise reduction: how far steady noise goes down, 0..24 dB (Denoiser, first in the chain); 0 = off
     double roomPct = 0.0;       // room reduction: how much of the room's echo after words is taken out, 0..100 % (Denoiser)
+    double clickAmount = 0.0;   // mouth de-click, 0..100 % (DeClick); 0 = off
 };
 
 class Cleanup

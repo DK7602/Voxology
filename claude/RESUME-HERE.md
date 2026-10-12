@@ -1420,3 +1420,26 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Built on Linux now needs: apt-get libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev libasound2-dev
   libgtk-3-dev libwebkit2gtk-4.1-dev libcurl4-openssl-dev; build-hp = full configure (plugins ON, JUCE from the scratch
   clone via -DFETCHCONTENT_SOURCE_DIR_JUCE=...).
+
+- v0.35.0 CI green: Actions run 38256141294 (commit 010676b; ~30 min: Windows + engine tests under ASan / UBSan).
+
+## v0.36.0 Mouth de-click (Cleanup "Clicks") (2026-10-12)
+- dsp/DeClick.h/.cpp: works on the side-chain (Pitch's latency ahead, like Pops / Breaths); off (isAvailable false)
+  when the look-ahead < (context + max click + 2 blocks) + pad ~16 ms: Record mode (5 ms).
+- Detector: top end (2x HP 1.5 kHz) peak per 0.5 ms block vs the 85th percentile of the block peaks 10 ms on BOTH sides
+  (ring of 2 x context + maxBlocks + 4 blocks). A first version (fast peak vs mean energy) flagged ~1000 "clicks" in
+  12 s: every glottal pulse of the buzzy test voice. Flag: peak > ratio x typical (18 dB at 0 % .. 14 dB at 100 %;
+  10 - 12 dB had many false hits) and > -70 dBFS; runs <= 4 ms (8 blocks) = click, longer = consonant ("t" 12 ms bursts
+  untouched).
+- Edge rule (both sides of the burst, full band, P85 of 10 ms): quiet on one side and the voice on the other (within
+  12 dB of the burst) = a word's hard start / end, a "b"/"d" release, a final "t": left alone. Without it the clean
+  test voice got 5 - 16 false clicks (its abrupt word starts / ends); with it 0 at every setting.
+- Repair: the WHOLE sound turned down for the click (+-0.8 ms pad, 0.5 ms fades), depth = min(maxCut = 30 dB x amount,
+  top-end excess - 6, full-band excess): a gap click goes fully, inside a word the dip stays tiny. (Ducking only the
+  top end via HP subtraction left ~-3 dB: the HP's phase shift.) Gap clicks: 30 % -9 dB, 60 % -18, 100 % -27.7.
+- Chain: after Pops (side-chain), CleanupParams.clickAmount; meters clickDb / clicks -> UI "click" / "clicks" (lane C,
+  stat "click fixed"). Param clClicks 0-100 %. Cleanup page: 9 controls in two rows.
+- Auto-Edit: runs DeClick at 60 % on the cleaned vocal (audio delayed 34 ms vs a side-chain copy), counts clicks:
+  >= 3 and >= 4 / min -> 40 / 60 / 80 % (Light / Balanced / Strong); > 20 / min -> DRY MOUTH note. Real vocals: 0 - 2
+  clicks on all but one pro dry stem (Make_Love 6 -> 60 %).
+- Tests: tests/test_declick.cpp (3).

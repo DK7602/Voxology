@@ -22,7 +22,8 @@ add_executable(vox_tests
     test_clipwatch.cpp
     test_manual.cpp
     test_vocalfit.cpp
-    test_denoise.cpp)
+    test_denoise.cpp
+    test_declick.cpp)
 
 target_link_libraries(vox_tests PRIVATE vox_dsp Catch2::Catch2WithMain)
 target_include_directories(vox_tests PRIVATE ${CMAKE_SOURCE_DIR}/honeytune)   # HoneyView.h (the editor's rules, no JUCE)

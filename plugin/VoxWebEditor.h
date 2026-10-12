@@ -76,7 +76,7 @@ private:
     juce::dsp::WindowingFunction<float> window { static_cast<size_t> (kFftSize), juce::dsp::WindowingFunction<float>::hann, false };
     std::array<float, 2 * kFftSize> fftBuffer {};
     Analyser inAnalyser, outAnalyser;
-    float popHold = 0.0f, breathHold = 0.0f, noiseHold = 0.0f;
+    float popHold = 0.0f, breathHold = 0.0f, noiseHold = 0.0f, clickHold = 0.0f;
     float clipRecent = 0.0f, overRecent = 0.0f;   // decaying counts (~1 s)
     int clipSeen = -1, overSeen = -1;            // running totals last read (-1 = not yet)
     int clipSinceOpen = 0;

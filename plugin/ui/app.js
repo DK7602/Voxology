@@ -120,7 +120,7 @@ window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !manual.hi
 // ---------------------------------------------------------------------------------------------
 // Parameters
 const NOTES_C = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
+const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "clClicks", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
   "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth",
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
@@ -214,7 +214,7 @@ function typeIn(valEl, id, fmt, def, after, refocus) {
 }
 
 // Latest meter frame.
-const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, noise: 0, clipNow: 0, clipTotal: 0, overNow: 0, hotPeak: -100, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
+const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, noise: 0, click: 0, clicks: 0, clipNow: 0, clipTotal: 0, overNow: 0, hotPeak: -100, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1],
   bkState: 0, bkSource: 0, scState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, midiNotes: 0, notesUsed: 0xFFF, recMode: 0, latencyMs: 33, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
@@ -428,26 +428,28 @@ const MODULES = [
     cells: pitchCells,
     stat: () => (val("ptAmount") < 0.05 ? ["idle", false] : M.pitchTarget >= 0 ? [`\u2192 ${noteName(M.pitchTarget)}`, true]
       : [`${NOTES[M.keyUsed]} ${SCALES_SHORT[M.scaleUsed].split(" ")[0].toLowerCase()} · ${PITCH_MODES[choice("ptMode")].toLowerCase()}`, true]) },
-  { key: "cleanup", name: "CLEANUP", onId: "clOn", what: "noise, room, low cut, pops, breaths and gate: the recording cleaned up",
+  { key: "cleanup", name: "CLEANUP", onId: "clOn", what: "noise, room, low cut, pops, clicks, breaths and gate: the recording cleaned up",
     cells: () => [
       knob("clNoise", "Noise", "hiss & hum down", (v) => (v < 0.05 ? "Off" : `${MINUS}${v.toFixed(1)} dB`), 0),
       knob("clRoom", "Room", "echo after words", (v) => (v < 0.05 ? "Off" : fmtPct(v)), 0),
       knob("clLowCut", "Low Cut", "rumble below", (v) => (v <= 20.5 ? "Off" : fmtHz(v)), 20),
       knob("clPops", "Pops", "p & b thumps", (v) => (v < 0.05 ? "Off" : fmtPct(v)), 0),
+      knob("clClicks", "Clicks", "mouth & lip", (v) => (v < 0.05 ? "Off" : fmtPct(v)), 0),
       knob("clBreath", "Breaths", "turned down", (v) => (v < 0.05 ? "Off" : `${MINUS}${v.toFixed(1)} dB`), 0),
       knob("clGateThr", "Gate", "opens above", fmtDb, -60),
       knob("clGateRange", "Gate Range", "gaps turned down", (v) => (v < 0.05 ? "Off" : fmtDb(v)), 0),
       multiMeter("Working", "right now", [["N", () => M.noise, 24, () => val("clNoise") >= 0.05 || val("clRoom") >= 0.05],
-        ["P", () => M.pops, 24, () => val("clPops") >= 0.05], ["B", () => M.breath, 24, () => val("clBreath") >= 0.05],
+        ["P", () => M.pops, 24, () => val("clPops") >= 0.05], ["C", () => M.click, 30, () => val("clClicks") >= 0.05], ["B", () => M.breath, 24, () => val("clBreath") >= 0.05],
         ["G", () => M.gate, 30, () => val("clGateRange") >= 0.05]]),
     ],
     stat: () => {
       if (M.clipNow >= 1) return ["clipped in!", true];
       if (M.overNow >= 1) return ["too hot in!", true];
       if (M.pops < -3) return [`pop ${fmtNum(M.pops, 0)} dB`, true];
+      if (M.click < -3) return ["click fixed", true];
       if (M.breath < -1) return [`breath ${fmtNum(M.breath, 0)} dB`, true];
       if (M.gate < -0.5) return [`gate ${fmtNum(M.gate, 0)} dB`, true];
-      const parts = [val("clLowCut") > 20.5, val("clPops") >= 0.05, val("clBreath") >= 0.05, val("clGateRange") >= 0.05, val("clNoise") >= 0.05, val("clRoom") >= 0.05].filter(Boolean).length;
+      const parts = [val("clLowCut") > 20.5, val("clPops") >= 0.05, val("clBreath") >= 0.05, val("clGateRange") >= 0.05, val("clNoise") >= 0.05, val("clRoom") >= 0.05, val("clClicks") >= 0.05].filter(Boolean).length;
       if (val("clNoise") >= 0.05) return [`noise ${MINUS}${fmtNum(val("clNoise"), 0)} dB`, true];
       return parts ? [val("clLowCut") > 20.5 ? `cut ${fmtHz(val("clLowCut"))}` : "ready", true] : ["idle", false];
     } },
@@ -1153,7 +1155,7 @@ const LEARN = {
       "Already using Auto-Tune or Melodyne? Turn this off: one tuner is enough."],
     live: () => {
       const t = [];
-      if (M.recMode) t.push(tip("RECORD MODE", `Voxology is in Record mode: about ${M.latencyMs.toFixed(0)} ms, so you can hear yourself tuned while you record. Pitch uses a faster, slightly rougher method; Voices, Formant, Noise and Room are off.`, "calm",
+      if (M.recMode) t.push(tip("RECORD MODE", `Voxology is in Record mode: about ${M.latencyMs.toFixed(0)} ms, so you can hear yourself tuned while you record. Pitch uses a faster, slightly rougher method; Voices, Formant, Noise, Room and Clicks are off.`, "calm",
         { need: "Switch it off when you're done recording.", steps: ["Click REC in the header to go back to full quality for mixing (Cubase adjusts the timing for you)."] }));
       if (choice("ptMidi") === 2 && M.midiNotes === 0) t.push(tip("LEARN IS WAITING", "MIDI is on Learn, but no notes have been played yet, so Pitch uses the key as usual.", "calm",
         { need: "Only if you want the MIDI scale.", steps: ["Route a MIDI track's output to Voxology (Cubase: the track's output menu).", "Play the beat's notes or chords once: they light up blue in Notes."] }));
@@ -1174,14 +1176,15 @@ const LEARN = {
       return t;
     } },
   cleanup: {
-    does: "Cleans up the recording before anything else. It also watches the vocal coming in and warns you if it arrives clipped or too hot. Noise turns down steady background noise (fans, AC, hiss, computer hum): it learns the noise by itself from the quiet moments, so there's nothing to set up, and it never touches a held note. Room shortens the echo of your room after words (what a bare bedroom adds), and leaves held notes alone. Low Cut removes rumble, hum and mic-stand bumps under the voice. Pops catches the low thump of \"p\" and \"b\" hitting the mic and cuts it for just those few hundredths of a second. Breaths turns your breaths down (they get louder later, when the compressor works) without touching the words. The gate turns the gaps between phrases down, so room noise and headphone bleed don't creep up.",
+    does: "Cleans up the recording before anything else. It also watches the vocal coming in and warns you if it arrives clipped or too hot. Noise turns down steady background noise (fans, AC, hiss, computer hum): it learns the noise by itself from the quiet moments, so there's nothing to set up, and it never touches a held note. Room shortens the echo of your room after words (what a bare bedroom adds), and leaves held notes alone. Clicks takes out mouth noises: lip smacks, tongue clicks and the sticky sound of a dry mouth, a few milliseconds each, without touching \"t\", \"k\" or \"s\". Low Cut removes rumble, hum and mic-stand bumps under the voice. Pops catches the low thump of \"p\" and \"b\" hitting the mic and cuts it for just those few hundredths of a second. Breaths turns your breaths down (they get louder later, when the compressor works) without touching the words. The gate turns the gaps between phrases down, so room noise and headphone bleed don't creep up.",
     how: ["Noise: 6 - 12 dB is clean and natural; past 18 dB the quiet ends of words can start to sound watery. It needs about a second of the song to learn the noise.",
       "Room: 30 - 60 % for a bare room. It shortens the echo by up to about 5 dB; it isn't a full de-reverb, so a very echoey take still sounds roomy.",
+      "Clicks: 40 - 60 % catches most mouth clicks. Higher is more sensitive and deeper; if a word's start sounds nicked, come down. Off in Record mode.",
       "Low Cut: raise it until the voice starts to thin, then back off 10 - 20 Hz. Deep voices sit around 70 - 90 Hz, higher voices 100 - 150 Hz.",
       "Pops: 60 - 100 % catches them. It only acts on a pop, so a high setting is safe.",
       "Breaths: 4 - 8 dB keeps them natural, 10 - 15 dB is the clean, tight rap sound. Off keeps every breath as recorded.",
       "Gate: set it between the noise in your gaps and your quietest words. Gate Range 10 - 15 dB sounds natural.",
-      "The Working meter shows N (noise and room taken out), P (pop cut), B (breath turn-down) and G (gate) live."],
+      "The Working meter shows N (noise and room taken out), P (pop cut), C (mouth click cut), B (breath turn-down) and G (gate) live."],
     live: () => {
       const t = [];
       t.push(...inputTips());
