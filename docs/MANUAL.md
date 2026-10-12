@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.41.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.42.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.41.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.42.0**).
 
 Where each one goes in Cubase:
 
@@ -76,8 +76,8 @@ Every knob:
 | 08 | Saturation | Adds harmonics: warmth, density, presence | Mode (Tape, Tube, Clip), Drive, Mix |
 | 09 | Voices | Doubles, extra voices and harmonies in key, up to 8 voices | Double, Width, Voice 1 (left) + Voice 2 (right): **Unison** (a second singer on your own notes, same octave) or a harmony: 3rd, 5th or octave, up or down, Stack (2, 4 or 6 more singers on your notes, or **MIDI chords**: the voices sing the chords you play), Crew (each voice its own singer), Level, Formant |
 | 10 | Dimension | Movement and width: chorus, flanger or phaser | Mode (Chorus, Flanger, Phaser), Amount, Speed, Width |
-| 11 | Delay | Echoes locked to the song's tempo | Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong |
-| 12 | Reverb | A vocal plate: a space for the voice | Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps) |
+| 11 | Delay | Echoes locked to the song's tempo | Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong, Throw (an echo on each line's last word) |
+| 12 | Reverb | A vocal plate: a space for the voice | Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps), Throw (a wash after each line) |
 | 13 | Output | Final level into your mix | Output gain |
 
 **Noise and Room (Cleanup)** work before anything else in the chain, so Pitch and the gate already hear the cleaner vocal.
@@ -101,6 +101,13 @@ Every knob:
 - To play chords into Voxology in Cubase: add a MIDI track (no instrument), open its output menu (the routing at the top of the Inspector) and choose Voxology on your vocal track. Record or draw the chords on that track, under the vocal part.
 - **Crew** makes every backing voice its own singer: each gets its own voice (formant, deeper or brighter), tone (darker or brighter), timing (a little later) and tuning (a few cents off). 0 % = all your own voice; 40 - 70 % sounds like your crew behind you. It isn't AI: it won't sound like a stranger, but the stack stops sounding like copies of you. Turning it never clicks.
 - Each voice costs about 2 % of one CPU core: 8 voices about 16 %. Record mode leaves the voices out.
+
+**Throws (Delay and Reverb)** do what engineers do by hand: an echo or a reverb wash on the **last word of each line**, while the rest of the line stays dry.
+
+- Voxology hears a line end (you sang for about a second or more, then stopped for a quarter of a second) and throws its last word into an echo at the Delay's **Time**, on the beat: the echo lands exactly where it would have if the word had been sent while you sang it. It repeats a few times, darker each time, bouncing left and right.
+- **Throw** on the Delay page = how loud that echo is (100 % = as loud as the word); **Throw** on the Reverb page = a long reverb wash (its own plate) after each line. They work even with Mix at 0, and switch off with their module.
+- 30 - 60 % suits trap hooks and ad-lib lines. If you start the next line while it's still echoing, the echo steps back about 8 dB.
+- Because the end of a line is only known a quarter of a second after it, an echo due before that (a very short Time like 1/16) is skipped; the next repeat comes in at its proper level.
 
 **Dimension** adds movement and width to the finished vocal (after Voices; the delay and reverb hear the vocal without it).
 
@@ -132,7 +139,7 @@ Click **MY CHAINS** (under INTENSITY).
 - **Load**: click a name. Every module is set the way you saved it. With **Keep this song's key when loading** ticked (the default), the song's Key, Scale, key source, MIDI mode and switched-off notes stay as they are.
 - Not part of a chain: REC, the power button, A / B, MATCH, Auto-Edit's Style and Intensity, and BEAT mode.
 - **✕** next to a name deletes it.
-- **Quick Looks** change only their own modules, on top of what you have: **Hard Robot** and **Smooth Tune** (Pitch), **Stacked Hook** (with Crew), **Harmony 3rd + 5th** and **Deep Ad-lib** (Voices), **Phone Voice** (Low Cut, Tone EQ, Saturation), **Wide Chorus** (Dimension), **Ad-lib Echo** (Delay) and **Big Space** (Reverb).
+- **Quick Looks** change only their own modules, on top of what you have: **Hard Robot** and **Smooth Tune** (Pitch), **Stacked Hook** (with Crew), **Harmony 3rd + 5th** and **Deep Ad-lib** (Voices), **Phone Voice** (Low Cut, Tone EQ, Saturation), **Wide Chorus** (Dimension), **Ad-lib Echo** (Delay), **Line Throws** (Delay and Reverb throws) and **Big Space** (Reverb).
 - **Start fresh** sets every module back to neutral (the key stays when ticked).
 - **UNDO** takes back the last chain, look or Start fresh (the Auto-Edit report stays).
 - A chain saved with an older Voxology still loads; anything newer than the chain starts off.

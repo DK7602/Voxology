@@ -26,6 +26,7 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
     voices.prepare (sr);
     doubler.prepare (sr);
     dimension.prepare (sr);
+    throws.prepare (sr);
     delay.prepare (sr);
     reverb.prepare (sr);
     for (auto& w : work) w.assign (kChunk, 0.0);
@@ -55,6 +56,7 @@ void VocalChain::reset() noexcept
     voices.reset();
     doubler.reset();
     dimension.reset();
+    throws.reset();
     delay.reset();
     reverb.reset();
     for (auto& d : dryLine) std::fill (d.begin(), d.end(), 0.0);
@@ -88,6 +90,14 @@ void VocalChain::setParams (const ChainParams& p) noexcept
     }
     doubler.setParams (p.doubler);
     dimension.setParams (p.dimension);
+    {
+        ThrowParams t = p.throws;
+        t.division = p.delay.division;
+        t.bpm = p.delay.bpm;
+        if (! p.delay.enabled) t.echo = 0.0;
+        if (! p.reverb.enabled) t.wash = 0.0;
+        throws.setParams (t);
+    }
     delay.setParams (p.delay);
     reverb.setParams (p.reverb);
 }
@@ -100,6 +110,7 @@ ChainMeters VocalChain::takeMeters() noexcept
     m.popDb = pops.takeCutDb();
     m.clickDb = declick.takeCutDb();
     m.clicks = declick.takeClicks();
+    m.throws = throws.takeThrows();
     m.breathDb = breaths.takeGainDb();
     m.dynEqDb = dynEq.takeCutDb();
     m.deEssDb = deEsser.takeCutDb();
@@ -184,6 +195,7 @@ void VocalChain::processChunk (int nch, int len) noexcept
         dimension.process (ch.data(), nch, len);   // (the delay and reverb still hear the plain vocal)
         delay.process (mono.data(), ch.data(), nch, len);
         reverb.process (mono.data(), ch.data(), nch, len);
+        throws.process (mono.data(), ch.data(), nch, len);
     }
 
     const double outTarget = fromDb (std::clamp (params.outputDb, -24.0, 24.0));

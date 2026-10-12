@@ -38,6 +38,8 @@ const std::vector<ChainLibrary::Look>& ChainLibrary::looks()
           { { "dmOn", 1 }, { "dmMode", 0 }, { "dmAmount", 30 }, { "dmRate", 0.4f }, { "dmWidth", 90 } } },
         { "Ad-lib Echo", "Delay: dotted 1/8 ping-pong echoes that stay quiet while you sing.",
           { { "dlOn", 1 }, { "dlTime", 2 }, { "dlFeedback", 35 }, { "dlMix", 25 }, { "dlTone", 4000 }, { "dlDuck", 70 }, { "dlPing", 1 } } },
+        { "Line Throws", "Delay and Reverb: an echo and a wash on the last word of each line (dotted 1/8), the rest stays dry.",
+          { { "dlOn", 1 }, { "dlTime", 2 }, { "dlThrow", 50 }, { "rvOn", 1 }, { "rvThrow", 30 } } },
         { "Big Space", "Reverb: a long, wide plate that blooms in the gaps. For hooks and melodic parts.",
           { { "rvOn", 1 }, { "rvDecay", 2.6f }, { "rvPredelay", 40 }, { "rvMix", 20 }, { "rvTone", 6000 }, { "rvDuck", 50 } } },
     };

@@ -13,6 +13,7 @@ add_library(vox_dsp STATIC
     src/Voices.cpp
     src/Space.cpp
     src/Dimension.cpp
+    src/Throws.cpp
     src/VocalChain.cpp
     src/AutoEdit.cpp
     src/ReferenceLibrary.cpp

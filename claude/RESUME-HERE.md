@@ -1551,3 +1551,18 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Test (test_reference.cpp +1): looksSplit cases; a synthetic split (HP 220 Hz x2, a 90 ms room) flagged split vs
   the same audio named "acapella": Body -3 dB vs -6 dB (split doesn't thin you out), presence the same (+-1 dB),
   reverb = style, note present.
+
+## v0.42.0 Throws (#8): echo / reverb wash on the last word of each line (2026-10-12)
+- dsp/Throws.h/.cpp: watches the mono vocal (after inserts + voices) in 10 ms levels. A line = level > -50 dBFS, ends
+  when 24 dB under the line's peak (or < -60) for 0.25 s and it lasted >= 0.8 s. Last word = back from the last loud
+  block to the last dip 10 dB under what follows (<= 0.6 s). Late "send": the word (HP 250 Hz, 10 / 30 ms fades) is
+  added into a random-access ping-pong line at the slot it would have been written in: age = now - t, k = age / D + 1,
+  slot `age - (k - 1) D` back, gain fb^(k - 1) -> its echo lands at t + kD, on the beat (a repeat due before the line
+  end was known is skipped). Feedback 0.45, LP 4.5 kHz in the loop, -8 dB while singing (next line). Wash = its own
+  Reverb (2.8 s, 100 % wet) fed by the echo. Off -> echo fades 50 ms, wash rings out (kWashSeconds + 1 s), then
+  reset = bit-exact. Time = the Delay's (division, bpm); echo off with Delay off, wash off with Reverb off.
+- Measured (test): first echo -6.8 dB under the word (60 %, HP takes the 220 Hz fundamental), on time (nothing in
+  the 0.3 s before), next repeat -8 dB on the other side, nothing thrown mid-line (40 ms word gaps), 4 lines -> 4 throws.
+- Params dlThrow, rvThrow (0 - 100 %, Auto-Edit never writes them). UI: Throw knob on Delay (page now two rows) and
+  Reverb; stats "+ throws"; faceFor: Throw before "Thr" (it got the +dB face). Quick Look "Line Throws" (10 looks).
+  Meter ChainMeters.throws (not shown yet). Manual: module rows + Throws paragraph. Chains harness: ALL OK.

@@ -10,6 +10,7 @@
 #include "PitchCorrector.h"
 #include "Saturation.h"
 #include "Space.h"
+#include "Throws.h"
 #include "Voices.h"
 
 #include <array>
@@ -31,6 +32,7 @@ struct ChainParams
     DoublerParams doubler;
     VoicesParams voices;      // harmonies (the VOICES module = doubler + harmonies; doubler.enabled switches both)
     DimensionParams dimension;
+    ThrowParams throws;       // echo: Delay's Throw, wash: Reverb's Throw (each off with its module; time = the Delay's)
     DelayParams delay;
     ReverbParams reverb;
     double outputDb = 0.0;
@@ -53,6 +55,7 @@ struct ChainMeters
     double popDb = 0.0;         // deepest plosive cut (<= 0)
     double clickDb = 0.0;       // deepest mouth-click cut (<= 0)
     int clicks = 0;             // mouth clicks fixed
+    int throws = 0;             // lines thrown (Throws)
     double breathDb = 0.0;      // deepest breath turn-down (<= 0)
     std::array<double, kDynBands> dynEqDb {};   // deepest Dynamic EQ cut per band (<= 0)
     double deEssDb = 0.0;       // deepest de-esser cut (<= 0)
@@ -130,6 +133,7 @@ private:
     HarmonyVoices voices;
     Doubler doubler;
     Dimension dimension;
+    Throws throws;
     EchoDelay delay;
     Reverb reverb;
     std::array<std::vector<double>, kMaxChannels> work;

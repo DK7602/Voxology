@@ -9,6 +9,7 @@
   const sliders = {
     ptAmount: lin(0, 100, 0), ptSpeed: centre(0, 400, 60, 50), ptHumanize: lin(0, 100, 0), ptFormant: lin(-6, 6, 0), ptVibrato: lin(-100, 100, 0, 1), ptTranspose: lin(-12, 12, 0, 1),
     hvLevel: lin(0, 100, 50), hvFormant: lin(-6, 6, 0), hvCrew: lin(0, 100, 0),
+    dlThrow: lin(0, 100, 40), rvThrow: lin(0, 100, 0),
     dmAmount: lin(0, 100, 30), dmRate: centre(0.05, 5, 0.6, 0.5, 0.01), dmWidth: lin(0, 100, 70),
     clLowCut: centre(20, 400, 80, 20), clGateThr: lin(-80, -20, -60), clGateRange: lin(0, 30, 0), clPops: lin(0, 100, 0), clBreath: lin(0, 24, 0), clNoise: lin(0, 24, 0), clRoom: lin(0, 100, 0), clClicks: lin(0, 100, 0),
     dsAmount: lin(0, 100, 0), dsSens: lin(0, 100, 50), dsFreq: centre(3000, 12000, 6000, 6000, 10),
@@ -174,7 +175,7 @@
         if (payload.name === "setUnmaskSource") um.selected = (payload.params && payload.params[0]) || "";
         if (payload.name === "listChains") result = JSON.stringify({ yours: chains.yours.map((n) => ({ name: n })), folder: "C:\\Users\\you\\Documents\\Voxology\\Chains",
           looks: [["Hard Robot", "Pitch: Robot, instant."], ["Smooth Tune", "Pitch: Natural and gentle."], ["Stacked Hook", "Voices: Unison both sides, Stack 6."], ["Harmony 3rd + 5th", "Voices: a 3rd up and a 5th down."],
-            ["Deep Ad-lib", "Voices: an octave down."], ["Phone Voice", "Low Cut, Tone EQ and Saturation."], ["Wide Chorus", "Dimension: a gentle, wide chorus."], ["Ad-lib Echo", "Delay: dotted 1/8 ping-pong."], ["Big Space", "Reverb: a long, wide plate."]].map(([name, about]) => ({ name, about })) });
+            ["Deep Ad-lib", "Voices: an octave down."], ["Phone Voice", "Low Cut, Tone EQ and Saturation."], ["Wide Chorus", "Dimension: a gentle, wide chorus."], ["Ad-lib Echo", "Delay: dotted 1/8 ping-pong."], ["Line Throws", "Delay and Reverb throws on line ends."], ["Big Space", "Reverb: a long, wide plate."]].map(([name, about]) => ({ name, about })) });
         if (payload.name === "getChainName") result = chains.name;
         if (payload.name === "saveChain") { const n = String(payload.params[0]).trim(); if (!chains.yours.includes(n)) chains.yours.push(n); chains.name = n; }
         if (payload.name === "loadChain") { chains.name = payload.params[0] === "yours" ? payload.params[1] : ""; ae.undo = true; }

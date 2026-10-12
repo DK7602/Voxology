@@ -22,8 +22,8 @@ namespace VoxParams
         for (int b = 0; b < vox::kDynBands; ++b) { ids.add (n ("dqCut", b)); ids.add (n ("dqFreq", b)); }
         ids.addArray ({ "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
                         "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix",
-                        "dbAmount", "dbWidth", "dmAmount", "dmRate", "dmWidth", "dlFeedback", "dlMix", "dlTone", "dlDuck",
-                        "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount" });
+                        "dbAmount", "dbWidth", "dmAmount", "dmRate", "dmWidth", "dlFeedback", "dlMix", "dlTone", "dlDuck", "dlThrow",
+                        "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "rvThrow", "outGain", "umAmount" });
         return ids;
     }
     inline juce::StringArray toggleIds()
@@ -193,6 +193,7 @@ namespace VoxParams
         slider ("dlTone", "Delay Tone", skewed (1000.0f, 16000.0f, 10.0f, 4000.0f), 6000.0f, "Hz", hzText);
         slider ("dlDuck", "Delay Duck", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f, "%", pctText);
         toggle ("dlPing", "Delay Ping-Pong", false);
+        slider ("dlThrow", "Delay Throw", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
 
         toggle ("rvOn", "Reverb On", true);
         slider ("rvDecay", "Reverb Decay", skewed (0.3f, 8.0f, 0.01f, 1.5f), 1.6f, "s", [] (float v, int) { return String (v, 1) + " s"; });
@@ -200,6 +201,7 @@ namespace VoxParams
         slider ("rvMix", "Reverb Mix", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
         slider ("rvTone", "Reverb Tone", skewed (2000.0f, 16000.0f, 10.0f, 6000.0f), 7000.0f, "Hz", hzText);
         slider ("rvDuck", "Reverb Duck", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 30.0f, "%", pctText);
+        slider ("rvThrow", "Reverb Throw", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
 
         slider ("outGain", "Output", NormalisableRange<float> (-24.0f, 24.0f, 0.1f), 0.0f, "dB", dbText);
     }
@@ -332,6 +334,8 @@ namespace VoxParams
             p.dimension = { on ("dmOn"), idx ("dmMode", vox::kDimensionModes - 1), d ("dmAmount"), d ("dmRate"), d ("dmWidth") };
             p.delay = { on ("dlOn"), idx ("dlTime", vox::kDelayDivisions - 1), d ("dlFeedback"), d ("dlMix"), d ("dlTone"), d ("dlDuck"), on ("dlPing"), bpm };
             p.reverb = { on ("rvOn"), d ("rvDecay"), d ("rvPredelay"), d ("rvMix"), d ("rvTone"), d ("rvDuck") };
+            p.throws.echo = d ("dlThrow");
+            p.throws.wash = d ("rvThrow");
             p.outputDb = d ("outGain");
         }
 
