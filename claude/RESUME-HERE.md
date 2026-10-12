@@ -1623,3 +1623,5 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   rap, finished (male)" / "Male trap rap, wet stem" -> "Male trap rap" again.
 - Female rap: one vocal (this is revolution: rapped, untuned, clean) -> not a built-in (one voice = one artist's tone);
   told the user to add it under YOURS (+ REFERENCE) and send 2 - 3 more.
+
+- v0.45.0 CI green: run 38298482361 (commit 86ac392). Next idea offered: a rename button for YOURS references (today the name = the audio file name).
