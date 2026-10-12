@@ -1351,3 +1351,4 @@ User OK'd all four audit items.
 - Measurements: test-audio/fit-measurements/musdb18_fit.csv gains `yourVocal`; musdb18_your_vocal.csv (beat / own mix /
   other mix). Manual: Vocal Fit "send the beat only" paragraph, Covers row, troubleshooting row. 8 Vocal Fit tests.
 - Vocal Fit plan (3 steps) COMPLETE. Left: reverb / delay for the beat (needs full-song data); user's Cubase test.
+- v0.34.0 CI green: Actions run 38206016363 (commit 9f46b80).
