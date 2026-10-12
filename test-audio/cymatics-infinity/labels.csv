@@ -1,0 +1,125 @@
+file,voice,song,part,take,bpm,pack_key,song_key,stem_key,sung_note_sets,notes_in_set_pct,voiced_s,f0_hz,held_pct,s_db,punch_db
+female/Make_Me_Crazy_acapella-dry_95bpm_sung_Dsharp_minor.mp3,female,Make Me Crazy,Acapella,dry,95,D# minor,D# minor,D# minor,F# major or C# major,95,44.88,312.8,50.5,-9.27,5.85
+female/Make_Me_Crazy_ad-libs-dry_95bpm_sung_Dsharp_minor.mp3,female,Make Me Crazy,Ad Libs,dry,95,D# minor,D# minor,D# minor,F# major,96,8.40,411.2,58.2,,2.16
+female/Make_Me_Crazy_ad-libs-wet_95bpm_sung_Dsharp_minor.mp3,female,Make Me Crazy,Ad Libs,wet,95,D# minor,D# minor,D# minor,F# major,97,17.54,410.4,44.1,,9.35
+female/Make_Me_Crazy_harmony-dry_95bpm_sung_Dsharp_minor.mp3,female,Make Me Crazy,Harmony,dry,95,D# minor,D# minor,D# minor,F# major,93,32.86,349.0,52.5,-8.21,4.97
+female/Make_Me_Crazy_harmony-wet_95bpm_sung_Dsharp_minor.mp3,female,Make Me Crazy,Harmony,wet,95,D# minor,D# minor,D# minor,F# major,96,49.55,387.6,65.6,-2.14,10.26
+female/Make_Me_Crazy_lead-dry_95bpm_sung_Dsharp_minor.mp3,female,Make Me Crazy,Lead,dry,95,D# minor,D# minor,D# minor,F# major or C# major,95,39.29,346.6,57.6,-9.84,3.96
+female/Make_Me_Crazy_lead-wet_95bpm_sung_Dsharp_minor.mp3,female,Make Me Crazy,Lead,wet,95,D# minor,D# minor,D# minor,F# major or C# major,97,58.19,347.4,58.4,-4.33,7.97
+female/Not_Mine_acapella-dry_110bpm_sung_D_minor.mp3,female,Not Mine,Acapella,dry,110,D minor,D minor,D minor,F major,95,46.86,290.7,50.4,-2.67,3.95
+female/Not_Mine_background-dry_110bpm_sung_D_minor.mp3,female,Not Mine,Background,dry,110,D minor,D minor,D minor,F major,95,24.78,327.4,62.2,-9.13,3.90
+female/Not_Mine_background-wet_110bpm_sung_D_minor.mp3,female,Not Mine,Background,wet,110,D minor,D minor,D minor,F major,95,32.11,326.4,58.7,-7.05,4.76
+female/Not_Mine_lead-dry_110bpm_sung_D_minor.mp3,female,Not Mine,Lead,dry,110,D minor,D minor,D minor,F major,95,34.91,348.1,51.8,-1.32,4.92
+female/Not_Mine_lead-wet_110bpm_sung_D_minor.mp3,female,Not Mine,Lead,wet,110,D minor,D minor,D minor,F major,96,43.48,353.5,52.0,-0.16,4.78
+female/Out_Of_Time_acapella-dry_92bpm_sung_Fsharp_minor.mp3,female,Out Of Time,Acapella,dry,92,F# minor,F# minor,F# minor,A major or E major,93,38.29,246.4,50.5,-1.67,5.58
+female/Out_Of_Time_background-1-dry_92bpm_sung_Fsharp_minor.mp3,female,Out Of Time,Background 1,dry,92,F# minor,F# minor,F# minor,A major or E major,95,13.43,440.6,49.0,-21.15,3.45
+female/Out_Of_Time_background-1-wet_92bpm_sung_Fsharp_minor.mp3,female,Out Of Time,Background 1,wet,92,F# minor,F# minor,F# minor,A major or E major,95,15.84,438.1,46.8,-17.16,5.07
+female/Out_Of_Time_background-2-dry_92bpm_sung_Fsharp_minor.mp3,female,Out Of Time,Background 2,dry,92,F# minor,F# minor,F# minor,A major,93,13.29,328.2,55.6,-1.13,4.04
+female/Out_Of_Time_background-2-wet_92bpm_sung_Fsharp_minor.mp3,female,Out Of Time,Background 2,wet,92,F# minor,F# minor,F# minor,A major,95,17.07,329.9,53.9,1.03,6.40
+female/Out_Of_Time_lead-1-dry_92bpm_sung_Fsharp_minor.mp3,female,Out Of Time,Lead 1,dry,92,F# minor,F# minor,F# minor,A major or E major or B major,88,17.46,246.5,53.8,-2.68,3.60
+female/Out_Of_Time_lead-1-wet_92bpm_sung_Fsharp_minor.mp3,female,Out Of Time,Lead 1,wet,92,F# minor,F# minor,F# minor,A major or E major or B major,88,20.56,246.6,53.5,-1.95,4.38
+female/Out_Of_Time_lead-2-dry_92bpm_sung_Fsharp_minor.mp3,female,Out Of Time,Lead 2,dry,92,F# minor,F# minor,F# minor,A major or E major,94,19.92,276.0,59.1,-2.94,4.50
+female/Out_Of_Time_lead-2-wet_92bpm_sung_Fsharp_minor.mp3,female,Out Of Time,Lead 2,wet,92,F# minor,F# minor,F# minor,A major or E major or B major,95,26.43,276.5,54.4,0.27,7.06
+female/Wake_Up_acapella-dry_100bpm_sung_Dsharp_minor.mp3,female,Wake Up,Acapella,dry,100,D# minor,D# minor,D# minor,F# major or C# major,97,42.70,238.2,46.4,-3.12,3.92
+female/Wake_Up_background-1-dry_100bpm_sung_Dsharp_minor.mp3,female,Wake Up,Background 1,dry,100,D# minor,D# minor,D# minor,F# major or C# major,96,15.89,274.8,40.6,-2.60,3.94
+female/Wake_Up_background-1-wet_100bpm_sung_Dsharp_minor.mp3,female,Wake Up,Background 1,wet,100,D# minor,D# minor,D# minor,F# major or C# major,97,22.28,275.4,40.6,1.32,5.46
+female/Wake_Up_background-2-dry_100bpm_sung_Dsharp_minor.mp3,female,Wake Up,Background 2,dry,100,D# minor,D# minor,D# minor,F# major or C# major,97,19.09,356.7,42.8,-2.96,3.09
+female/Wake_Up_background-2-wet_100bpm_sung_Dsharp_minor.mp3,female,Wake Up,Background 2,wet,100,D# minor,D# minor,D# minor,F# major or C# major,98,26.13,349.8,40.6,0.68,5.07
+female/Wake_Up_lead-dry_100bpm_sung_Dsharp_minor.mp3,female,Wake Up,Lead,dry,100,D# minor,D# minor,D# minor,F# major or C# major or B major,95,34.61,278.8,52.3,-3.04,3.88
+female/Wake_Up_lead-wet_100bpm_sung_Dsharp_minor.mp3,female,Wake Up,Lead,wet,100,D# minor,D# minor,D# minor,F# major or B major or C# major,96,42.73,279.4,53.0,-0.37,4.72
+female/What_I_Do_acapella-dry_98bpm_sung_E_minor.mp3,female,What I Do,Acapella,dry,98,E minor,E minor,E minor,G major,97,36.41,259.7,47.6,-0.67,4.94
+female/What_I_Do_background-1-dry_98bpm_sung_E_minor.mp3,female,What I Do,Background 1,dry,98,E minor,E minor,E minor,G major,97,16.89,264.4,56.1,-2.54,3.18
+female/What_I_Do_background-1-wet_98bpm_sung_E_minor.mp3,female,What I Do,Background 1,wet,98,E minor,E minor,E minor,G major,98,20.07,261.3,54.0,-1.68,2.95
+female/What_I_Do_background-2-dry_98bpm_sung_E_minor.mp3,female,What I Do,Background 2,dry,98,E minor,E minor,E minor,G major or C major,97,10.38,439.5,37.6,-1.61,3.68
+female/What_I_Do_background-2-wet_98bpm_sung_E_minor.mp3,female,What I Do,Background 2,wet,98,E minor,E minor,E minor,G major or C major,97,10.48,439.7,39.8,-1.62,3.79
+female/What_I_Do_background-3-dry_98bpm_sung_E_minor.mp3,female,What I Do,Background 3,dry,98,E minor,E minor,E minor,G major or D major,95,4.80,247.1,63.3,,3.80
+female/What_I_Do_background-3-wet_98bpm_sung_E_minor.mp3,female,What I Do,Background 3,wet,98,E minor,E minor,E minor,G major or D major,94,6.07,243.5,51.6,,3.36
+female/What_I_Do_lead-dry_98bpm_sung_E_minor.mp3,female,What I Do,Lead,dry,98,E minor,E minor,E minor,G major or D major,96,25.07,293.1,55.8,-4.17,4.36
+female/What_I_Do_lead-wet_98bpm_sung_E_minor.mp3,female,What I Do,Lead,wet,98,E minor,E minor,E minor,G major or D major,97,27.79,292.8,56.5,-3.46,3.56
+male/Deliberation_acapella-dry_100bpm_sung_Gsharp_minor.mp3,male,Deliberation,Acapella,dry,100,G# minor,G# minor,G# minor,B major or F# major,97,34.81,233.8,63.8,-5.15,2.30
+male/Deliberation_adlib-dry_100bpm_sung_Gsharp_minor.mp3,male,Deliberation,Adlib,dry,100,G# minor,G# minor,G# minor,B major or F# major,99,6.13,232.8,79.9,-4.32,4.78
+male/Deliberation_adlib-wet_100bpm_sung_Gsharp_minor.mp3,male,Deliberation,Adlib,wet,100,G# minor,G# minor,G# minor,B major or F# major,99,6.76,232.8,73.2,-4.18,6.19
+male/Deliberation_background-dry_100bpm_sung_Gsharp_minor.mp3,male,Deliberation,Background,dry,100,G# minor,G# minor,G# minor,B major or F# major,99,18.42,233.6,59.4,-4.41,6.34
+male/Deliberation_background-wet_100bpm_sung_Gsharp_minor.mp3,male,Deliberation,Background,wet,100,G# minor,G# minor,G# minor,B major or F# major,99,21.13,234.8,55.1,-4.62,6.12
+male/Deliberation_lead-dry_100bpm_sung_Gsharp_minor.mp3,male,Deliberation,Lead,dry,100,G# minor,G# minor,G# minor,B major or F# major,97,31.90,234.6,61.7,-5.46,2.17
+male/Deliberation_lead-wet_100bpm_sung_Gsharp_minor.mp3,male,Deliberation,Lead,wet,100,G# minor,G# minor,G# minor,F# major or B major,98,34.28,235.0,62.3,-5.14,3.43
+male/Goodbye_acapella-dry_90bpm_sung_E_major.mp3,male,Goodbye,Acapella,dry,90,E major,E major,E major,E major or B major,92,2.60,327.7,36.3,-0.88,4.54
+male/Goodbye_ad-libs-dry_90bpm_sung_E_major.mp3,male,Goodbye,Ad Libs,dry,90,E major,E major,E major,B major or E major or A major,95,3.51,195.4,40.7,,4.04
+male/Goodbye_ad-libs-flanged-dry_90bpm_sung_E_major.mp3,male,Goodbye,Ad Libs (Flanged),dry,90,E major,E major,E major,E major or B major,92,2.60,327.7,36.3,-0.88,4.54
+male/Goodbye_ad-libs-flanged-wet_90bpm_sung_E_major.mp3,male,Goodbye,Ad Libs (Flanged),wet,90,E major,E major,E major,E major or B major,93,6.54,329.1,49.8,21.37,25.78
+male/Goodbye_ad-libs-wet_90bpm_sung_E_major.mp3,male,Goodbye,Ad Libs,wet,90,E major,E major,E major,B major or E major or A major,96,7.88,205.3,35.7,,29.74
+male/Goodbye_background-vocals-dry_90bpm_sung_E_major.mp3,male,Goodbye,Background Vocals,dry,90,E major,E major,E major,E major or B major,96,17.57,210.7,40.6,-2.59,2.87
+male/Goodbye_background-vocals-wet_90bpm_sung_E_major.mp3,male,Goodbye,Background Vocals,wet,90,E major,E major,E major,E major or B major,97,22.08,212.2,34.6,-1.44,3.72
+male/Goodbye_lead-1-dry_90bpm_sung_E_major.mp3,male,Goodbye,Lead 1,dry,90,E major,E major,E major,E major,93,47.61,243.2,48.0,-2.02,1.92
+male/Goodbye_lead-1-wet_90bpm_sung_E_major.mp3,male,Goodbye,Lead 1,wet,90,E major,E major,E major,E major,94,51.86,237.9,45.5,-1.80,2.14
+male/Goodbye_lead-2-dry_90bpm_sung_E_major.mp3,male,Goodbye,Lead 2,dry,90,E major,E major,E major,A major or E major,94,53.74,206.8,42.8,-1.79,1.89
+male/Goodbye_lead-2-wet_90bpm_sung_E_major.mp3,male,Goodbye,Lead 2,wet,90,E major,E major,E major,A major or E major,95,57.82,206.6,42.6,-1.69,2.07
+male/In_My_Life_acapella-dry_100bpm_sung_Fsharp_major.mp3,male,In My Life,Acapella,dry,100,F# major,F# major,F# major,F# major or C# major,97,59.66,208.5,55.7,-4.75,4.08
+male/In_My_Life_adlib-dry_100bpm_sung_Fsharp_major.mp3,male,In My Life,Adlib,dry,100,F# major,F# major,F# major,C# major or F# major,97,14.77,206.3,60.5,-17.82,6.37
+male/In_My_Life_adlib-wet_100bpm_sung_Fsharp_major.mp3,male,In My Life,Adlib,wet,100,F# major,F# major,F# major,F# major or C# major,98,15.89,207.0,54.6,-17.74,7.79
+male/In_My_Life_background-dry_100bpm_sung_Fsharp_major.mp3,male,In My Life,Background,dry,100,F# major,F# major,F# major,F# major,97,12.02,176.1,43.2,-3.61,4.59
+male/In_My_Life_background-wet_100bpm_sung_Fsharp_major.mp3,male,In My Life,Background,wet,100,F# major,F# major,F# major,F# major,98,12.83,176.7,42.4,-2.80,5.38
+male/In_My_Life_lead-dry_100bpm_sung_Fsharp_major.mp3,male,In My Life,Lead,dry,100,F# major,F# major,F# major,F# major,96,46.44,215.4,52.8,-6.77,2.97
+male/In_My_Life_lead-wet_100bpm_sung_Fsharp_major.mp3,male,In My Life,Lead,wet,100,F# major,F# major,F# major,F# major,97,50.97,212.7,55.0,-6.15,3.90
+male/Ja_Ja_acapella-dry_105bpm_sung_C_minor.mp3,male,Ja Ja,Acapella,dry,105,C minor,C minor,C minor,D# major,98,32.21,233.0,60.9,-7.38,4.50
+male/Ja_Ja_adlib-dry_105bpm_sung_C_minor.mp3,male,Ja Ja,Adlib,dry,105,C minor,C minor,C minor,D# major or A# major,96,6.48,291.9,44.5,,2.29
+male/Ja_Ja_adlib-wet_105bpm_sung_C_minor.mp3,male,Ja Ja,Adlib,wet,105,C minor,C minor,C minor,D# major or A# major,97,9.53,286.1,41.2,,7.97
+male/Ja_Ja_background-dry_105bpm_sung_C_minor.mp3,male,Ja Ja,Background,dry,105,C minor,C minor,C minor,D# major,98,11.87,233.4,68.3,-5.11,5.75
+male/Ja_Ja_background-wet_105bpm_sung_C_minor.mp3,male,Ja Ja,Background,wet,105,C minor,C minor,C minor,D# major,97,13.39,232.8,68.3,-4.74,6.21
+male/Ja_Ja_lead-dry_105bpm_sung_C_minor.mp3,male,Ja Ja,Lead,dry,105,C minor,C minor,C minor,D# major,98,16.12,212.4,63.1,-7.99,2.36
+male/Ja_Ja_lead-wet_105bpm_sung_C_minor.mp3,male,Ja Ja,Lead,wet,105,C minor,C minor,C minor,D# major,99,18.10,210.9,60.2,-5.56,2.61
+male/Make_Love_acapella-dry_124bpm_sung_A_mixolydian.mp3,male,Make Love,Acapella,dry,124,A major,A mixolydian,D major,D major or G major,97,40.67,220.8,51.7,1.61,5.01
+male/Make_Love_ad-libs-flanged-dry_124bpm_sung_A_mixolydian.mp3,male,Make Love,Ad Libs (Flanged),dry,124,A major,A mixolydian,G major,G major or D major or E major,81,3.05,437.2,26.5,1.17,5.47
+male/Make_Love_ad-libs-flanged-wet_124bpm_sung_A_mixolydian.mp3,male,Make Love,Ad Libs (Flanged),wet,124,A major,A mixolydian,G major,G major or D major,82,8.82,453.9,29.6,19.31,20.54
+male/Make_Love_background-dry_124bpm_sung_A_mixolydian.mp3,male,Make Love,Background,dry,124,A major,A mixolydian,A major,A major or D major,99,20.70,146.3,73.9,-2.40,3.03
+male/Make_Love_background-wet_124bpm_sung_A_mixolydian.mp3,male,Make Love,Background,wet,124,A major,A mixolydian,A major,A major or D major,100,22.89,110.7,76.4,-2.26,3.21
+male/Make_Love_lead-1-dry_124bpm_sung_A_mixolydian.mp3,male,Make Love,Lead 1,dry,124,A major,A mixolydian,D major,D major or G major,96,27.48,219.8,55.5,1.20,3.22
+male/Make_Love_lead-1-wet_124bpm_sung_A_mixolydian.mp3,male,Make Love,Lead 1,wet,124,A major,A mixolydian,D major,D major or G major,97,31.86,220.2,59.2,2.14,3.75
+male/Make_Love_lead-2-dry_124bpm_sung_A_mixolydian.mp3,male,Make Love,Lead 2,dry,124,A major,A mixolydian,A major,D major or A major or G major or C major,95,8.52,292.8,59.5,-1.74,2.40
+male/Make_Love_lead-2-wet_124bpm_sung_A_mixolydian.mp3,male,Make Love,Lead 2,wet,124,A major,A mixolydian,A major,D major or A major or G major or C major,97,12.25,294.3,57.6,8.17,7.92
+male/No_Good_Reason_acapella-dry_164bpm_sung_B_minor.mp3,male,No Good Reason,Acapella,dry,164,B minor,B minor,B minor,D major or A major,96,74.81,247.8,67.1,-7.24,2.66
+male/No_Good_Reason_ad-libs-dry_164bpm_sung_B_minor.mp3,male,No Good Reason,Ad Libs,dry,164,B minor,B minor,B minor,D major,96,18.82,277.9,66.1,-2.20,7.63
+male/No_Good_Reason_ad-libs-wet_164bpm_sung_B_minor.mp3,male,No Good Reason,Ad Libs,wet,164,B minor,B minor,B minor,D major,97,21.81,290.9,64.5,0.03,8.96
+male/No_Good_Reason_distorted-ad-libs-wet_164bpm_sung_B_minor.mp3,male,No Good Reason,Distorted Ad Libs,wet,164,B minor,B minor,B minor,A major or D major,96,7.08,431.7,37.3,,7.89
+male/No_Good_Reason_harmonies-dry_164bpm_sung_B_minor.mp3,male,No Good Reason,Harmonies,dry,164,B minor,B minor,B minor,D major or A major,99,17.65,110.2,52.7,,3.77
+male/No_Good_Reason_harmonies-wet_164bpm_sung_B_minor.mp3,male,No Good Reason,Harmonies,wet,164,B minor,B minor,B minor,D major,99,19.40,219.1,46.3,-9.36,5.09
+male/No_Good_Reason_lead-dry_164bpm_sung_B_minor.mp3,male,No Good Reason,Lead,dry,164,B minor,B minor,B minor,D major or A major,96,60.93,247.7,66.3,-7.27,2.29
+male/No_Good_Reason_lead-wet_164bpm_sung_B_minor.mp3,male,No Good Reason,Lead,wet,164,B minor,B minor,B minor,D major or A major,97,68.62,249.8,63.2,-6.86,3.04
+male/No_More_acapella-dry_153bpm_sung_Csharp_minor.mp3,male,No More,Acapella,dry,153,C# minor,C# minor,C# minor,A major or E major,96,41.05,207.3,54.5,-4.90,3.51
+male/No_More_adlib-1-dry_153bpm_sung_Csharp_minor.mp3,male,No More,Adlib 1,dry,153,C# minor,C# minor,C# minor,E major,96,3.31,242.1,66.1,-50.13,2.76
+male/No_More_adlib-1-wet_153bpm_sung_Csharp_minor.mp3,male,No More,Adlib 1,wet,153,C# minor,C# minor,C# minor,E major,98,4.96,220.9,70.7,,18.79
+male/No_More_adlib-2-dry_153bpm_sung_Csharp_minor.mp3,male,No More,Adlib 2,dry,153,C# minor,C# minor,C# minor,A major or E major,94,10.40,239.8,60.8,-7.12,5.98
+male/No_More_adlib-2-wet_153bpm_sung_Csharp_minor.mp3,male,No More,Adlib 2,wet,153,C# minor,C# minor,C# minor,E major or A major,94,15.37,245.7,54.2,-2.66,8.84
+male/No_More_adlib-3-dry_153bpm_sung_Csharp_minor.mp3,male,No More,Adlib 3,dry,153,C# minor,C# minor,A# minor,C# major or F# major,89,1.64,365.2,16.7,-40.41,13.89
+male/No_More_adlib-3-wet_153bpm_sung_Csharp_minor.mp3,male,No More,Adlib 3,wet,153,C# minor,C# minor,C# minor,D major or G major or A major or E major or B major,92,5.75,368.0,25.4,,26.71
+male/No_More_background-dry_153bpm_sung_Csharp_minor.mp3,male,No More,Background,dry,153,C# minor,C# minor,C# minor,E major,97,18.43,207.7,58.7,-3.83,5.42
+male/No_More_background-wet_153bpm_sung_Csharp_minor.mp3,male,No More,Background,wet,153,C# minor,C# minor,C# minor,E major,97,22.18,207.4,57.9,-3.61,6.83
+male/No_More_lead-dry_153bpm_sung_Csharp_minor.mp3,male,No More,Lead,dry,153,C# minor,C# minor,C# minor,A major or E major,97,34.47,206.8,59.2,-5.61,2.58
+male/No_More_lead-wet_153bpm_sung_Csharp_minor.mp3,male,No More,Lead,wet,153,C# minor,C# minor,C# minor,A major or E major,98,40.16,207.0,61.1,-4.62,4.37
+male/Pray_For_You_acapella-dry_120bpm_sung_Dsharp_minor.mp3,male,Pray For You,Acapella,dry,120,D# minor,D# minor,D# minor,C# major or F# major,92,5.35,213.1,39.9,2.91,9.30
+male/Pray_For_You_ad-libs-dry_120bpm_sung_Dsharp_minor.mp3,male,Pray For You,Ad Libs,dry,120,D# minor,D# minor,D# minor,C# major or F# major,94,1.54,358.0,27.9,-12.36,4.96
+male/Pray_For_You_ad-libs-wet_120bpm_sung_Dsharp_minor.mp3,male,Pray For You,Ad Libs,wet,120,D# minor,D# minor,D# minor,C# major or F# major,95,8.76,368.3,27.7,13.58,28.91
+male/Pray_For_You_background-vocals-dry_120bpm_sung_Dsharp_minor.mp3,male,Pray For You,Background Vocals,dry,120,D# minor,D# minor,D# minor,F# major or C# major,97,8.45,205.6,61.3,-3.63,3.65
+male/Pray_For_You_background-vocals-wet_120bpm_sung_Dsharp_minor.mp3,male,Pray For You,Background Vocals,wet,120,D# minor,D# minor,D# minor,F# major or C# major,100,11.17,206.9,81.6,-3.33,3.96
+male/Pray_For_You_lead-dry_120bpm_sung_Dsharp_minor.mp3,male,Pray For You,Lead,dry,120,D# minor,D# minor,D# minor,F# major,96,45.81,207.6,48.8,-3.68,3.41
+male/Pray_For_You_lead-wet_120bpm_sung_Dsharp_minor.mp3,male,Pray For You,Lead,wet,120,D# minor,D# minor,D# minor,F# major,96,54.62,207.8,46.4,-2.03,4.19
+male/Pray_For_You_underlays-flanged-dry_120bpm_sung_Dsharp_minor.mp3,male,Pray For You,Underlays (Flanged),dry,120,D# minor,D# minor,D# minor,C# major or F# major,92,3.85,214.1,45.6,-0.18,6.58
+male/Pray_For_You_underlays-flanged-wet_120bpm_sung_Dsharp_minor.mp3,male,Pray For You,Underlays (Flanged),wet,120,D# minor,D# minor,D# minor,C# major or F# major,94,9.70,214.9,55.7,17.97,23.98
+male/Reminisce_acapella-dry_160bpm_sung_G_major.mp3,male,Reminisce,Acapella,dry,160,G major,G major,G major,G major or D major,91,95.32,218.3,43.2,-1.28,2.38
+male/Reminisce_background-dry_160bpm_sung_G_major.mp3,male,Reminisce,Background,dry,160,G major,G major,G major,G major or D major,94,31.89,220.6,28.0,-0.36,3.47
+male/Reminisce_background-wet_160bpm_sung_G_major.mp3,male,Reminisce,Background,wet,160,G major,G major,G major,G major or D major,97,42.04,219.8,31.3,1.05,4.44
+male/Reminisce_lead-1-dry_160bpm_sung_G_major.mp3,male,Reminisce,Lead 1,dry,160,G major,G major,G major,G major or D major,93,53.21,220.8,48.3,0.64,5.80
+male/Reminisce_lead-1-wet_160bpm_sung_G_major.mp3,male,Reminisce,Lead 1,wet,160,G major,G major,G major,G major or D major,93,63.87,220.9,47.9,-1.21,2.92
+male/Reminisce_lead-2-dry_160bpm_sung_G_major.mp3,male,Reminisce,Lead 2,dry,160,G major,G major,G major,G major or D major or C major,91,28.75,218.4,42.5,3.48,3.14
+male/Reminisce_lead-2-wet_160bpm_sung_G_major.mp3,male,Reminisce,Lead 2,wet,160,G major,G major,G major,G major or D major or C major,91,36.04,218.8,46.5,0.32,2.28
+male/Reminisce_lead-3-dry_160bpm_sung_G_major.mp3,male,Reminisce,Lead 3,dry,160,G major,G major,G major,G major or C major,93,14.16,220.6,50.3,-0.02,4.51
+male/Reminisce_lead-3-wet_160bpm_sung_G_major.mp3,male,Reminisce,Lead 3,wet,160,G major,G major,G major,G major or C major,94,17.68,220.3,54.6,-1.27,2.56
+male/Reminisce_low-voice-underlay-dry_160bpm_sung_G_major.mp3,male,Reminisce,Low Voice Underlay,dry,160,G major,G major,G major,D major or G major,87,23.81,123.0,41.4,-11.22,7.48
+male/Reminisce_low-voice-underlay-wet_160bpm_sung_G_major.mp3,male,Reminisce,Low Voice Underlay,wet,160,G major,G major,G major,D major or G major,86,27.68,122.8,40.9,-10.54,5.60
+male/Where_Did_You_Come_From_acapella-dry_90bpm_sung_A_minor.mp3,male,Where Did You Come From,Acapella,dry,90,A minor,A minor,A minor,C major,98,29.05,261.2,66.7,-6.82,2.10
+male/Where_Did_You_Come_From_background-dry_90bpm_sung_A_minor.mp3,male,Where Did You Come From,Background,dry,90,A minor,A minor,A minor,C major or G major,99,18.42,261.6,75.7,-7.19,4.91
+male/Where_Did_You_Come_From_background-wet_90bpm_sung_A_minor.mp3,male,Where Did You Come From,Background,wet,90,A minor,A minor,A minor,C major or G major,100,25.57,261.3,81.7,-5.16,5.32
+male/Where_Did_You_Come_From_lead-1-dry_90bpm_sung_A_minor.mp3,male,Where Did You Come From,Lead 1,dry,90,A minor,A minor,A minor,C major or F major,97,16.40,292.5,57.5,-5.62,2.07
+male/Where_Did_You_Come_From_lead-1-wet_90bpm_sung_A_minor.mp3,male,Where Did You Come From,Lead 1,wet,90,A minor,A minor,A minor,C major or F major,97,21.44,292.6,54.3,-4.27,2.59
+male/Where_Did_You_Come_From_lead-2-dry_90bpm_sung_A_minor.mp3,male,Where Did You Come From,Lead 2,dry,90,A minor,A minor,A minor,G major or C major,100,12.62,247.8,78.2,-11.03,1.69
+male/Where_Did_You_Come_From_lead-2-wet_90bpm_sung_A_minor.mp3,male,Where Did You Come From,Lead 2,wet,90,A minor,A minor,A minor,G major or C major,99,15.07,247.6,72.8,-9.35,2.17
