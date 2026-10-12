@@ -1332,3 +1332,4 @@ User OK'd all four audit items.
   suggestion polish, "beat has vocals" warning, maybe space if full-song data turns up.
 - Tests: test_vocalfit.cpp 7 cases (hears + reports; < 4 s of beat = bit-identical chain to no beat; presence target
   follows the beat; punchy beat +punch / steady never +; level + FIT LEVEL math; covers-your-voice; silent / none).
+- v0.33.0 CI green: Actions run 38203353460 (commit e49e048).
