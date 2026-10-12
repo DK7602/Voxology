@@ -27,7 +27,7 @@
     sliders["dqCut" + (i + 1)] = lin(0, 12, 0);
     sliders["dqFreq" + (i + 1)] = centre(lo, hi, Math.sqrt(lo * hi), def);
   });
-  const toggles = { recMode: true, ptRm0: false, ptRm1: false, ptRm2: false, ptRm3: false, ptRm4: false, ptRm5: false, ptRm6: true, ptRm7: false, ptRm8: false, ptRm9: false, ptRm10: false, ptRm11: false, bypass: false, listenA: false, levelMatch: false, ptOn: true, clOn: true, eqOn: true, dqOn: true, dsOn: true, rdOn: true, cpOn: true, saOn: true, dbOn: true, dlOn: true, dlPing: false, rvOn: true };
+  const toggles = { recMode: true, ptRm0: false, ptRm1: false, ptRm2: false, ptRm3: false, ptRm4: false, ptRm5: false, ptRm6: true, ptRm7: false, ptRm8: false, ptRm9: false, ptRm10: false, ptRm11: false, bypass: false, listenA: false, levelMatch: false, ptOn: true, clOn: true, eqOn: true, dqOn: true, dsOn: true, rdOn: true, cpOn: true, saOn: true, dbOn: true, dlOn: true, dlPing: false, rvOn: true, hvMidi: false };
   const combos = {
     aeStyle: { choices: ["Trap Lead", "Rap", "Melodic", "Robot", "R&B", "Pop", "Folk", "Natural Singer"], value: 0 },
     aeIntensity: { choices: ["Light", "Balanced", "Strong"], value: 0.5 },
@@ -43,6 +43,7 @@
     umFocus: { choices: ["Centre", "Full"], value: 0 },
     hv1: { choices: ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison"], value: 1 },
     hv2: { choices: ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison"], value: 6 / 8 },
+    hvStack: { choices: ["Off", "2", "4", "6"], value: 0 },
   };
 
   const send = (id, obj) => setTimeout(() => window.__JUCE__.backend && window.__JUCE__.backend.emitByBackend(id, JSON.stringify(obj)), 0);
@@ -211,7 +212,8 @@
       umDip: [0.35, 0.6, 0.85, 1, 1, 0.7].map((w) => (combos.mode.value > 0.5 && sing ? +(-w * s("umAmount") / 100 * 6 * word).toFixed(1) : 0)),
       umVocal: [-38, -30, -26, -24, -28, -36].map((v) => (sing ? v + 6 * word : -120)),
       umLink: combos.mode.value > 0.5 ? 2 : 0,
-      hvNotes: sing && toggles.dbOn ? [60, 50] : [-1, -1],
+      heldNotes: toggles.hvMidi ? 3 : 0,
+      hvNotes: sing && toggles.dbOn ? (toggles.hvMidi ? [55, 58, 62, -1, -1, -1, -1, -1] : [60, 50, -1, -1, -1, -1, -1, -1]) : [-1, -1, -1, -1, -1, -1, -1, -1],
       dyn: [0, 1, 2, 3].map((b) => (active("dqOn") && s("dqCut" + (b + 1)) > 0 && sing ? +(-Math.min(s("dqCut" + (b + 1)), s("dqCut" + (b + 1)) * Math.max(0, Math.sin(t * (2.1 + b * 0.7) + b)) ** 3)).toFixed(1) : 0)),
       deEss: active("dsOn") && s("dsAmount") > 0 && word > 0.9 ? +(-s("dsAmount") / 100 * 7).toFixed(1) : 0,
       rider: active("rdOn") && s("rdRange") > 0 ? +(s("rdRange") * Math.sin(t / 2)).toFixed(1) : 0,

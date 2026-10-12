@@ -1443,3 +1443,28 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   >= 3 and >= 4 / min -> 40 / 60 / 80 % (Light / Balanced / Strong); > 20 / min -> DRY MOUTH note. Real vocals: 0 - 2
   clicks on all but one pro dry stem (Make_Love 6 -> 60 %).
 - Tests: tests/test_declick.cpp (3).
+v0.36.0 CI green: Actions run 38259827951 (commit 6242ce2).
+
+## v0.37.0 Voices: 8 voices, Stack, MIDI chords (2026-10-12)
+- dsp/Voices.h/.cpp: kMaxVoices 8 PitchCorrector slots. Slot {on, harmony, fixedNote, cents, lateMs, pan}. Normal mode:
+  Voice 1 / 2 (as before) + Stack (hvStack Off / 2 / 4 / 6): unison singers, cents {14,-14,6,-6,20,-20}, late ms
+  {23,31,15,35,11,39}, pan {-.6,.6,-.9,.9,-.3,.3} x Width. Bus weight sqrt(2 / voices) (smoothed): a stack is bigger,
+  not louder (measured: Stack 2 / 4 / 6 all ~-6 dB vs the lead at Level 50, L/R within 0.03 dB).
+- MIDI (hvMidi): the voices sing the held notes (PitchParams.fixedNote: desired = fixedNote - sung, any key), lowest
+  left .. highest right, cents {3,-3,5,-5,2,-2,4,-4}, late {0,7,13,4,10,2,15,9} ms. Voice allocation is stateful
+  (midiSlots): a note still held keeps its voice; a new note takes a voice just let go of (nearest within 5 semitones:
+  it glides, no gap), else a silent voice, else the nearest busy one. Per-voice fades (20 ms); a voice let go of keeps
+  singing for its latency first (hold[]: the fade lands on the note-off, not 34 ms early); a voice started from silence
+  is reset and runs unheard for its latency + late ms (warm[]: its first output is zeros), then fades in with its level
+  reading started from the other voices' (or the lead's). Before that fix a chord change left a ~20 ms gap and a 3x
+  burst (level follow from a silent reading). Pan / weight smoothed 50 ms. Level follow only counts heard voices.
+- Plugin: PitchCorrector fixedNote; meters hvNotes x8, heldNotes; processor fills voices.notes from midiHeld (up to 8,
+  lowest first); params hvStack (combo), hvMidi (toggle); module OFF also zeroes stack / MIDI.
+- UI: Voices page two rows (CSS grid areas: Double / Width | Voice 1 | Voice 2 | Stack over Level / Formant ... MIDI);
+  MIDI on dims Voice 1 / 2 / Stack; stat shows the notes ("N notes" over 4), "MIDI · n held" / "MIDI: no notes"; tip
+  PLAY A CHORD. Fixed (old bug): the Pitch page's Mode click didn't dim Retune / Humanize / Vibrato until the page was
+  reopened (a click doesn't come back as a valueChanged event): click listeners call refresh.
+- Tests: test_voices.cpp +3 (Stack counts / pitch / balance / level; MIDI notes sung (C-E-G over a sung A: 52 dB over
+  A3), none held = bit-exact; chord change C -> Dm (old chord 43 dB down, top-end peak at the change <= held), release,
+  add a note, chord from nothing (level within 3 dB of a held chord, nothing before)).
+- CPU: ~2 % of a core per voice (8 voices ~16 %).

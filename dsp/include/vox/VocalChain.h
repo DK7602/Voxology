@@ -56,7 +56,7 @@ struct ChainMeters
     double peakGrDb = 0.0, levelGrDb = 0.0;   // compressor stages (<= 0)
     double satResidual = 0.0, satSignal = 0.0;   // saturation energies
     PitchCorrector::Reading pitch;                // what Pitch hears and does right now
-    std::array<int, 2> voiceNotes { -1, -1 };     // the harmony voices' notes (MIDI, -1 = none)
+    std::array<int, kMaxVoices> voiceNotes { -1, -1, -1, -1, -1, -1, -1, -1 };   // the harmony voices' notes (MIDI, -1 = none)
     ClipWatch::Counts input;                      // the incoming vocal: clipped stretches, samples over full scale
 };
 

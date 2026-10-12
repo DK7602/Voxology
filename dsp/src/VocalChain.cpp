@@ -81,7 +81,7 @@ void VocalChain::setParams (const ChainParams& p) noexcept
     saturation.setParams (p.saturation);
     {
         VoicesParams v = p.voices;
-        if (! p.doubler.enabled) v.interval = { 0, 0 };
+        if (! p.doubler.enabled) { v.interval = { 0, 0 }; v.stack = 0; v.midi = false; }
         voices.setParams (v, p.pitch, p.cleanup.enabled ? p.cleanup.lowCutHz : 20.0, p.eq, p.deEsser);
     }
     doubler.setParams (p.doubler);

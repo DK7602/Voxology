@@ -288,6 +288,16 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
         for (int k = 0; k < 128; ++k) if (midiHeld[static_cast<size_t> (k)] > 0) held |= 1 << (k % 12);
         const int midiMode = juce::roundToInt (midiParam->load());
         chainParams.pitch.onlyNotes = midiMode == 1 ? held : midiMode == 2 ? midiLearned.load() : 0;
+        // Voices MIDI: the voices sing the notes held right now, lowest first (up to kMaxVoices).
+        chainParams.voices.notes.fill (-1);
+        int heldNow = 0;
+        for (int k = 0; k < 128; ++k)
+            if (midiHeld[static_cast<size_t> (k)] > 0)
+            {
+                if (chainParams.voices.midi && heldNow < vox::kMaxVoices) chainParams.voices.notes[static_cast<size_t> (heldNow)] = k;
+                ++heldNow;
+            }
+        meters.heldNotes.store (heldNow);
         meters.midiNotes.store (midiMode == 2 ? midiLearned.load() : held);
         const auto& pp = chainParams.pitch;
         meters.notesUsed.store (vox::PitchCorrector::allowedMask (pp.key, pp.scale, pp.extraNotes, pp.onlyNotes, pp.removedNotes));
@@ -404,8 +414,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     meters.pitchSung.store (m.pitch.voiced ? static_cast<float> (m.pitch.sungMidi) : 0.0f);
     meters.pitchTarget.store (m.pitch.voiced ? m.pitch.targetMidi : -1);
     meters.pitchCorr.store (static_cast<float> (m.pitch.correction));
-    meters.hvNotes[0].store (m.voiceNotes[0]);
-    meters.hvNotes[1].store (m.voiceNotes[1]);
+    for (size_t k = 0; k < meters.hvNotes.size(); ++k) meters.hvNotes[k].store (m.voiceNotes[k]);
 }
 
 void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)  { processAnyPrecision (buffer, midi); }

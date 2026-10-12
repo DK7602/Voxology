@@ -288,8 +288,7 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("pitchCorr", roundTo (m.pitchCorr.load(), 0.01f));
     {
         juce::Array<juce::var> hv;
-        hv.add (m.hvNotes[0].load());
-        hv.add (m.hvNotes[1].load());
+        for (const auto& note : m.hvNotes) hv.add (note.load());
         frame->setProperty ("hvNotes", hv);
     }
     frame->setProperty ("bkState", m.bkState.load());
@@ -305,6 +304,7 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("bkHeard", roundTo (m.bkHeard.load(), 0.1f));
     frame->setProperty ("keyUsed", m.keyUsed.load());
     frame->setProperty ("midiNotes", m.midiNotes.load());
+    frame->setProperty ("heldNotes", m.heldNotes.load());
     frame->setProperty ("recMode", m.recMode.load());
     frame->setProperty ("latencyMs", m.latencyMs10.load() / 10.0);
     frame->setProperty ("notesUsed", m.notesUsed.load());

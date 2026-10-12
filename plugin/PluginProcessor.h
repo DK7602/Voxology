@@ -78,13 +78,13 @@ public:
         std::array<std::atomic<float>, vox::kUnmaskBands> umDip {};     // BEAT: deepest dip per band, dB, held until read
         std::array<std::atomic<float>, vox::kUnmaskBands> umVocal {};   // BEAT: the linked vocal's band levels, dB
         std::atomic<int> umLink { 0 };              // BEAT: vocals heard this block (0 = none)
-        std::array<std::atomic<int>, 2> hvNotes { -1, -1 };   // the harmony voices' notes (MIDI, -1 = none)
+        std::array<std::atomic<int>, vox::kMaxVoices> hvNotes { -1, -1, -1, -1, -1, -1, -1, -1 };   // the harmony voices' notes (MIDI, -1 = none)
         // Key (Auto). VOCAL: 0 manual, 1 following a key, 2 nothing heard yet, 3 listening / not sure yet;
         // bkSource: what it hears (0 nothing, 1 Voxology on a beat, 2 the beat on the side-chain, 3 the voice).
         // scState: the side-chain input (0 off, 1 on but no sound for 2 s, 2 sound coming in).
         // BEAT: this beat's own reading (bkState 4 = listening, 5 = has a key).
         std::atomic<int> bkState { 0 }, bkSource { 0 }, scState { 0 }, bkKey { 0 }, bkMode { 0 }, bkSet { 0 }, bkUnclear { 0 }, bkOpen { -1 }, keyUsed { 0 }, scaleUsed { 0 };
-        std::atomic<int> midiNotes { 0 }, notesUsed { 0 };
+        std::atomic<int> midiNotes { 0 }, notesUsed { 0 }, heldNotes { 0 };   // heldNotes: how many MIDI notes are held now
         std::atomic<int> recMode { 0 }, latencyMs10 { 0 };   // Record mode on; the chain's latency (0.1 ms)   // pitch classes (bits): MIDI held / learned, and what Pitch may aim for
         std::atomic<float> bkConf { 0.0f }, bkTune { 0.0f }, bkHeard { 0.0f };
     };

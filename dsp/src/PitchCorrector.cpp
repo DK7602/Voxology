@@ -301,7 +301,7 @@ void PitchCorrector::analyse() noexcept
         else
         {
             const double vibKept = mode == kPitchNatural ? std::clamp ((noteAge - 0.1) / 0.15, 0.0, 1.0) * vib : 0.0;
-            const double desired = harmonyVoice ? harmonyNote (note, params.harmony, params.key, params.scale) - midi
+            const double desired = harmonyVoice ? (params.fixedNote >= 0 ? params.fixedNote : harmonyNote (note, params.harmony, params.key, params.scale)) - midi
                                                 : (note - midi + vibKept) * amt;
             if (harmonyVoice && startOfNote) corr = desired;   // a backing voice starts on its note (no scoop)
             const double tau = params.speedMs / 1000.0 * (1.0 + 3.0 * std::clamp (params.humanize, 0.0, 100.0) / 100.0 * std::clamp (sustain / 0.6, 0.0, 1.0));

@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.36.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.37.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.36.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.37.0**).
 
 Where each one goes in Cubase:
 
@@ -73,7 +73,7 @@ Every knob:
 | 06 | Rider | Rides the level word by word, like a hand on the fader | Target, Range, Speed (Slow, Med, Fast) |
 | 07 | Compressor | Evens the performance | Peak (catches spikes), Threshold + Ratio (smooth leveler), Makeup, Mix (parallel blend) |
 | 08 | Saturation | Adds harmonics: warmth, density, presence | Mode (Tape, Tube, Clip), Drive, Mix |
-| 09 | Voices | Doubles, extra voices and harmonies in key | Double, Width, Voice 1 (left) + Voice 2 (right): **Unison** (a second singer on your own notes, same octave) or a harmony: 3rd, 5th or octave, up or down, Level, Formant |
+| 09 | Voices | Doubles, extra voices and harmonies in key, up to 8 voices | Double, Width, Voice 1 (left) + Voice 2 (right): **Unison** (a second singer on your own notes, same octave) or a harmony: 3rd, 5th or octave, up or down, Stack (2, 4 or 6 more singers on your notes), MIDI (the voices sing the chords you play), Level, Formant |
 | 10 | Delay | Echoes locked to the song's tempo | Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong |
 | 11 | Reverb | A vocal plate: a space for the voice | Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps) |
 | 12 | Output | Final level into your mix | Output gain |
@@ -91,6 +91,13 @@ Every knob:
 - "t", "k" and "s" are left alone, and so are the hard starts and ends of words (the release of a "b" or "d", a final "t").
 - 40 - 60 % catches most clicks. Auto-Edit turns it on when it hears a few clicks a minute, and says how many it found. If it hears a lot, you get a DRY MOUTH tip (water, a bite of green apple).
 - Record mode leaves it out: it needs to listen about 16 ms ahead.
+
+**Stack and MIDI chords (Voices)** make the voices bigger.
+
+- **Stack** adds 2, 4 or 6 more singers on your own notes, spread left and right, each a little off and a little late, like a stacked hook. More singers make it bigger, not louder: the stack stays at the Level you set.
+- **MIDI** makes the voices sing the notes you hold on a keyboard, whatever note you sing (up to 8 notes; Voice 1, Voice 2 and Stack are dimmed and ignored). Lowest note on the left, highest on the right. Change the chord and each voice slides to the nearest new note; let go and they fade out. Play the chord with the words and hold it through them.
+- To play chords into Voxology in Cubase: add a MIDI track (no instrument), open its output menu (the routing at the top of the Inspector) and choose Voxology on your vocal track. Record or draw the chords on that track, under the vocal part.
+- Each voice costs about 2 % of one CPU core: 8 voices about 16 %. Record mode leaves the voices out.
 
 Each cell shows a short status under its name (for example "idle", "flat", "cut 80 Hz"). Cleanup's status reads "clipped in!" or "too hot in!" when the recording itself is distorted: fix that at the recording stage.
 
@@ -251,4 +258,5 @@ Quick rule: a fast trap or robot effect = Voxology's Pitch alone (Robot or Class
 | Report says YOUR VOCAL IS IN THE BEAT | The side-chain gets a mix with your vocal in it. Send only the instrumental track (or a music-only group) to "Voxology - Side-Chain", then run Auto-Edit again |
 | Unmask doesn't dip the beat | Both Voxologys must be in the same project, and the vocal must be playing. The beat's Learn panel says NO VOCAL HEARD if the link is missing |
 | Hearing yourself late while recording | Turn on REC in Voxology's top bar (about 6 ms). Turn it off for mixing |
+| MIDI is on in Voices but nothing sings | The voices sing only while a MIDI note is held. Set a MIDI track's output to Voxology and play or draw notes (see Stack and MIDI chords) |
 | B always sounds better than A | Turn on MATCH so both play at the same loudness |

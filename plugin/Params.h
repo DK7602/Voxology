@@ -28,11 +28,11 @@ namespace VoxParams
     }
     inline juce::StringArray toggleIds()
     {
-        juce::StringArray ids { "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn" };
+        juce::StringArray ids { "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn", "hvMidi" };
         for (int k = 0; k < 12; ++k) ids.add ("ptRm" + juce::String (k));   // Pitch: notes switched off (C .. B)
         return ids;
     }
-    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2" }; }
+    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2", "hvStack" }; }
 
     inline void addTo (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
     {
@@ -99,6 +99,8 @@ namespace VoxParams
         for (const auto& iv : vox::kHarmonyIntervals) intervals.add (iv.name);
         choice ("hv1", "Voice 1", intervals, 0);
         choice ("hv2", "Voice 2", intervals, 0);
+        choice ("hvStack", "Voices Stack", { "Off", "2", "4", "6" }, 0);
+        toggle ("hvMidi", "Voices MIDI", false);
         slider ("hvLevel", "Voices Level", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f, "%", pctText);
         slider ("hvFormant", "Voices Formant", NormalisableRange<float> (-fm, fm, 0.1f), 0.0f, "st", stText);
 
@@ -288,6 +290,8 @@ namespace VoxParams
             p.voices.interval = { idx ("hv1", vox::kHarmonies - 1), idx ("hv2", vox::kHarmonies - 1) };
             p.voices.level = d ("hvLevel");
             p.voices.formant = d ("hvFormant");
+            p.voices.stack = idx ("hvStack", static_cast<int> (vox::kStackSizes.size()) - 1);
+            p.voices.midi = on ("hvMidi");
             p.voices.width = d ("dbWidth");
             p.cleanup = { on ("clOn"), d ("clLowCut"), d ("clGateThr"), d ("clGateRange"), d ("clPops"), d ("clBreath"), d ("clNoise"), d ("clRoom"), d ("clClicks") };
             p.eq.enabled = on ("eqOn");

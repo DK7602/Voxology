@@ -53,6 +53,7 @@ struct PitchParams
     int onlyNotes = 0;        // bit n: when not 0, ONLY these notes (MIDI: the notes you hold / taught it), any octave
     int removedNotes = 0;     // bit n: never pulled to these (you switched them off)
     int transpose = 0;        // semitones, -12 .. +12: the whole voice moved (formants kept)
+    int fixedNote = -1;       // harmony voice: sing this MIDI note, whatever is sung (Voices MIDI); -1 = the interval
 };
 
 /** Harmony intervals: scale steps when a key / scale is set (they stay in key), semitones with Chromatic.
