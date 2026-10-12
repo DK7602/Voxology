@@ -304,6 +304,7 @@ juce::String profileToJson (const vox::ReferenceProfile& r)
     o->setProperty ("warning", juce::String::fromUTF8 (r.warning.c_str()));
     o->setProperty ("about", juce::String::fromUTF8 (r.about.c_str()));
     o->setProperty ("builtin", r.builtin);
+    o->setProperty ("split", r.split);
     o->setProperty ("sib", r.sibilanceDb);
     o->setProperty ("punch", r.microDynDb);
     o->setProperty ("tail", r.tailDb);
@@ -327,6 +328,7 @@ std::shared_ptr<vox::ReferenceProfile> profileFromJson (const juce::String& save
     r->warning = o->getProperty ("warning").toString().toStdString();
     r->about = o->getProperty ("about").toString().toStdString();
     r->builtin = o->hasProperty ("builtin") && static_cast<bool> (o->getProperty ("builtin"));
+    r->split = o->hasProperty ("split") ? static_cast<bool> (o->getProperty ("split")) : vox::looksSplit (r->name);   // (older files: by name)
     r->sibilanceDb = o->getProperty ("sib");
     r->microDynDb = o->getProperty ("punch");
     r->tailDb = o->getProperty ("tail");
@@ -417,6 +419,7 @@ juce::String AutoEditController::getReferenceJson() const
         o->setProperty ("seconds", r->voicedSeconds);
         o->setProperty ("about", juce::String::fromUTF8 (r->about.c_str()));
         o->setProperty ("builtin", r->builtin);
+        o->setProperty ("split", r->split);
     }
     return juce::JSON::toString (juce::var (o), true);
 }
@@ -468,6 +471,7 @@ juce::String AutoEditController::listReferencesJson() const
         {
             auto* o = new juce::DynamicObject();
             o->setProperty ("name", juce::String::fromUTF8 (r->name.c_str()));
+            o->setProperty ("split", r->split);
             yours.add (juce::var (o));
         }
     std::shared_ptr<const vox::ReferenceProfile> cur;
@@ -497,6 +501,27 @@ void AutoEditController::selectReference (bool builtin, const juce::String& name
     {
         const juce::ScopedLock sl (refLock);
         reference = std::move (r);
+    }
+    ++refVersion;
+}
+
+void AutoEditController::setReferenceSplit (const juce::String& name, bool split)
+{
+    // Your saved reference, and the one in use if it's that one.
+    if (const auto f = userRefFile (name); f.existsAsFile())
+        if (auto r = profileFromJson (f.loadFileAsString()); r != nullptr)
+        {
+            r->split = split;
+            f.replaceWithText (profileToJson (*r));
+        }
+    {
+        const juce::ScopedLock sl (refLock);
+        if (reference != nullptr && ! reference->builtin && juce::String::fromUTF8 (reference->name.c_str()) == name)
+        {
+            auto r = std::make_shared<vox::ReferenceProfile> (*reference);
+            r->split = split;
+            reference = std::move (r);
+        }
     }
     ++refVersion;
 }

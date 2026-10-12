@@ -57,7 +57,7 @@
   // Simulated Auto-Edit (listening runs 3x faster than the real 12 s). Values from the engine's own
   // report on the synthetic test vocal (tools/report.cpp).
   const um = { selected: "" };
-  const ref = { json: JSON.stringify({ state: "none" }), version: 0, yours: ["My Favorite Hook (Acapella)"] };
+  const ref = { json: JSON.stringify({ state: "none" }), version: 0, yours: ["My Favorite Hook (Acapella)", "Big Song_(Vocals)_UVR-MDX-NET-Voc_FT"], split: { "Big Song_(Vocals)_UVR-MDX-NET-Voc_FT": true } };
   const ae = { state: 0, progress: 0, undo: false, version: 0, report: "", snapshot: null };
   function aeFinish() {
     ae.snapshot = { sliders: JSON.parse(JSON.stringify(sliders)), toggles: { ...toggles }, combos: JSON.parse(JSON.stringify(combos)) };
@@ -166,8 +166,9 @@
             ["Female", "Female pop singer", "26 released pop vocals"], ["Female", "Female R&B singer", "4 R&B leads"], ["Female", "Female singer, bright", "Airy, open top"],
             ["Female", "Female singer, warm", "Smooth, soft top"], ["Female", "Female electronic singer", "13 dance vocals"], ["Female", "Female rap, rhythmic", "Present mids"],
             ["Mixed", "Sung hooks, wet", "11 hooks"], ["Mixed", "All voices, pro average", "Neutral"] ].map(([section, name, about]) => ({ section, name, about, pitch: /rap/.test(name) ? "Off" : /melodic/.test(name) ? "Classic" : "Natural" })),
-          yours: ref.yours.map((n) => ({ name: n })), folder: "C:\\Users\\you\\Documents\\Voxology\\References", current: (JSON.parse(ref.json).name || "") });
-        if (payload.name === "selectReference") { const n = payload.params[1]; ref.json = JSON.stringify({ state: "ok", name: n, seconds: 60, problem: "", warning: "" }); ref.version++; }
+          yours: ref.yours.map((n) => ({ name: n, split: !!ref.split[n] })), folder: "C:\\Users\\you\\Documents\\Voxology\\References", current: (JSON.parse(ref.json).name || "") });
+        if (payload.name === "selectReference") { const n = payload.params[1]; ref.json = JSON.stringify({ state: "ok", name: n, seconds: 60, problem: "", warning: "", split: !!ref.split[n] }); ref.version++; }
+        if (payload.name === "setReferenceSplit") { ref.split[payload.params[0]] = !!payload.params[1]; const j = JSON.parse(ref.json); if (j.name === payload.params[0]) { j.split = !!payload.params[1]; ref.json = JSON.stringify(j); } ref.version++; }
         if (payload.name === "deleteReference") { ref.yours = ref.yours.filter((n) => n !== payload.params[0]); ref.version++; }
         if (payload.name === "getUnmaskSources") result = JSON.stringify({ sources: [{ name: "Lead Vocal" }, { name: "Ad-libs" }], selected: um.selected });
         if (payload.name === "setUnmaskSource") um.selected = (payload.params && payload.params[0]) || "";

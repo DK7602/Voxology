@@ -146,6 +146,7 @@ const refClear = Juce.getNativeFunction("clearReference");
 const refList = Juce.getNativeFunction("listReferences");
 const refSelect = Juce.getNativeFunction("selectReference");
 const refDelete = Juce.getNativeFunction("deleteReference");
+const refSetSplit = Juce.getNativeFunction("setReferenceSplit");
 const refGet = Juce.getNativeFunction("getReference");
 const umGetSources = Juce.getNativeFunction("getUnmaskSources");
 const umSetSource = Juce.getNativeFunction("setUnmaskSource");
@@ -1411,7 +1412,7 @@ function notesAsTips() {
 
 function referenceBlock() {
   if (refInfo.state === "none") {
-    body.append(head("REFERENCE MATCH"), para("Click + REFERENCE (under STYLE) to aim Auto-Edit at a sound you like: pick one of the BUILT-IN finished pro vocals (male / female, singer / rap), or add the acapella of a vocal you love. Auto-Edit then matches its tone, how bright its s sounds are and its punch, instead of the style's built-in target. Every vocal you add is saved under YOURS, so it's there in every project."));
+    body.append(head("REFERENCE MATCH"), para("Click + REFERENCE (under STYLE) to aim Auto-Edit at a sound you like: pick one of the BUILT-IN finished pro vocals (male / female, singer / rap), or add the acapella of a vocal you love. Auto-Edit then matches its tone, how bright its s sounds are and its punch, instead of the style's built-in target. Every vocal you add is saved under YOURS, so it's there in every project. No acapella? Split the song with the free UVR app (Vocals only) and add the vocal it makes: Voxology marks it \u2702 and uses its tone from 250 Hz up, its s and its punch, not its low end or space (splitting gets those wrong)."));
     body.append(tip("WHERE TO GET ONE", "Use the vocal on its own (an acapella or vocal stem), not the full song: a beat under it throws the reading off by about 7 dB.", "calm",
       { need: "Optional. The styles work without one.", steps: ["Search for \"<song name> acapella\" (many artists release them), or ask the producer for the vocal stem.", "WAV, AIFF, FLAC, MP3 or OGG all work. A verse or hook (10 s+) is plenty."] }));
     return;
@@ -1593,7 +1594,7 @@ async function fetchReference() {
   b.classList.toggle("ok", refInfo.state === "ok");
   b.classList.toggle("warn", refInfo.state === "problem" || !!refInfo.warning);
   b.textContent = refInfo.state === "loading" ? "READING…" : refInfo.state === "none" ? "+ REFERENCE"
-    : `${refInfo.state === "ok" ? "\u266A" : "\u26A0"} ${refInfo.name || "reference"}`;
+    : `${refInfo.state === "ok" ? (refInfo.split ? "\u2702" : "\u266A") : "\u26A0"} ${refInfo.name || "reference"}`;
   b.title = refInfo.state === "none" ? "Reference Match: pick a built-in pro vocal or add an acapella you love, and Auto-Edit aims at its sound"
     : refInfo.problem || refInfo.warning || `Auto-Edit will match "${refInfo.name}". Click to choose another.`;
   $("ref-clear").hidden = refInfo.state === "none" || refInfo.state === "loading";
@@ -1607,7 +1608,7 @@ async function openRefMenu() {
   let lib = { builtin: [], yours: [], folder: "", current: "" };
   try { lib = Object.assign(lib, JSON.parse((await refList()) || "{}")); } catch { /* keep the empty library */ }
   const m = el("div", "ref-menu");
-  const item = (label, title, onPick, current, onDelete, pitch) => {
+  const item = (label, title, onPick, current, onDelete, pitch, split) => {
     const row = el("div", "ref-item" + (current ? " current" : ""));
     const b = el("button", "ref-pick", (current ? "\u266A " : "") + label);
     if (pitch) b.append(el("span", "ref-pitch", `Pitch: ${pitch}`));   // how tuned it sounds, as a Pitch mode
@@ -1615,6 +1616,15 @@ async function openRefMenu() {
     if (title) b.title = title;
     b.addEventListener("click", async () => { closeRefMenu(); await onPick(); fetchReference(); });
     row.append(b);
+    if (split) {
+      // Split from a full song (UVR etc.)? Then Auto-Edit leaves out its low end and its space.
+      const sc = el("button", "ref-del ref-split" + (split.on ? " on" : ""), "\u2702");
+      sc.type = "button";
+      sc.title = split.on ? `"${label}" is marked as split from a full song: Auto-Edit uses its tone from 250 Hz up, its s and its punch, not its low end or space. Click if it's a real acapella.`
+        : `Split from a full song (UVR, Demucs ...)? Click to mark it: Auto-Edit then leaves out its low end and space, which splitting gets wrong.`;
+      sc.addEventListener("click", async (e) => { e.stopPropagation(); await refSetSplit(label, !split.on); openRefMenu(); fetchReference(); });
+      row.append(sc);
+    }
     if (onDelete) {
       const x = el("button", "ref-del", "\u2715");
       x.type = "button";
@@ -1632,7 +1642,7 @@ async function openRefMenu() {
   }
   m.append(el("div", "ref-head", "YOURS"));
   if (!lib.yours.length) m.append(el("div", "ref-hint", "Vocals you add are saved here for every project."));
-  for (const r of lib.yours) item(r.name, "", () => refSelect(false, r.name), r.name === lib.current, () => refDelete(r.name));
+  for (const r of lib.yours) item(r.name, r.split ? "Split from a full song (\u2702)" : "", () => refSelect(false, r.name), r.name === lib.current, () => refDelete(r.name), null, { on: !!r.split });
   m.append(el("div", "ref-sep"));
   item("+ Add a vocal file\u2026", "An acapella you like (WAV, AIFF, FLAC, MP3 or OGG). It's measured once and saved under YOURS" + (lib.folder ? ` (${lib.folder})` : "") + ".", () => refChoose(), false, null);
   if (lib.current) item("No reference (use the style)", "", () => refClear(), false, null);

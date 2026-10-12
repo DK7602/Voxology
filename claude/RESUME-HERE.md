@@ -1530,3 +1530,24 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Param hvCrew (0 - 100 %). UI: Voices page column 5 = Stack (Off / 2 / 4 / 6 + a wide "MIDI chords" button that
   toggles hvMidi; numbers set hvMidi off) over the Crew knob (the MIDI toggle cell is gone). MIDI dims Voice 1 / 2.
   Stat adds "crew". Stacked Hook look now sets Crew 50. Manual + Learn updated. Chains harness: ALL OK.
+- v0.40.0 CI green: Actions run 38275055595 (commit 8fd59ed).
+
+## v0.41.0 Split-vocal references (#7, "Audiolens-lite") (2026-10-12)
+- Study (scratch, nothing shipped): MUSDB18-7 (144 excerpts, 142 with >= 3 s voice), mixtures split with UVR's
+  MDX-Net "UVR-MDX-NET-Voc_FT" (pip audio-separator[cpu] in a venv; model from github.com/TRvlvr/model_repo; the Demucs
+  model host was 403 from here), real vocal stems vs split, Auto-Edit's analysis (tools/audit/split_study.cpp,
+  split_separate.py, split_compare.py; numbers in test-audio/split-measurements/). Split - real: s +0.06 dB (90 %
+  within 1.5), punch +0.10 (0.8), tone 250 Hz - 10 kHz within ~1 dB (90 %: <= 3.6), 100 / 125 Hz -9.1 / -7.0 dB,
+  200 Hz 90 % within 9.7, space measurable on 7 of 142. My first guess ("s and punch skew, tone only") was wrong:
+  told the user, built "everything but the low end and space" instead.
+- Detecting a split vocal from the audio alone: best single feature (spectral holes 2 - 5 kHz) 70 % right on these
+  clips -> not used. Detection = file name (looksSplit: "(vocals)", "[vocals]", "uvr", "mdx", "demucs", "spleeter",
+  "voc_ft", "kim_vocal", "roformer", "lalal", "moises", "_vocals", "-vocals", or exactly "vocals") + a manual
+  toggle (✂ per YOURS item in the reference menu; native setReferenceSplit; saved in the reference JSON as "split";
+  older files fall back to the name).
+- Auto-Edit with ref->split: want[] under kSplitLowHz (250 Hz) = the style target for your voice (styleTarget(style,
+  f0)); refTail ignored (space follows the style, also for refWet); summary drops "and its space"; note SPLIT
+  REFERENCE. Full-song warning now suggests UVR (Vocals only). Reference chip shows ✂ for a split reference.
+- Test (test_reference.cpp +1): looksSplit cases; a synthetic split (HP 220 Hz x2, a 90 ms room) flagged split vs
+  the same audio named "acapella": Body -3 dB vs -6 dB (split doesn't thin you out), presence the same (+-1 dB),
+  reverb = style, note present.

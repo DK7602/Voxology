@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.40.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.41.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.40.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.41.0**).
 
 Where each one goes in Cubase:
 
@@ -144,7 +144,7 @@ Tip: one chain per kind of part works well: "Lead", "Hook stack", "Ad-libs". Aut
 A reference makes Auto-Edit aim at the tone of a real finished vocal instead of the style's target. Click **+ REFERENCE** (it shows the reference's name once one is loaded) to open the menu:
 
 - **BUILT-IN**: 15 measured groups of finished pro vocals, in three sections: MALE, FEMALE and MIXED. Only measurements are stored, never audio. Projects saved with an older version keep their reference (renamed to today's name).
-- **YOURS**: every vocal file you've added. Click ✕ to remove one.
+- **YOURS**: every vocal file you've added. Click ✕ to remove one, ✂ to mark one as split from a full song (see below).
 - **+ Add a vocal file…**: pick a WAV, AIFF, FLAC, MP3 or OGG file. It's measured once and saved in Documents\Voxology\References, so it's there in every project.
 - **No reference**: back to the style's own target.
 
@@ -171,6 +171,11 @@ The *Pitch* tag after each name (in italics in the menu) says how tuned that ref
 After picking a reference, press **AUTO-EDIT** again so it re-aims.
 
 Best files to add: the **acapella or vocal stem** of a song you love, dry or lightly processed. A full song (with the beat) only works roughly; the Learn panel warns "FULL SONG?". Most online acapellas are **wet** (reverb or echo baked in): Voxology notices, takes only their tone and "s" brightness, and leaves space and compression to your STYLE.
+
+**No acapella? Split the song yourself.** The free app UVR (Ultimate Vocal Remover) pulls the vocal out of a full song on your computer: pick a vocal model (for example MDX-Net "Voc_FT"), choose Vocals only, and load the vocal it makes with **+ Add a vocal file…**. Use it for your own reference only.
+
+- Voxology spots a split vocal by its file name (UVR's "(Vocals)", Demucs' "vocals", model names) and marks it with ✂. Rename it, or click ✂ in the menu, to change that.
+- For a split vocal, Auto-Edit matches its tone from 250 Hz up, its "s" brightness and its punch, which measure the same as the real vocal track (tested on 142 songs split with UVR: "s" and punch within about 1 dB, tone from 250 Hz up typically within 1 dB). It leaves out the low end (a splitter gives part of it to the bass: 9 dB too low at 100 Hz) and the space (the reverb goes with the music): those follow your STYLE.
 
 ## The beat: key detection, Vocal Fit and Unmask
 

@@ -107,6 +107,8 @@ public:
     juce::String listReferencesJson() const;          // { builtin: [{name, about, section, pitch}], yours: [{name}], folder, current }
     void selectReference (bool builtin, const juce::String& name);
     void deleteUserReference (const juce::String& name);
+    /** Marks one of your references as split from a full song (or not): then its low end and space aren't used. */
+    void setReferenceSplit (const juce::String& name, bool split);
     int getReferenceVersion() const noexcept { return refVersion.load(); }
 
     State getState() const noexcept           { return static_cast<State> (stateFlag.load()); }

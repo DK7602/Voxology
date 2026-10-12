@@ -86,6 +86,11 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
             if (args.size() >= 2) audioProcessor.autoEdit.selectReference (static_cast<bool> (args[0]), args[1].toString());
             complete (true);
         })
+        .withNativeFunction ("setReferenceSplit", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            if (args.size() >= 2) audioProcessor.autoEdit.setReferenceSplit (args[0].toString(), static_cast<bool> (args[1]));
+            complete (true);
+        })
         .withNativeFunction ("deleteReference", [this] (const juce::Array<juce::var>& args, auto complete)
         {
             if (args.size() >= 1) audioProcessor.autoEdit.deleteUserReference (args[0].toString());

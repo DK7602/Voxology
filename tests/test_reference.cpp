@@ -184,3 +184,54 @@ TEST_CASE ("Built-in references: Male, Female, Mixed sections in order, a Pitch 
     }
     CHECK (findBuiltinReference ("Not a reference") == nullptr);
 }
+
+TEST_CASE ("Split references (UVR etc.): spotted by name; their low end and space aren't used, their tone, s and punch are", "[reference]")
+{
+    for (const char* n : { "My Song_(Vocals)_UVR-MDX-NET-Voc_FT", "1_My Song_(Vocals)", "vocals", "Track_vocals", "song (Kim_Vocal_2)", "htdemucs vocals",
+                           "Song [Vocals]", "song - Moises" })
+    {
+        INFO (n);
+        CHECK (looksSplit (n));
+    }
+    for (const char* n : { "My Acapella", "Lead Vocal Dry", "Hook", "Pro vocal stem", "Vocal Chops", "acapella (official)" })
+    {
+        INFO (n);
+        CHECK_FALSE (looksSplit (n));
+    }
+
+    // A splitter's vocal: the low end mostly gone (it went with the bass), and some room on it.
+    auto v = testsig::vocal (kSr, 14.0, -80.0, -14.0, 8, 150.0);
+    for (int stage = 0; stage < 2; ++stage)
+    {
+        Biquad hp;
+        design::apply (hp, design::butterworth (true, 220.0, kSr));
+        for (auto& s : v) s = static_cast<float> (hp.process (s));
+    }
+    const auto d = static_cast<size_t> (0.09 * kSr);
+    for (size_t i = d; i < v.size(); ++i) v[i] += 0.35f * v[i - d];
+    const auto split = analyseReference ({ v }, kSr, "My Song_(Vocals)_UVR-MDX-NET-Voc_FT"), whole = analyseReference ({ v }, kSr, "My Song acapella");
+    REQUIRE (split.ok);
+    REQUIRE (whole.ok);
+    CHECK (split.split);
+    CHECK_FALSE (whole.split);
+
+    const auto mine = testsig::vocal (kSr, 14.0, -80.0, -14.0, 3, 140.0);
+    const auto style = autoEdit ({ mine }, kSr, { 1, 1, 0.0, nullptr });
+    const auto fromSplit = autoEdit ({ mine }, kSr, { 1, 1, 0.0, &split }), fromWhole = autoEdit ({ mine }, kSr, { 1, 1, 0.0, &whole });
+    REQUIRE (fromSplit.ok);
+    REQUIRE (fromWhole.ok);
+    INFO ("low cut: style " << style.params.cleanup.lowCutHz << ", split " << fromSplit.params.cleanup.lowCutHz << ", not split " << fromWhole.params.cleanup.lowCutHz
+          << "; Body: style " << style.params.eq.gainDb[0] << ", split " << fromSplit.params.eq.gainDb[0] << ", not split " << fromWhole.params.eq.gainDb[0]);
+    // Taken at its word, the thin low end would thin your vocal out; flagged as split, it doesn't.
+    const double thinWhole = fromWhole.params.eq.gainDb[0] - 0.02 * fromWhole.params.cleanup.lowCutHz;
+    const double thinSplit = fromSplit.params.eq.gainDb[0] - 0.02 * fromSplit.params.cleanup.lowCutHz;
+    CHECK (thinSplit > thinWhole + 0.5);
+    // Its presence (above 200 Hz) still counts: the same presence move either way.
+    CHECK (fromSplit.params.eq.gainDb[3] == Catch::Approx (fromWhole.params.eq.gainDb[3]).margin (1.0));
+    // Space: follows the style, not the room on the split vocal.
+    CHECK (fromSplit.params.reverb.mix == Catch::Approx (style.params.reverb.mix).margin (0.5));
+    bool note = false;
+    for (const auto& n : fromSplit.notes) note |= n.rfind ("SPLIT REFERENCE", 0) == 0;
+    CHECK (note);
+    CHECK (fromSplit.summary.find ("its space") == std::string::npos);
+}

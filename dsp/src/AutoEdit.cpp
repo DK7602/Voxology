@@ -8,6 +8,7 @@
 #include "vox/PopBreath.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <numeric>
 
@@ -708,10 +709,21 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
     return a;
 }
 
+bool looksSplit (const std::string& fileName)
+{
+    std::string s;
+    for (char c : fileName) s += static_cast<char> (std::tolower (static_cast<unsigned char> (c)));
+    for (const char* mark : { "(vocals)", "[vocals]", "(vocal)", "uvr", "mdx", "demucs", "spleeter", "voc_ft", "kim_vocal", "roformer",
+                              "lalal", "moises", "_vocals", "-vocals", "(vocals only)" })
+        if (s.find (mark) != std::string::npos) return true;
+    return s == "vocals" || s == "vocal";   // (Demucs names its output just "vocals")
+}
+
 ReferenceProfile analyseReference (const std::vector<std::vector<float>>& audio, double sr, const std::string& name)
 {
     ReferenceProfile r;
     r.name = name;
+    r.split = looksSplit (name);
     const auto a = analyseVocal (audio, sr);
     r.voicedSeconds = a.voicedSeconds;
     r.bandDb = a.bandDb;
@@ -1042,8 +1054,10 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
     // with its reverb, delay and throws baked in (most online acapellas are "wet") reads very spacious, punchy (echoes
     // fill the gaps) and bright, which would mean 60 % reverb, no compression and no de-essing. Its tone still counts.
     const double refPunch = ref != nullptr ? std::clamp (ref->microDynDb, 2.5, 5.5) : 0.0;
-    const double refTail = ref != nullptr && ref->tailDb > -100.0 ? std::min (ref->tailDb, -18.0) : -120.0;
-    const bool refWet = ref != nullptr && ((ref->tailDb > -100.0 && ref->tailDb > -18.0) || ref->microDynDb > 5.5 || ref->sibilanceDb > -2.0);
+    // A split vocal's space can't be measured (the reverb went with the music): the space then follows the style.
+    const double refTailRaw = ref != nullptr && ! ref->split ? ref->tailDb : -120.0;
+    const double refTail = refTailRaw > -100.0 ? std::min (refTailRaw, -18.0) : -120.0;
+    const bool refWet = ref != nullptr && ((refTailRaw > -100.0 && refTailRaw > -18.0) || ref->microDynDb > 5.5 || ref->sibilanceDb > -2.0);
     const std::string aimed = ref != nullptr ? "the reference (" + ref->name + ")"
                                              : std::string ("a finished ") + kStyleNames[static_cast<size_t> (style)] + " vocal";
     if (a.voicedSeconds < 3.0)
@@ -1388,6 +1402,12 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             const auto mine = styleTarget (style, a.f0Median), theirs = styleTarget (style, ref->f0Median);
             for (size_t b = 0; b < want.size() && b < mine.size() && analysisBands()[b] < 630.0; ++b) want[b] += mine[b] - theirs[b];
         }
+        if (ref->split)
+        {
+            // A split vocal's low end went partly with the bass: under kSplitLowHz aim at the style's balance for your voice.
+            const auto st = styleTarget (style, a.f0Median > 0.0 ? a.f0Median : ref->f0Median);
+            for (size_t b = 0; b < want.size() && b < st.size() && analysisBands()[b] < kSplitLowHz; ++b) want[b] = st[b];
+        }
         addBeatFit (want, beatFitNow);
         // Same discipline as the style fit (v0.19.0), a little more room since matching is the point: each band on
         // its own job, the "s" zone left to the De-Esser, Body only on your voice's range, and every dB has to
@@ -1410,7 +1430,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         const double oldLow = p.cleanup.lowCutHz;
         p.cleanup.lowCutHz = fit.lowCutHz;
         const auto& bands = analysisBands();
-        const auto refShape = smoothedTone (ref->bandDb), myShape = smoothedTone (a.bandDb);
+        const auto refShape = smoothedTone (want), myShape = smoothedTone (a.bandDb);
         auto diffNear = [&] (double f)   // reference minus yours at the nearest analysis band (dB, overall shape)
         {
             size_t best = 0;
@@ -2136,7 +2156,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                 " sound: " + spec.sound + ". Every change is explained below.";
     if (ref != nullptr)
     {
-        r.summary = "Listened to " + num (a.voicedSeconds) + " s of voice and matched it to your reference, \"" + ref->name + "\": its tone, how bright its \"s\" sounds are, its punch and its space. "
+        r.summary = "Listened to " + num (a.voicedSeconds) + " s of voice and matched it to your reference, \"" + ref->name + "\": its tone, how bright its \"s\" sounds are, its punch" + (ref->split ? "" : " and its space") + ". "
                     "Your vocal came in at " + num (a.inputLufs) + " LUFS with peaks at " + db (a.peakDb) + ". Pitch, clean-up and saturation still follow " +
                     kStyleNames[static_cast<size_t> (style)] + ". Every change is explained below.";
         if (refWet)
@@ -2145,10 +2165,15 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                                "\nNEED: No. The match still follows its sound."
                                "\nSTEP: For a closer match, use a dry acapella of it if you can find one (no reverb or echoes)."
                                "\nSTEP: If you want more space, raise the Reverb or Delay Mix yourself.");
+        if (ref->split)
+            r.notes.push_back ("SPLIT REFERENCE: \"" + ref->name + "\" was split from a full song, so Auto-Edit matched its tone from 250 Hz up, its s brightness and its punch "
+                               "(they measure the same as the real vocal track: tested on 142 songs split with UVR), but not its low end (a splitter gives part of it to the bass) "
+                               "or its space (the reverb goes with the music): those follow your STYLE."
+                               "\nNEED: No. That's how split references work best.");
         if (! ref->warning.empty())
             r.notes.push_back ("REFERENCE IS A FULL SONG: " + ref->warning +
                                "\nNEED: Yes, for a close match. It still works, roughly."
-                               "\nSTEP: Search for the song's acapella (\"<song name> acapella\") or ask the producer for the vocal stem."
+                               "\nSTEP: Split the song yourself with the free UVR app (Ultimate Vocal Remover, Vocals only) and load the vocal it makes, or search for the song's acapella (\"<song name> acapella\")."
                                "\nSTEP: Load that as the reference (REF in the header) and run Auto-Edit again.");
     }
     r.params = p;

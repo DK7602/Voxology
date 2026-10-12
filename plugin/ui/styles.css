@@ -442,6 +442,9 @@ body.beat #rec { display: none; }
 .ref-pitch { margin-left: 6px; font-style: italic; font-weight: 400; font-size: 11.5px; color: var(--ink-soft); }
 .ref-del { width: 22px; height: 22px; border: 0; border-radius: 11px; background: transparent; color: var(--ink-soft); font-size: 11px; cursor: pointer; }
 .ref-del:hover { background: var(--marble); color: var(--warn); }
+.ref-split { opacity: 0.45; }
+.ref-split.on { opacity: 1; color: var(--blue-deep); box-shadow: inset 0 0 0 1.5px var(--gold); }
+.ref-split:hover { color: var(--blue-deep); opacity: 1; }
 /* My Chains: under INTENSITY, the menu shares the reference menu's look. */
 .chain-row { width: 100%; }
 #chains.named { background: var(--marble); color: var(--blue-deep); box-shadow: inset 0 0 0 2px var(--gold), 0 0 8px rgba(var(--glow-rgb), 0.8); letter-spacing: 0.02em; font-size: 12px; }

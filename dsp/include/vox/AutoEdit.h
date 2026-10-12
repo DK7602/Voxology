@@ -35,7 +35,16 @@ struct ReferenceProfile
     bool builtin = false;              // from the built-in library (ReferenceLibrary.cpp), not a file
     std::string section;               // built-in menu section: "Male", "Female" or "Mixed" (empty for your own files)
     std::string pitch;                 // built-in: the Pitch mode its tuning sounds like ("Natural", or "Off" for rap), shown in the menu
+    bool split = false;                // separated from a full song (UVR etc.): its low end (under kSplitLowHz) and its space aren't used
 };
+
+/** Split vocals (a song's vocal separated with UVR / Demucs etc.), measured on 142 MUSDB18 songs split with UVR's
+    MDX-Net vocal model against their real vocal stems (test-audio/split-measurements): s brightness and punch read the
+    same (median +0.1 dB, 90 % within 1.5 / 0.8 dB), tone from 250 Hz up within about 1 dB (90 %: 3.6 dB), but the low
+    end reads 9 dB too low at 100 Hz (the splitter gives it to the bass) and the space can't be measured (7 of 142). */
+inline constexpr double kSplitLowHz = 250.0;
+/** Does a file name look like a splitter's output (UVR "(Vocals)", model names, Demucs' "vocals")? */
+bool looksSplit (const std::string& fileName);
 
 struct AutoEditSettings
 {
