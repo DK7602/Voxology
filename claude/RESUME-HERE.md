@@ -1636,3 +1636,4 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   s -0.7 -> -2, punch 4.9. Top 4 - 10 kHz ~8 dB brighter than "Female rap, rhythmic". refcheck on 3 Cymatics female dry
   leads: EQ up to +4.5 @ 5 kHz / +6 @ 8 kHz, tone distance 6.5 -> 3.3, 5.6 -> 5.0, 6.6 -> 6.1 dB. 17 built-ins.
 - File: test-audio/looperman/Female_Trap_Rap_user-cut-of-this-is-revolution.mp3.
+- v0.46.0 CI green: run 38309203335 (commit 3623d52).
