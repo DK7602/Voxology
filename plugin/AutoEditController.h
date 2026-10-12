@@ -12,7 +12,8 @@
 
 /** Runs Auto-Edit inside the plug-in.
 
-    1. start(): the audio thread copies the incoming vocal (before any processing) into a buffer.
+    1. start(): the audio thread copies the incoming vocal (before any processing) into a buffer, and
+       the beat on the side-chain (when it's on) into another at the same moments (Vocal Fit).
        Exact digital silence (transport stopped) is skipped; the gaps between phrases are kept,
        because Auto-Edit needs them to hear your room noise. It stops once it has heard
        kVoiceSeconds of voice (or kMaxSeconds in all).
@@ -37,9 +38,10 @@ public:
 
     void prepare (double sampleRate);
 
-    /** Audio thread: records the vocal while listening. Never allocates or locks. */
+    /** Audio thread: records the vocal (and the beat on the side-chain, side = nullptr when it's off) while
+        listening. Never allocates or locks. */
     template <typename Sample>
-    void capture (const juce::AudioBuffer<Sample>& buffer, int numInputChannels) noexcept
+    void capture (const juce::AudioBuffer<Sample>& buffer, int numInputChannels, const juce::AudioBuffer<Sample>* side) noexcept
     {
         if (stateFlag.load (std::memory_order_acquire) != listening)
             return;
@@ -68,6 +70,17 @@ public:
             captureL[static_cast<size_t> (w + i)] = static_cast<float> (l[i]);
             captureR[static_cast<size_t> (w + i)] = static_cast<float> (r[i]);
         }
+        const int scn = side != nullptr ? std::min (side->getNumChannels(), 2) : 0;
+        if (scn > 0 && side->getNumSamples() >= todo)
+        {
+            sideSeen.store (true, std::memory_order_relaxed);
+            const Sample* a = side->getReadPointer (0);
+            const Sample* b = side->getReadPointer (scn - 1);
+            for (int i = 0; i < todo; ++i)
+                captureBeat[static_cast<size_t> (w + i)] = static_cast<float> (0.5 * (static_cast<double> (a[i]) + static_cast<double> (b[i])));
+        }
+        else
+            std::fill_n (captureBeat.begin() + w, todo, 0.0f);
         stereo.store (nch > 1, std::memory_order_relaxed);
         written.compare_exchange_strong (w, w + todo, std::memory_order_acq_rel);
     }
@@ -117,12 +130,12 @@ public:
     std::function<void (vox::AutoEditSettings&)> liveKeySource;
 private:
 
-    std::vector<float> captureL, captureR;
+    std::vector<float> captureL, captureR, captureBeat;
     std::atomic<int> capacity { 0 };
     std::atomic<double> sampleRate { 0.0 };
     std::atomic<int> written { 0 }, voiced { 0 };
     std::atomic<int> stateFlag { idle };
-    std::atomic<bool> heardAudio { false }, stereo { false };
+    std::atomic<bool> heardAudio { false }, stereo { false }, sideSeen { false };
     bool hearingAudio = false;
     int quietTicks = 0;
     int session = 0;

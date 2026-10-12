@@ -724,7 +724,150 @@ ReferenceProfile analyseReference (const std::vector<std::vector<float>>& audio,
     return r;
 }
 
+BeatAnalysis analyseBeat (const std::vector<float>& beatIn, const std::vector<std::vector<float>>& vocal, double sr)
+{
+    BeatAnalysis b;
+    const Signal v = toMono (vocal);
+    const size_t n = std::min (beatIn.size(), v.size());
+    if (n == 0 || sr <= 0.0) return b;
+    const Signal beat (beatIn.begin(), beatIn.begin() + static_cast<std::ptrdiff_t> (n));
+    const Signal voice (v.begin(), v.begin() + static_cast<std::ptrdiff_t> (n));
+
+    // The vocal's singing frames (as analyseVocal finds them) and the beat's own (above -60 dBFS).
+    const Frames vf = frames (highPass (voice, 80.0, sr), sr), bf = frames (beat, sr);
+    double activeThr = -65.0;
+    const auto singing = activeMask (vf, activeThr);
+    std::vector<bool> both (singing.size(), false);
+    size_t heard = 0, under = 0;
+    for (size_t i = 0; i < singing.size() && i < bf.rmsDb.size(); ++i)
+    {
+        const bool on = bf.rmsDb[i] > -60.0;
+        heard += on ? 1 : 0;
+        both[i] = on && singing[i];
+        under += both[i] ? 1 : 0;
+    }
+    b.seconds = 0.010 * static_cast<double> (heard);
+    b.underVoiceSeconds = 0.010 * static_cast<double> (under);
+    b.heard = b.underVoiceSeconds >= kBeatMinSeconds;
+    if (heard == 0) return b;
+
+    b.lufs = integratedLufs (beat, sr);
+    const double vocalLufs = integratedLufs (voice, sr);
+    b.vocalOverBeatDb = std::isfinite (b.lufs) && std::isfinite (vocalLufs) && b.lufs > -100.0 ? vocalLufs - b.lufs : 0.0;
+    if (! std::isfinite (b.lufs)) b.lufs = -120.0;
+
+    // Tone: both measured over the same moments (the vocal singing over the beat).
+    const auto beatSpec = averageSpectrum (beat, both, bf.hop), voiceSpec = averageSpectrum (voice, both, bf.hop);
+    b.bandDb = bandBalance (beatSpec, sr);
+    const auto vb = bandBalance (voiceSpec, sr);
+    b.overDb.resize (vb.size());
+    for (size_t k = 0; k < vb.size(); ++k) b.overDb[k] = vb[k] - b.bandDb[k];
+    const double mid = bandEnergy (beatSpec, 500.0, 2000.0, sr);
+    b.brightDb = energyDb (bandEnergy (beatSpec, 5000.0, std::min (12000.0, 0.49 * sr), sr)) - energyDb (mid);
+    double low = 0.0, all = 0.0;
+    for (size_t i = 1; i < beatSpec.size(); ++i) { all += beatSpec[i]; if (static_cast<double> (i) * sr / static_cast<double> (kFftN) < 100.0) low += beatSpec[i]; }
+    b.lowDb = energyDb (low) - energyDb (all);
+
+    // How much it moves: its 50 ms levels while it plays.
+    std::vector<double> lv;
+    for (size_t i = 0; i + 5 <= bf.rmsDb.size(); i += 5)
+    {
+        double e = 0.0;
+        for (size_t j = i; j < i + 5; ++j) e += std::pow (10.0, bf.rmsDb[j] / 10.0);
+        const double l = energyDb (e / 5.0);
+        if (l > -60.0) lv.push_back (l);
+    }
+    b.busyDb = lv.size() >= 20 ? percentile (lv, 90.0) - percentile (lv, 10.0) : 0.0;
+    return b;
+}
+
 // =================================================================================================
+namespace {
+
+/** How finished pro vocals sit against their own beats: MUSDB18-7 (143 released songs, the vocal stem vs the
+    other stems summed, measured with analyseBeat; tools/audit/fit_study.cpp, test-audio/fit-measurements).
+    P25, median, P75. Mostly rock / pop / indie, a few rap songs; the rapped ones sit the same (median -2.0 dB). */
+struct ProRange { double lo, mid, hi; };
+constexpr ProRange kProVocalOverBeat { -4.1, -2.1, -0.6 };   // vocal minus beat, LUFS
+constexpr ProRange kProBright { -14.6, -10.4, -6.9 };         // beat: 5 - 12 kHz vs 500 Hz - 2 kHz
+constexpr ProRange kProLow { -5.7, -4.0, -2.7 };              // beat: under 100 Hz vs the whole
+constexpr ProRange kProBusy { 4.9, 6.3, 9.0 };                // beat: P90 - P10 of its 50 ms levels
+/** Per analysis band (100 Hz - 16 kHz): the vocal over the beat, vs that at 500 Hz - 2 kHz (BeatAnalysis::overDb), P25. */
+constexpr std::array<double, 23> kProOverP25 { -50.0, -44.3, -36.7, -26.0, -14.3, -9.5, -8.6, -4.8, -1.5, -3.0, -2.1, -3.3,
+                                               -4.0, -7.0, -8.8, -7.3, -9.4, -13.5, -11.7, -9.1, -10.3, -12.8, -16.6 };
+
+/** Vocal Fit (v0.32: what it hears; the settings don't follow it yet). */
+void vocalFit (AutoEditResult& r, const std::vector<float>& beatAudio, const Signal& processed, double sr, bool reference)
+{
+    auto line = [&r] (const std::string& c, const std::string& v, const std::string& why) { r.fit.push_back ({ "fit", c, v, why }); };
+    std::vector<std::vector<float>> voice (1, std::vector<float> (processed.size()));
+    for (size_t i = 0; i < processed.size(); ++i) voice[0][i] = static_cast<float> (processed[i]);
+    const BeatAnalysis b = analyseBeat (beatAudio, voice, sr);
+    r.beat = b;
+    if (b.seconds < 1.0)
+    {
+        r.notes.push_back ("BEAT SILENT: Voxology's side-chain is on, but no beat came in while Auto-Edit listened, so Vocal Fit couldn't compare your vocal with it."
+                           "\nNEED: Optional: only for Vocal Fit. The rest of Auto-Edit worked as usual."
+                           "\nSTEP: On the beat track in Cubase, open Sends, pick \"Voxology - Side-Chain\" and switch the send on, at 0 dB."
+                           "\nSTEP: Play a part with the beat and your vocal together, then press AUTO-EDIT again.");
+        return;
+    }
+    if (! b.heard)
+    {
+        line ("Beat heard", num (b.underVoiceSeconds) + " s under your voice",
+              "Too little to judge (Vocal Fit needs " + num (kBeatMinSeconds, 0) + " s of beat while you sing). Run Auto-Edit on a part where the beat plays under your vocal.");
+        return;
+    }
+    line ("Beat heard", num (b.underVoiceSeconds) + " s under your voice",
+          "Recorded from the side-chain at the same moments as your vocal, then compared with your finished vocal (after Voxology). "
+          "In this version Vocal Fit reports what it hears; the settings above still come from your " + std::string (reference ? "reference" : "style") + ".");
+
+    // Level: the only reading that depends on the fader and the send.
+    const double lv = b.vocalOverBeatDb;
+    std::string why;
+    if (lv > kProVocalOverBeat.hi)
+        why = "Your vocal is louder against the beat than most pro mixes (they put it " + num (-kProVocalOverBeat.hi) + " to " + num (-kProVocalOverBeat.lo) +
+              " dB under the beat, " + num (-kProVocalOverBeat.mid) + " dB in the middle). Fine for an up-front rap vocal; if the beat feels small, pull the vocal fader down about " +
+              num (lv - kProVocalOverBeat.mid, 0) + " dB.";
+    else if (lv < kProVocalOverBeat.lo)
+        why = "Your vocal is quieter against the beat than most pro mixes (they put it " + num (-kProVocalOverBeat.hi) + " to " + num (-kProVocalOverBeat.lo) +
+              " dB under the beat, " + num (-kProVocalOverBeat.mid) + " dB in the middle). If words get lost, push the vocal fader up about " + num (kProVocalOverBeat.mid - lv, 0) + " dB.";
+    else
+        why = "Right where pro mixes put it: " + num (-kProVocalOverBeat.hi) + " to " + num (-kProVocalOverBeat.lo) + " dB under the beat's loudness (" + num (-kProVocalOverBeat.mid) + " dB in the middle).";
+    line ("Vocal vs beat", signedDb (lv), why + " This reading is only right with the vocal fader at 0 dB and the beat's side-chain send at 0 dB, post-fader.");
+
+    // The beat's character (doesn't depend on levels).
+    auto vs = [] (double v, const ProRange& p, const char* low, const char* mid, const char* high) { return v < p.lo ? low : v > p.hi ? high : mid; };
+    line ("Top end (hi-hats)", std::string (vs (b.brightDb, kProBright, "dark", "typical", "bright")) + ", " + signedDb (b.brightDb),
+          "5 - 12 kHz against the mids. Pro beats (mostly rock / pop; trap hats often read bright): " + num (kProBright.lo) + " to " + num (kProBright.hi) + " dB. "
+          "Over brighter beats pros keep the vocal a little brighter too, not darker, so the top of the vocal isn't buried.");
+    line ("Low end (808 / kick)", std::string (vs (b.lowDb, kProLow, "light", "typical", "heavy")) + ", " + signedDb (b.lowDb),
+          "Under 100 Hz against the whole beat. Pro beats (mostly rock / pop): " + num (kProLow.lo) + " to " + num (kProLow.hi) + " dB. That's the beat's space: the vocal's Low Cut keeps out of it.");
+    line ("Movement", std::string (vs (b.busyDb, kProBusy, "steady", "typical", "punchy")) + ", " + db (b.busyDb),
+          "How much the beat's level moves (" + num (kProBusy.lo) + " to " + num (kProBusy.hi) + " dB in pro beats). "
+          "In pro mixes, vocals over steady, wall-of-sound beats are compressed more evenly; over punchy beats with space between hits they keep more punch.");
+
+    // Where the beat covers the finished vocal more than in pro mixes (250 Hz - 6.3 kHz: where words live).
+    const auto& bands = analysisBands();
+    double worst = 0.0;
+    size_t wk = 0;
+    for (size_t k = 0; k < bands.size() && k < b.overDb.size() && k < kProOverP25.size(); ++k)
+    {
+        if (bands[k] < 250.0 || bands[k] > 6300.0) continue;
+        const double d = b.overDb[k] - kProOverP25[k];
+        if (d < worst) { worst = d; wk = k; }
+    }
+    if (worst < -2.0)
+        line ("Covers your voice", "around " + hz (bands[wk]),
+              "There the beat covers your finished vocal " + num (-worst) + " dB more than in most pro mixes (against the rest of the voice, so it doesn't depend on levels). "
+              "Unmask can make room: put a second Voxology on the beat track, switch it to BEAT and it dips the beat there only while you sing.");
+    else
+        line ("Covers your voice", "nowhere unusual",
+              "From 250 Hz to 6.3 kHz, where words live, your finished vocal stands out from this beat about as much as in pro mixes.");
+}
+
+} // namespace
+
 AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr, const AutoEditSettings& settings)
 {
     AutoEditResult r;
@@ -1627,6 +1770,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
     }
 
     // ---------------------------------------------------------------------------------------- Output
+    Signal processed;   // the finished vocal, as it leaves Voxology (Vocal Fit compares it with the beat)
     {
         const Signal full = renderMono (raw, sr, p);
         const double inL = a.inputLufs, outL = integratedLufs (full, sr);
@@ -1634,7 +1778,19 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         r.outputLufs = std::isfinite (outL) ? outL + p.outputDb : -120.0;
         reason ("out", "Output", signedDb (p.outputDb),
                 "Matches the processed vocal to the loudness it came in at (" + num (inL) + " LUFS), so it doesn't jump in your mix and your fader stays where it was. Set the vocal's balance with the track fader.");
+        if (settings.beat != nullptr)
+        {
+            const double g = std::pow (10.0, p.outputDb / 20.0);
+            processed = full;
+            for (auto& v : processed) v *= g;
+        }
     }
+
+    // ---------------------------------------------------------------------------------------- Vocal Fit
+    if (settings.beat != nullptr)
+        vocalFit (r, *settings.beat, processed, sr, ref != nullptr);
+    else
+        r.suggestions.push_back ("Send your beat to Voxology's side-chain and run Auto-Edit again: Vocal Fit then checks how your vocal sits against the beat (see the manual, Vocal Fit).");
 
     // ---------------------------------------------------------------------------------------- Suggestions
     r.suggestions.push_back ("Compare with A / B and MATCH on: MATCH plays both at the same loudness, so you judge the tone, not the volume.");

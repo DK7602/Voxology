@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.31.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.32.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.31.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.32.0**).
 
 Where each one goes in Cubase:
 
@@ -85,7 +85,7 @@ Each cell shows a short status under its name (for example "idle", "flat", "cut 
 The right-hand panel tells you what each module does, why Auto-Edit chose its settings, and what to fix. It has two tabs:
 
 - **THIS MODULE**: what the open module does, how to use each control, and live warnings about it.
-- **AUTO-EDIT REPORT**: after Auto-Edit, one line per setting it chose and why. "CHECKED · KEPT" means it looked at a module and left it alone on purpose.
+- **AUTO-EDIT REPORT**: after Auto-Edit, one line per setting it chose and why. "CHECKED · KEPT" means it looked at a module and left it alone on purpose. With the beat on the side-chain, a **VOCAL FIT · YOUR BEAT** section comes first (see Vocal Fit).
 
 How to read a warning card:
 
@@ -126,9 +126,9 @@ After picking a reference, press **AUTO-EDIT** again so it re-aims.
 
 Best files to add: the **acapella or vocal stem** of a song you love, dry or lightly processed. A full song (with the beat) only works roughly; the Learn panel warns "FULL SONG?". Most online acapellas are **wet** (reverb or echo baked in): Voxology notices, takes only their tone and "s" brightness, and leaves space and compression to your STYLE.
 
-## The beat: key detection and Unmask
+## The beat: key detection, Vocal Fit and Unmask
 
-Let Voxology hear your beat and it gets the key right and makes room for the vocal. The beat is the surest way to find the key; the voice alone is often unsure, especially on rap.
+Let Voxology hear your beat and it gets the key right, checks how your vocal sits against it, and makes room for the vocal. The beat is the surest way to find the key; the voice alone is often unsure, especially on rap.
 
 **Pitch key, Auto (the default)** uses the surest of these, in this order:
 
@@ -137,6 +137,19 @@ Let Voxology hear your beat and it gets the key right and makes room for the voc
 3. **Your voice**: needs about 6 seconds of held notes. If it stays unsure, Pitch snaps to the nearest note (Chromatic) until you pick the key under **MANUAL**.
 
 The Pitch page shows where the key came from ("beat: Dm", "voice: Dm", "voice: listening…").
+
+**Vocal Fit** (new in 0.32): with the beat on the side-chain (step 1 above), Auto-Edit records the beat while it listens to your vocal and compares the two. The report's **VOCAL FIT · YOUR BEAT** section shows:
+
+| Line | What it tells you |
+| --- | --- |
+| Beat heard | How many seconds of beat played under your voice (it needs 4 s) |
+| Vocal vs beat | Your finished vocal's loudness against the beat's. Pro mixes put the vocal about 2 dB under the beat (most between 0.6 and 4 dB under). It suggests how far to move the vocal fader. Only right with the vocal fader at 0 dB and the side-chain send at 0 dB, post-fader |
+| Top end (hi-hats) | How bright the beat is (dark, typical, bright) |
+| Low end (808 / kick) | How heavy the beat's low end is (light, typical, heavy) |
+| Movement | Steady (a wall of sound) or punchy (space between the hits) |
+| Covers your voice | Where the beat covers your words more than in pro mixes, if anywhere. Unmask (below) can make room there |
+
+In this version Vocal Fit only reports: your settings still come from the STYLE or reference, exactly as without a beat. Voxology can't move Cubase's faders (no plug-in can), so it tells you how far to move the vocal fader instead. If the report says **BEAT SILENT**, the side-chain is on but no beat reached it: switch the beat track's send on (0 dB) and run Auto-Edit again while the beat plays. The pro numbers come from 143 released songs (MUSDB18, mostly rock and pop; trap beats often read brighter and punchier).
 
 **Unmask (BEAT mode)**: put a second Voxology on the beat track and flip its switch to **BEAT**. While you sing, it dips the beat only in the frequency bands where your voice sits, so the vocal cuts through without turning it up. In the gaps the beat comes back full.
 
@@ -206,6 +219,7 @@ Quick rule: a fast trap or robot effect = Voxology's Pitch alone (Robot or Class
 | Honey Tune says KEY UNSURE | Pick the song's key in KEY, or put a Voxology on the beat (BEAT mode) and play the song for about 6 s |
 | Honey Tune isn't in Audio > Extensions | Your Cubase edition needs ARA (Artist or Pro). Elements doesn't have it |
 | The vocal sounds tuned twice or warbly | Voxology's Pitch is on after Honey Tune. Switch Pitch off on that track |
+| Auto-Edit report has no VOCAL FIT section | The beat isn't on the side-chain. Click the side-chain button at the top of Voxology, add a Send to "Voxology - Side-Chain" on the beat track, play the beat with the vocal and run Auto-Edit again |
 | Unmask doesn't dip the beat | Both Voxologys must be in the same project, and the vocal must be playing. The beat's Learn panel says NO VOCAL HEARD if the link is missing |
 | Hearing yourself late while recording | Turn on REC in Voxology's top bar (about 6 ms). Turn it off for mixing |
 | B always sounds better than A | Turn on MATCH so both play at the same loudness |

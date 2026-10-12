@@ -47,6 +47,7 @@ struct AutoEditSettings
     int beatKeyNote = 0, beatScale = 1;   // the key / scale Pitch uses from it (followBeatKey)
     std::string beatKeyName;              // e.g. "B minor"
     bool beatKeyFromVoice = false;        // that key was learned from the voice (no beat to hear)
+    const std::vector<float>* beat = nullptr;   // Vocal Fit: the beat from the side-chain, recorded with the vocal (mono, same length)
 };
 
 /** One explained decision: which module and control, the value chosen and why (plain language). */
@@ -85,6 +86,26 @@ struct VocalAnalysis
     bool stereo = false, oneSided = false;
 };
 
+/** Vocal Fit: what Auto-Edit heard of the beat on the side-chain, recorded at the same moments as the vocal.
+    The beat's character against the voice (its tone, hats, 808, how much it moves) doesn't depend on how loud
+    the beat is sent; the level the two play at does (it's only right with the vocal fader at 0 dB and a 0 dB
+    post-fader send). */
+struct BeatAnalysis
+{
+    bool heard = false;                // a beat played under the vocal (at least kBeatMinSeconds while singing)
+    double seconds = 0.0;              // beat heard in all (above -60 dBFS)
+    double underVoiceSeconds = 0.0;    // ... of it while the vocal sings
+    double lufs = -120.0;              // the beat, as it reaches the side-chain
+    double vocalOverBeatDb = 0.0;      // vocal loudness minus beat loudness (LUFS, the same stretch of song)
+    std::vector<double> bandDb;        // the beat's third-octave balance while the vocal sings (vs its 500 Hz - 2 kHz average)
+    std::vector<double> overDb;        // per band, while singing: vocal minus beat (dB), less that at 500 Hz - 2 kHz:
+                                       // + = the voice stands out from the beat more there, - = the beat covers it more
+    double brightDb = -120.0;          // hi-hats / top: 5 - 12 kHz vs 500 Hz - 2 kHz (dB)
+    double lowDb = -120.0;             // kick / 808: under 100 Hz vs the whole beat (dB)
+    double busyDb = 0.0;               // how much the beat moves: P90 - P10 of its 50 ms levels (dB); low = a steady wall of sound
+};
+inline constexpr double kBeatMinSeconds = 4.0;
+
 struct AutoEditResult
 {
     bool ok = false;
@@ -95,6 +116,8 @@ struct AutoEditResult
     std::vector<AutoEditReason> reasons;
     std::array<bool, kModules> kept {};        // looked at and chose no change
     VocalAnalysis analysis;
+    BeatAnalysis beat;                         // Vocal Fit (heard = false: no beat on the side-chain)
+    std::vector<AutoEditReason> fit;           // Vocal Fit: what it heard in the beat (module "fit")
     ChainParams params;                        // the settings to apply
     double outputLufs = -120.0;
 };
@@ -106,6 +129,9 @@ const std::vector<double>& analysisBands();
 std::vector<double> styleTarget (int style, double f0Hz = 0.0);
 
 VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double sampleRate);
+
+/** Vocal Fit: the beat (mono) against the vocal it was recorded with (the same moments, the same length). */
+BeatAnalysis analyseBeat (const std::vector<float>& beat, const std::vector<std::vector<float>>& vocal, double sampleRate);
 
 /** Measures a reference vocal. It should be the vocal on its own: a full song (beat + vocal) reads ~7 dB
     off the real vocal's tone (measured on 144 pro songs), so that gets a warning (it still works, roughly). */

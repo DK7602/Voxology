@@ -103,6 +103,14 @@
         R("reverb", "Mix", "12 %", "Just enough space to sound like a record without washing out the words."),
         R("out", "Output", "+1.5 dB", "Matches the processed vocal to the loudness it came in at (−23.7 LUFS), so it doesn't jump in your mix."),
       ],
+      fit: [
+        { control: "Beat heard", value: "11.8 s under your voice", why: "Recorded from the side-chain at the same moments as your vocal, then compared with your finished vocal (after Voxology). In this version Vocal Fit reports what it hears; the settings above still come from your style." },
+        { control: "Vocal vs beat", value: "+1.7 dB", why: "Your vocal is louder against the beat than most pro mixes (they put it 0.6 to 4.1 dB under the beat, 2.1 dB in the middle). Fine for an up-front rap vocal; if the beat feels small, pull the vocal fader down about 4 dB. This reading is only right with the vocal fader at 0 dB and the beat's side-chain send at 0 dB, post-fader." },
+        { control: "Top end (hi-hats)", value: "bright, −1.9 dB", why: "5 - 12 kHz against the mids. Pro beats (mostly rock / pop; trap hats often read bright): −14.6 to −6.9 dB. Over brighter beats pros keep the vocal a little brighter too, not darker, so the top of the vocal isn't buried." },
+        { control: "Low end (808 / kick)", value: "typical, −3.4 dB", why: "Under 100 Hz against the whole beat. Pro beats (mostly rock / pop): −5.7 to −2.7 dB. That's the beat's space: the vocal's Low Cut keeps out of it." },
+        { control: "Movement", value: "punchy, 11.6 dB", why: "How much the beat's level moves (4.9 to 9.0 dB in pro beats). In pro mixes, vocals over steady, wall-of-sound beats are compressed more evenly; over punchy beats with space between hits they keep more punch." },
+        { control: "Covers your voice", value: "nowhere unusual", why: "From 250 Hz to 6.3 kHz, where words live, your finished vocal stands out from this beat about as much as in pro mixes." },
+      ],
     });
     ae.undo = true; ae.version++; ae.state = 0;
   }

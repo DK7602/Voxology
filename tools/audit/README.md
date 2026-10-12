@@ -21,6 +21,8 @@ Compile each against the engine: `g++ -std=c++20 -O2 -Idsp/include tools/audit/<
 | `sat_audit.cpp in.f64 style` | Saturation: estimated vs real harmonics on the vocal, aliasing with a loud 9 kHz tone |
 | `whole_chain.cpp a.f64 ...` | the whole Auto-Edit insert chain on many vocals ("do no harm" on finished ones): tone change, punch, "s", loudness, as CSV |
 | `keybench.cpp f64dir test-audio/cymatics/labels.csv` | the voice key (Auto-Edit's guess and the live AUTO key) vs the sung keys of 54 labelled pro vocals: right / wrong / unsure |
+| `fit_study.cpp name voc.f64 beat.f64 ...` | Vocal Fit: Auto-Edit's analysis of each vocal + `analyseBeat` of the beat under it, as CSV (test-audio/fit-measurements) |
+| `fit_report.cpp voc.f64 beat.f64 [style] [s]` | Vocal Fit: runs Auto-Edit with the beat on the "side-chain" and prints the VOCAL FIT report lines |
 | `honey_tune_audit.cpp in.f64` | Honey Tune: snap every note, keep drift + vibrato, re-analyse: lands within, shape kept, pitch glitches |
 
 Results and history: claude/RESUME-HERE.md (v0.17.0).

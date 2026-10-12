@@ -1271,3 +1271,37 @@ User OK'd all four audit items.
   test v0.31 in Cubase (typing values, reference menu, Unison voices).
 - User prefs (unchanged): short replies, plain language, honest, a plan with warnings; Actions link when green +
   Ctrl+J -> Keep; keep this file AND docs/MANUAL.md updated (MANUAL rule); no PRs.
+
+## v0.32.0 Vocal Fit, step 1: Auto-Edit hears the beat (2026-10-12, "Voxology upgrades" thread)
+- User asked about ChatGPT's upgrade list: 6 of its 8 items were already built (Dynamic EQ, Breath, Unmask, Voices,
+  Gate, Formant, Reference Match, tempo-locked delay). Its one new idea, "Vocal Fit" (Auto-Edit listens to vocal + beat
+  and fits the vocal to THIS beat), was approved as a 3-step plan: step 1 hear + report (this), step 2 the settings follow
+  it (v0.33), step 3 Unmask suggestion, beat-has-vocals warning, polish (v0.34).
+- Faders: no VST3 plug-in can move the DAW's faders. Voxology can move its own Output (= a fader with the Cubase fader
+  at 0 dB). Step 1 only ADVISES how far to move the vocal fader ("Vocal vs beat" line). Whether step 2 sets Output to
+  the pro level (opt-in) is the user's call: it breaks the "Output = input loudness, fader stays put" rule.
+- Capture: AutoEditController::capture (buffer, numIn, side) now records the side-chain (mono avg) into captureBeat at
+  the same indices as the vocal (same skipped silent blocks); called at the TOP of processAnyPrecision (before the mono
+  copy overwrites the side-chain's shared channels). sideSeen -> settings.beat (shared_ptr kept alive by the job).
+- dsp: BeatAnalysis + analyseBeat (beat, vocal, sr): beat seconds / under the voice (heard = >= kBeatMinSeconds 4 s),
+  beat LUFS, vocalOverBeatDb, beat bandDb (vs its 500 Hz-2 kHz), overDb (vocal minus beat per band, level-free),
+  brightDb (5-12 kHz vs 500 Hz-2 kHz), lowDb (< 100 Hz vs all), busyDb (P90-P10 of 50 ms levels).
+  autoEdit(): after Output, vocalFit() compares the PROCESSED vocal (full render x Output gain) with the beat and fills
+  r.fit (module "fit": Beat heard, Vocal vs beat, Top end, Low end, Movement, Covers your voice) + r.beat. Silent
+  side-chain -> "BEAT SILENT" note (NEED / STEP); no side-chain -> a suggestion. Params are NOT changed (test: renders
+  bit-identical with / without a beat).
+- Study (tools/audit/fit_study.cpp, test-audio/fit-measurements/: numbers only): MUSDB18-7, 143 songs (vocal stem vs
+  drums+bass+other). Pro vocal vs beat: median -2.1 LU (P25 -4.1, P75 -0.6), rapped -2.0. Vocal tone vs beat tone: weak
+  POSITIVE links (r 0.1-0.3: bright beats -> slightly brighter vocals), so "less air on bright hats" is DROPPED from
+  step 2. Strongest link: vocal punch vs beat movement r +0.42 (slope 0.25 dB/dB: steady beats -> more compressed
+  vocals) -> step 2 Compressor. Space can't be measured on 7 s clips -> step 2 reverb / delay needs full songs (or skip).
+  Covers-your-voice threshold: overDb below the pro P25 by > 2 dB, 250 Hz - 6.3 kHz.
+- User songs (fit_report): Gallas vocal +6.4 dB over beat (acapella export is hot: not trustworthy), Schaf +1.7; both
+  beats "bright" + "punchy" vs MUSDB (rock / pop); nothing covers the voice. Only Don & Lysette's stems sum exactly to
+  its mix (vocal +2.75 over the guitar); Gallas / Schaf mixes were processed further.
+- UI: report section "VOCAL FIT · YOUR BEAT" (report.fit) before the modules; mock.js has sample lines. Browser preview
+  needs plugin/ui/juce/{index.js,check_native_interop.js} from JUCE 8.0.15 modules/juce_gui_extra/native/javascript
+  (gitignored), served over http (python3 -m http.server in plugin/ui).
+- Manual: "The beat: key detection, Vocal Fit and Unmask" + Vocal Fit table, Learn panel line, troubleshooting row.
+- Tests: tests/test_vocalfit.cpp (4 cases). Local check of plug-in sources: g++ -fsyntax-only against a JUCE 8.0.15
+  clone (-DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_gui_extra=1 -DJucePlugin_Name='"Voxology"').

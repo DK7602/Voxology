@@ -7,6 +7,7 @@ AutoEditController::AutoEditController (juce::AudioProcessorValueTreeState& s, s
     const auto maxSamples = static_cast<size_t> (kMaxSampleRate * kMaxSeconds);
     captureL.assign (maxSamples, 0.0f);
     captureR.assign (maxSamples, 0.0f);
+    captureBeat.assign (maxSamples, 0.0f);
 }
 
 AutoEditController::~AutoEditController()
@@ -36,6 +37,7 @@ bool AutoEditController::start()
     written.store (0);
     voiced.store (0);
     heardAudio.store (false);
+    sideSeen.store (false);
     hearingAudio = false;
     quietTicks = 0;
     stateFlag.store (listening, std::memory_order_release);
@@ -96,6 +98,10 @@ void AutoEditController::launchAnalysis()
     std::vector<std::vector<float>> audio { std::vector<float> (captureL.begin(), captureL.begin() + n) };
     if (stereo.load())
         audio.emplace_back (captureR.begin(), captureR.begin() + n);
+    // Vocal Fit: the beat, when the side-chain was on while listening (silent or not: Auto-Edit says which).
+    std::shared_ptr<const std::vector<float>> beat;
+    if (sideSeen.load())
+        beat = std::make_shared<std::vector<float>> (captureBeat.begin(), captureBeat.begin() + n);
     const double sr = sampleRate.load();
 
     auto choice = [this] (const char* id) { return juce::roundToInt (state.getRawParameterValue (id)->load()); };
@@ -114,13 +120,14 @@ void AutoEditController::launchAnalysis()
     pendingRefName = ref != nullptr && ref->ok ? juce::String::fromUTF8 (ref->name.c_str()) : juce::String();
 
     const int thisSession = session;
-    pool.addJob ([this, audio = std::move (audio), sr, settings, thisSession, ref]
+    pool.addJob ([this, audio = std::move (audio), sr, settings, thisSession, ref, beat]
     {
         std::unique_ptr<vox::AutoEditResult> result;
         try
         {
             auto s = settings;
             s.reference = ref != nullptr && ref->ok ? ref.get() : nullptr;
+            s.beat = beat.get();
             result = std::make_unique<vox::AutoEditResult> (vox::autoEdit (audio, sr, s));
         }
         catch (...)
@@ -192,6 +199,16 @@ void AutoEditController::apply (const vox::AutoEditResult& r, const vox::AutoEdi
         doc->setProperty ("notes", notes);
         doc->setProperty ("tips", tips);
         doc->setProperty ("reasons", reasons);
+        juce::Array<juce::var> fit;
+        for (const auto& x : r.fit)
+        {
+            auto* o = new juce::DynamicObject();
+            o->setProperty ("control", str (x.control));
+            o->setProperty ("value", str (x.value));
+            o->setProperty ("why", str (x.why));
+            fit.add (juce::var (o));
+        }
+        doc->setProperty ("fit", fit);
         doc->setProperty ("kept", kept);
         doc->setProperty ("values", juce::var (values));
         const auto& a = r.analysis;
@@ -211,6 +228,16 @@ void AutoEditController::apply (const vox::AutoEditResult& r, const vox::AutoEdi
         an->setProperty ("bandDb", bands);
         an->setProperty ("bandHz", bandHz);
         doc->setProperty ("analysis", juce::var (an));
+        if (r.beat.heard)
+        {
+            auto* bt = new juce::DynamicObject();
+            bt->setProperty ("seconds", r.beat.underVoiceSeconds);
+            bt->setProperty ("vocalOverBeatDb", r.beat.vocalOverBeatDb);
+            bt->setProperty ("brightDb", r.beat.brightDb);
+            bt->setProperty ("lowDb", r.beat.lowDb);
+            bt->setProperty ("busyDb", r.beat.busyDb);
+            doc->setProperty ("beat", juce::var (bt));
+        }
     }
     setReport (juce::JSON::toString (juce::var (doc), true));
 }

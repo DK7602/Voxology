@@ -1359,6 +1359,10 @@ function renderReport() {
   }
   body.append(head("AUTO-EDIT REPORT"), para(`${report.style} · ${report.intensity}${report.reference ? ` · matched to "${report.reference}"` : ""}`, "l-meta"), para(report.summary));
   notesAsTips();
+  if (report.fit && report.fit.length) {
+    body.append(el("div", "l-sep"), head("VOCAL FIT · YOUR BEAT"));
+    report.fit.forEach((r) => body.append(item(r.control, r.value, r.why)));
+  }
   MODULES.forEach((m, i) => {
     const rs = (report.reasons || []).filter((r) => r.module === m.key);
     if (!rs.length) return;

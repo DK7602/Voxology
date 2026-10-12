@@ -109,7 +109,7 @@ bool VoxologyAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts)
         return false;
     if (in != juce::AudioChannelSet::mono() && in != juce::AudioChannelSet::stereo())
         return false;
-    // The side-chain (the beat, only listened to for its key): off, mono or stereo.
+    // The side-chain (the beat, listened to for its key and for Vocal Fit): off, mono or stereo.
     if (layouts.inputBuses.size() > 1)
     {
         const auto sc = layouts.getChannelSet (true, 1);
@@ -155,7 +155,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     const int nch = juce::jmin (buffer.getNumChannels(), numOut, vox::kMaxChannels);
     const bool beatMode = isBeatMode();
 
-    // The side-chain (VOCAL: the beat, for its key). Read it first: its channels share the buffer with
+    // The side-chain (VOCAL: the beat, for its key and Vocal Fit). Read it first: its channels share the buffer with
     // the outputs, which the lines below write.
     const bool sideOn = ! beatMode && sideChainOn();
     if (sideOn)
@@ -177,6 +177,13 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
             }
             sideKey.process (mono.data(), len);
         }
+    }
+
+    // Auto-Edit records the vocal, and the beat for Vocal Fit, here: the side-chain's channels are still intact.
+    if (! beatMode)
+    {
+        const auto side = sideOn ? getBusBuffer (buffer, true, 1) : juce::AudioBuffer<Sample>();
+        autoEdit.capture (buffer, numIn, sideOn ? &side : nullptr);
     }
 
     // A mono vocal feeds both sides; any other extra output channel starts silent.
@@ -201,8 +208,6 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     double inputPeak = 0.0;
     for (int c = 0; c < juce::jmin (numIn, buffer.getNumChannels()); ++c)
         inputPeak = juce::jmax (inputPeak, static_cast<double> (buffer.getMagnitude (c, 0, n)));
-    if (! beatMode)
-        autoEdit.capture (buffer, numIn);
     inputTap.push (buffer.getArrayOfReadPointers(), juce::jmin (numIn, buffer.getNumChannels()), n);
     inMeter.process (buffer.getArrayOfReadPointers(), juce::jmin (numIn, buffer.getNumChannels()), n);
 
