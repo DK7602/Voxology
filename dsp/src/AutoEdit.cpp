@@ -296,6 +296,9 @@ Signal renderMono (const Signal& x, double sr, const ChainParams& p)
 }
 
 /** Everything off (neutral), the starting point for each partial render. */
+constexpr double kNoiseTargetSnr = 48.0;   // Auto-Edit's noise reduction aims the noise this far under the voice (dB)
+constexpr double kRoomTailFrom = -34.0;    // ... and Room starts when more than this rings on after a phrase (dB)
+
 ChainParams neutralChain()
 {
     ChainParams p;
@@ -1159,6 +1162,50 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         }
     }
 
+    // ---------------------------------------------------------------------------------------- 02 Cleanup: noise + room
+    {
+        // Noise: steady background noise, measured in your gaps. Dry pro vocals sit about 50 dB over theirs (8 Cymatics
+        // dry stems: 41 - 56 dB); the reducer brings yours to about kNoiseTargetSnr (6 - 12 dB sounds natural).
+        const double kk = intensity == 0 ? 0.7 : intensity == 2 ? 1.2 : 1.0;
+        const double snr0 = a.voiceRmsDb - a.noiseFloorDb;
+        // Only when it's worth it (6 dB or more): a take that's nearly studio-quiet is left exactly as it is.
+        if (a.heardGaps && a.noiseFloorDb > -100.0 && (kNoiseTargetSnr - snr0) * kk >= 6.0)
+        {
+            p.cleanup.noiseDb = std::clamp (std::round ((kNoiseTargetSnr - snr0) * kk), 6.0, intensity == 2 ? 18.0 : 15.0);
+            reason ("cleanup", "Noise", "\xE2\x88\x92" + db (p.cleanup.noiseDb),
+                    "Your gaps have steady noise (fan, AC, hiss or hum) " + num (snr0, 0) + " dB under your voice; dry pro vocals have about " + num (kNoiseTargetSnr + 2.0, 0) +
+                    " dB. Noise reduction takes it down " + num (p.cleanup.noiseDb, 0) + " dB under the words too, where the gate can't reach. It learns the noise from your quiet moments and leaves held notes alone.");
+        }
+        else
+            reason ("cleanup", "Noise", "Off", a.heardGaps ? "The noise in your gaps is already " + num (snr0, 0) + " dB under your voice, close to a pro studio take (about " + num (kNoiseTargetSnr + 2.0, 0) + " dB), so it isn't worth touching."
+                                                           : "Auto-Edit heard no gaps between phrases, so it can't tell the noise from your voice: noise reduction stays off.");
+
+        // Room: what rings on 100 - 300 ms after a phrase ends, measured after the noise reduction (so it's the room,
+        // not the noise). Dry pro vocals: -37 dB or lower (7 of 8 Cymatics dry stems); home takes -25 to -29 dB.
+        ChainParams q = neutralChain();
+        q.cleanup.enabled = true;
+        q.cleanup.noiseDb = p.cleanup.noiseDb;
+        const double tail = p.cleanup.noiseDb > 0.0 ? spaceDb (frames (highPass (renderMono (raw, sr, q), 80.0, sr), sr)) : a.tailDb;
+        const double noiseLeft = a.noiseFloorDb - p.cleanup.noiseDb - a.voiceRmsDb + 6.0;   // vs a phrase's end, ~6 dB under the voice
+        if (tail > -100.0 && tail > kRoomTailFrom && tail > noiseLeft + 6.0)
+        {
+            p.cleanup.roomPct = std::clamp (std::round ((tail - kRoomTailFrom) * 6.0 * kk / 5.0) * 5.0, 15.0, intensity == 2 ? 85.0 : 70.0);
+            reason ("cleanup", "Room", pct (p.cleanup.roomPct),
+                    "After your phrases end, the room rings on " + num (-tail, 0) + " dB down; dry pro vocals ring on " + num (-kRoomTailFrom - 3.0, 0) +
+                    " dB down or less. Room shortens that echo (by up to about 5 dB) so the reverb you add later is the only space you hear. Held notes are left alone.");
+            if (tail > -20.0)
+                r.notes.push_back ("ALREADY ECHOEY: what rings on after your phrases is only " + num (-tail, 0) + " dB down, more like a reverb than a room. If you added reverb or delay "
+                                   "before Voxology (or the vocal came with it), Room is shortening it."
+                                   "\nNEED: Only if that reverb is on purpose."
+                                   "\nSTEP: Turn Room off in the Cleanup module, or move your reverb after Voxology (Voxology has its own Reverb and Delay)."
+                                   "\nSTEP: Next take: record in a smaller space with soft things around you (a closet of clothes works).");
+        }
+        else
+            reason ("cleanup", "Room", "Off", tail <= -100.0 ? "Auto-Edit couldn't hear clear phrase endings, so Room stays off."
+                                              : tail <= kRoomTailFrom ? "After your phrases end, almost nothing rings on (" + num (-tail, 0) + " dB down), like a dry studio take."
+                                                                      : "What rings on after your phrases is mostly noise, not the room, so Room stays off.");
+    }
+
     // ---------------------------------------------------------------------------------------- 02 Cleanup
     {
         double hpf = 80.0;
@@ -1191,7 +1238,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                     db (p.cleanup.gateThrDb) + ", under your quietest words.");
             if (squeezed || snr < 30.0)
                 r.notes.push_back ("NOISY RECORDING: the noise in your gaps is only " + num (snr, 0) + " dB under your voice, so very soft words and breaths sit close to it."
-                                   "\nNEED: Optional. The gate handles most of it; listen to quiet word endings."
+                                   "\nNEED: Optional. Noise reduction and the gate handle most of it; listen to quiet word endings."
                                    "\nSTEP: If soft words get cut off, lower the Gate threshold 3 dB at a time (Cleanup module)."
                                    "\nSTEP: Next take: turn off fans / AC, record closer to the mic (a fist away), keep headphones quieter so they don't leak.");
         }
@@ -1822,13 +1869,19 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         // The rider and compressor bring quiet sounds up, and an "s" is quieter than the vowels around it, so
         // after them the "s" sits about 1 - 2 dB brighter than where the De-Esser was set (measured on the
         // user's songs). Listen again at the end of the inserts and turn the De-Esser up until it's on target.
-        // The chain up to the De-Esser is rendered once; each try runs only De-Esser -> Rider -> Compressor on it
-        // (Saturation doesn't move the "s" vs the voice: measured, so it's left out to keep Auto-Edit quick).
+        // The chain up to the De-Esser is rendered once; each try runs De-Esser -> Rider -> Compressor -> Saturation on
+        // it. (Saturation barely moves the "s" vs the voice, except right where the "s" stops counting as one: there it
+        // read 1.5 dB brighter than without it, enough to stop one step short, so it's in.)
         ChainParams front = p;
         front.deEsser.amount = 0.0;
         front.rider.enabled = false;
         front.comp.enabled = false;
         front.saturation.enabled = false;
+        // The inserts only: the doubler / voices, delay and reverb fill the gaps and blur the "s" (they read it ~4 dB
+        // lower than the dry vocal has it), and the "s" target is for the vocal itself.
+        front.doubler.amount = 0.0;
+        front.delay.mix = 0.0;
+        front.reverb.mix = 0.0;
         const Signal pre = renderMono (raw, sr, front);
         auto atEnd = [&] (double amount, double hz, double* sibHz)
         {
@@ -1838,9 +1891,11 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             DeEsser de;
             Rider rd;
             VocalCompressor cp;
+            Saturation st;
             de.prepare (sr, 1); de.setParams (dp);
             rd.prepare (sr, 1); rd.setParams (p.rider);
             cp.prepare (sr, 1); cp.setParams (p.comp);
+            st.prepare (sr, 1); st.setParams (p.saturation);
             Signal y = pre;
             for (size_t s0 = 0; s0 < y.size(); s0 += 512)
             {
@@ -1849,11 +1904,16 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                 de.process (&ptr, 1, len);
                 rd.process (&ptr, 1, len);
                 cp.process (&ptr, 1, len);
+                st.process (&ptr, 1, len);
             }
             const Frames f = frames (highPass (y, 80.0, sr), sr);
             double thr = 0.0;
             const auto mask = activeMask (f, thr);
-            const auto sb = sibilance (y, sr, mask, f.hop, activeRmsDb (y, mask, f.hop));
+            // Against the voice's median level while singing, like analyseVocal (and the style targets): the mean
+            // energy reads 1 - 2 dB louder, which made the "s" look on target when it wasn't.
+            std::vector<double> voiced;
+            for (size_t i = 0; i < mask.size() && i < f.rmsDb.size(); ++i) if (mask[i]) voiced.push_back (f.rmsDb[i]);
+            const auto sb = sibilance (y, sr, mask, f.hop, percentile (voiced, 50.0));
             if (sibHz != nullptr) *sibHz = sb.hz;
             return sb.levelDb;
         };
@@ -1885,6 +1945,46 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                              " vs your voice (around " + hz (sibHz) + "), sharp on headphones and earbuds. " + pct (p.deEsser.amount) + " brings them to " + signedDb (after) +
                              ", where " + aimed + " sits, and only while they happen.";
                 }
+        }
+
+        // Check on the real inserts (the quick version above leaves out Pitch's and the gate's timing, block sizes ...;
+        // where an "s" barely counts as one, that flipped the reading by up to 4 dB): still over, step it up.
+        if (p.deEsser.amount >= 0.05 || now > sibTargetDb + 0.5)
+        {
+            auto realEnd = [&] (double amount)
+            {
+                ChainParams q = p;
+                q.deEsser.amount = amount;
+                q.doubler.amount = 0.0;
+                q.delay.mix = 0.0;
+                q.reverb.mix = 0.0;
+                const Signal y = renderMono (raw, sr, q);
+                const Frames f = frames (highPass (y, 80.0, sr), sr);
+                double thr = 0.0;
+                const auto mask = activeMask (f, thr);
+                std::vector<double> voiced;
+                for (size_t i = 0; i < mask.size() && i < f.rmsDb.size(); ++i) if (mask[i]) voiced.push_back (f.rmsDb[i]);
+                return sibilance (y, sr, mask, f.hop, percentile (voiced, 50.0)).levelDb;
+            };
+            double amount = p.deEsser.amount, end = realEnd (amount);
+            const double first = amount;
+            for (int it = 0; it < 4 && end > -100.0 && end > sibTargetDb + 1.0 && amount < 100.0; ++it)
+            {
+                amount = std::min (100.0, std::round (amount + std::max (3.0, 0.15 * amount)));
+                end = realEnd (amount);
+            }
+            if (amount != first)
+            {
+                p.deEsser.amount = amount;
+                p.deEsser.sensitivity = 50.0;
+                r.kept[static_cast<size_t> (Module::deEsser)] = false;
+                for (auto& rs : r.reasons)
+                    if (rs.module == "deess" && rs.control == "Amount")
+                    {
+                        rs.value = pct (p.deEsser.amount) + " at " + hz (p.deEsser.freqHz);
+                        rs.why += " Checked on the finished chain, it took " + pct (p.deEsser.amount) + " to keep the \"s\" there (" + signedDb (end) + ").";
+                    }
+            }
         }
     }
 

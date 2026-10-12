@@ -9,6 +9,7 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
     sr = sampleRate;
     chanCount = std::clamp (numChannels, 1, kMaxChannels);
     clipWatch.prepare (chanCount);
+    denoise.prepare (sr, chanCount);
     pitch.prepare (sr, chanCount, lowLatency);
     // The gate, pops and breaths listen to the chain's input, which is Pitch's latency ahead of them: free look-ahead.
     cleanup.prepare (sr, chanCount, pitch.latencySamples(), kChunk);
@@ -37,6 +38,7 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
 void VocalChain::reset() noexcept
 {
     clipWatch.reset();
+    denoise.reset();
     pitch.reset();
     cleanup.reset();
     pops.reset();
@@ -65,6 +67,7 @@ void VocalChain::setParams (const ChainParams& p) noexcept
     params = p;
     pitch.setParams (p.pitch);
     cleanup.setParams (p.cleanup);
+    denoise.setParams (p.cleanup.enabled ? DenoiseParams { p.cleanup.noiseDb, p.cleanup.roomPct } : DenoiseParams {});
     pops.setParams ({ p.cleanup.enabled ? p.cleanup.popAmount : 0.0 });
     breaths.setParams ({ p.cleanup.enabled ? p.cleanup.breathDb : 0.0 });
     eq.setParams (p.eq);
@@ -87,6 +90,7 @@ ChainMeters VocalChain::takeMeters() noexcept
 {
     ChainMeters m = meters;
     m.gateDb = cleanup.takeGateDb();
+    m.noiseDb = denoise.takeReductionDb();
     m.popDb = pops.takeCutDb();
     m.breathDb = breaths.takeGainDb();
     m.dynEqDb = dynEq.takeCutDb();
@@ -125,6 +129,11 @@ void VocalChain::processChunk (int nch, int len) noexcept
 
     // The incoming vocal: clipped or too hot? (read-only, for the tips)
     clipWatch.process (ch.data(), nch, len);
+
+    // Noise / room reduction first (Cleanup's): Pitch, the side-chain below and everything else hear the cleaner
+    // vocal. It always runs (a constant delay, and no stale frame when B comes back); not in Record mode.
+    if (! pitch.isLowLatency())
+        denoise.process (ch.data(), nch, len);
 
     // The input, before Pitch delays it: the gate / pops / breaths side-chain.
     cleanup.listen (ch.data(), nch, len);

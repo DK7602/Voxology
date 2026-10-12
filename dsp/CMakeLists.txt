@@ -7,6 +7,7 @@ add_library(vox_dsp STATIC
     src/Modules.cpp
     src/DynamicEq.cpp
     src/PopBreath.cpp
+    src/Denoise.cpp
     src/Unmask.cpp
     src/Voices.cpp
     src/Space.cpp

@@ -1367,3 +1367,56 @@ User OK'd all four audit items.
 - Checked with the preview tool (HONEY_W / HONEY_H env, -DVOX_HONEY_PREVIEW=ON; built on Linux after apt-get
   libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev libasound2-dev) at 900x460, 900, 1050, 1200, 1280,
   1400; HoneyTune_VST3 compiled on Linux. Manual: Honey Tune "Window size" paragraph.
+- v0.34.1 CI green: Actions run 38246439658 (commit 20a699c).
+
+## User's upgrade queue (2026-10-12): "go in order 1-7 then your 2 ideas"
+1 noise & room cleanup (v0.35), 2 mouth de-click, 3 more voices + MIDI harmonies (Nectar: up to 8 + MIDI mode),
+4 presets / my chains, 5 Dimension (chorus / flanger / phaser), 6 Backer (other-singer background vocals: needs AI voice
+models -> assess honestly first), 7 Audiolens (vocal separated from a full song as a reference: needs a separation
+model -> assess first), then 8 auto throws (delay / reverb throw on the last word of a line), 9 resonance smoother
+(soothe-style). Gap analysis vs Nectar 4 Advanced (Auto-Level, Voices 8 + MIDI, Backer, Audiolens, Dimension, Follow EQ,
+13 component plug-ins) and RX / VoiceAssist (de-noise, de-reverb, mouth de-click).
+
+## v0.35.0 Noise + Room (Cleanup) (2026-10-12)
+- dsp/Denoise.h/.cpp Denoiser: STFT (frameSize ~21 ms: 1024 @ 44.1/48k, 2048 @ 96k; hop n/4; sqrt-Hann both ways,
+  x0.5 OLA), latency = n ALWAYS (neutral = an exact delay line, bit for bit; the STFT path always runs so switching on
+  has no stale frames). Linked channels (one gain).
+  - Noise PSD: minimum statistics (Martin) over 1.5 s (8 sub-windows) of the 30 ms-smoothed power, ONLY on quiet frames
+    (frame level 100 Hz - 8 kHz within 12 dB of its 5 s minimum, after ~1 s): long held notes are never learned as
+    noise (they were: -0.6 dB / altered before the quiet gate). kMinimumBias 2.9 (calibrated vs the sqrt-Hann
+    expectation sigma^2 N/2; a Hann-window reference had misled it to 2.25, 1.2 dB low).
+  - Gain: Ephraim-Malah log-spectral MMSE, decision-directed a priori SNR (0.98), floor = the setting; over-subtraction
+    1 + max(0, dB-6)/12; min a priori SNR follows the depth (-(depth+6) dB) or the gain stops ~16 dB. 3-tap smoothing
+    across bins. Measured on steady noise: 6 -> 6.0, 12 -> 11.8, 18 -> 17.2, 24 -> 22.0 dB; words -0.04..-0.07 dB;
+    residual level wobble 0.3 dB (input 0.6): no twinkle.
+  - Room (Lebart / Habets late-reverb PSD): kappa (Room%^2) x 3 (tail over-subtraction) x decay(T60 0.8 s over 50 ms) x
+    the smoothed power 50 ms ago, ONLY while the overall level is 1.5 - 4 dB+ under its 150 ms peak (a fading tail):
+    held / rising notes untouched (they lost 2 - 3 dB without that). Floor Room% x 12 dB. Result on a T60 0.45 s room:
+    echo in the gaps -4.5 dB at 100 %, words -0.2 dB; dry held note bit-exact, dry rap words -0.3 dB. Honest limit: a
+    tail shortener, not a full de-reverb (AI).
+- Chain: Denoiser FIRST (before Pitch and the gate / pops / breaths side-chain, whose look-ahead timing stays right),
+  always processed (also while A / bypass); latencySamples = denoise n + Pitch + Saturation (Record mode: no denoise,
+  latency unchanged ~6 ms). Normal latency ~33 -> ~55 ms. CleanupParams += noiseDb, roomPct (Cleanup off = neutral).
+  Meter ChainMeters.noiseDb -> meters.noise -> UI "noise" (Working meter lane N).
+- Params clNoise (0-24 dB), clRoom (0-100 %). UI: Cleanup gets Noise + Room knobs (dB face for Noise), two-row layout
+  (data-cols 5 like the EQs), Learn text + DEEP NOISE CUT tip (>= 18 dB), REC tip mentions Noise / Room off.
+- Auto-Edit (before Low Cut): Noise when gaps' SNR < kNoiseTargetSnr 48 - 3: round((48 - SNR) x k) dB, 3..15 (Strong 18),
+  Light x0.7 / Strong x1.2. Room: tail (spaceDb) measured AFTER rendering the noise reduction, if > kRoomTailFrom -34 dB
+  and > residual noise + 6: round((tail + 34) x 6 x k / 5) x 5 %, 15..70 (Strong 85); ALREADY ECHOEY note if tail > -20.
+  Data (vstat): dry pro stems SNR 41-56 (median ~50), tail -37..-55 (one -29); user's takes SNR 34-43, tail -25..-29.
+  Picks: Schaf -15 dB / 60 %, Gallas -14 / 25 %, Don&Lysette -12 / off, Don_Birthday -5 / 20 %; clean pro dry mostly
+  off. Known limit: wet pro hooks (reverb printed) get Room 55-70 % (Voxology is for raw takes).
+- Auto-Edit Noise only when worth >= 6 dB (SNR under ~42): a near-studio take (SNR 43-44) is left alone.
+- Found by the full suite (test "De-Esser keeps the s on target"): the denoiser's constant 1024-sample delay shifts
+  Pitch's analysis grid, outputs move ~0.1 %, and the De-Esser second look (a quick De-Esser -> Rider -> Comp sim)
+  read the "s" 4.5 dB lower than the real chain (signals only -24.5 dB apart: the "s" measure is a cliff where frames
+  barely count as "s"). Fixes in the second look: Saturation included in the sim; "s" vs the voice's MEDIAN level
+  (like analyseVocal and the targets; it used the mean energy); the doubler / delay / reverb off in its render (the
+  target is for the inserts); and a final check on the REAL inserts (renderMono, space off): still > target + 1 dB ->
+  step the amount up (+max(3, 15 %), up to 4 renders), reason text says so.
+- Tests: tests/test_denoise.cpp (7): exact delayed pass-through + block independence; reduction per setting + noise
+  estimate within 1 dB; noisy vocal gaps -10 dB, words +-0.2; clean vocal + held note untouched (Noise and Room);
+  Room -3 dB+ echo, words > -0.5; chain latency + Record mode + stereo linked; Auto-Edit noisy vs clean.
+- Built on Linux now needs: apt-get libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev libasound2-dev
+  libgtk-3-dev libwebkit2gtk-4.1-dev libcurl4-openssl-dev; build-hp = full configure (plugins ON, JUCE from the scratch
+  clone via -DFETCHCONTENT_SOURCE_DIR_JUCE=...).

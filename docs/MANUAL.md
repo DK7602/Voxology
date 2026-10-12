@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.34.1. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.35.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.34.1**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.35.0**).
 
 Where each one goes in Cubase:
 
@@ -48,7 +48,7 @@ The top bar holds everything you need for a quick mix; the panels below are for 
 | UNDO | Puts back the settings from before Auto-Edit | If you don't like the result |
 | A / B | A = your original vocal, B = through Voxology | Checking it really is better |
 | MATCH | A and B play at the same loudness | Always on while comparing (louder always sounds better) |
-| REC | Record mode: about 6 ms delay instead of 33 ms, so you hear yourself tuned while recording. A little rougher; Voices and Formant are off | On while recording, off for mixing |
+| REC | Record mode: about 6 ms delay instead of about 55 ms, so you hear yourself tuned while recording. A little rougher; Voices, Formant, Noise and Room are off | On while recording, off for mixing |
 | Power button | Bypasses all of Voxology | Quick before / after |
 
 The round **?** next to LEARN opens this manual (Esc or CLOSE to go back). The bottom bar shows **IN** and **OUT** loudness (LUFS) and peak level, plus the version number. The middle card, **VOCAL SPECTRUM**, shows your vocal (grey-blue), the result (gold), the Tone EQ curve (blue line, drag its 5 points) and Dynamic EQ cuts (orange).
@@ -66,7 +66,7 @@ Every knob:
 | # | Module | What it does | Main controls |
 | --- | --- | --- | --- |
 | 01 | Pitch | Auto-tune, from natural to the hard robot effect | Mode (Natural, Classic, Robot), Amount, Retune (speed), Vibrato, Humanize (long notes stay live), Formant, Key (Auto / Manual + note), Scale, Notes (MIDI off / notes / learn), Transpose |
-| 02 | Cleanup | Cleans the recording | Low Cut (rumble), Pops (p and b thumps), Breaths (turned down), Gate + Gate Range (quiets the gaps). Warns "clipped in!" if the recording itself is distorted |
+| 02 | Cleanup | Cleans the recording | Noise (steady hiss, fan, AC or hum turned down, even under the words), Room (the echo of your room after words, shortened), Low Cut (rumble), Pops (p and b thumps), Breaths (turned down), Gate + Gate Range (quiets the gaps). Warns "clipped in!" if the recording itself is distorted |
 | 03 | Tone EQ | Shapes the tone: body, mud, nasal, presence, air | 5 bands, each Gain + Frequency. Or drag the 5 points on the spectrum (double-click a point = flat) |
 | 04 | Dynamic EQ | Cuts boom, mud, honk and harshness only when they jump out | 4 bands, each Max Cut + Frequency, Sensitivity |
 | 05 | De-Esser | Tames sharp s, t, sh and ch | Amount, Sensitivity, Frequency |
@@ -77,6 +77,13 @@ Every knob:
 | 10 | Delay | Echoes locked to the song's tempo | Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong |
 | 11 | Reverb | A vocal plate: a space for the voice | Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps) |
 | 12 | Output | Final level into your mix | Output gain |
+
+**Noise and Room (Cleanup)** work before anything else in the chain, so Pitch and the gate already hear the cleaner vocal.
+
+- **Noise** learns your background noise by itself from the quiet moments (it needs about a second of the song), then turns it down, also under the words where the gate can't reach. 6 - 12 dB sounds natural; past 18 dB the quiet ends of words can turn watery. Measured on steady noise: 6 dB takes out 6, 12 takes out 12, 18 about 17, 24 about 22. A clean recording and long held notes are left exactly as they are.
+- **Room** shortens the echo of a bare room after your words (by up to about 5 dB), and leaves held notes alone. It isn't a full de-reverb (that needs an AI model), so a very echoey take still sounds roomy: record in a smaller space with soft things around you.
+- Auto-Edit sets both: Noise when the noise in your gaps is less than about 42 dB under your voice (dry pro vocals: about 50 dB), so it takes out at least 6 dB, Room when more than -34 dB rings on after your phrases (dry pro vocals: -37 dB or less). If your vocal already has reverb on it, Room shortens that too: turn Room off if it's on purpose.
+- They add about 21 ms to Voxology's delay, on or off, so the timing never changes (Cubase makes up for it automatically). Record mode leaves them out.
 
 Each cell shows a short status under its name (for example "idle", "flat", "cut 80 Hz"). Cleanup's status reads "clipped in!" or "too hot in!" when the recording itself is distorted: fix that at the recording stage.
 

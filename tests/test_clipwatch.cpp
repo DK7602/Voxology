@@ -83,7 +83,7 @@ TEST_CASE ("Clip watch in the chain and Auto-Edit: no latency, audio untouched, 
     VocalChain chain;
     chain.prepare (kSr, 1);
     PitchCorrector p; p.prepare (kSr, 1);
-    CHECK (chain.latencySamples() == p.latencySamples() + Saturation::kLatency);
+    CHECK (chain.latencySamples() == Denoiser::frameSize (kSr) + p.latencySamples() + Saturation::kLatency);
 
     const auto clean = sungVowel (2.0);
     double peak = 0.0; for (double v : clean) peak = std::max (peak, std::abs (v));
