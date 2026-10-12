@@ -1607,3 +1607,19 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Remaining licence questions (before selling): MUSDB18 / MoisesDB groups (research data, measurements only); the
   Cymatics packs (royalty-free for music: ask Cymatics in writing about shipping measurements). Male trap RAP needs
   licensed rap acapellas from the user.
+- v0.44.0 CI green: Actions run 38293055158 (commit c3bd839, + the Euphoria clips).
+- User then sent 5 Cymatics "Euphoria" clips as trap rap (test-audio/cymatics-euphoria): 3 processed rap phrases (6.5 s
+  voiced) + 2 sung chops: too little; looped, 4.1 / 4.2 dB from the old trap rap / released rap. Not used.
+
+## v0.45.0 "Male trap rap" back, from Looperman acapellas (2026-10-12)
+- User sent 5 Looperman acapellas "cleared for commercial use" + 1 female rap (test-audio/looperman, README has the
+  per-file measurements and a licence-proof reminder). Voxology's own full-song check flagged "die slow" and "dope
+  fein" (beat / 808 under them); UVR split (scratch lp/sep2.py) kept their low end: it's the voices (deep, f0 ~100,
+  pitched down). Yardstick: the v0.30 22-clip trap rap bands (from git, unlicensed, NOT shipped): hook 2.6, dope
+  (split) 2.7, faceshot 3.5, die slow 3.6, ugly eyes 4.2; median of hook + dope + faceshot 1.7 dB (Male rap, released
+  songs 2.9). -> "Male trap rap" = that median (256 s voiced, f0 105, s -3.5, punch 5.0, Pitch Off), 16 built-ins.
+- Their low end is extreme (100 Hz: +5.9 / -2.9 / -13.3 dB): new ReferenceProfile.lowFromStyle (built-in): Auto-Edit
+  aims under kSplitLowHz at the style target (as for split references) + note LOW END FROM YOUR STYLE. Aliases "Trap
+  rap, finished (male)" / "Male trap rap, wet stem" -> "Male trap rap" again.
+- Female rap: one vocal (this is revolution: rapped, untuned, clean) -> not a built-in (one voice = one artist's tone);
+  told the user to add it under YOURS (+ REFERENCE) and send 2 - 3 more.

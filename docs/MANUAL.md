@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.44.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.45.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.44.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.45.0**).
 
 Where each one goes in Cubase:
 
@@ -156,7 +156,7 @@ Tip: one chain per kind of part works well: "Lead", "Hook stack", "Ad-libs". Aut
 
 A reference makes Auto-Edit aim at the tone of a real finished vocal instead of the style's target. Click **+ REFERENCE** (it shows the reference's name once one is loaded) to open the menu:
 
-- **BUILT-IN**: 15 measured groups of finished pro vocals, in three sections: MALE, FEMALE and MIXED. Only measurements are stored, never audio. Projects saved with an older version keep their reference (renamed to today's name).
+- **BUILT-IN**: 16 measured groups of finished pro vocals, in three sections: MALE, FEMALE and MIXED. Only measurements are stored, never audio. Projects saved with an older version keep their reference (renamed to today's name).
 - **YOURS**: every vocal file you've added. Click ✕ to remove one, ✂ to mark one as split from a full song (see below).
 - **+ Add a vocal file…**: pick a WAV, AIFF, FLAC, MP3 or OGG file. It's measured once and saved in Documents\Voxology\References, so it's there in every project.
 - **No reference**: back to the style's own target.
@@ -169,6 +169,7 @@ A reference makes Auto-Edit aim at the tone of a real finished vocal instead of 
 | Male | Male singer, rock / indie | *Natural* | 18 finished mixes (MUSDB18) |
 | Male | Male rap, released songs | *Off* | 17 released rap songs (MoisesDB) |
 | Male | Male rap, rhythmic | *Off* | 12 finished mixes (MUSDB18) |
+| Male | Male trap rap | *Off* | 3 trap rap vocals, finished (Looperman, cleared for commercial use); their boomy low end follows your STYLE |
 | Female | Female pop singer | *Natural* | 26 released pop songs (MoisesDB) |
 | Female | Female R&B singer | *Natural* | 4 R&B acapellas (Cymatics sample packs) |
 | Female | Female trap singer | *Natural* | 6 melodic trap lead vocals, the finished (wet) mix (Cymatics Infinity sample packs) |

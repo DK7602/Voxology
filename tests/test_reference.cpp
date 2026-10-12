@@ -115,7 +115,7 @@ TEST_CASE ("Reference Match keeps each band on its job (no stacking, nothing und
 TEST_CASE ("Built-in references: pro groups (MUSDB18, MoisesDB, Cymatics, trap), usable by Auto-Edit", "[reference]")
 {
     const auto& lib = builtinReferences();
-    REQUIRE (lib.size() == 15);
+    REQUIRE (lib.size() == 16);
     const auto mine = testsig::vocal (kSr, 14.0, -80.0, -14.0, 3, 150.0);
     for (const auto& ref : lib)
     {
@@ -183,6 +183,18 @@ TEST_CASE ("Built-in references: Male, Female, Mixed sections in order, a Pitch 
         CHECK (findBuiltinReference (old) != nullptr);
     }
     CHECK (findBuiltinReference ("Not a reference") == nullptr);
+
+    // Male trap rap (v0.45): its sources' boomy low end isn't used: Auto-Edit doesn't add low body for it.
+    const auto* trapRap = findBuiltinReference ("Male trap rap");
+    REQUIRE (trapRap != nullptr);
+    CHECK (trapRap->lowFromStyle);
+    const auto mine = testsig::vocal (kSr, 14.0, -80.0, -14.0, 3, 140.0);
+    const auto style = autoEdit ({ mine }, kSr, { 1, 1, 0.0, nullptr }), aimed = autoEdit ({ mine }, kSr, { 1, 1, 0.0, trapRap });
+    REQUIRE (aimed.ok);
+    CHECK (aimed.params.eq.gainDb[0] <= style.params.eq.gainDb[0] + 1.0);
+    bool note = false;
+    for (const auto& n : aimed.notes) note |= n.rfind ("LOW END FROM YOUR STYLE", 0) == 0;
+    CHECK (note);
 }
 
 TEST_CASE ("Split references (UVR etc.): spotted by name; their low end and space aren't used, their tone, s and punch are", "[reference]")

@@ -163,7 +163,7 @@
         if (payload.name === "setUiRed") window.__mockRed = !!payload.params[0];
         if (payload.name === "listReferences") result = JSON.stringify({ builtin: [
             ["Male", "Male pop singer", "15 released pop vocals"], ["Male", "Male R&B singer", "7 R&B leads"], ["Male", "Male trap, melodic", "15 wet melodic trap leads"], ["Male", "Male singer, rock / indie", "Warm, full low mids"],
-            ["Male", "Male rap, released songs", "17 released rap vocals"], ["Male", "Male rap, rhythmic", "Forward mids"],
+            ["Male", "Male rap, released songs", "17 released rap vocals"], ["Male", "Male rap, rhythmic", "Forward mids"], ["Male", "Male trap rap", "3 trap rap vocals"],
             ["Female", "Female pop singer", "26 released pop vocals"], ["Female", "Female R&B singer", "4 R&B leads"], ["Female", "Female trap singer", "6 wet melodic trap leads"], ["Female", "Female singer, bright", "Airy, open top"],
             ["Female", "Female singer, warm", "Smooth, soft top"], ["Female", "Female electronic singer", "13 dance vocals"], ["Female", "Female rap, rhythmic", "Present mids"],
             ["Mixed", "Sung hooks, wet", "11 hooks"], ["Mixed", "All voices, pro average", "Neutral"] ].map(([section, name, about]) => ({ section, name, about, pitch: /rap/.test(name) ? "Off" : "Natural" })),

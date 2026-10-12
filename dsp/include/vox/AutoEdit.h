@@ -36,6 +36,7 @@ struct ReferenceProfile
     std::string section;               // built-in menu section: "Male", "Female" or "Mixed" (empty for your own files)
     std::string pitch;                 // built-in: the Pitch mode its tuning sounds like ("Natural", or "Off" for rap), shown in the menu
     bool split = false;                // separated from a full song (UVR etc.): its low end (under kSplitLowHz) and its space aren't used
+    bool lowFromStyle = false;         // built-in: its low end (under kSplitLowHz) isn't used (boomy / pitched-down source vocals)
 };
 
 /** Split vocals (a song's vocal separated with UVR / Demucs etc.), measured on 142 MUSDB18 songs split with UVR's

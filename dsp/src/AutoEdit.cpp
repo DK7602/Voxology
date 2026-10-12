@@ -1402,9 +1402,10 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             const auto mine = styleTarget (style, a.f0Median), theirs = styleTarget (style, ref->f0Median);
             for (size_t b = 0; b < want.size() && b < mine.size() && analysisBands()[b] < 630.0; ++b) want[b] += mine[b] - theirs[b];
         }
-        if (ref->split)
+        if (ref->split || ref->lowFromStyle)
         {
-            // A split vocal's low end went partly with the bass: under kSplitLowHz aim at the style's balance for your voice.
+            // A split vocal's low end went partly with the bass (and some built-ins' sources are boomy or pitched down):
+            // under kSplitLowHz aim at the style's balance for your voice.
             const auto st = styleTarget (style, a.f0Median > 0.0 ? a.f0Median : ref->f0Median);
             for (size_t b = 0; b < want.size() && b < st.size() && analysisBands()[b] < kSplitLowHz; ++b) want[b] = st[b];
         }
@@ -2165,6 +2166,10 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                                "\nNEED: No. The match still follows its sound."
                                "\nSTEP: For a closer match, use a dry acapella of it if you can find one (no reverb or echoes)."
                                "\nSTEP: If you want more space, raise the Reverb or Delay Mix yourself.");
+        if (ref->lowFromStyle && ! ref->split)
+            r.notes.push_back ("LOW END FROM YOUR STYLE: the vocals behind \"" + ref->name + "\" are boomy or pitched down under 250 Hz, so Auto-Edit matched "
+                               "their tone from 250 Hz up, their s brightness and their punch; the low end follows your STYLE (it would make yours boomy)."
+                               "\nNEED: No. That's built in.");
         if (ref->split)
             r.notes.push_back ("SPLIT REFERENCE: \"" + ref->name + "\" was split from a full song, so Auto-Edit matched its tone from 250 Hz up, its s brightness and its punch "
                                "(they measure the same as the real vocal track: tested on 142 songs split with UVR), but not its low end (a splitter gives part of it to the bass) "
