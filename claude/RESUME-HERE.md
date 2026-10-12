@@ -1586,3 +1586,24 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Param dqSmooth (0 - 100 %; Auto-Edit doesn't write it). Meter ChainMeters.smoothDb -> "smooth" (stat "smooth -x dB").
   UI: Dynamic EQ page six across (cells 116 px): bands, meter, Smooth; frequencies + Sensitivity below. Learn + manual;
   Record-mode text lists Smooth. Tests: tests/test_smooth.cpp (2).
+- v0.42.0 + v0.43.0 pushed together: CI green, Actions run 38283301876 (commit 5dac551).
+
+## v0.44.0 Trap references from licensed packs (Cymatics Infinity) (2026-10-12)
+- User sent two wormhole.app links (24 h; end-to-end encrypted, key in the URL fragment): downloaded with headless
+  Chromium (Playwright, proxy 127.0.0.1:45699, "Download all files" -> zip; male 1.5 GB / 87 WAVs, female 394 MB / 37).
+  Saved as mono MP3 V5 in test-audio/cymatics-infinity/{male,female}/ (54 MB, 124 files; commit c00e260 pushed first so
+  they're safe) + labels.csv + README. None needed looping (39 - 405 s; the user had offered). Song keys from each
+  song's full acapella (scratch wh/sungkey.py: harmonic sum, note histogram, major-scale sets): pack names right for
+  14 / 15; Make Love ("A Maj") is A mixolydian (G natural). Stem keys kept per file.
+- Measured (scratch: split_study for Auto-Edit's analysis, wh/tunedness.cpp rebuilt for the Pitch tag): every lead
+  is SUNG (held 42 - 73 %), no rap in either set; wet leads tuned tightly but naturally (male centres 2.7 c, movement
+  14 c, 9.9 - 19; female 3.0 / 15) = Natural (the Sample Snagger clips were Classic).
+- ReferenceLibrary: "Male trap, melodic" = median of the 15 male wet leads (575 s, f0 220, s -2.0, punch 2.9, Natural);
+  NEW "Female trap singer" = 6 female wet leads (219 s, f0 286, s -1.2 stored -2.0, punch 4.8, Natural); "Male trap rap"
+  (Sample Snagger, 22 rap clips) REMOVED: no licensed rap to replace it; its name (and the older aliases) now find
+  "Male rap, released songs". Still 15 built-ins. No built-in is Classic any more (manual text says so).
+- Check on the user's vocals (scratch wh/refcheck.cpp): Male trap, melodic: EQ <= 7 dB, tone distance 3.5 -> 2.7,
+  5.5 -> 3.8, 4.4 -> 3.3. Female trap singer on female dry leads: already 1.4 - 3.2 dB away, moves <= 3 dB.
+- Remaining licence questions (before selling): MUSDB18 / MoisesDB groups (research data, measurements only); the
+  Cymatics packs (royalty-free for music: ask Cymatics in writing about shipping measurements). Male trap RAP needs
+  licensed rap acapellas from the user.
