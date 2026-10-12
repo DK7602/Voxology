@@ -13,8 +13,13 @@ copy of each acapella's Looperman page showing its terms, and credit the artist 
 | `4392213-0017584-faceshot-remix-future-type-vocal` | male, auto-tuned melodic rap (held 57 %, 6.4 c movement), deep, a little low bleed in the gaps | "Male trap rap" |
 | `4392213-0016595-die-slow-evil-type-rap` | male, pitched-down effect vocal, mostly held notes, boomy (full-song warning even after splitting) | not used |
 | `3594080-0020240-ugly-eyes` | male, sung (held 61 %), naturally tuned | not used (sung) |
-| `4660320-0024093-lil-woodie-wood-this-is-revolution` | **female**, rapped (held 13 %), untuned, 124 s voiced, clean | not a built-in yet (one voice) |
+| `4660320-0024093-lil-woodie-wood-this-is-revolution` | **female**, rapped (held 13 %), untuned, 124 s voiced, clean | via the cut below |
+| `Female_Trap_Rap_user-cut-of-this-is-revolution` | the user's own cut of it, just the rap (74 s, 72 s voiced, held 9 %, untuned, f0 288 Hz, very bright top) | "Female trap rap" (v0.46) |
 
 "Male trap rap" (v0.45) = the median of the three marked: 1.7 dB (250 Hz - 10 kHz) from the v0.30 22-clip trap rap
 average it replaces, closer than any other reference. Their low end (+6 .. -13 dB at 100 Hz: deep, pitched-down,
 split) isn't used (`lowFromStyle`).
+
+"Female trap rap" (v0.46) = the user's cut alone (the user asked for it as a built-in): one voice, so it carries her
+tone. Its 4 - 10 kHz sits about 8 dB brighter than "Female rap, rhythmic" (35 MUSDB18 voices). More female trap rap
+vocals would make it a broader average.

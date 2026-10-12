@@ -57,14 +57,14 @@ struct PitchParams
 };
 
 /** Harmony intervals: scale steps when a key / scale is set (they stay in key), semitones with Chromatic.
-    Unison (added last, so saved projects keep their choices) = the lead's own notes: a second voice. */
+    Unison and 4th up (added last, so saved projects keep their choices): Unison = the lead's own notes, a second voice. */
 struct HarmonyInterval { const char* name; int steps; int semis; };
-inline constexpr int kHarmonies = 9;
+inline constexpr int kHarmonies = 10;
 inline constexpr int kHarmonyUnison = 8;
 inline constexpr std::array<HarmonyInterval, kHarmonies> kHarmonyIntervals {{
     { "Off", 0, 0 }, { "3rd up", 2, 4 }, { "5th up", 4, 7 }, { "Octave up", 7, 12 },
     { "3rd down", -2, -3 }, { "4th down", -3, -5 }, { "5th down", -4, -7 }, { "Octave down", -7, -12 },
-    { "Unison", 0, 0 },
+    { "Unison", 0, 0 }, { "4th up", 3, 5 },
 }};
 inline constexpr double kMaxFormant = 6.0;
 

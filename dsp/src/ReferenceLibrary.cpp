@@ -18,7 +18,10 @@
 //   auto-tuned); 256 s voiced, two uploaders. Their median sits 1.7 dB (250 Hz - 10 kHz) from the v0.30 22-clip trap rap
 //   average (unlicensed previews, used only as a yardstick), closer than any other reference (Male rap, released songs:
 //   2.9). Their low end is boomy / pitched down (+6 .. -13 dB at 100 Hz), so it isn't used (lowFromStyle). Left out: "die
-//   slow" (pitched-down effect, mostly held notes), "ugly eyes" (sung). Female: one rap vocal only (not a built-in yet).
+//   slow" (pitched-down effect, mostly held notes), "ugly eyes" (sung). Female: one rap vocal only.
+// - v0.46 Female trap rap: the user's own cut of that one (lil woodie wood "this is revolution", just the rap, 72 s voiced,
+//   rapped: held 9 %, untuned: movement 34 c -> Off; f0 288; s -0.7 stored as -2; punch 4.9). Its top (4 - 10 kHz) is
+//   about 8 dB brighter than "Female rap, rhythmic" (35 MUSDB18 voices): one voice, so it carries her tone.
 // Pitch: how tuned each sounds, as a Voxology Pitch mode (tools: per note >= 0.25 s, distance of its centre from the
 // nearest semitone and pitch movement inside it; calibrated on dry leads through Natural ~10-14 c movement, Classic ~7-10,
 // Robot ~3-6). MUSDB18 singers: centres 9-14 c off, movement 17-23 c -> Natural; MUSDB rap: few held notes -> Off.
@@ -69,6 +72,7 @@ const std::vector<ReferenceProfile>& builtinReferences()
         make ("Female", "Natural", "Female singer, warm", "25 higher voices that mostly sing, the warmer half (MUSDB18): smooth, soft top, gentle s sounds (soul / ballad).", 25, 343, -10.2, 3.5, { -41.3, -40.0, -35.3, -24.6, -11.8, -4.8, -4.2, -3.8, 0.2, 2.3, -0.7, -1.6, -3.7, -9.8, -12.0, -8.9, -13.2, -20.1, -20.8, -20.9, -21.5, -25.7, -33.8 }),
         make ("Female", "Natural", "Female electronic singer", "13 finished female lead vocals from electronic / dance songs (MoisesDB): body around 250 Hz, present upper mids, soft air. Punch follows your STYLE.", 13, 250, -4.2, 0.0, { -33.6, -30.2, -13.5, -2.8, 4.7, 2.8, 0.4, -0.1, 0.7, 2.7, -1.1, -3.9, -2.1, -4.3, -6.4, -5.0, -7.5, -11.6, -9.3, -10.1, -13.5, -22.3, -31.3 }),
         make ("Female", "Off", "Female rap, rhythmic", "35 higher voices that rap or deliver rhythmically, from finished mixes (MUSDB18): present mids, clear top, crisp s sounds.", 35, 280, -4.3, 3.8, { -32.6, -32.0, -23.7, -13.5, -6.2, -3.6, -2.3, -0.2, 1.9, 0.3, -0.8, -1.7, -2.4, -4.6, -4.1, -5.3, -9.1, -13.5, -13.0, -11.9, -13.1, -18.1, -27.7 }),
+        make ("Female", "Off", "Female trap rap", "1 finished female trap rap vocal (Looperman, cleared for commercial use; rapped, not tuned): a thin low end, present mids, a very bright, airy top, bright s sounds. One rapper, so it leans toward her tone.", 1, 288, -2.0, 4.9, { -23.6, -26.1, -26.4, -12.2, -2.5, 0.3, -8.4, -2.0, 3.9, -0.6, 0.0, -0.7, -2.2, -2.4, -3.5, -3.1, -2.0, -2.7, -10.9, -4.4, -3.6, -7.8, -20.4 }),
         make ("Mixed", "Natural", "Sung hooks, wet", "11 finished sung hooks, male and female (Cymatics sample packs), effects baked in: warm and smooth, a darker top, the low end cut away. Space and punch follow your STYLE.", 11, 263, -4.7, 0.0, { -48.9, -37.2, -26.2, -7.1, -3.7, -0.5, -2.4, 0.2, 2.9, 0.6, 0.5, -4.2, -7.6, -9.1, -14.4, -13.1, -12.7, -19.1, -19.6, -18.5, -16.0, -22.9, -32.9 }),
         make ("Mixed", "Natural", "All voices, pro average", "The middle of all 143 finished pro vocals (MUSDB18): a neutral, balanced target.", 143, 262, -5.1, 3.5, { -33.8, -31.4, -18.0, -7.9, -5.1, -1.0, -0.4, -0.2, 2.0, 0.6, -1.1, -2.3, -2.9, -6.2, -6.6, -7.0, -9.8, -14.1, -13.2, -13.4, -14.8, -19.4, -28.2 }),
     };

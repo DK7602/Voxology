@@ -107,7 +107,8 @@ TEST_CASE ("Voices: harmonies land on the right notes, in key", "[voices]")
     const auto x = sungA (6.0);
     struct Case { int interval; double hz; const char* name; };
     for (const auto& c : { Case { 1, 261.63, "3rd up: C4" }, Case { 2, 329.63, "5th up: E4" }, Case { 4, 174.61, "3rd down: F3" },
-                           Case { 6, 146.83, "5th down: D3" }, Case { 7, 110.0, "octave down: A2" } })
+                           Case { 6, 146.83, "5th down: D3" }, Case { 7, 110.0, "octave down: A2" }, Case { 9, 293.66, "4th up: D4" },
+                           Case { 5, 164.81, "4th down: E3" } })
     {
         INFO (c.name);
         const auto v = voicesOnly (x, harmonyIn (c.interval, 0));

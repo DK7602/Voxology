@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.45.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.46.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.45.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.46.0**).
 
 Where each one goes in Cubase:
 
@@ -74,7 +74,7 @@ Every knob:
 | 06 | Rider | Rides the level word by word, like a hand on the fader | Target, Range, Speed (Slow, Med, Fast) |
 | 07 | Compressor | Evens the performance | Peak (catches spikes), Threshold + Ratio (smooth leveler), Makeup, Mix (parallel blend) |
 | 08 | Saturation | Adds harmonics: warmth, density, presence | Mode (Tape, Tube, Clip), Drive, Mix |
-| 09 | Voices | Doubles, extra voices and harmonies in key, up to 8 voices | Double, Width, Voice 1 (left) + Voice 2 (right): **Unison** (a second singer on your own notes, same octave) or a harmony: 3rd, 5th or octave, up or down, Stack (2, 4 or 6 more singers on your notes, or **MIDI chords**: the voices sing the chords you play), Crew (each voice its own singer), Level, Formant |
+| 09 | Voices | Doubles, extra voices and harmonies in key, up to 8 voices | Double, Width, Voice 1 (left) + Voice 2 (right): **Unison** (a second singer on your own notes, same octave) or a harmony: 3rd, 4th, 5th or octave, up or down, Stack (2, 4 or 6 more singers on your notes, or **MIDI chords**: the voices sing the chords you play), Crew (each voice its own singer), Level, Formant |
 | 10 | Dimension | Movement and width: chorus, flanger or phaser | Mode (Chorus, Flanger, Phaser), Amount, Speed, Width |
 | 11 | Delay | Echoes locked to the song's tempo | Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong, Throw (an echo on each line's last word) |
 | 12 | Reverb | A vocal plate: a space for the voice | Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps), Throw (a wash after each line) |
@@ -156,7 +156,7 @@ Tip: one chain per kind of part works well: "Lead", "Hook stack", "Ad-libs". Aut
 
 A reference makes Auto-Edit aim at the tone of a real finished vocal instead of the style's target. Click **+ REFERENCE** (it shows the reference's name once one is loaded) to open the menu:
 
-- **BUILT-IN**: 16 measured groups of finished pro vocals, in three sections: MALE, FEMALE and MIXED. Only measurements are stored, never audio. Projects saved with an older version keep their reference (renamed to today's name).
+- **BUILT-IN**: 17 measured groups of finished pro vocals, in three sections: MALE, FEMALE and MIXED. Only measurements are stored, never audio. Projects saved with an older version keep their reference (renamed to today's name).
 - **YOURS**: every vocal file you've added. Click ✕ to remove one, ✂ to mark one as split from a full song (see below).
 - **+ Add a vocal file…**: pick a WAV, AIFF, FLAC, MP3 or OGG file. It's measured once and saved in Documents\Voxology\References, so it's there in every project.
 - **No reference**: back to the style's own target.
@@ -177,6 +177,7 @@ A reference makes Auto-Edit aim at the tone of a real finished vocal instead of 
 | Female | Female singer, warm | *Natural* | 25 finished mixes, the warmer half (MUSDB18) |
 | Female | Female electronic singer | *Natural* | 13 released electronic / dance songs (MoisesDB) |
 | Female | Female rap, rhythmic | *Off* | 35 finished mixes (MUSDB18) |
+| Female | Female trap rap | *Off* | 1 trap rap vocal, finished (Looperman, cleared for commercial use): very bright top; one rapper, so it leans toward her tone |
 | Mixed | Sung hooks, wet | *Natural* | 11 finished hooks, male and female, effects baked in (Cymatics) |
 | Mixed | All voices, pro average | *Natural* | all 143 MUSDB18 vocals |
 

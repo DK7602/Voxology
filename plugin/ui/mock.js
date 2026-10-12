@@ -43,8 +43,8 @@
     dlTime: { choices: ["1/4", "1/8", "1/8 dot", "1/4 dot", "1/16", "1/2"], value: 0 },
     mode: { choices: ["Vocal", "Beat"], value: location.hash === "#beat" ? 1 : 0 },
     umFocus: { choices: ["Centre", "Full"], value: 0 },
-    hv1: { choices: ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison"], value: 1 },
-    hv2: { choices: ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison"], value: 6 / 8 },
+    hv1: { choices: ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison", "4th up"], value: 8 / 9 },
+    hv2: { choices: ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison", "4th up"], value: 6 / 9 },
     hvStack: { choices: ["Off", "2", "4", "6"], value: 0 },
     dmMode: { choices: ["Chorus", "Flanger", "Phaser"], value: 0 },
   };
@@ -165,7 +165,7 @@
             ["Male", "Male pop singer", "15 released pop vocals"], ["Male", "Male R&B singer", "7 R&B leads"], ["Male", "Male trap, melodic", "15 wet melodic trap leads"], ["Male", "Male singer, rock / indie", "Warm, full low mids"],
             ["Male", "Male rap, released songs", "17 released rap vocals"], ["Male", "Male rap, rhythmic", "Forward mids"], ["Male", "Male trap rap", "3 trap rap vocals"],
             ["Female", "Female pop singer", "26 released pop vocals"], ["Female", "Female R&B singer", "4 R&B leads"], ["Female", "Female trap singer", "6 wet melodic trap leads"], ["Female", "Female singer, bright", "Airy, open top"],
-            ["Female", "Female singer, warm", "Smooth, soft top"], ["Female", "Female electronic singer", "13 dance vocals"], ["Female", "Female rap, rhythmic", "Present mids"],
+            ["Female", "Female singer, warm", "Smooth, soft top"], ["Female", "Female electronic singer", "13 dance vocals"], ["Female", "Female rap, rhythmic", "Present mids"], ["Female", "Female trap rap", "1 trap rap vocal"],
             ["Mixed", "Sung hooks, wet", "11 hooks"], ["Mixed", "All voices, pro average", "Neutral"] ].map(([section, name, about]) => ({ section, name, about, pitch: /rap/.test(name) ? "Off" : "Natural" })),
           yours: ref.yours.map((n) => ({ name: n, split: !!ref.split[n] })), folder: "C:\\Users\\you\\Documents\\Voxology\\References", current: (JSON.parse(ref.json).name || "") });
         if (payload.name === "selectReference") { const n = payload.params[1]; ref.json = JSON.stringify({ state: "ok", name: n, seconds: 60, problem: "", warning: "", split: !!ref.split[n] }); ref.version++; }

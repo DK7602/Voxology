@@ -15,11 +15,11 @@ const fmtMs = (v) => `${Math.round(v)} ms`;
 const fmtRate = (v) => `${v < 1 ? v.toFixed(2) : v.toFixed(1)} Hz`;
 const DIM_MODES = ["Chorus", "Flanger", "Phaser"];
 const fmtSt = (v) => (Math.abs(v) < 0.05 ? "0 st" : `${v > 0 ? "+" : MINUS}${Math.abs(v).toFixed(1)} st`);
-const INTERVALS = ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison"];
-const INTERVALS_SHORT = ["Off", "3rd \u2191", "5th \u2191", "8ve \u2191", "3rd \u2193", "4th \u2193", "5th \u2193", "8ve \u2193", "Unison"];
-// Shown in this order (Unison was added last to the parameter, so saved projects keep their choices): Off | Unison, then
-// up | down in rows, octaves together on the last row (-1 = an empty slot).
-const INTERVAL_ORDER = [0, 8, 1, 4, 2, 5, -1, 6, 3, 7];
+const INTERVALS = ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison", "4th up"];
+const INTERVALS_SHORT = ["Off", "3rd \u2191", "5th \u2191", "8ve \u2191", "3rd \u2193", "4th \u2193", "5th \u2193", "8ve \u2193", "Unison", "4th \u2191"];
+// Shown in this order (Unison, then 4th up, were added last to the parameter, so saved projects keep their choices):
+// Off | Unison, then up | down in rows (3rd, 4th, 5th), octaves together on the last row (-1 = an empty slot).
+const INTERVAL_ORDER = [0, 8, 1, 4, 9, 5, 2, 6, 3, 7];
 
 // ---------------------------------------------------------------------------------------------
 // Scale the fixed 1600x900 design to the window.
@@ -1356,9 +1356,9 @@ const LEARN = {
       return t;
     } },
   double: {
-    does: "Backing vocals from your own voice, up to 8 voices. Double stacks two slightly late copies left and right, like a second take. Voice 1 and Voice 2 are extra singers: Unison sings your own notes (same octave, tuned onto them, a few cents off you and a moment later, like a second singer), or they sing harmonies with you, a 3rd, 5th or octave away, always in the key and scale set in the Pitch module, so they never clash. Stack adds 2, 4 or 6 more singers on your notes; MIDI chords: the voices sing the chords you play instead. Crew makes each voice its own singer. They get your lead's EQ and de-essing, follow its level, and go into the delay and reverb too.",
+    does: "Backing vocals from your own voice, up to 8 voices. Double stacks two slightly late copies left and right, like a second take. Voice 1 and Voice 2 are extra singers: Unison sings your own notes (same octave, tuned onto them, a few cents off you and a moment later, like a second singer), or they sing harmonies with you, a 3rd, 4th, 5th or octave away, always in the key and scale set in the Pitch module, so they never clash. Stack adds 2, 4 or 6 more singers on your notes; MIDI chords: the voices sing the chords you play instead. Crew makes each voice its own singer. They get your lead's EQ and de-essing, follow its level, and go into the delay and reverb too.",
     how: ["Set Key and Scale in the Pitch module first (your beat's key): the harmonies use it. Chromatic gives plain intervals that can clash.",
-      "Voice 1 / Voice 2: Unison on both = a wide, stacked lead in your own octave (try Formant a little - or + so they sound like other singers). A 3rd up is the classic harmony; add a 5th down or an octave down for a full stack. Octave down is the deep ad-lib voice.",
+      "Voice 1 / Voice 2: Unison on both = a wide, stacked lead in your own octave (try Formant a little - or + so they sound like other singers). A 3rd up is the classic harmony; add a 5th down or an octave down for a full stack. A 4th up sounds more open (gospel, sus). Octave down is the deep ad-lib voice.",
       "Stack: 2, 4 or 6 more singers on your notes, spread left and right, for a big stacked hook. More singers sound bigger, not louder.",
       "MIDI chords (under Stack): in Cubase, make a MIDI track and set its output to Voxology, then play or draw chords under the vocal: the voices sing those notes (up to 8), lowest on the left, highest on the right. Voice 1 and Voice 2 wait while it's on.",
       "Crew: each backing voice becomes its own singer (its own voice, tone, timing and tuning). 40 - 70 % sounds like your crew behind you instead of copies of you.",

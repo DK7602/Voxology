@@ -1625,3 +1625,14 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   told the user to add it under YOURS (+ REFERENCE) and send 2 - 3 more.
 
 - v0.45.0 CI green: run 38298482361 (commit 86ac392). Next idea offered: a rename button for YOURS references (today the name = the audio file name).
+
+## v0.46.0 Voices "4th up" + built-in "Female trap rap" (2026-10-12)
+- User spotted the empty slot in the Voice 1 / 2 grid: no 4th up (left out since v0.7, no reason recorded: just a short
+  list). kHarmonyIntervals gains { "4th up", 3, 5 } at index 9 (appended, so saved projects / chains keep Unison = 8 etc.;
+  host automation of hv1 / hv2 maps to 10 steps now). UI order rows: Off|Unison, 3rd, 4th, 5th, 8ve (up | down).
+  Test: sung A3 in C major -> 4th up D4 293.7, 4th down E3 164.8.
+- "Female trap rap" (FEMALE, Pitch Off): the user's own cut of lil woodie wood "this is revolution" (Looperman), the user
+  asked for it as a built-in although it's one voice. Bands = its analyseVocal bands (not boomy: low end used), f0 288,
+  s -0.7 -> -2, punch 4.9. Top 4 - 10 kHz ~8 dB brighter than "Female rap, rhythmic". refcheck on 3 Cymatics female dry
+  leads: EQ up to +4.5 @ 5 kHz / +6 @ 8 kHz, tone distance 6.5 -> 3.3, 5.6 -> 5.0, 6.6 -> 6.1 dB. 17 built-ins.
+- File: test-audio/looperman/Female_Trap_Rap_user-cut-of-this-is-revolution.mp3.

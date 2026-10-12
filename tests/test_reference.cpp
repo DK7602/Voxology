@@ -115,7 +115,7 @@ TEST_CASE ("Reference Match keeps each band on its job (no stacking, nothing und
 TEST_CASE ("Built-in references: pro groups (MUSDB18, MoisesDB, Cymatics, trap), usable by Auto-Edit", "[reference]")
 {
     const auto& lib = builtinReferences();
-    REQUIRE (lib.size() == 16);
+    REQUIRE (lib.size() == 17);
     const auto mine = testsig::vocal (kSr, 14.0, -80.0, -14.0, 3, 150.0);
     for (const auto& ref : lib)
     {
@@ -195,6 +195,13 @@ TEST_CASE ("Built-in references: Male, Female, Mixed sections in order, a Pitch 
     bool note = false;
     for (const auto& n : aimed.notes) note |= n.rfind ("LOW END FROM YOUR STYLE", 0) == 0;
     CHECK (note);
+
+    // Female trap rap (v0.46): in the FEMALE section, rapped (Pitch Off), its own low end used (not boomy).
+    const auto* femaleRap = findBuiltinReference ("Female trap rap");
+    REQUIRE (femaleRap != nullptr);
+    CHECK (femaleRap->section == "Female");
+    CHECK (femaleRap->pitch == "Off");
+    CHECK (! femaleRap->lowFromStyle);
 }
 
 TEST_CASE ("Split references (UVR etc.): spotted by name; their low end and space aren't used, their tone, s and punch are", "[reference]")
