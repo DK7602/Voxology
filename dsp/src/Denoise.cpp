@@ -20,7 +20,8 @@ constexpr double kQuietRatio = 15.85;       // 12 dB: a frame this close to the 
 constexpr double kLevelWindowSeconds = 5.0;
 constexpr double kTailPeakSeconds = 0.15;
 constexpr double kRoomOverSubtract = 3.0;   // in a fading tail the decay model alone under-counts the echo
-constexpr double kTailRatioOff = 0.7, kTailRatioFull = 0.4;   // Room acts where the level fell 1.5 dB (none) .. 4 dB (all) in 50 ms
+constexpr double kTailRatioOff = 0.7, kTailRatioFull = 0.4;
+constexpr double kSurroundNear = 0.891, kSurroundFar = 0.707;   // Smooth: 1/6 and 1/2 of an octave (2^-1/6, 2^-1/2)   // Room acts where the level fell 1.5 dB (none) .. 4 dB (all) in 50 ms
 
 /** E1(x), the exponential integral, x > 0 (series below 1, continued fraction above: Numerical Recipes). */
 double expint1 (double x) noexcept
@@ -74,7 +75,7 @@ void Denoiser::prepare (double sampleRate, int numChannels)
     for (auto& b : outBuf) b.assign (static_cast<size_t> (n), 0.0);
     for (auto& b : delay) b.assign (static_cast<size_t> (n), 0.0);
     for (auto& s : spec) s.assign (static_cast<size_t> (n), {});
-    for (auto* v : { &power, &smooth, &noise, &curMin, &prevGain, &prevPost, &gain, &gainSm })
+    for (auto* v : { &power, &smooth, &noise, &curMin, &prevGain, &prevPost, &gain, &gainSm, &lvlLong, &topsLong, &resDb, &longAvg })
         v->assign (static_cast<size_t> (bins), 0.0);
     const double framesPerSecond = sr / hop;
     subFrames = std::max (1, static_cast<int> (std::ceil (kNoiseWindowSeconds * framesPerSecond / kSubWindows)));
@@ -85,6 +86,8 @@ void Denoiser::prepare (double sampleRate, int numChannels)
     roomFrames = std::max (1, static_cast<int> (std::lround (kRoomDelaySeconds * framesPerSecond)));
     history.assign (static_cast<size_t> (roomFrames + 1), std::vector<double> (static_cast<size_t> (bins), 0.0));
     levelHistory.assign (static_cast<size_t> (std::max (2, static_cast<int> (std::lround (kTailPeakSeconds * framesPerSecond)))), 0.0);
+    smoothRelease = 1.0 - std::exp (-1.0 / (0.060 * framesPerSecond));
+    longCoeff = 1.0 - std::exp (-1.0 / (kSmoothLearnSeconds * framesPerSecond));
     reset();
 }
 
@@ -104,6 +107,9 @@ void Denoiser::reset() noexcept
     lvlIndex = lvlCount = lvlFilled = 0;
     for (auto& h : history) std::fill (h.begin(), h.end(), 0.0);
     std::fill (levelHistory.begin(), levelHistory.end(), 0.0);
+    std::fill (resDb.begin(), resDb.end(), 0.0);
+    std::fill (longAvg.begin(), longAvg.end(), 0.0);
+    smoothDeepest = 0.0;
     count = delayPos = subIndex = subCount = histPos = levelPos = 0;
     warm = false;
     sumIn = sumOut = 0.0;
@@ -252,6 +258,56 @@ void Denoiser::processFrame (int nch) noexcept
         const double lo = gain[k > 0 ? k - 1 : k], hi = gain[k + 1 < ub ? k + 1 : k];
         gainSm[k] = 0.25 * lo + 0.5 * gain[k] + 0.25 * hi;
     }
+
+    // Smooth: resonances that stick out of the voice's own outline, turned down while they ring.
+    if (params.smoothPct >= 0.05)
+    {
+        const double amount = std::clamp (params.smoothPct, 0.0, 100.0) / 100.0;
+        const double binHz = sr / n;
+        const auto from = static_cast<size_t> (std::max (2.0, kSmoothFromHz / binHz)), to = std::min (ub - 2, static_cast<size_t> (kSmoothToHz / binHz));
+        const auto reach = static_cast<size_t> (std::max (1.0, std::round (100.0 / binHz)));   // the harmonics' tops: within ~100 Hz
+        // Only while singing: the frame within 30 dB of the loudest of the last 150 ms.
+        const bool singing = level > 1.0e-3 * peak && level > 1.0e-14;
+        // Where the resonances are: the voice's long-term spectrum (~2 s, while singing). The vowels' formants move
+        // and average out into a smooth outline; a room, mic or nose resonance stays put and sticks out of it.
+        if (singing) for (size_t k = 0; k < ub; ++k) longAvg[k] += (smooth[k] - longAvg[k]) * longCoeff;
+        for (size_t k = 0; k < ub; ++k) lvlLong[k] = 10.0 * std::log10 (longAvg[k] + 1.0e-30);
+        for (size_t k = 0; k < ub; ++k)
+        {
+            double t = lvlLong[k];
+            for (size_t j = k > reach ? k - reach : 0; j <= std::min (ub - 1, k + reach); ++j) t = std::max (t, lvlLong[j]);
+            topsLong[k] = t;
+        }
+        const double thr = 5.0 - 2.0 * amount;          // dB over the outline before it acts (5 at 0 %, 3 at 100 %)
+        const double maxCut = kMaxSmoothDb * amount;
+        for (size_t k = 0; k < ub; ++k)
+        {
+            double target = 0.0;
+            if (singing && k >= from && k <= to && power[k] > 10.0 * noise[k])
+            {
+                // Its outline: the long-term tops' average from 1/6 to 1/2 an octave away on both sides (in dB). A ringing
+                // resonance is narrow and stands out of it; the voice's broad shape doesn't.
+                const double kd = static_cast<double> (k);
+                double sum = 0.0;
+                int cnt = 0;
+                for (const auto& [a0, a1] : { std::pair { kd * kSurroundFar, kd * kSurroundNear }, std::pair { kd / kSurroundNear, kd / kSurroundFar } })
+                    for (auto j = static_cast<size_t> (std::ceil (a0)); j <= std::min (ub - 1, static_cast<size_t> (std::floor (a1))); ++j) { sum += topsLong[j]; ++cnt; }
+                const double excess = cnt > 0 ? topsLong[k] - sum / cnt : 0.0;
+                // Turned down while it rings: this frame at (or over) its usual level there (smoothed spectrum: ~30 ms).
+                const double now = std::clamp ((10.0 * std::log10 (smooth[k] + 1.0e-30) - lvlLong[k] + 3.0) / 6.0, 0.0, 1.0);
+                target = -std::min (maxCut, std::max (0.0, excess - thr) * (1.0 + 0.8 * amount) * now);
+            }
+            resDb[k] = target < resDb[k] ? target : resDb[k] + (target - resDb[k]) * smoothRelease;
+        }
+        for (size_t k = 0; k < ub; ++k)
+        {
+            const double v = 0.25 * resDb[k > 0 ? k - 1 : k] + 0.5 * resDb[k] + 0.25 * resDb[k + 1 < ub ? k + 1 : k];
+            smoothDeepest = std::min (smoothDeepest, v);
+            gainSm[k] *= fromDb (v);
+        }
+    }
+    else
+        std::fill (resDb.begin(), resDb.end(), 0.0);   // (back on: from no cut)
 
     // Apply, back to time, overlap-add (the windows' Hann sum is 2 at 75 % overlap: x 0.5).
     for (auto& o : outBuf)

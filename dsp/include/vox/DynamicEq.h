@@ -26,6 +26,7 @@ struct DynEqParams
     std::array<double, kDynBands> freqHz { 150, 350, 1000, 3500 };
     std::array<double, kDynBands> maxCutDb { 0, 0, 0, 0 };   // 0 = band off; up to kDynMaxCutDb
     double sensitivity = 50.0;                              // 0..100 %: how easily a jump counts
+    double smoothPct = 0.0;                                 // Smooth: resonance smoothing, 0..100 % (runs in the Denoiser's spectra: no added delay)
 };
 
 /** Per band: name, frequency range and default, Q, how long the detector averages (s), how fast

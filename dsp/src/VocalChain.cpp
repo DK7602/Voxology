@@ -73,7 +73,12 @@ void VocalChain::setParams (const ChainParams& p) noexcept
     params = p;
     pitch.setParams (p.pitch);
     cleanup.setParams (p.cleanup);
-    denoise.setParams (p.cleanup.enabled ? DenoiseParams { p.cleanup.noiseDb, p.cleanup.roomPct } : DenoiseParams {});
+    {
+        DenoiseParams d;
+        if (p.cleanup.enabled) { d.noiseDb = p.cleanup.noiseDb; d.roomPct = p.cleanup.roomPct; }
+        if (p.dynEq.enabled) d.smoothPct = p.dynEq.smoothPct;   // (the Dynamic EQ's Smooth rides on the same spectra)
+        denoise.setParams (d);
+    }
     pops.setParams ({ p.cleanup.enabled ? p.cleanup.popAmount : 0.0 });
     declick.setParams ({ p.cleanup.enabled ? p.cleanup.clickAmount : 0.0 });
     breaths.setParams ({ p.cleanup.enabled ? p.cleanup.breathDb : 0.0 });
@@ -107,6 +112,7 @@ ChainMeters VocalChain::takeMeters() noexcept
     ChainMeters m = meters;
     m.gateDb = cleanup.takeGateDb();
     m.noiseDb = denoise.takeReductionDb();
+    m.smoothDb = denoise.takeSmoothDb();
     m.popDb = pops.takeCutDb();
     m.clickDb = declick.takeCutDb();
     m.clicks = declick.takeClicks();

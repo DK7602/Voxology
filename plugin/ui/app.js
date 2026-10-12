@@ -125,7 +125,7 @@ const NOTES_C = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
 const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "hvCrew", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "clClicks", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
   "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth", "dmAmount", "dmRate", "dmWidth",
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "dlThrow", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "rvThrow", "outGain", "umAmount",
-  ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
+  ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", "dqSmooth", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
 const PT_RM = NOTES_C.map((_, k) => "ptRm" + k);
 const TOGGLES = [...PT_RM, "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn", "hvMidi", "dmOn"];
 const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode"];
@@ -217,7 +217,7 @@ function typeIn(valEl, id, fmt, def, after, refocus) {
 }
 
 // Latest meter frame.
-const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, noise: 0, click: 0, clicks: 0, clipNow: 0, clipTotal: 0, overNow: 0, hotPeak: -100, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
+const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, noise: 0, smooth: 0, click: 0, clicks: 0, clipNow: 0, clipTotal: 0, overNow: 0, hotPeak: -100, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1, -1, -1, -1, -1, -1, -1],
   bkState: 0, bkSource: 0, scState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, midiNotes: 0, heldNotes: 0, notesUsed: 0xFFF, recMode: 0, latencyMs: 33, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
@@ -517,16 +517,17 @@ const MODULES = [
       ...EQ_BANDS.map((b, i) => knob("eqFreq" + (i + 1), b.name, "frequency", fmtHz, [180, 300, 900, 4000, 12000][i])),
     ],
     stat: () => { const n = [0, 1, 2, 3, 4].filter((b) => Math.abs(eqGain(b)) >= 0.05).length; return n ? [`${n} band${n > 1 ? "s" : ""}`, true] : ["flat", false]; } },
-  { key: "dyneq", name: "DYNAMIC EQ", onId: "dqOn", what: "cuts boom, mud, honk and harshness only when they jump out",
+  { key: "dyneq", name: "DYNAMIC EQ", onId: "dqOn", what: "cuts boom, mud, honk and harshness only when they jump out; Smooth tames ringing resonances",
     cells: () => [
       ...DYN_BANDS.map((b, i) => knob("dqCut" + (i + 1), b.name, "max cut", fmtCut, 0)),
       dynMeter(),
+      knob("dqSmooth", "Smooth", "resonances", fmtPct, 0),
       ...DYN_BANDS.map((b, i) => knob("dqFreq" + (i + 1), b.name, "frequency", fmtHz, b.def)),
       knob("dqSens", "Sensitivity", "how easily", fmtPct, 50),
     ],
     stat: () => {
       const n = [0, 1, 2, 3].filter((b) => dynCut(b) >= 0.05).length;
-      if (!n) return ["idle", false];
+      if (!n) return val("dqSmooth") >= 0.05 ? [M.smooth < -0.3 ? `smooth ${fmtDb(M.smooth)}` : "smooth", true] : ["idle", false];
       const deepest = Math.min(...[0, 1, 2, 3].map(dynLive));
       return deepest < -0.3 ? [fmtDb(deepest), true] : [`${n} band${n > 1 ? "s" : ""}`, true];
     } },
@@ -1228,7 +1229,7 @@ const LEARN = {
       "Already using Auto-Tune or Melodyne? Turn this off: one tuner is enough."],
     live: () => {
       const t = [];
-      if (M.recMode) t.push(tip("RECORD MODE", `Voxology is in Record mode: about ${M.latencyMs.toFixed(0)} ms, so you can hear yourself tuned while you record. Pitch uses a faster, slightly rougher method; Voices, Formant, Noise, Room and Clicks are off.`, "calm",
+      if (M.recMode) t.push(tip("RECORD MODE", `Voxology is in Record mode: about ${M.latencyMs.toFixed(0)} ms, so you can hear yourself tuned while you record. Pitch uses a faster, slightly rougher method; Voices, Formant, Noise, Room, Clicks and Smooth are off.`, "calm",
         { need: "Switch it off when you're done recording.", steps: ["Click REC in the header to go back to full quality for mixing (Cubase adjusts the timing for you)."] }));
       if (choice("ptMidi") === 2 && M.midiNotes === 0) t.push(tip("LEARN IS WAITING", "MIDI is on Learn, but no notes have been played yet, so Pitch uses the key as usual.", "calm",
         { need: "Only if you want the MIDI scale.", steps: ["Route a MIDI track's output to Voxology (Cubase: the track's output menu).", "Play the beat's notes or chords once: they light up blue in Notes."] }));
@@ -1302,10 +1303,11 @@ const LEARN = {
     how: ["Max Cut (top row): the most a band may cut. Off = band not used. 2 - 4 dB is natural; 6 dB+ is strong.",
       "Frequency (bottom row): where the problem lives. Easy trick: raise Max Cut, then sweep Frequency while a problem word plays until the orange cut appears on it.",
       "Sensitivity: how far a band may rise above your normal before it's pulled back. Higher catches more.",
+      "Smooth (soothe-style): finds narrow resonances that ring in your voice (a whistly, harsh or nasal spot from the room, the mic or your nose) by listening for a couple of seconds, and turns just those down while they ring. A smooth voice is left alone. 30 - 60 % is natural. It works 800 Hz - 7 kHz (the s zone is the De-Esser's) and adds no delay; off in Record mode.",
       "On the spectrum, drag the B, M, N, H points: left / right = where, down = Max Cut. The orange shape is what it's cutting right now."],
     live: () => {
       const t = [];
-      if (on("dqOn") && [0, 1, 2, 3].every((b) => dynCut(b) < 0.05)) t.push(tip("NO BANDS SET", "Every band's Max Cut is Off, so the Dynamic EQ does nothing yet.", "calm",
+      if (on("dqOn") && [0, 1, 2, 3].every((b) => dynCut(b) < 0.05) && val("dqSmooth") < 0.05) t.push(tip("NO BANDS SET", "Every band's Max Cut is Off, so the Dynamic EQ does nothing yet.", "calm",
         { need: "No. Only use it if some words boom, cloud up, honk or bite.", steps: ["Run Auto-Edit: it finds the spots that jump out in your voice.", "Or raise a band's Max Cut to 3 dB and sweep its Frequency while the problem word plays."] }));
       const maxed = [0, 1, 2, 3].filter((b) => dynCut(b) >= 1 && dynLive(b) <= -(dynCut(b) - 0.15));
       if (maxed.length) t.push(tip("AT THE LIMIT", `${maxed.map((b) => DYN_BANDS[b].name).join(", ")} ${maxed.length > 1 ? "are" : "is"} cutting the full Max Cut right now: that spot jumps out further than the band is allowed to fix.`, "calm",

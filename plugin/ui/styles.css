@@ -371,6 +371,8 @@ body.beat #header .title { margin-left: 0; }
 #cells[data-page="pitch"] .cell.pt-tune .pitch-face { width: 112px; }
 #cells[data-page="pitch"] .vseg.keys { width: 156px; gap: 4px; }
 .cell.inactive { opacity: 0.4; }
+/* Dynamic EQ page: six across (the bands, the meter, Smooth), the frequencies below. */
+#cells[data-page="dyneq"] .cell { width: 116px; }
 /* Voices page: Voice 1 / 2 full height in the middle; the doubler's knobs on the left, the voices' knobs and Stack / MIDI around them. */
 #cells[data-page="double"] { display: grid; grid-template-columns: 128px 128px 150px 150px 136px; grid-template-rows: 150px 150px;
   grid-template-areas: "dbl wid v1 v2 stk" "lvl fmt v1 v2 crew"; justify-content: center; }

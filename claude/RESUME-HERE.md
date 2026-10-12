@@ -1551,6 +1551,7 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Test (test_reference.cpp +1): looksSplit cases; a synthetic split (HP 220 Hz x2, a 90 ms room) flagged split vs
   the same audio named "acapella": Body -3 dB vs -6 dB (split doesn't thin you out), presence the same (+-1 dB),
   reverb = style, note present.
+- v0.41.0 CI green: Actions run 38278925346 (commit 6c29fda).
 
 ## v0.42.0 Throws (#8): echo / reverb wash on the last word of each line (2026-10-12)
 - dsp/Throws.h/.cpp: watches the mono vocal (after inserts + voices) in 10 ms levels. A line = level > -50 dBFS, ends
@@ -1566,3 +1567,22 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Params dlThrow, rvThrow (0 - 100 %, Auto-Edit never writes them). UI: Throw knob on Delay (page now two rows) and
   Reverb; stats "+ throws"; faceFor: Throw before "Thr" (it got the +dB face). Quick Look "Line Throws" (10 looks).
   Meter ChainMeters.throws (not shown yet). Manual: module rows + Throws paragraph. Chains harness: ALL OK.
+
+## v0.43.0 Smooth: resonance smoother (#9, soothe-style), in the Dynamic EQ (2026-10-12)
+- Runs inside the Denoiser's STFT (no added latency; off in Record mode like Noise / Room; DenoiseParams.smoothPct =
+  DynEqParams.smoothPct when the Dynamic EQ is on). Per frame, 800 Hz - 7 kHz, only while singing (frame level within
+  30 dB of the 150 ms peak) and where power > 10 x the learned noise.
+- Finding them (4 variants measured on a +10 dB Q 8 ringing peak at 3.15 kHz on the synthetic vocal AND on three real
+  dry vocals, test-audio Don_Birthday / Don_Lysette / Gallas): per-frame tops vs their third-octave average barely
+  acted (the window held the peak); vs 1/6 - 1/2 octave surroundings it took the peak down but also 2 - 4 dB out of
+  the whole 1.25 - 6.3 kHz of REAL vocals (their formants look like resonances frame by frame) and 1.8 dB at 8 - 10 kHz
+  (noisy top end; fixed by the 30 ms smoothed spectrum and the 7 kHz top limit); medians too weak. Chosen: the
+  long-term spectrum (2 s while singing: vowels average out, a fixed resonance stays), harmonic tops (max within
+  ~100 Hz) vs their average 1/6 - 1/2 octave either side; excess over 5 - 2 x amount dB, x (1 + 0.8 amount), max 9 dB x
+  amount, applied while it rings (the smoothed level there at / over its long-term level, 0 .. 1 over -3 .. +3 dB).
+  Attack one frame, release 60 ms, 3-tap smoothing across bins.
+- Measured: the test peak's third-octave bump 5.9 -> 3.6 dB (40 %), 1.7 dB (80 %); synthetic plain vocal every band
+  within 1.5 dB at 80 %; the three real vocals at 60 %: most third octaves within 0.5 dB, a few spots -1 .. -1.6 dB.
+- Param dqSmooth (0 - 100 %; Auto-Edit doesn't write it). Meter ChainMeters.smoothDb -> "smooth" (stat "smooth -x dB").
+  UI: Dynamic EQ page six across (cells 116 px): bands, meter, Smooth; frequencies + Sensitivity below. Learn + manual;
+  Record-mode text lists Smooth. Tests: tests/test_smooth.cpp (2).

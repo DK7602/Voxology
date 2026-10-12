@@ -19,6 +19,7 @@ namespace VoxParams
         juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "hvCrew", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "clClicks" };
         for (int b = 0; b < vox::kEqBands; ++b) { ids.add (n ("eqGain", b)); ids.add (n ("eqFreq", b)); }
         ids.add ("dqSens");
+        ids.add ("dqSmooth");
         for (int b = 0; b < vox::kDynBands; ++b) { ids.add (n ("dqCut", b)); ids.add (n ("dqFreq", b)); }
         ids.addArray ({ "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
                         "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix",
@@ -135,6 +136,7 @@ namespace VoxParams
         // Dynamic EQ: Max Cut 0 = band off.
         toggle ("dqOn", "Dynamic EQ On", true);
         slider ("dqSens", "Dynamic EQ Sensitivity", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f, "%", pctText);
+        slider ("dqSmooth", "Dynamic EQ Smooth (resonances)", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
         for (int b = 0; b < vox::kDynBands; ++b)
         {
             const auto& info = vox::kDynBandInfo[static_cast<size_t> (b)];
@@ -318,6 +320,7 @@ namespace VoxParams
             }
             p.dynEq.enabled = on ("dqOn");
             p.dynEq.sensitivity = d ("dqSens");
+            p.dynEq.smoothPct = d ("dqSmooth");
             for (size_t b = 0; b < static_cast<size_t> (vox::kDynBands); ++b)
             {
                 p.dynEq.maxCutDb[b] = dqCut[b]->load();

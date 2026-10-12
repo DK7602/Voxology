@@ -52,6 +52,7 @@ struct ChainMeters
 {
     double gateDb = 0.0;        // deepest gate turn-down (<= 0)
     double noiseDb = 0.0;       // noise / room reduction: how far the sound was turned down on average (<= 0)
+    double smoothDb = 0.0;      // Smooth: the deepest resonance cut (<= 0)
     double popDb = 0.0;         // deepest plosive cut (<= 0)
     double clickDb = 0.0;       // deepest mouth-click cut (<= 0)
     int clicks = 0;             // mouth clicks fixed

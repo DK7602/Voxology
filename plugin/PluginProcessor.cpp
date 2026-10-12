@@ -399,6 +399,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     holdMin (meters.pops, static_cast<float> (m.popDb));
     holdMin (meters.breath, static_cast<float> (m.breathDb));
     holdMin (meters.noise, static_cast<float> (m.noiseDb));
+    holdMin (meters.smooth, static_cast<float> (m.smoothDb));
     holdMin (meters.click, static_cast<float> (m.clickDb));
     meters.clicks.fetch_add (m.clicks);
     meters.clipRuns.fetch_add (m.input.runs);

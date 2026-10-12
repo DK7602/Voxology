@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.42.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.43.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.42.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.43.0**).
 
 Where each one goes in Cubase:
 
@@ -49,7 +49,7 @@ The top bar holds everything you need for a quick mix; the panels below are for 
 | UNDO | Puts back the settings from before the last Auto-Edit, chain or Quick Look | If you don't like the result |
 | A / B | A = your original vocal, B = through Voxology | Checking it really is better |
 | MATCH | A and B play at the same loudness | Always on while comparing (louder always sounds better) |
-| REC | Record mode: about 6 ms delay instead of about 55 ms, so you hear yourself tuned while recording. A little rougher; Voices, Formant, Noise, Room and Clicks are off | On while recording, off for mixing |
+| REC | Record mode: about 6 ms delay instead of about 55 ms, so you hear yourself tuned while recording. A little rougher; Voices, Formant, Noise, Room, Clicks and Smooth are off | On while recording, off for mixing |
 | Power button | Bypasses all of Voxology | Quick before / after |
 
 The round **?** next to LEARN opens this manual (Esc or CLOSE to go back). The bottom bar shows **IN** and **OUT** loudness (LUFS) and peak level, plus the version number. The middle card, **VOCAL SPECTRUM**, shows your vocal (grey-blue), the result (gold), the Tone EQ curve (blue line, drag its 5 points) and Dynamic EQ cuts (orange).
@@ -69,7 +69,7 @@ Every knob:
 | 01 | Pitch | Auto-tune, from natural to the hard robot effect | Mode (Natural, Classic, Robot), Amount, Retune (speed), Vibrato, Humanize (long notes stay live), Formant, Key (Auto / Manual + note), Scale, Notes (MIDI off / notes / learn), Transpose |
 | 02 | Cleanup | Cleans the recording | Noise (steady hiss, fan, AC or hum turned down, even under the words), Room (the echo of your room after words, shortened), Low Cut (rumble), Pops (p and b thumps), Clicks (mouth clicks and lip smacks), Breaths (turned down), Gate + Gate Range (quiets the gaps). Warns "clipped in!" if the recording itself is distorted |
 | 03 | Tone EQ | Shapes the tone: body, mud, nasal, presence, air | 5 bands, each Gain + Frequency. Or drag the 5 points on the spectrum (double-click a point = flat) |
-| 04 | Dynamic EQ | Cuts boom, mud, honk and harshness only when they jump out | 4 bands, each Max Cut + Frequency, Sensitivity |
+| 04 | Dynamic EQ | Cuts boom, mud, honk and harshness only when they jump out; Smooth tames ringing resonances | 4 bands, each Max Cut + Frequency, Sensitivity, Smooth |
 | 05 | De-Esser | Tames sharp s, t, sh and ch | Amount, Sensitivity, Frequency |
 | 06 | Rider | Rides the level word by word, like a hand on the fader | Target, Range, Speed (Slow, Med, Fast) |
 | 07 | Compressor | Evens the performance | Peak (catches spikes), Threshold + Ratio (smooth leveler), Makeup, Mix (parallel blend) |
@@ -101,6 +101,12 @@ Every knob:
 - To play chords into Voxology in Cubase: add a MIDI track (no instrument), open its output menu (the routing at the top of the Inspector) and choose Voxology on your vocal track. Record or draw the chords on that track, under the vocal part.
 - **Crew** makes every backing voice its own singer: each gets its own voice (formant, deeper or brighter), tone (darker or brighter), timing (a little later) and tuning (a few cents off). 0 % = all your own voice; 40 - 70 % sounds like your crew behind you. It isn't AI: it won't sound like a stranger, but the stack stops sounding like copies of you. Turning it never clicks.
 - Each voice costs about 2 % of one CPU core: 8 voices about 16 %. Record mode leaves the voices out.
+
+**Smooth (Dynamic EQ)** is a resonance smoother, like soothe: it finds the narrow spots that ring in your voice (a whistly, harsh or nasal resonance from the room, the mic or your nose) and turns just those down while they ring.
+
+- It listens for a couple of seconds first: the vowels move around and average out, a resonance stays in the same place and sticks out. A smooth voice is left alone (on three real dry vocals at 60 %, most of the range moved less than 0.5 dB; a few spots 1 - 1.5 dB).
+- 30 - 60 % is natural; 100 % takes a ringing peak down by up to 9 dB. It works 800 Hz - 7 kHz (the "s" zone above is the De-Esser's job).
+- It rides on the same analysis as Noise and Room, so it adds no delay. Like them, it's off in Record mode. The Dynamic EQ's switch turns it off too.
 
 **Throws (Delay and Reverb)** do what engineers do by hand: an echo or a reverb wash on the **last word of each line**, while the rest of the line stays dry.
 

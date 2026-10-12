@@ -259,6 +259,7 @@ void VoxWebEditor::timerCallback()
     holdDown (popHold, m.pops.exchange (0.0f));
     holdDown (breathHold, m.breath.exchange (0.0f));
     holdDown (noiseHold, m.noise.exchange (0.0f));
+    holdDown (smoothHold, m.smooth.exchange (0.0f));
     holdDown (clickHold, m.click.exchange (0.0f));
     holdDown (essHold, m.deEss.exchange (0.0f));
     juce::Array<juce::var> dyn;
@@ -285,6 +286,7 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("pops", roundTo (popHold, 0.1f));
     frame->setProperty ("breath", roundTo (breathHold, 0.1f));
     frame->setProperty ("noise", roundTo (noiseHold, 0.1f));
+    frame->setProperty ("smooth", roundTo (smoothHold, 0.1f));
     frame->setProperty ("click", roundTo (clickHold, 0.1f));
     frame->setProperty ("clicks", m.clicks.load());
     {
