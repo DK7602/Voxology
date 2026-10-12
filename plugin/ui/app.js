@@ -1361,7 +1361,10 @@ function renderReport() {
   notesAsTips();
   if (report.fit && report.fit.length) {
     body.append(el("div", "l-sep"), head("VOCAL FIT · YOUR BEAT"));
-    report.fit.forEach((r) => body.append(item(r.control, r.value, r.why)));
+    report.fit.forEach((r) => {
+      body.append(item(r.control, r.value, r.why));
+      if (r.control === "Vocal vs beat" && report.fitLevel) body.append(fitLevelButton());
+    });
   }
   MODULES.forEach((m, i) => {
     const rs = (report.reasons || []).filter((r) => r.module === m.key);
@@ -1373,6 +1376,33 @@ function renderReport() {
     rs.forEach((r) => body.append(item(r.control, r.value, r.why)));
   });
   if (report.tips && report.tips.length) { body.append(el("div", "l-sep"), head("SUGGESTIONS"), list(report.tips)); }
+}
+
+// FIT LEVEL (Vocal Fit): sets Output so the vocal sits against the beat where pro mixes put it. Never automatic:
+// you see the move first, and the same button puts Output back.
+let fitLevelUndo = null;   // { time: report it belongs to, from: Output before }
+function fitLevelButton() {
+  const f = report.fitLevel;
+  const wrap = el("div", "fit-level");
+  const b = el("button", "chip");
+  b.type = "button";
+  const note = el("div", "l-why");
+  const show = () => {
+    const applied = fitLevelUndo && fitLevelUndo.time === report.time;
+    b.textContent = applied ? `PUT OUTPUT BACK TO ${fmtSigned(fitLevelUndo.from)}` : `FIT LEVEL: OUTPUT TO ${fmtSigned(f.output)}`;
+    note.textContent = applied ? "Done: the vocal now sits about where pro mixes put it against this beat. Judge it with the beat playing; press again to put Output back."
+      : `Moves Voxology's Output ${fmtSigned(f.db)}${Math.abs(f.full) > Math.abs(f.db) ? ` (the full move is ${fmtSigned(f.full)}: do the rest with the fader)` : ""}. Leave the vocal fader at 0 dB, or this lands off by however far the fader is.`;
+  };
+  b.addEventListener("click", () => {
+    const s = P.outGain, applied = fitLevelUndo && fitLevelUndo.time === report.time;
+    const to = applied ? fitLevelUndo.from : f.output;
+    fitLevelUndo = applied ? null : { time: report.time, from: val("outGain") };
+    s.sliderDragStarted(); s.setNormalisedValue(scaledToNorm(s, clamp(to, s.properties.start, s.properties.end))); s.sliderDragEnded();
+    show();
+  });
+  show();
+  wrap.append(b, note);
+  return wrap;
 }
 
 function renderModuleLearn() {

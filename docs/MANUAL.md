@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.32.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.33.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.32.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.33.0**).
 
 Where each one goes in Cubase:
 
@@ -138,18 +138,26 @@ Let Voxology hear your beat and it gets the key right, checks how your vocal sit
 
 The Pitch page shows where the key came from ("beat: Dm", "voice: Dm", "voice: listening…").
 
-**Vocal Fit** (new in 0.32): with the beat on the side-chain (step 1 above), Auto-Edit records the beat while it listens to your vocal and compares the two. The report's **VOCAL FIT · YOUR BEAT** section shows:
+**Vocal Fit**: with the beat on the side-chain (step 1 above), Auto-Edit records the beat while it listens to your vocal and sets the chain for that beat. It nudges two modules the way pro vocals sit in their own beats:
+
+- **Tone EQ**: pro vocals follow their beat's tone a little. Over a beat with more presence (2 - 5 kHz) the vocal gets a bit more too, so the words aren't buried; the same for low-mids and air. The target moves at most 1.5 dB, and a band only moves when your vocal is outside the normal range.
+- **Compressor**: over a punchy beat (space between the hits) your words keep up to 1 dB more punch; over a steady, wall-of-sound beat the vocal is smoothed a little more. If the compressor can't get there on your take, it leaves it as the style set it and says so.
+
+The report's **VOCAL FIT · YOUR BEAT** section (and a "Vocal Fit" line in those two modules) shows:
 
 | Line | What it tells you |
 | --- | --- |
-| Beat heard | How many seconds of beat played under your voice (it needs 4 s) |
-| Vocal vs beat | Your finished vocal's loudness against the beat's. Pro mixes put the vocal about 2 dB under the beat (most between 0.6 and 4 dB under). It suggests how far to move the vocal fader. Only right with the vocal fader at 0 dB and the side-chain send at 0 dB, post-fader |
+| Beat heard | How many seconds of beat played under your voice (it needs 4 s; with less, the chain is set as if there were no beat) |
+| Vocal vs beat | Your finished vocal's loudness against the beat's. Pro mixes put the vocal about 2 dB under the beat (most between 0.6 and 4 dB under) |
+| FIT LEVEL button | Appears when your vocal is 1 dB or more off that. It shows the move first ("FIT LEVEL: OUTPUT TO −2.5 dB"); click it to set Voxology's Output there, click again to put it back. It moves Output at most 6 dB (the rest is the fader's). Nothing changes unless you click |
 | Top end (hi-hats) | How bright the beat is (dark, typical, bright) |
 | Low end (808 / kick) | How heavy the beat's low end is (light, typical, heavy) |
 | Movement | Steady (a wall of sound) or punchy (space between the hits) |
+| Tone for this beat | How far the Tone EQ target moved for this beat |
+| Compressor for this beat | How much more (+) or less (−) punch your words keep |
 | Covers your voice | Where the beat covers your words more than in pro mixes, if anywhere. Unmask (below) can make room there |
 
-In this version Vocal Fit only reports: your settings still come from the STYLE or reference, exactly as without a beat. Voxology can't move Cubase's faders (no plug-in can), so it tells you how far to move the vocal fader instead. If the report says **BEAT SILENT**, the side-chain is on but no beat reached it: switch the beat track's send on (0 dB) and run Auto-Edit again while the beat plays. The pro numbers come from 143 released songs (MUSDB18, mostly rock and pop; trap beats often read brighter and punchier).
+The level reading and FIT LEVEL are only right with the **vocal fader at 0 dB** and the beat's side-chain send at **0 dB, post-fader**: Voxology can't see or move Cubase's faders (no plug-in can). Rap often sits a little louder than the pro middle: skip FIT LEVEL if you like your vocal up front. If the report says **BEAT SILENT**, the side-chain is on but no beat reached it: switch the beat track's send on (0 dB) and run Auto-Edit again while the beat plays. Without a beat, Auto-Edit works exactly as before. The pro numbers come from 143 released songs (MUSDB18, mostly rock and pop; trap beats often read brighter and punchier).
 
 **Unmask (BEAT mode)**: put a second Voxology on the beat track and flip its switch to **BEAT**. While you sing, it dips the beat only in the frequency bands where your voice sits, so the vocal cuts through without turning it up. In the gaps the beat comes back full.
 

@@ -209,6 +209,14 @@ void AutoEditController::apply (const vox::AutoEditResult& r, const vox::AutoEdi
             fit.add (juce::var (o));
         }
         doc->setProperty ("fit", fit);
+        if (r.fitLevelDb != 0.0)
+        {
+            auto* fl = new juce::DynamicObject();
+            fl->setProperty ("db", r.fitLevelDb);
+            fl->setProperty ("full", r.fitLevelFullDb);
+            fl->setProperty ("output", juce::jlimit (-24.0, 24.0, r.params.outputDb + r.fitLevelDb));   // the Output knob's range
+            doc->setProperty ("fitLevel", juce::var (fl));
+        }
         doc->setProperty ("kept", kept);
         doc->setProperty ("values", juce::var (values));
         const auto& a = r.analysis;

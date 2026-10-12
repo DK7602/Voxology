@@ -1,4 +1,5 @@
-// Vocal Fit (v0.32): Auto-Edit hears the beat on the side-chain and reports how the finished vocal sits against it.
+// Vocal Fit: Auto-Edit hears the beat on the side-chain (v0.32), nudges Tone EQ and Compressor for it and offers
+// FIT LEVEL (v0.33), and reports how the finished vocal sits against it.
 #include "Signals.h"
 #include "vox/AutoEdit.h"
 #include "vox/VocalChain.h"
@@ -6,6 +7,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <numbers>
 #include <random>
 
@@ -44,6 +46,32 @@ std::vector<float> beat (double seconds, double hatDb, double levelDb = 0.0, dou
     return out;
 }
 
+/** A steady, wall-of-sound beat: a sustained chord pad and constant noise, no drums (its level barely moves). */
+std::vector<float> steadyBeat (double seconds, unsigned seed = 9)
+{
+    std::mt19937 rng (seed);
+    std::normal_distribution<double> white (0.0, 1.0);
+    std::vector<float> out (static_cast<size_t> (kSr * seconds));
+    for (size_t i = 0; i < out.size(); ++i)
+    {
+        const double t = static_cast<double> (i) / kSr;
+        double pad = 0.0;
+        for (double f : { 55.0, 110.0, 220.0, 261.6, 329.6 })
+            for (int h = 1; h * f < 4000.0; ++h) pad += std::sin (2.0 * std::numbers::pi * h * f * t) / h;
+        out[i] = static_cast<float> (0.03 * pad + 0.01 * white (rng));
+    }
+    return out;
+}
+
+bool sameChain (const AutoEditResult& a, const AutoEditResult& b, const std::vector<float>& x)
+{
+    const std::vector<std::vector<float>> slice { std::vector<float> (x.begin(), x.begin() + static_cast<std::ptrdiff_t> (3.0 * kSr)) };
+    const auto ya = VocalChain::render (slice, kSr, a.params), yb = VocalChain::render (slice, kSr, b.params);
+    if (ya[0].size() != yb[0].size() || a.params.outputDb != b.params.outputDb) return false;
+    for (size_t i = 0; i < ya[0].size(); ++i) if (ya[0][i] != yb[0][i]) return false;
+    return true;
+}
+
 const AutoEditReason* fitLine (const AutoEditResult& r, const std::string& control)
 {
     for (const auto& f : r.fit)
@@ -52,7 +80,7 @@ const AutoEditReason* fitLine (const AutoEditResult& r, const std::string& contr
 }
 }
 
-TEST_CASE ("Vocal Fit: hears the beat and reports it; no setting changes yet", "[vocalfit]")
+TEST_CASE ("Vocal Fit: hears the beat and reports it", "[vocalfit]")
 {
     const auto x = testsig::vocal (kSr, 14.0);
     const auto bright = beat (14.0, -12.0), dark = beat (14.0, -60.0);
@@ -69,11 +97,13 @@ TEST_CASE ("Vocal Fit: hears the beat and reports it; no setting changes yet", "
     // It heard the beat under the voice, and tells a bright beat from a dark one.
     CHECK (! plain.beat.heard);
     CHECK (plain.fit.empty());
+    CHECK (plain.fitLevelDb == 0.0);
     CHECK (withBright.beat.heard);
     CHECK (withBright.beat.underVoiceSeconds >= kBeatMinSeconds);
     CHECK (withBright.beat.brightDb > withDark.beat.brightDb + 10.0);
     CHECK (withBright.beat.busyDb > 3.0);
-    for (const char* c : { "Beat heard", "Vocal vs beat", "Top end (hi-hats)", "Low end (808 / kick)", "Movement", "Covers your voice" })
+    for (const char* c : { "Beat heard", "Vocal vs beat", "Top end (hi-hats)", "Low end (808 / kick)", "Movement", "Tone for this beat",
+                           "Compressor for this beat", "Covers your voice" })
     {
         INFO (c);
         const auto* f = fitLine (withBright, c);
@@ -83,13 +113,61 @@ TEST_CASE ("Vocal Fit: hears the beat and reports it; no setting changes yet", "
     }
     CHECK (fitLine (withBright, "Top end (hi-hats)")->value.rfind ("bright", 0) == 0);
     CHECK (fitLine (withDark, "Top end (hi-hats)")->value.rfind ("dark", 0) == 0);
+}
 
-    // Step 1 only listens: the chain is exactly the one Auto-Edit sets without a beat.
-    const std::vector<std::vector<float>> slice { std::vector<float> (x.begin(), x.begin() + static_cast<std::ptrdiff_t> (3.0 * kSr)) };
-    const auto a = VocalChain::render (slice, kSr, plain.params), b = VocalChain::render (slice, kSr, withBright.params);
-    REQUIRE (a[0].size() == b[0].size());
-    for (size_t i = 0; i < a[0].size(); ++i) REQUIRE (a[0][i] == b[0][i]);
-    CHECK (plain.params.outputDb == withBright.params.outputDb);
+TEST_CASE ("Vocal Fit: nothing heard = exactly the chain without a beat", "[vocalfit]")
+{
+    const auto x = testsig::vocal (kSr, 14.0);
+    std::vector<float> tooShort (x.size(), 0.0f);
+    const auto b = beat (2.0, -12.0);
+    std::copy (b.begin(), b.end(), tooShort.begin());   // 2 s of beat: under kBeatMinSeconds
+    AutoEditSettings s { 0, 1, 140.0 };
+    const auto none = autoEdit ({ x }, kSr, s);
+    s.beat = &tooShort;
+    const auto r = autoEdit ({ x }, kSr, s);
+    REQUIRE (r.ok);
+    CHECK (! r.beat.heard);
+    CHECK (r.fitPunchDb == 0.0);
+    CHECK (r.fitToneDb == std::array<double, 3> {});
+    CHECK (sameChain (none, r, x));
+}
+
+TEST_CASE ("Vocal Fit: Tone EQ target follows the beat's presence, a little", "[vocalfit]")
+{
+    const auto x = testsig::vocal (kSr, 14.0);
+    const auto plain = beat (14.0, -30.0), lead = beat (14.0, -30.0, 0.0, -20.0);
+    AutoEditSettings s { 0, 1, 140.0 };
+    s.beat = &plain;
+    const auto rp = autoEdit ({ x }, kSr, s);
+    s.beat = &lead;
+    const auto rl = autoEdit ({ x }, kSr, s);
+    REQUIRE (rl.beat.heard);
+    INFO ("presence target move: " << rp.fitToneDb[1] << " -> " << rl.fitToneDb[1]);
+    CHECK (rl.fitToneDb[1] > rp.fitToneDb[1] + 0.5);   // more presence in the beat: a little more in the vocal, not less
+    for (const auto* r : { &rp, &rl })
+        for (double d : r->fitToneDb) CHECK (std::abs (d) <= 1.5);
+}
+
+TEST_CASE ("Vocal Fit: punchy beat keeps punch, steady beat smooths more, never the wrong way", "[vocalfit]")
+{
+    const auto x = testsig::vocal (kSr, 14.0);
+    const auto punchy = beat (14.0, -12.0), steady = steadyBeat (14.0);
+    AutoEditSettings s { 0, 1, 140.0 };
+    const auto none = autoEdit ({ x }, kSr, s);
+    s.beat = &punchy;
+    const auto rp = autoEdit ({ x }, kSr, s);
+    s.beat = &steady;
+    const auto rs = autoEdit ({ x }, kSr, s);
+    REQUIRE (rp.beat.heard);
+    REQUIRE (rs.beat.heard);
+    INFO ("busy " << rp.beat.busyDb << " / " << rs.beat.busyDb << ", punch moves " << rp.fitPunchDb << " / " << rs.fitPunchDb
+                  << ", leveler " << none.params.comp.thrDb << " / " << rp.params.comp.thrDb << " / " << rs.params.comp.thrDb);
+    CHECK (rp.beat.busyDb > 9.0);
+    CHECK (rs.beat.busyDb < 4.9);
+    CHECK (rp.fitPunchDb >= 0.0);
+    CHECK (rp.fitPunchDb <= 1.0 + 0.3);
+    CHECK (rs.fitPunchDb <= 0.0);
+    CHECK (rs.fitPunchDb >= -0.75 - 0.3);
 }
 
 TEST_CASE ("Vocal Fit: the level reading follows the beat's level, its character doesn't", "[vocalfit]")
@@ -104,6 +182,14 @@ TEST_CASE ("Vocal Fit: the level reading follows the beat's level, its character
     REQUIRE (rl.beat.heard);
     REQUIRE (rq.beat.heard);
     CHECK (rq.beat.vocalOverBeatDb - rl.beat.vocalOverBeatDb == Approx (6.0).margin (0.3));
+    // FIT LEVEL: the Output move to sit 2.1 dB under the beat (pro median), at most 6 dB, in 0.5 dB steps.
+    for (const auto* r : { &rl, &rq })
+    {
+        const double full = std::round (2.0 * (-2.1 - r->beat.vocalOverBeatDb)) / 2.0;
+        CHECK (r->fitLevelFullDb == Approx (std::abs (full) >= 1.0 ? full : 0.0));
+        CHECK (r->fitLevelDb == Approx (std::clamp (r->fitLevelFullDb, -kFitLevelMaxDb, kFitLevelMaxDb)));
+    }
+    CHECK (rq.fitLevelFullDb < rl.fitLevelFullDb);   // a quieter beat: the vocal comes down more
     CHECK (rq.beat.brightDb == Approx (rl.beat.brightDb).margin (0.2));
     CHECK (rq.beat.lowDb == Approx (rl.beat.lowDb).margin (0.2));
     CHECK (rq.beat.busyDb == Approx (rl.beat.busyDb).margin (0.3));

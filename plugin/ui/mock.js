@@ -104,13 +104,16 @@
         R("out", "Output", "+1.5 dB", "Matches the processed vocal to the loudness it came in at (−23.7 LUFS), so it doesn't jump in your mix."),
       ],
       fit: [
-        { control: "Beat heard", value: "11.8 s under your voice", why: "Recorded from the side-chain at the same moments as your vocal, then compared with your finished vocal (after Voxology). In this version Vocal Fit reports what it hears; the settings above still come from your style." },
-        { control: "Vocal vs beat", value: "+1.7 dB", why: "Your vocal is louder against the beat than most pro mixes (they put it 0.6 to 4.1 dB under the beat, 2.1 dB in the middle). Fine for an up-front rap vocal; if the beat feels small, pull the vocal fader down about 4 dB. This reading is only right with the vocal fader at 0 dB and the beat's side-chain send at 0 dB, post-fader." },
-        { control: "Top end (hi-hats)", value: "bright, −1.9 dB", why: "5 - 12 kHz against the mids. Pro beats (mostly rock / pop; trap hats often read bright): −14.6 to −6.9 dB. Over brighter beats pros keep the vocal a little brighter too, not darker, so the top of the vocal isn't buried." },
+        { control: "Beat heard", value: "11.8 s under your voice", why: "Recorded from the side-chain at the same moments as your vocal. Vocal Fit nudges the Tone EQ and Compressor for this beat (below), then compares your finished vocal (after Voxology) with it." },
+        { control: "Vocal vs beat", value: "+1.8 dB", why: "Your vocal is louder against the beat than most pro mixes (they put it 0.6 to 4.1 dB under the beat, 2.1 dB in the middle). Fine for an up-front rap vocal; if the beat feels small, bring the vocal down 4.0 dB. FIT LEVEL below does it with Voxology's Output. This reading is only right with the vocal fader at 0 dB and the beat's side-chain send at 0 dB, post-fader." },
+        { control: "Top end (hi-hats)", value: "bright, −1.9 dB", why: "5 - 12 kHz against the mids. Pro beats (mostly rock / pop; trap hats often read bright): −14.6 to −6.9 dB." },
         { control: "Low end (808 / kick)", value: "typical, −3.4 dB", why: "Under 100 Hz against the whole beat. Pro beats (mostly rock / pop): −5.7 to −2.7 dB. That's the beat's space: the vocal's Low Cut keeps out of it." },
-        { control: "Movement", value: "punchy, 11.6 dB", why: "How much the beat's level moves (4.9 to 9.0 dB in pro beats). In pro mixes, vocals over steady, wall-of-sound beats are compressed more evenly; over punchy beats with space between hits they keep more punch." },
+        { control: "Movement", value: "punchy, 11.6 dB", why: "How much the beat's level moves (4.9 to 9.0 dB in pro beats)." },
+        { control: "Tone for this beat", value: "low-mids +1.3 dB, presence +0.4 dB, air +1.3 dB", why: "Pro vocals follow their beat's tone a little: over a beat with more presence, the vocal has a bit more too, so the words aren't buried. Tone EQ aims that much off its usual target (a third of how far this beat is from a typical one, at most 1.5 dB). The Tone EQ lines above include it; it only moves a band when your vocal is outside the normal range." },
+        { control: "Compressor for this beat", value: "+0.8 dB punch", why: "Over punchy beats with space between the hits, pro vocals keep more punch (their loud words stand further out). The compressor smooths a little less, so your words keep 0.8 dB more punch." },
         { control: "Covers your voice", value: "nowhere unusual", why: "From 250 Hz to 6.3 kHz, where words live, your finished vocal stands out from this beat about as much as in pro mixes." },
       ],
+      fitLevel: { db: -4, full: -4, output: -2.5 },
     });
     ae.undo = true; ae.version++; ae.state = 0;
   }

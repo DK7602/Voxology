@@ -221,6 +221,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .l-item .l-top { display: flex; justify-content: space-between; gap: 10px; font-weight: 700; }
 .l-item .l-val { font-family: "Plex"; font-weight: 600; color: var(--blue-deep); font-size: 13px; text-align: right; }
 .l-item .l-why { margin-top: 3px; color: var(--ink-soft); font-size: 14px; }
+.fit-level { margin: -4px 0 12px; padding: 0 2px; }
+.fit-level .chip { padding: 0 14px; }
+.fit-level .l-why { margin-top: 5px; color: var(--ink-soft); font-size: 13px; }
 .tip { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: #fff6e6; box-shadow: inset 0 0 0 2px var(--gold); }
 .tip.warn { background: #fdece6; box-shadow: inset 0 0 0 1.5px var(--warn); }
 .tip.calm { background: var(--blue-calm); box-shadow: inset 0 0 0 1.5px var(--blue); }

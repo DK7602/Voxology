@@ -32,5 +32,7 @@ int main (int argc, char** argv)
     const auto r = vox::autoEdit ({ voc }, sr, s);
     std::printf ("ok %d  beat heard %d (%.1f s under the voice)\n", r.ok, r.beat.heard, r.beat.underVoiceSeconds);
     for (const auto& f : r.fit) std::printf ("  %-22s %-26s %s\n", f.control.c_str(), f.value.c_str(), f.why.c_str());
+    std::printf ("  FIT LEVEL: Output %+.1f dB (full move %+.1f dB) -> %+.1f dB; tone moves %+.1f / %+.1f / %+.1f dB; punch %+.1f dB\n", r.fitLevelDb,
+                 r.fitLevelFullDb, r.params.outputDb + r.fitLevelDb, r.fitToneDb[0], r.fitToneDb[1], r.fitToneDb[2], r.fitPunchDb);
     for (const auto& note : r.notes) std::printf ("NOTE %s\n", note.c_str());
 }

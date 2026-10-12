@@ -105,6 +105,7 @@ struct BeatAnalysis
     double busyDb = 0.0;               // how much the beat moves: P90 - P10 of its 50 ms levels (dB); low = a steady wall of sound
 };
 inline constexpr double kBeatMinSeconds = 4.0;
+inline constexpr double kFitLevelMaxDb = 6.0;   // FIT LEVEL moves Output at most this far (a wrong reading can't make a big jump)
 
 struct AutoEditResult
 {
@@ -117,7 +118,12 @@ struct AutoEditResult
     std::array<bool, kModules> kept {};        // looked at and chose no change
     VocalAnalysis analysis;
     BeatAnalysis beat;                         // Vocal Fit (heard = false: no beat on the side-chain)
-    std::vector<AutoEditReason> fit;           // Vocal Fit: what it heard in the beat (module "fit")
+    std::vector<AutoEditReason> fit;           // Vocal Fit: what it heard in the beat and did about it (module "fit")
+    std::array<double, 3> fitToneDb {};        // Vocal Fit: Tone EQ target moved for this beat: low-mids, presence, air (dB)
+    double fitPunchDb = 0.0;                   // Vocal Fit: Compressor aims for this much more (+) or less (-) punch (dB)
+    double fitLevelDb = 0.0;                   // Vocal Fit: FIT LEVEL button: Output change that puts the vocal where pros
+                                               // sit against the beat (at most +-kFitLevelMaxDb; 0 = no button)
+    double fitLevelFullDb = 0.0;               // ... the whole move, before that cap
     ChainParams params;                        // the settings to apply
     double outputLufs = -120.0;
 };

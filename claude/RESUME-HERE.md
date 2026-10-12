@@ -1305,3 +1305,30 @@ User OK'd all four audit items.
 - Manual: "The beat: key detection, Vocal Fit and Unmask" + Vocal Fit table, Learn panel line, troubleshooting row.
 - Tests: tests/test_vocalfit.cpp (4 cases). Local check of plug-in sources: g++ -fsyntax-only against a JUCE 8.0.15
   clone (-DJUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 -DJUCE_MODULE_AVAILABLE_juce_gui_extra=1 -DJucePlugin_Name='"Voxology"').
+- v0.32.0 CI green: Actions run 38200642607 (commit 0e97b3b).
+
+## v0.33.0 Vocal Fit, step 2: the chain follows the beat + FIT LEVEL button (2026-10-12)
+- User chose option C for the level: FIT LEVEL is a button in the report (never automatic). Options weighed: A advice
+  only (safe, easy to ignore), B auto-set Output (wrong by however far the fader / send is off; jumps; pro target is
+  rock / pop), C advice + button (shows the move first, press again = put back, at most kFitLevelMaxDb 6 dB).
+- autoEdit(): beatFit (analyseBeat (beat, RAW vocal)) right after the warnings -> BeatFit { toneDb[3], punchDb }:
+  - Tone: kFitRegions low-mids 250-400 Hz slope 0.39 (beat median +3.1), presence 2-5 kHz 0.34 (-3.4), air 8-12.5 kHz
+    0.15 (-10.9): target move = slope x (beat region - median), +-1.5 dB, added to the style target (plainTarget kept
+    for the BOOMY MIC note) or the reference's `want`, before fitTone. Tolerance zones still apply, so a band only moves
+    when the vocal is near / outside the pro spread.
+  - Compressor: aim = style's punch + 0.25 x (beat busy - 6.3), -0.75..+1 dB. Punch is NOT monotonic in the leveler
+    threshold (Schaf: more squeeze = MORE punch; a bisection slid to thr 0 and moved the wrong way). So: grid of
+    thresholds within +-8 dB of the style's (1 dB steps), score = |punch - aim| + 0.03 x |dB moved|, squeeze < 10 dB,
+    applied only if 0.25 dB closer -> can never end further from the aim. r.fitPunchDb = ACHIEVED change. Then the punch
+    floor as before. Adds ~2-3 s to a 30 s Auto-Edit.
+  - Results (fit_report): Gallas (Trap Lead) presence -1.5, low-mids +0.9, air +1.0, +0.8 dB punch; Schaf: tone +1.3 /
+    +0.4 / +1.3, punch "can't move it that way" (no change); Don & Lysette: +1.1 punch on R&B.
+- vocalFit() (end, PROCESSED vocal): level line + r.fitLevelDb / fitLevelFullDb (pro median -2.1 minus reading, 0.5 dB
+  steps, only if >= 1 dB, capped +-6); lines "Tone for this beat", "Compressor for this beat"; module reasons
+  "Vocal Fit" in eq and comp. Report JSON fitLevel { db, full, output = Auto-Edit's Output + db, clamped +-24 }.
+- UI: fitLevelButton() under "Vocal vs beat": "FIT LEVEL: OUTPUT TO x dB" -> sets outGain (absolute) and becomes
+  "PUT OUTPUT BACK TO y dB" (fitLevelUndo keyed by report.time); styles .fit-level. Mock has fitLevel.
+- Not done (no data): reverb / delay for the beat (7 s MUSDB clips can't measure space). Step 3 (v0.34): Unmask
+  suggestion polish, "beat has vocals" warning, maybe space if full-song data turns up.
+- Tests: test_vocalfit.cpp 7 cases (hears + reports; < 4 s of beat = bit-identical chain to no beat; presence target
+  follows the beat; punchy beat +punch / steady never +; level + FIT LEVEL math; covers-your-voice; silent / none).
