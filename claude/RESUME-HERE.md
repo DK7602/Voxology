@@ -1333,3 +1333,21 @@ User OK'd all four audit items.
 - Tests: test_vocalfit.cpp 7 cases (hears + reports; < 4 s of beat = bit-identical chain to no beat; presence target
   follows the beat; punchy beat +punch / steady never +; level + FIT LEVEL math; covers-your-voice; silent / none).
 - v0.33.0 CI green: Actions run 38203353460 (commit e49e048).
+
+## v0.34.0 Vocal Fit, step 3: "your vocal is in the beat" + Unmask card (2026-10-12)
+- Study (scratch voxdetect.py / lagtest.py, then the C++ in fit_study): on MUSDB, beat alone vs the song's own full mix
+  vs another song's full mix. Own vocal in the side-chain is easy: correlation of the 1 - 4 kHz 10 ms level curves
+  (vocal vs beat, while singing, best lag within +-250 ms): beats max 0.523, other songs' mixes max 0.403, own mixes
+  median 0.80 (121 / 143 >= 0.6). +-1 s lag adds false alarms (0.59), so +-250 ms. Someone ELSE's vocal (a sampled hook)
+  is NOT detectable reliably (pitched share AUC 0.64, pitch median 0.74, syllable modulation 0.32): no warning for it.
+  User files: Gallas_with_music 0.87, Don_Lysette_Music_Vox 0.92 (caught); instrumentals 0.03 - 0.10. Schaf's acapella
+  is not the vocal in its mix (stem fit failed earlier), so it reads 0.03 - correct.
+- BeatAnalysis.yourVocalCorr / hasYourVocal (kYourVocalCorr 0.6). beatFit: hasYourVocal -> off (yourVocal flag).
+  vocalFit: YOUR VOCAL IS IN THE BEAT note (NEED: Yes, steps: send only the instrumental / music-only group); only the
+  "Beat heard: with your vocal in it" line; no FIT LEVEL; chain bit-identical to no beat (test).
+- Unmask card: when "Covers your voice" flags (overDb below pro P25 by > 2 dB), a calm BEAT COVERS YOUR VOICE note:
+  steps to add Voxology in BEAT mode on the beat, or (settings.unmaskOnBeat: UnmaskLink::readBeatKey (slot).present,
+  via AutoEditController::unmaskOnBeatSource) check "Make room for" + raise Amount to ~70 %.
+- Measurements: test-audio/fit-measurements/musdb18_fit.csv gains `yourVocal`; musdb18_your_vocal.csv (beat / own mix /
+  other mix). Manual: Vocal Fit "send the beat only" paragraph, Covers row, troubleshooting row. 8 Vocal Fit tests.
+- Vocal Fit plan (3 steps) COMPLETE. Left: reverb / delay for the beat (needs full-song data); user's Cubase test.

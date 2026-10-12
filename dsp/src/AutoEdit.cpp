@@ -778,6 +778,47 @@ BeatAnalysis analyseBeat (const std::vector<float>& beatIn, const std::vector<st
         if (l > -60.0) lv.push_back (l);
     }
     b.busyDb = lv.size() >= 20 ? percentile (lv, 90.0) - percentile (lv, 10.0) : 0.0;
+
+    // Your own vocal in the "beat" (a full mix or a bounce on the side-chain): the beat's 1 - 4 kHz level then rises and
+    // falls with your words. Correlation of the two 10 ms level curves while you sing, best within +-250 ms.
+    auto band = [sr] (const Signal& x)
+    {
+        Signal y = x;
+        for (int stage = 0; stage < 2; ++stage)
+        {
+            Biquad h, l;
+            design::apply (h, design::butterworth (true, 1000.0, sr));
+            design::apply (l, design::butterworth (false, std::min (4000.0, 0.45 * sr), sr));
+            for (auto& smp : y) smp = l.process (h.process (smp));
+        }
+        return frames (y, sr).rmsDb;
+    };
+    const auto ev = band (voice), eb = band (beat);
+    std::vector<bool> loud (ev.size(), false);
+    {
+        std::vector<double> live;
+        for (double e : ev) if (e > -100.0) live.push_back (e);
+        const double top = percentile (live, 95.0);
+        for (size_t i = 0; i < ev.size(); ++i) loud[i] = ev[i] > top - 30.0 && ev[i] > -100.0;
+    }
+    for (int lag = -25; lag <= 25; ++lag)
+    {
+        double sx = 0.0, sy = 0.0, sxx = 0.0, syy = 0.0, sxy = 0.0;
+        size_t cnt = 0;
+        for (size_t i = 0; i < ev.size(); ++i)
+        {
+            const auto j = static_cast<std::ptrdiff_t> (i) - lag;
+            if (! loud[i] || j < 0 || j >= static_cast<std::ptrdiff_t> (eb.size())) continue;
+            const double x = ev[i], y = std::max (eb[static_cast<size_t> (j)], -120.0);
+            sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y;
+            ++cnt;
+        }
+        if (cnt < 100) continue;
+        const double c = static_cast<double> (cnt);
+        const double den = std::sqrt (std::max (0.0, sxx - sx * sx / c) * std::max (0.0, syy - sy * sy / c));
+        if (den > 1.0e-9) b.yourVocalCorr = std::max (b.yourVocalCorr, (sxy - sx * sy / c) / den);
+    }
+    b.hasYourVocal = b.yourVocalCorr >= kYourVocalCorr;
     return b;
 }
 
@@ -811,6 +852,8 @@ constexpr double kFitPunchSlope = 0.25, kFitPunchMin = -0.75, kFitPunchMax = 1.0
 struct BeatFit
 {
     bool on = false;
+    bool yourVocal = false;   // your own vocal is in the "beat": Vocal Fit stays out (its readings would be your voice)
+    double yourVocalCorr = 0.0;
     std::array<double, 3> toneDb {}, beatDb {};   // per kFitRegions: the target move, and the beat there (vs its mids)
     double punchDb = 0.0;
 };
@@ -818,7 +861,9 @@ struct BeatFit
 BeatFit beatFit (const BeatAnalysis& b)
 {
     BeatFit f;
-    if (! b.heard || b.bandDb.empty()) return f;
+    f.yourVocal = b.hasYourVocal;
+    f.yourVocalCorr = b.yourVocalCorr;
+    if (! b.heard || b.bandDb.empty() || b.hasYourVocal) return f;
     f.on = true;
     const auto& bands = analysisBands();
     for (size_t g = 0; g < kFitRegions.size(); ++g)
@@ -855,7 +900,7 @@ std::string toneMoves (const BeatFit& f)
 }
 
 /** Vocal Fit: what it heard in the beat, against the FINISHED vocal, and what it did about it. */
-void vocalFit (AutoEditResult& r, const std::vector<float>& beatAudio, const Signal& processed, double sr, const BeatFit& fit)
+void vocalFit (AutoEditResult& r, const std::vector<float>& beatAudio, const Signal& processed, double sr, const BeatFit& fit, bool unmaskOnBeat)
 {
     auto line = [&r] (const std::string& c, const std::string& v, const std::string& why) { r.fit.push_back ({ "fit", c, v, why }); };
     std::vector<std::vector<float>> voice (1, std::vector<float> (processed.size()));
@@ -868,6 +913,19 @@ void vocalFit (AutoEditResult& r, const std::vector<float>& beatAudio, const Sig
                            "\nNEED: Optional: only for Vocal Fit. The rest of Auto-Edit worked as usual."
                            "\nSTEP: On the beat track in Cubase, open Sends, pick \"Voxology - Side-Chain\" and switch the send on, at 0 dB."
                            "\nSTEP: Play a part with the beat and your vocal together, then press AUTO-EDIT again.");
+        return;
+    }
+    if (fit.yourVocal || b.hasYourVocal)
+    {
+        r.notes.push_back ("YOUR VOCAL IS IN THE BEAT: what comes into Voxology's side-chain has your own vocal in it (a full mix or a bounce with vocals), "
+                           "so Vocal Fit stayed out: it would be fitting your voice to itself. The rest of Auto-Edit worked as usual."
+                           "\nNEED: Yes, for Vocal Fit (and the beat's key reads more surely without the vocal)."
+                           "\nSTEP: Send only the beat to \"Voxology - Side-Chain\": the instrumental track, or a group / bus with just the music on it."
+                           "\nSTEP: If the beat came as a full song, ask the producer for the instrumental (or the beat without the hook)."
+                           "\nSTEP: Play the part again and press AUTO-EDIT.");
+        line ("Beat heard", "with your vocal in it",
+              "The side-chain's sound rises and falls with your words (" + pct (100.0 * std::max (fit.yourVocalCorr, b.yourVocalCorr)) +
+              " match; a beat on its own stays under 52 %), so it's a mix with your vocal, not the beat alone. Vocal Fit changed nothing: see the warning above.");
         return;
     }
     if (! b.heard)
@@ -936,9 +994,25 @@ void vocalFit (AutoEditResult& r, const std::vector<float>& beatAudio, const Sig
         if (d < worst) { worst = d; wk = k; }
     }
     if (worst < -2.0)
+    {
         line ("Covers your voice", "around " + hz (bands[wk]),
               "There the beat covers your finished vocal " + num (-worst) + " dB more than in most pro mixes (against the rest of the voice, so it doesn't depend on levels). "
-              "Unmask can make room: put a second Voxology on the beat track, switch it to BEAT and it dips the beat there only while you sing.");
+              + std::string (unmaskOnBeat ? "Unmask is already on a beat in this project: it can dip deeper there." : "Unmask can make room there (see the card above)."));
+        if (unmaskOnBeat)
+            r.notes.push_back ("BEAT COVERS YOUR VOICE: around " + hz (bands[wk]) + " the beat covers your words " + num (-worst) + " dB more than in most pro mixes. "
+                               "There's already a Voxology in BEAT mode in this project, so Unmask can make more room."
+                               "\nNEED: Optional. Listen with the beat: if the words there sound buried, do it."
+                               "\nSTEP: Open the Voxology on the beat track (the one switched to BEAT)."
+                               "\nSTEP: Check \"Make room for\" lists this vocal (or All vocals)."
+                               "\nSTEP: Raise Amount to about 70 %, play the part and watch the dip at " + hz (bands[wk]) + " on its Dipping meter.");
+        else
+            r.notes.push_back ("BEAT COVERS YOUR VOICE: around " + hz (bands[wk]) + " the beat covers your words " + num (-worst) + " dB more than in most pro mixes. "
+                               "Unmask makes room there only while you sing, so the beat stays full in the gaps."
+                               "\nNEED: Optional. Listen with the beat: if the words there sound buried, do it."
+                               "\nSTEP: Add Voxology to an insert slot on the beat / instrumental track."
+                               "\nSTEP: Click BEAT at the top left of its SIGNAL CHAIN (the hive turns into one big UNMASK cell)."
+                               "\nSTEP: Leave Amount at 50 % and Focus on Centre, play the part, and check its Dipping meter moves at " + hz (bands[wk]) + ".");
+    }
     else
         line ("Covers your voice", "nowhere unusual",
               "From 250 Hz to 6.3 kHz, where words live, your finished vocal stands out from this beat about as much as in pro mixes.");
@@ -1908,7 +1982,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
 
     // ---------------------------------------------------------------------------------------- Vocal Fit
     if (settings.beat != nullptr)
-        vocalFit (r, *settings.beat, processed, sr, beatFitNow);
+        vocalFit (r, *settings.beat, processed, sr, beatFitNow, settings.unmaskOnBeat);
     else
         r.suggestions.push_back ("Send your beat to Voxology's side-chain and run Auto-Edit again: Vocal Fit then checks how your vocal sits against the beat (see the manual, Vocal Fit).");
 

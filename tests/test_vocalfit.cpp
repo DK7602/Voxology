@@ -102,6 +102,8 @@ TEST_CASE ("Vocal Fit: hears the beat and reports it", "[vocalfit]")
     CHECK (withBright.beat.underVoiceSeconds >= kBeatMinSeconds);
     CHECK (withBright.beat.brightDb > withDark.beat.brightDb + 10.0);
     CHECK (withBright.beat.busyDb > 3.0);
+    CHECK (! withBright.beat.hasYourVocal);
+    CHECK (withBright.beat.yourVocalCorr < kYourVocalCorr);
     for (const char* c : { "Beat heard", "Vocal vs beat", "Top end (hi-hats)", "Low end (808 / kick)", "Movement", "Tone for this beat",
                            "Compressor for this beat", "Covers your voice" })
     {
@@ -212,6 +214,53 @@ TEST_CASE ("Vocal Fit: finds where the beat covers the voice", "[vocalfit]")
     INFO (f->value);
     CHECK ((f->value == "around 3.1 kHz" || f->value == "around 3.2 kHz" || f->value == "around 2.5 kHz" || f->value == "around 4.0 kHz"));
     CHECK (fitLine (rp, "Covers your voice")->value != f->value);
+
+    // ... with a card that says how Unmask makes room (or that it's already in the project).
+    auto card = [] (const AutoEditResult& r) -> std::string
+    {
+        for (const auto& n : r.notes) if (n.rfind ("BEAT COVERS YOUR VOICE: ", 0) == 0) return n;
+        return {};
+    };
+    const auto addIt = card (rl);
+    REQUIRE (! addIt.empty());
+    CHECK (addIt.find ("\nNEED: Optional") != std::string::npos);
+    CHECK (addIt.find ("\nSTEP: Add Voxology") != std::string::npos);
+    CHECK (card (rp).empty());
+    s.unmaskOnBeat = true;
+    const auto already = card (autoEdit ({ x }, kSr, s));
+    REQUIRE (! already.empty());
+    CHECK (already.find ("already") != std::string::npos);
+    CHECK (already.find ("Make room for") != std::string::npos);
+}
+
+TEST_CASE ("Vocal Fit: your own vocal in the beat = a warning, and Vocal Fit stays out", "[vocalfit]")
+{
+    const auto x = testsig::vocal (kSr, 14.0);
+    auto mix = beat (14.0, -12.0);
+    for (size_t i = 0; i < mix.size() && i < x.size(); ++i) mix[i] += x[i];   // a full mix (beat + this vocal) on the side-chain
+    AutoEditSettings s { 0, 1, 140.0 };
+    const auto none = autoEdit ({ x }, kSr, s);
+    s.beat = &mix;
+    const auto r = autoEdit ({ x }, kSr, s);
+    REQUIRE (r.ok);
+    INFO ("match " << r.beat.yourVocalCorr);
+    CHECK (r.beat.hasYourVocal);
+    CHECK (r.fitLevelDb == 0.0);
+    CHECK (r.fitPunchDb == 0.0);
+    CHECK (r.fitToneDb == std::array<double, 3> {});
+    CHECK (sameChain (none, r, x));
+    bool warned = false;
+    for (const auto& n : r.notes)
+        if (n.rfind ("YOUR VOCAL IS IN THE BEAT: ", 0) == 0)
+        {
+            warned = true;
+            CHECK (n.find ("\nNEED: Yes") != std::string::npos);
+            CHECK (n.find ("\nSTEP: ") != std::string::npos);
+        }
+    CHECK (warned);
+    REQUIRE (fitLine (r, "Beat heard") != nullptr);
+    CHECK (fitLine (r, "Beat heard")->value == "with your vocal in it");
+    CHECK (fitLine (r, "Vocal vs beat") == nullptr);
 }
 
 TEST_CASE ("Vocal Fit: a silent side-chain gets a plan; no side-chain gets a suggestion", "[vocalfit]")

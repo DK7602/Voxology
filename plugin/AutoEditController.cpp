@@ -111,6 +111,7 @@ void AutoEditController::launchAnalysis()
     settings.bpm = bpmSource ? bpmSource() : 0.0;
     if (choice ("ptKeySrc") == 0 && liveKeySource)
         liveKeySource (settings);
+    settings.unmaskOnBeat = unmaskOnBeatSource && unmaskOnBeatSource();
     std::shared_ptr<const vox::ReferenceProfile> ref;
     {
         const juce::ScopedLock sl (refLock);

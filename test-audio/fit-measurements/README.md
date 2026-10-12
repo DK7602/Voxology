@@ -14,7 +14,7 @@ How finished vocals sit against their own beats, measured for Vocal Fit (v0.32.0
 Columns: `voiced` s of voice, `held` % held notes (sung vs rapped), `f0` Hz, `sibDb` / `sibHz` "s" level vs the
 voice and where, `microDyn` word-to-word punch (dB), `rangeDb` loud vs quiet lines, `vocalOverBeat` vocal LUFS minus
 beat LUFS, `beatLufs`, `bright` beat 5 - 12 kHz vs 500 Hz - 2 kHz, `low` beat under 100 Hz vs all, `busy` P90 - P10 of
-the beat's 50 ms levels, `under` s of beat under the voice; then per third-octave band (100 Hz - 16 kHz) `v<f>` the
+the beat's 50 ms levels, `under` s of beat under the voice, `yourVocal` how closely the beat's 1 - 4 kHz level follows the vocal's (v0.34); then per third-octave band (100 Hz - 16 kHz) `v<f>` the
 vocal's balance and `b<f>` the beat's (each vs its own 500 Hz - 2 kHz average), and `o<f>` = v - b.
 
 Findings (143 songs; r = correlation across songs):
@@ -27,3 +27,9 @@ Findings (143 songs; r = correlation across songs):
 | Vocal punch vs beat movement | r +0.42, slope +0.25 dB per dB: steady beats go with more compressed vocals | step 2: Compressor |
 | Vocal level vs beat movement / low / brightness | r +0.03 / -0.14 / +0.01: no link | - |
 | Space (reverb tail) | can't be measured on 7 s clips | step 2 needs full songs |
+
+`musdb18_your_vocal.csv` (v0.34, "your vocal is in the beat"): the same `yourVocal` match for each song's vocal against
+its beat alone, its own full mix (beat + that vocal), and another song's full mix (someone else's vocal). Beats alone
+reach 0.523 at most, other songs' mixes 0.403; own mixes 0.799 typically, 121 of 143 at 0.6 or more (the threshold),
+the rest have the vocal low in the mix. Someone ELSE's vocal in a beat can't be told reliably (pitch / modulation
+features: AUC 0.64 - 0.74), so Voxology doesn't warn about it.

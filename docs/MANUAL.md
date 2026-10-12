@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.33.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.34.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.33.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.34.0**).
 
 Where each one goes in Cubase:
 
@@ -155,9 +155,13 @@ The report's **VOCAL FIT · YOUR BEAT** section (and a "Vocal Fit" line in those
 | Movement | Steady (a wall of sound) or punchy (space between the hits) |
 | Tone for this beat | How far the Tone EQ target moved for this beat |
 | Compressor for this beat | How much more (+) or less (−) punch your words keep |
-| Covers your voice | Where the beat covers your words more than in pro mixes, if anywhere. Unmask (below) can make room there |
+| Covers your voice | Where the beat covers your words more than in pro mixes, if anywhere. Then a **BEAT COVERS YOUR VOICE** card gives the steps to make room there with Unmask (below), or, if a Voxology in BEAT mode is already in the project, how to make it dip deeper |
 
-The level reading and FIT LEVEL are only right with the **vocal fader at 0 dB** and the beat's side-chain send at **0 dB, post-fader**: Voxology can't see or move Cubase's faders (no plug-in can). Rap often sits a little louder than the pro middle: skip FIT LEVEL if you like your vocal up front. If the report says **BEAT SILENT**, the side-chain is on but no beat reached it: switch the beat track's send on (0 dB) and run Auto-Edit again while the beat plays. Without a beat, Auto-Edit works exactly as before. The pro numbers come from 143 released songs (MUSDB18, mostly rock and pop; trap beats often read brighter and punchier).
+The level reading and FIT LEVEL are only right with the **vocal fader at 0 dB** and the beat's side-chain send at **0 dB, post-fader**: Voxology can't see or move Cubase's faders (no plug-in can). Rap often sits a little louder than the pro middle: skip FIT LEVEL if you like your vocal up front. If the report says **BEAT SILENT**, the side-chain is on but no beat reached it: switch the beat track's send on (0 dB) and run Auto-Edit again while the beat plays.
+
+Send the **beat only**. If what reaches the side-chain has your own vocal in it (a full mix, a bounce with vocals, or a bus with the vocal on it), the report says **YOUR VOCAL IS IN THE BEAT** and Vocal Fit stays out: it would be fitting your voice to itself. Send the instrumental (or a group with just the music) and run Auto-Edit again. Voxology can tell your own vocal by how the sound follows your words; it can't reliably tell a different singer's vocal (a sampled hook) in a beat, so it doesn't warn about that.
+
+Without a beat, Auto-Edit works exactly as before. The pro numbers come from 143 released songs (MUSDB18, mostly rock and pop; trap beats often read brighter and punchier).
 
 **Unmask (BEAT mode)**: put a second Voxology on the beat track and flip its switch to **BEAT**. While you sing, it dips the beat only in the frequency bands where your voice sits, so the vocal cuts through without turning it up. In the gaps the beat comes back full.
 
@@ -228,6 +232,7 @@ Quick rule: a fast trap or robot effect = Voxology's Pitch alone (Robot or Class
 | Honey Tune isn't in Audio > Extensions | Your Cubase edition needs ARA (Artist or Pro). Elements doesn't have it |
 | The vocal sounds tuned twice or warbly | Voxology's Pitch is on after Honey Tune. Switch Pitch off on that track |
 | Auto-Edit report has no VOCAL FIT section | The beat isn't on the side-chain. Click the side-chain button at the top of Voxology, add a Send to "Voxology - Side-Chain" on the beat track, play the beat with the vocal and run Auto-Edit again |
+| Report says YOUR VOCAL IS IN THE BEAT | The side-chain gets a mix with your vocal in it. Send only the instrumental track (or a music-only group) to "Voxology - Side-Chain", then run Auto-Edit again |
 | Unmask doesn't dip the beat | Both Voxologys must be in the same project, and the vocal must be playing. The beat's Learn panel says NO VOCAL HEARD if the link is missing |
 | Hearing yourself late while recording | Turn on REC in Voxology's top bar (about 6 ms). Turn it off for mixing |
 | B always sounds better than A | Turn on MATCH so both play at the same loudness |

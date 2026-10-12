@@ -23,7 +23,7 @@ int main (int argc, char** argv)
 {
     constexpr double sr = 48000.0;
     const auto& bands = vox::analysisBands();
-    std::printf ("name,voiced,held,f0,sibDb,sibHz,microDyn,rangeDb,vocalOverBeat,beatLufs,bright,low,busy,under");
+    std::printf ("name,voiced,held,f0,sibDb,sibHz,microDyn,rangeDb,vocalOverBeat,beatLufs,bright,low,busy,under,yourVocal");
     for (double f : bands) std::printf (",v%.0f", f);
     for (double f : bands) std::printf (",b%.0f", f);
     for (double f : bands) std::printf (",o%.0f", f);
@@ -39,6 +39,7 @@ int main (int argc, char** argv)
         const auto b = vox::analyseBeat (beat, v, sr);
         std::printf ("\"%s\",%.2f,%.1f,%.1f,%.2f,%.0f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f", argv[i], a.voicedSeconds, a.heldShare, a.f0Median,
                      a.sibilanceDb, a.sibilanceHz, a.microDynDb, a.rangeDb, b.vocalOverBeatDb, b.lufs, b.brightDb, b.lowDb, b.busyDb, b.underVoiceSeconds);
+        std::printf (",%.3f", b.yourVocalCorr);
         for (double d : a.bandDb) std::printf (",%.2f", d);
         for (double d : b.bandDb) std::printf (",%.2f", d);
         for (double d : b.overDb) std::printf (",%.2f", d);

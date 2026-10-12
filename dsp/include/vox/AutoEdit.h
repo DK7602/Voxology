@@ -48,6 +48,7 @@ struct AutoEditSettings
     std::string beatKeyName;              // e.g. "B minor"
     bool beatKeyFromVoice = false;        // that key was learned from the voice (no beat to hear)
     const std::vector<float>* beat = nullptr;   // Vocal Fit: the beat from the side-chain, recorded with the vocal (mono, same length)
+    bool unmaskOnBeat = false;            // a Voxology in BEAT mode is in the project (Unmask can already make room)
 };
 
 /** One explained decision: which module and control, the value chosen and why (plain language). */
@@ -103,8 +104,14 @@ struct BeatAnalysis
     double brightDb = -120.0;          // hi-hats / top: 5 - 12 kHz vs 500 Hz - 2 kHz (dB)
     double lowDb = -120.0;             // kick / 808: under 100 Hz vs the whole beat (dB)
     double busyDb = 0.0;               // how much the beat moves: P90 - P10 of its 50 ms levels (dB); low = a steady wall of sound
+    double yourVocalCorr = 0.0;        // how closely the beat's 1 - 4 kHz level follows your vocal's, word by word (best within
+                                       // +-250 ms): your own vocal is IN the "beat" (a full mix or a bounce sent to the side-chain)
+    bool hasYourVocal = false;         // yourVocalCorr >= kYourVocalCorr
 };
 inline constexpr double kBeatMinSeconds = 4.0;
+/** MUSDB18-7: beats alone reach 0.51 at most (0 of 144 over 0.6, nor 0 of 144 other songs' full mixes); a song's own
+    full mix reads 0.81 typically (122 of 144 over 0.6; the rest have the vocal low in the mix, where it skews little). */
+inline constexpr double kYourVocalCorr = 0.6;
 inline constexpr double kFitLevelMaxDb = 6.0;   // FIT LEVEL moves Output at most this far (a wrong reading can't make a big jump)
 
 struct AutoEditResult

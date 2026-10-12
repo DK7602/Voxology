@@ -32,6 +32,7 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
         s.beatKeyName = std::string (vox::kNoteNames[static_cast<size_t> (r.tonic())]) + " " + vox::modeName (r.tonicOffset);
         s.beatKeyFromVoice = source == 3;
     };
+    autoEdit.unmaskOnBeatSource = [this] { return vox::UnmaskLink::instance().readBeatKey (linkSlot).present; };
     startTimerHz (1);
 }
 
