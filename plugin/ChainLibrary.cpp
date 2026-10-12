@@ -34,6 +34,8 @@ const std::vector<ChainLibrary::Look>& ChainLibrary::looks()
           { { "clOn", 1 }, { "clLowCut", 400 }, { "eqOn", 1 }, { "eqGain1", -12 }, { "eqFreq1", 400 }, { "eqGain2", 0 },
             { "eqGain3", 6 }, { "eqFreq3", 1200 }, { "eqGain4", -8 }, { "eqFreq4", 6500 }, { "eqGain5", -12 }, { "eqFreq5", 6000 },
             { "saOn", 1 }, { "saMode", 2 }, { "saDrive", 10 }, { "saMix", 60 } } },
+        { "Wide Chorus", "Dimension: a gentle, wide chorus. Widens a sung hook or a stack without sounding like an effect.",
+          { { "dmOn", 1 }, { "dmMode", 0 }, { "dmAmount", 30 }, { "dmRate", 0.4f }, { "dmWidth", 90 } } },
         { "Ad-lib Echo", "Delay: dotted 1/8 ping-pong echoes that stay quiet while you sing.",
           { { "dlOn", 1 }, { "dlTime", 2 }, { "dlFeedback", 35 }, { "dlMix", 25 }, { "dlTone", 4000 }, { "dlDuck", 70 }, { "dlPing", 1 } } },
         { "Big Space", "Reverb: a long, wide plate that blooms in the gaps. For hooks and melodic parts.",

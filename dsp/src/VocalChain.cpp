@@ -25,6 +25,7 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
     saturation.prepare (sr, chanCount);
     voices.prepare (sr);
     doubler.prepare (sr);
+    dimension.prepare (sr);
     delay.prepare (sr);
     reverb.prepare (sr);
     for (auto& w : work) w.assign (kChunk, 0.0);
@@ -53,6 +54,7 @@ void VocalChain::reset() noexcept
     saturation.reset();
     voices.reset();
     doubler.reset();
+    dimension.reset();
     delay.reset();
     reverb.reset();
     for (auto& d : dryLine) std::fill (d.begin(), d.end(), 0.0);
@@ -85,6 +87,7 @@ void VocalChain::setParams (const ChainParams& p) noexcept
         voices.setParams (v, p.pitch, p.cleanup.enabled ? p.cleanup.lowCutHz : 20.0, p.eq, p.deEsser);
     }
     doubler.setParams (p.doubler);
+    dimension.setParams (p.dimension);
     delay.setParams (p.delay);
     reverb.setParams (p.reverb);
 }
@@ -178,6 +181,7 @@ void VocalChain::processChunk (int nch, int len) noexcept
         if (! pitch.isLowLatency())   // (Record mode: the harmonies need the normal look-ahead)
             voices.process (side.data(), ch.data(), nch, mono.data(), len);
         doubler.process (mono.data(), ch.data(), nch, len);
+        dimension.process (ch.data(), nch, len);   // (the delay and reverb still hear the plain vocal)
         delay.process (mono.data(), ch.data(), nch, len);
         reverb.process (mono.data(), ch.data(), nch, len);
     }

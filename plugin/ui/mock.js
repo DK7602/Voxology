@@ -9,6 +9,7 @@
   const sliders = {
     ptAmount: lin(0, 100, 0), ptSpeed: centre(0, 400, 60, 50), ptHumanize: lin(0, 100, 0), ptFormant: lin(-6, 6, 0), ptVibrato: lin(-100, 100, 0, 1), ptTranspose: lin(-12, 12, 0, 1),
     hvLevel: lin(0, 100, 50), hvFormant: lin(-6, 6, 0),
+    dmAmount: lin(0, 100, 30), dmRate: centre(0.05, 5, 0.6, 0.5, 0.01), dmWidth: lin(0, 100, 70),
     clLowCut: centre(20, 400, 80, 20), clGateThr: lin(-80, -20, -60), clGateRange: lin(0, 30, 0), clPops: lin(0, 100, 0), clBreath: lin(0, 24, 0), clNoise: lin(0, 24, 0), clRoom: lin(0, 100, 0), clClicks: lin(0, 100, 0),
     dsAmount: lin(0, 100, 0), dsSens: lin(0, 100, 50), dsFreq: centre(3000, 12000, 6000, 6000, 10),
     rdTarget: lin(-40, -6, -20), rdRange: lin(0, 12, 0),
@@ -27,7 +28,7 @@
     sliders["dqCut" + (i + 1)] = lin(0, 12, 0);
     sliders["dqFreq" + (i + 1)] = centre(lo, hi, Math.sqrt(lo * hi), def);
   });
-  const toggles = { recMode: true, ptRm0: false, ptRm1: false, ptRm2: false, ptRm3: false, ptRm4: false, ptRm5: false, ptRm6: true, ptRm7: false, ptRm8: false, ptRm9: false, ptRm10: false, ptRm11: false, bypass: false, listenA: false, levelMatch: false, ptOn: true, clOn: true, eqOn: true, dqOn: true, dsOn: true, rdOn: true, cpOn: true, saOn: true, dbOn: true, dlOn: true, dlPing: false, rvOn: true, hvMidi: false };
+  const toggles = { recMode: true, ptRm0: false, ptRm1: false, ptRm2: false, ptRm3: false, ptRm4: false, ptRm5: false, ptRm6: true, ptRm7: false, ptRm8: false, ptRm9: false, ptRm10: false, ptRm11: false, bypass: false, listenA: false, levelMatch: false, ptOn: true, clOn: true, eqOn: true, dqOn: true, dsOn: true, rdOn: true, cpOn: true, saOn: true, dbOn: true, dlOn: true, dlPing: false, rvOn: true, hvMidi: false, dmOn: true };
   const combos = {
     aeStyle: { choices: ["Trap Lead", "Rap", "Melodic", "Robot", "R&B", "Pop", "Folk", "Natural Singer"], value: 0 },
     aeIntensity: { choices: ["Light", "Balanced", "Strong"], value: 0.5 },
@@ -44,6 +45,7 @@
     hv1: { choices: ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison"], value: 1 },
     hv2: { choices: ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison"], value: 6 / 8 },
     hvStack: { choices: ["Off", "2", "4", "6"], value: 0 },
+    dmMode: { choices: ["Chorus", "Flanger", "Phaser"], value: 0 },
   };
 
   const send = (id, obj) => setTimeout(() => window.__JUCE__.backend && window.__JUCE__.backend.emitByBackend(id, JSON.stringify(obj)), 0);
@@ -171,7 +173,7 @@
         if (payload.name === "setUnmaskSource") um.selected = (payload.params && payload.params[0]) || "";
         if (payload.name === "listChains") result = JSON.stringify({ yours: chains.yours.map((n) => ({ name: n })), folder: "C:\\Users\\you\\Documents\\Voxology\\Chains",
           looks: [["Hard Robot", "Pitch: Robot, instant."], ["Smooth Tune", "Pitch: Natural and gentle."], ["Stacked Hook", "Voices: Unison both sides, Stack 6."], ["Harmony 3rd + 5th", "Voices: a 3rd up and a 5th down."],
-            ["Deep Ad-lib", "Voices: an octave down."], ["Phone Voice", "Low Cut, Tone EQ and Saturation."], ["Ad-lib Echo", "Delay: dotted 1/8 ping-pong."], ["Big Space", "Reverb: a long, wide plate."]].map(([name, about]) => ({ name, about })) });
+            ["Deep Ad-lib", "Voices: an octave down."], ["Phone Voice", "Low Cut, Tone EQ and Saturation."], ["Wide Chorus", "Dimension: a gentle, wide chorus."], ["Ad-lib Echo", "Delay: dotted 1/8 ping-pong."], ["Big Space", "Reverb: a long, wide plate."]].map(([name, about]) => ({ name, about })) });
         if (payload.name === "getChainName") result = chains.name;
         if (payload.name === "saveChain") { const n = String(payload.params[0]).trim(); if (!chains.yours.includes(n)) chains.yours.push(n); chains.name = n; }
         if (payload.name === "loadChain") { chains.name = payload.params[0] === "yours" ? payload.params[1] : ""; ae.undo = true; }

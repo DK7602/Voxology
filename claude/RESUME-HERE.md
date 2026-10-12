@@ -1491,3 +1491,23 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   measure (s brightness, punch, top end). Recommended: commissioned vocals with a written licence (work-for-hire:
   dry + pro-mixed acapellas, male / female trap, rap, R&B), or written permission from a pack vendor, or CC BY acapellas
   (ccMixter: commercial use with credit, little trap).
+- v0.38.0 CI green: Actions run 38267675669 (commit 0199bd3).
+
+## v0.39.0 Dimension module (chorus / flanger / phaser) (2026-10-12)
+- dsp/Dimension.h/.cpp: on the finished vocal (after Voices' doubler, before Delay / Reverb, which still hear the plain
+  mono vocal), in place, 1 or 2 channels, no latency (works in Record mode). Chorus: FracDelay 12 ms +- 1.5 ms, copy at
+  0.7 x Amount. Flanger: 2.5 +- 2 ms, feedback 0.5. Phaser: 6 first-order all-passes swept 300 Hz - 3 kHz
+  (exponential), feedback 0.4. Feedback copies scaled by sqrt(1 - fb^2) (their average power gain); output x
+  1/sqrt(1 + 0.6 mix^2): measured on the test vocal, level -0.25 / +0.15 / +0.9 dB at 100 % (first try with
+  (1 - fb) scaling: flanger -2.4, phaser -2.1 dB). LFO sine, right channel up to half a cycle behind (Width).
+  Amount 0 / off = bit-exact (returns before touching); off or a mode change glides the mix out (30 ms one-pole down to
+  1e-4), then stops / switches with cleared lines: no clicks (tested: top-end peak at the switches < 1.3 x a steady
+  flanger). Params dmOn, dmMode (Chorus / Flanger / Phaser), dmAmount (0), dmRate (0.05 - 5 Hz, 0.5), dmWidth (70).
+  Auto-Edit never writes them (creative choice; forEachValue doesn't set them).
+- Module enum: dimension appended LAST (after output) so saved reports' "kept" arrays keep their meaning; the UI maps
+  kept by key (ENGINE_ORDER / keptFor). UI order: 10 DIMENSION, 11 Delay, 12 Reverb, 13 Output.
+- Honeycomb: 13 cells, still two per row (Output alone at the bottom): hexes 108 x 124 (were 124 x 143), step 96 / 79,
+  centred; name 12.5 px, stat 11 px nowrap. Dimension page: Mode list + Amount, Speed (Hz face), Width. Learn text +
+  SEASICK? tip (fast, deep chorus). Quick Look "Wide Chorus" (9 looks now). Manual: "The 13 modules", Dimension row +
+  paragraph, Quick Looks list.
+- Tests: tests/test_dimension.cpp (2). Chains harness re-run on the new build: ALL OK (9 looks, dm* round trip).

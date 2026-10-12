@@ -12,6 +12,8 @@ const fmtSigned = (v, d = 1) => `${v >= 0.05 ? "+" : ""}${fmtNum(v, d)} dB`;
 const fmtHz = (f) => (f >= 1000 ? `${(f / 1000).toFixed(1)} kHz` : `${Math.round(f)} Hz`);
 const fmtPct = (v) => `${Math.round(v)} %`;
 const fmtMs = (v) => `${Math.round(v)} ms`;
+const fmtRate = (v) => `${v < 1 ? v.toFixed(2) : v.toFixed(1)} Hz`;
+const DIM_MODES = ["Chorus", "Flanger", "Phaser"];
 const fmtSt = (v) => (Math.abs(v) < 0.05 ? "0 st" : `${v > 0 ? "+" : MINUS}${Math.abs(v).toFixed(1)} st`);
 const INTERVALS = ["Off", "3rd up", "5th up", "Octave up", "3rd down", "4th down", "5th down", "Octave down", "Unison"];
 const INTERVALS_SHORT = ["Off", "3rd \u2191", "5th \u2191", "8ve \u2191", "3rd \u2193", "4th \u2193", "5th \u2193", "8ve \u2193", "Unison"];
@@ -121,12 +123,12 @@ window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !manual.hi
 // Parameters
 const NOTES_C = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "clClicks", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
-  "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth",
+  "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth", "dmAmount", "dmRate", "dmWidth",
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
 const PT_RM = NOTES_C.map((_, k) => "ptRm" + k);
-const TOGGLES = [...PT_RM, "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn", "hvMidi"];
-const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2", "hvStack"];
+const TOGGLES = [...PT_RM, "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn", "hvMidi", "dmOn"];
+const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
 for (const id of TOGGLES) P[id] = Juce.getToggleState(id);
@@ -218,6 +220,9 @@ const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort
   satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1, -1, -1, -1, -1, -1, -1],
   bkState: 0, bkSource: 0, scState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, midiNotes: 0, heldNotes: 0, notesUsed: 0xFFF, recMode: 0, latencyMs: 33, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
+// The report's "kept" list is in the engine's module order (Dimension, added later, is last there).
+const ENGINE_ORDER = ["pitch", "cleanup", "eq", "dyneq", "deess", "rider", "comp", "sat", "double", "delay", "reverb", "out", "dimension"];
+const keptFor = (i) => !!(report && report.kept && report.kept[ENGINE_ORDER.indexOf(MODULES[i].key)]);
 let learnTab = "module";
 
 // ---------------------------------------------------------------------------------------------
@@ -541,6 +546,14 @@ const MODULES = [
       if (h.length) return [h.join(" + "), true];
       return val("dbAmount") < 0.05 ? ["idle", false] : [`double ${fmtPct(val("dbAmount"))}`, true];
     } },
+  { key: "dimension", name: "DIMENSION", onId: "dmOn", what: "chorus, flanger or phaser: movement and width",
+    cells: () => [
+      grid("dmMode", "Mode", "the effect", DIM_MODES, 1),
+      knob("dmAmount", "Amount", "how much", fmtPct, 0),
+      knob("dmRate", "Speed", "how fast it moves", fmtRate, 0.5),
+      knob("dmWidth", "Width", "left / right apart", fmtPct, 70),
+    ],
+    stat: () => (val("dmAmount") < 0.05 ? ["idle", false] : [`${DIM_MODES[choice("dmMode")]} ${fmtPct(val("dmAmount"))}`, true]) },
   { key: "delay", name: "DELAY", onId: "dlOn", what: "echoes locked to your song's tempo",
     cells: () => [
       vseg("dlTime", "Time", "on the beat", DELAYS),
@@ -589,7 +602,7 @@ const FACES = {
 };
 function faceFor(id) {
   if (id === "ptSpeed") return ["blank", "ms"];
-  if (/Freq|LowCut|Tone/.test(id)) return ["hz", ""];
+  if (/Freq|LowCut|Tone|dmRate/.test(id)) return ["hz", ""];
   if (id === "rvDecay") return ["blank", "s"];
   if (id === "rvPredelay") return ["blank", "ms"];
   if (id === "cpRatio") return ["blank", ":1"];
@@ -858,12 +871,12 @@ P.mode.propertiesChangedEvent.addListener(applyMode);
 // Honeycomb chain
 const hive = $("hive");
 const hexes = MODULES.map((m, i) => {
-  const row = Math.floor(i / 2), col = i % 2;   // 12 cells in a honeycomb, two per row
+  const row = Math.floor(i / 2), col = i % 2;   // 13 cells in a honeycomb, two per row (Output alone at the bottom)
   const h = document.createElement("div");
   h.className = "hex";
   h.style.setProperty("--tex", `linear-gradient(160deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 45%), var(--art-${["marble-blue", "marble-cream", "marble-blue2", "marble-cream2"][(i * 3 + row) % 4]}) center / cover`);
-  h.style.left = `${col * 110 + (row % 2) * 55 + 22}px`;
-  h.style.top = `${row * 92 + 2}px`;
+  h.style.left = `${col * 96 + (row % 2) * 48 + 36}px`;
+  h.style.top = `${row * 79 + 2}px`;
   h.innerHTML = `<div class="rim"></div><div class="face"><span class="num">${String(i + 1).padStart(2, "0")}</span>
     <span class="name">${m.name}</span><span class="stat"></span>${m.onId ? '<button type="button" class="dot" aria-label="On / off"></button>' : ""}</div>`;
   h.addEventListener("click", () => select(i));
@@ -895,7 +908,7 @@ function renderModuleHead() {
   const pw = $("mod-power");
   pw.hidden = !m.onId;
   if (m.onId) { pw.textContent = on(m.onId) ? "ON" : "OFF"; pw.classList.toggle("on", on(m.onId)); }
-  $("mod-kept").hidden = beat || !(report && report.ok && report.kept && report.kept[selected]);
+  $("mod-kept").hidden = beat || !(report && report.ok && keptFor(selected));
 }
 $("mod-power").addEventListener("click", () => {
   const m = MODULES[selected];
@@ -1316,6 +1329,14 @@ const LEARN = {
         { need: "Only if you want MIDI chords.", steps: ["In Cubase, add a MIDI track and set its output to Voxology (the routing at the top of the Inspector).", "Play or draw chords on it under the vocal part.", "Or switch MIDI off to use Voice 1, Voice 2 and Stack."] }));
       return t;
     } },
+  dimension: {
+    does: "Movement and width on your finished vocal. Chorus adds a slowly moving copy of your voice, left and right moving opposite ways: thicker and wider, like a second singer right next to you. Flanger is the jet \"whoosh\" sweep; Phaser the swirling, watery sweep. The level stays the same at any Amount. Auto-Edit never changes it: it's your creative choice.",
+    how: ["Chorus at 20 - 35 % with Speed around 0.5 Hz widens a sung hook or a background stack without sounding like an effect.",
+      "Flanger and Phaser are effects you notice: use them on an ad-lib, an intro or one line, and switch the module on and off with Cubase automation.",
+      "Speed: slow (0.1 - 0.5 Hz) is smooth and wide; fast (2 - 5 Hz) wobbles.",
+      "Width 0 = the same on both sides (it still moves); 100 = left and right move opposite ways."],
+    live: () => (val("dmAmount") >= 50 && choice("dmMode") === 0 && val("dmRate") > 2 ? [tip("SEASICK?", "Chorus at a fast Speed and a high Amount makes the pitch wobble audibly.", "calm",
+      { need: "Only if it sounds out of tune.", steps: ["Bring Speed under 1 Hz or Amount under 40 %."] })] : []) },
   delay: {
     does: "Echoes locked to your song's tempo, so they groove with the beat. Duck turns the echoes down while you're rapping and lets them come up in the gaps, so words stay clear.",
     how: ["Time: 1/4 and 1/8 are classic; 1/8 dot gives a bouncy feel.",
@@ -1406,7 +1427,7 @@ function renderReport() {
     if (!rs.length) return;
     body.append(el("div", "l-sep"));
     const h = head(`${String(i + 1).padStart(2, "0")} ${m.name}`);
-    if (report.kept && report.kept[i]) h.append(el("span", "l-kept", "  · CHECKED · KEPT"));
+    if (keptFor(i)) h.append(el("span", "l-kept", "  · CHECKED · KEPT"));
     body.append(h);
     rs.forEach((r) => body.append(item(r.control, r.value, r.why)));
   });
@@ -1449,7 +1470,7 @@ function renderModuleLearn() {
   if (report && report.ok && !beat) {
     const rs = (report.reasons || []).filter((r) => r.module === m.key);
     if (rs.length) {
-      body.append(head(report.kept && report.kept[selected] ? "AUTO-EDIT LOOKED · KEPT" : "WHAT AUTO-EDIT DID HERE"));
+      body.append(head(keptFor(selected) ? "AUTO-EDIT LOOKED · KEPT" : "WHAT AUTO-EDIT DID HERE"));
       rs.forEach((r) => body.append(item(r.control, r.value, r.why)));
     }
   }

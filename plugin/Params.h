@@ -22,17 +22,17 @@ namespace VoxParams
         for (int b = 0; b < vox::kDynBands; ++b) { ids.add (n ("dqCut", b)); ids.add (n ("dqFreq", b)); }
         ids.addArray ({ "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
                         "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix",
-                        "dbAmount", "dbWidth", "dlFeedback", "dlMix", "dlTone", "dlDuck",
+                        "dbAmount", "dbWidth", "dmAmount", "dmRate", "dmWidth", "dlFeedback", "dlMix", "dlTone", "dlDuck",
                         "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount" });
         return ids;
     }
     inline juce::StringArray toggleIds()
     {
-        juce::StringArray ids { "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn", "hvMidi" };
+        juce::StringArray ids { "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn", "hvMidi", "dmOn" };
         for (int k = 0; k < 12; ++k) ids.add ("ptRm" + juce::String (k));   // Pitch: notes switched off (C .. B)
         return ids;
     }
-    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2", "hvStack" }; }
+    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode" }; }
 
     inline void addTo (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
     {
@@ -172,6 +172,18 @@ namespace VoxParams
         toggle ("dbOn", "Doubler On", true);
         slider ("dbAmount", "Doubler Amount", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
         slider ("dbWidth", "Doubler Width", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 70.0f, "%", pctText);
+
+        // Dimension: chorus / flanger / phaser on the finished vocal. Amount 0 = off.
+        toggle ("dmOn", "Dimension On", true);
+        {
+            StringArray dimModes;
+            for (auto* m : vox::kDimensionNames) dimModes.add (m);
+            choice ("dmMode", "Dimension Mode", dimModes, 0);
+        }
+        slider ("dmAmount", "Dimension Amount", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
+        slider ("dmRate", "Dimension Speed", skewed (static_cast<float> (vox::Dimension::kMinRateHz), static_cast<float> (vox::Dimension::kMaxRateHz), 0.01f, 0.6f), 0.5f, "Hz",
+                [] (float v, int) { return String (v, v < 1.0f ? 2 : 1) + " Hz"; });
+        slider ("dmWidth", "Dimension Width", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 70.0f, "%", pctText);
 
         toggle ("dlOn", "Delay On", true);
         choice ("dlTime", "Delay Time", delays, 0);
@@ -315,6 +327,7 @@ namespace VoxParams
             p.saturation.driveDb = d ("saDrive");
             p.saturation.mix = d ("saMix");
             p.doubler = { on ("dbOn"), d ("dbAmount"), d ("dbWidth") };
+            p.dimension = { on ("dmOn"), idx ("dmMode", vox::kDimensionModes - 1), d ("dmAmount"), d ("dmRate"), d ("dmWidth") };
             p.delay = { on ("dlOn"), idx ("dlTime", vox::kDelayDivisions - 1), d ("dlFeedback"), d ("dlMix"), d ("dlTone"), d ("dlDuck"), on ("dlPing"), bpm };
             p.reverb = { on ("rvOn"), d ("rvDecay"), d ("rvPredelay"), d ("rvMix"), d ("rvTone"), d ("rvDuck") };
             p.outputDb = d ("outGain");

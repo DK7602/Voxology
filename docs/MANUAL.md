@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.38.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.39.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.38.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.39.0**).
 
 Where each one goes in Cubase:
 
@@ -54,7 +54,7 @@ The top bar holds everything you need for a quick mix; the panels below are for 
 
 The round **?** next to LEARN opens this manual (Esc or CLOSE to go back). The bottom bar shows **IN** and **OUT** loudness (LUFS) and peak level, plus the version number. The middle card, **VOCAL SPECTRUM**, shows your vocal (grey-blue), the result (gold), the Tone EQ curve (blue line, drag its 5 points) and Dynamic EQ cuts (orange).
 
-## The 12 modules
+## The 13 modules
 
 The honeycomb on the left is the chain, run top to bottom: click a cell to open it, click its dot to switch it on or off.
 
@@ -75,9 +75,10 @@ Every knob:
 | 07 | Compressor | Evens the performance | Peak (catches spikes), Threshold + Ratio (smooth leveler), Makeup, Mix (parallel blend) |
 | 08 | Saturation | Adds harmonics: warmth, density, presence | Mode (Tape, Tube, Clip), Drive, Mix |
 | 09 | Voices | Doubles, extra voices and harmonies in key, up to 8 voices | Double, Width, Voice 1 (left) + Voice 2 (right): **Unison** (a second singer on your own notes, same octave) or a harmony: 3rd, 5th or octave, up or down, Stack (2, 4 or 6 more singers on your notes), MIDI (the voices sing the chords you play), Level, Formant |
-| 10 | Delay | Echoes locked to the song's tempo | Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong |
-| 11 | Reverb | A vocal plate: a space for the voice | Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps) |
-| 12 | Output | Final level into your mix | Output gain |
+| 10 | Dimension | Movement and width: chorus, flanger or phaser | Mode (Chorus, Flanger, Phaser), Amount, Speed, Width |
+| 11 | Delay | Echoes locked to the song's tempo | Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong |
+| 12 | Reverb | A vocal plate: a space for the voice | Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps) |
+| 13 | Output | Final level into your mix | Output gain |
 
 **Noise and Room (Cleanup)** work before anything else in the chain, so Pitch and the gate already hear the cleaner vocal.
 
@@ -99,6 +100,13 @@ Every knob:
 - **MIDI** makes the voices sing the notes you hold on a keyboard, whatever note you sing (up to 8 notes; Voice 1, Voice 2 and Stack are dimmed and ignored). Lowest note on the left, highest on the right. Change the chord and each voice slides to the nearest new note; let go and they fade out. Play the chord with the words and hold it through them.
 - To play chords into Voxology in Cubase: add a MIDI track (no instrument), open its output menu (the routing at the top of the Inspector) and choose Voxology on your vocal track. Record or draw the chords on that track, under the vocal part.
 - Each voice costs about 2 % of one CPU core: 8 voices about 16 %. Record mode leaves the voices out.
+
+**Dimension** adds movement and width to the finished vocal (after Voices; the delay and reverb hear the vocal without it).
+
+- **Chorus**: a slowly moving copy of your voice, left and right moving opposite ways. Thicker and wider, like a second singer right next to you. 20 - 35 % at a Speed around 0.5 Hz widens a hook or a stack without sounding like an effect.
+- **Flanger**: the jet "whoosh" sweep. **Phaser**: the swirling, watery sweep. Both are effects you notice: use them on an ad-lib, an intro or one line (automate the module's ON button in Cubase).
+- **Speed**: slow (0.1 - 0.5 Hz) is smooth; fast (2 - 5 Hz) wobbles. **Width**: 0 = the same both sides, 100 = left and right move opposite ways.
+- The level stays the same at any Amount (within 1 dB). No added delay, so it works in Record mode too. Auto-Edit never changes it.
 
 Each cell shows a short status under its name (for example "idle", "flat", "cut 80 Hz"). Cleanup's status reads "clipped in!" or "too hot in!" when the recording itself is distorted: fix that at the recording stage.
 
@@ -123,7 +131,7 @@ Click **MY CHAINS** (under INTENSITY).
 - **Load**: click a name. Every module is set the way you saved it. With **Keep this song's key when loading** ticked (the default), the song's Key, Scale, key source, MIDI mode and switched-off notes stay as they are.
 - Not part of a chain: REC, the power button, A / B, MATCH, Auto-Edit's Style and Intensity, and BEAT mode.
 - **✕** next to a name deletes it.
-- **Quick Looks** change only their own modules, on top of what you have: **Hard Robot** and **Smooth Tune** (Pitch), **Stacked Hook**, **Harmony 3rd + 5th** and **Deep Ad-lib** (Voices), **Phone Voice** (Low Cut, Tone EQ, Saturation), **Ad-lib Echo** (Delay) and **Big Space** (Reverb).
+- **Quick Looks** change only their own modules, on top of what you have: **Hard Robot** and **Smooth Tune** (Pitch), **Stacked Hook**, **Harmony 3rd + 5th** and **Deep Ad-lib** (Voices), **Phone Voice** (Low Cut, Tone EQ, Saturation), **Wide Chorus** (Dimension), **Ad-lib Echo** (Delay) and **Big Space** (Reverb).
 - **Start fresh** sets every module back to neutral (the key stays when ticked).
 - **UNDO** takes back the last chain, look or Start fresh (the Auto-Edit report stays).
 - A chain saved with an older Voxology still loads; anything newer than the chain starts off.

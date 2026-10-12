@@ -12,6 +12,7 @@ add_library(vox_dsp STATIC
     src/Unmask.cpp
     src/Voices.cpp
     src/Space.cpp
+    src/Dimension.cpp
     src/VocalChain.cpp
     src/AutoEdit.cpp
     src/ReferenceLibrary.cpp

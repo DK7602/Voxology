@@ -2,6 +2,7 @@
 
 #include "ClipWatch.h"
 #include "DeClick.h"
+#include "Dimension.h"
 #include "Denoise.h"
 #include "DynamicEq.h"
 #include "Modules.h"
@@ -29,6 +30,7 @@ struct ChainParams
     SaturationParams saturation;
     DoublerParams doubler;
     VoicesParams voices;      // harmonies (the VOICES module = doubler + harmonies; doubler.enabled switches both)
+    DimensionParams dimension;
     DelayParams delay;
     ReverbParams reverb;
     double outputDb = 0.0;
@@ -38,7 +40,9 @@ struct ChainParams
 };
 
 /** The modules in signal order, for the UI and the report. */
-enum class Module { pitch = 0, cleanup, eq, dynEq, deEsser, rider, comp, saturation, doubler, delay, reverb, output, count };
+// (Dimension sits between Voices and Delay in the chain, but is numbered last here so reports saved before it keep
+// their meaning.)
+enum class Module { pitch = 0, cleanup, eq, dynEq, deEsser, rider, comp, saturation, doubler, delay, reverb, output, dimension, count };
 inline constexpr int kModules = static_cast<int> (Module::count);
 
 /** What the meters read since the last takeMeters() call. */
@@ -125,6 +129,7 @@ private:
     Saturation saturation;
     HarmonyVoices voices;
     Doubler doubler;
+    Dimension dimension;
     EchoDelay delay;
     Reverb reverb;
     std::array<std::vector<double>, kMaxChannels> work;
