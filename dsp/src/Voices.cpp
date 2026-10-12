@@ -19,7 +19,9 @@ void HarmonyVoices::prepare (double sampleRate)
     eq.prepare (sr, 2);
     deEsser.prepare (sr, 2);
     align.assign (static_cast<size_t> (Saturation::kLatency + 1) * 2, 0.0);
-    for (auto& l : late) l.assign (static_cast<size_t> (std::lround (kMaxLateMs / 1000.0 * sr)) + 1, 0.0);
+    for (auto& l : late) l.assign (static_cast<size_t> (std::lround (kMaxLateMs / 1000.0 * sr)) + 2, 0.0);
+    lateXfStep = 1.0 / (0.030 * sr);
+    toneDb.fill (0.0);
     followCoeff = onePole (kFollowSeconds, sr);
     gainCoeff = onePole (0.020, sr);
     peakFall = onePole (2.0, sr);
@@ -42,10 +44,13 @@ void HarmonyVoices::reset() noexcept
     alignPos = 0;
     for (auto& l : late) std::fill (l.begin(), l.end(), 0.0);
     latePos.fill (0);
+    lateA = lateB = lateTarget;
+    lateXf.fill (1.0);
+    for (auto& t : tone) t.reset();
     voiceMs.fill (0.0);
     slotGain.fill (0.0);
     hold.fill (0);
-    for (size_t k = 0; k < slots.size(); ++k) warm[k] = slots[k].on ? voice[k].latencySamples() + lateLen[k] : 0;   // (from silence)
+    for (size_t k = 0; k < slots.size(); ++k) warm[k] = slots[k].on ? voice[k].latencySamples() + lateB[k] : 0;   // (from silence)
     panL = panLTarget;
     panR = panRTarget;
     voiceWeight = weightTarget;
@@ -161,6 +166,7 @@ int HarmonyVoices::activeVoices (const VoicesParams& v) noexcept
 void HarmonyVoices::setParams (const VoicesParams& v, const PitchParams& lead, double lowCut_, const EqParams& eqp, const DeEsserParams& ds) noexcept
 {
     const auto next = v.midi ? midiSlots (v) : slotsFor (v);
+    const double crew = std::clamp (v.crew, 0.0, 100.0) / 100.0;
     for (size_t k = 0; k < next.size(); ++k)
     {
         const auto& b = next[k];
@@ -168,24 +174,24 @@ void HarmonyVoices::setParams (const VoicesParams& v, const PitchParams& lead, d
         {
             // Let go of: it keeps singing what it sang, until the audio heard now reaches the moment it was let go
             // (the voice's latency), then fades out.
-            if (slots[k].on) hold[k] = warm[k] > 0 ? 0 : voice[k].latencySamples();
+            if (slots[k].on) hold[k] = warm[k] > 0 ? 0 : voice[k].latencySamples() + lateB[k];
             continue;
         }
         hold[k] = 0;
-        const auto& a = sing[k];
         const bool start = ! slots[k].on && slotGain[k] == 0.0 && hold[k] == 0;
-        if (start || a.harmony != b.harmony || a.lateMs != b.lateMs)   // no stale unison audio
-        {
-            std::fill (late[k].begin(), late[k].end(), 0.0);
-            latePos[k] = 0;
-            lateLen[k] = std::min (static_cast<int> (late[k].size()), static_cast<int> (std::lround (b.lateMs / 1000.0 * sr)));
-        }
+        lateTarget[k] = std::min (static_cast<int> (late[k].size()) - 2,
+                                  static_cast<int> (std::lround ((b.lateMs + kCrewMs[k] * crew) / 1000.0 * sr)));
         if (start)
         {
             // From silence, not what it sang when it last stopped: it runs unheard until its output is real.
             voice[k].reset();
             for (auto& f : lowCut[k]) f.reset();
-            warm[k] = voice[k].latencySamples() + lateLen[k];
+            tone[k].reset();
+            std::fill (late[k].begin(), late[k].end(), 0.0);
+            latePos[k] = 0;
+            lateA[k] = lateB[k] = lateTarget[k];
+            lateXf[k] = 1.0;
+            warm[k] = voice[k].latencySamples() + lateB[k];
         }
         sing[k] = b;
     }
@@ -203,12 +209,18 @@ void HarmonyVoices::setParams (const VoicesParams& v, const PitchParams& lead, d
         p.scale = lead.scale;
         p.speedMs = std::min (lead.speedMs, 40.0);   // backing voices hold their notes; a slow lead retune would smear them
         p.humanize = lead.humanize;
-        p.formant = std::clamp (v.formant, -kMaxFormant, kMaxFormant);
+        p.formant = std::clamp (v.formant + kCrewFormant[k] * crew, -kMaxFormant, kMaxFormant);
         p.harmony = slot.harmony;
         p.fixedNote = slot.fixedNote;
         // In the beat's tuning like the lead; a unison voice sits a few cents off it (another singer, not a copy).
-        p.tuneCents = lead.tuneCents + slot.cents;
+        p.tuneCents = lead.tuneCents + slot.cents + kCrewCents[k] * crew;
         voice[k].setParams (p);
+        const double db = kCrewToneDb[k] * crew;
+        if (std::abs (db - toneDb[k]) > 0.01)
+        {
+            toneDb[k] = std::abs (db) < 0.01 ? 0.0 : db;
+            design::apply (tone[k], design::highShelf (kCrewToneHz, db, sr));
+        }
     }
     weightTarget = std::sqrt (2.0 / std::max (2, count));
     lowCutHz = lowCut_;
@@ -270,18 +282,26 @@ void HarmonyVoices::process (const double* side, double* const* ch, int nch, dou
             std::copy (side + start, side + start + len, b.begin());
             double* p = b.data();
             voice[k].process (&p, 1, len);
-            if (lateLen[k] > 0)
+            // A little later than the lead (unison, Crew): a delay line; a new delay fades in over the old one.
+            auto& d = late[k];
+            const int size = static_cast<int> (d.size());
+            auto tap = [&] (int delay) { int at = latePos[k] - delay; if (at < 0) at += size; return d[static_cast<size_t> (at)]; };
+            // (Always written, even with no delay, so a new delay never reads old audio.)
+            for (int i = 0; i < len; ++i)
             {
-                auto& d = late[k];
-                for (int i = 0; i < len; ++i)
+                const auto ii = static_cast<size_t> (i);
+                d[static_cast<size_t> (latePos[k])] = b[ii];
+                if (lateXf[k] >= 1.0 && lateB[k] != lateTarget[k]) { lateA[k] = lateB[k]; lateB[k] = lateTarget[k]; lateXf[k] = 0.0; }
+                if (lateXf[k] >= 1.0) b[ii] = tap (lateB[k]);
+                else
                 {
-                    const auto ii = static_cast<size_t> (i), at = static_cast<size_t> (latePos[k]);
-                    const double y = d[at];
-                    d[at] = b[ii];
-                    b[ii] = y;
-                    latePos[k] = (latePos[k] + 1) % lateLen[k];
+                    lateXf[k] = std::min (1.0, lateXf[k] + lateXfStep);
+                    b[ii] = (1.0 - lateXf[k]) * tap (lateA[k]) + lateXf[k] * tap (lateB[k]);
                 }
+                if (++latePos[k] >= size) latePos[k] = 0;
             }
+            if (toneDb[k] != 0.0)
+                for (int i = 0; i < len; ++i) b[static_cast<size_t> (i)] = tone[k].process (b[static_cast<size_t> (i)]);
         }
         int active = 0;   // the voices on and heard (their level readings are real)
         for (int i = 0; i < len; ++i)

@@ -373,18 +373,19 @@ body.beat #header .title { margin-left: 0; }
 .cell.inactive { opacity: 0.4; }
 /* Voices page: Voice 1 / 2 full height in the middle; the doubler's knobs on the left, the voices' knobs and Stack / MIDI around them. */
 #cells[data-page="double"] { display: grid; grid-template-columns: 128px 128px 150px 150px 136px; grid-template-rows: 150px 150px;
-  grid-template-areas: "dbl wid v1 v2 stk" "lvl fmt v1 v2 midi"; justify-content: center; }
+  grid-template-areas: "dbl wid v1 v2 stk" "lvl fmt v1 v2 crew"; justify-content: center; }
 #cells[data-page="double"] .cell { width: auto; }
 #cells[data-page="double"] .vc-dbl { grid-area: dbl; } #cells[data-page="double"] .vc-wid { grid-area: wid; }
 #cells[data-page="double"] .vc-lvl { grid-area: lvl; } #cells[data-page="double"] .vc-fmt { grid-area: fmt; }
-#cells[data-page="double"] .vc-stk { grid-area: stk; } #cells[data-page="double"] .vc-midi { grid-area: midi; }
+#cells[data-page="double"] .vc-stk { grid-area: stk; } #cells[data-page="double"] .vc-crew { grid-area: crew; }
 #cells[data-page="double"] .vc-v1 { grid-area: v1; height: auto; } #cells[data-page="double"] .vc-v2 { grid-area: v2; height: auto; }
 #cells[data-page="double"] .vc-v1 .cell-sub, #cells[data-page="double"] .vc-v2 .cell-sub,
-#cells[data-page="double"] .vc-stk .cell-sub, #cells[data-page="double"] .vc-midi .cell-sub { display: block; }
+#cells[data-page="double"] .vc-stk .cell-sub { display: block; }
 #cells[data-page="double"] .vc-v1 .vseg.keys, #cells[data-page="double"] .vc-v2 .vseg.keys { width: 140px; gap: 8px 5px; margin-top: 14px; }
 #cells[data-page="double"] .vc-v1 .vseg.keys button, #cells[data-page="double"] .vc-v2 .vseg.keys button { height: 40px; font-size: 13px; }
-#cells[data-page="double"] .vc-stk .vseg.keys { width: 104px; gap: 6px; margin-top: 12px; }
-#cells[data-page="double"] .vc-midi .chip { margin-top: 26px; }
+#cells[data-page="double"] .vc-stk .vseg.keys { width: 112px; gap: 5px; margin-top: 6px; }
+#cells[data-page="double"] .vc-stk .vseg.keys button { height: 26px; }
+#cells[data-page="double"] .vc-stk .vseg.keys button.wide { grid-column: span 2; }
 #cells[data-page="pitch"] .vseg.keys button { height: 32px; font-size: 13px; }
 
 /* Dynamic EQ page: four live cut bars in one cell. */

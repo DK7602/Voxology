@@ -23,7 +23,10 @@
     Sound: each voice is a PitchCorrector in harmony mode (full shift, no scoop, formant control),
     then the lead's own clean-up low cut, Tone EQ and De-Esser, then its level follows the finished
     lead's (so the voices get the lead's compression and never jump out), times Level. With more than two voices
-    each is a little quieter (sqrt (2 / voices)), so a stack sounds bigger, not just louder. Panned across Width. */
+    each is a little quieter (sqrt (2 / voices)), so a stack sounds bigger, not just louder. Panned across Width.
+    Crew: each voice its own singer, by the amount: its own formant (deeper / brighter voice), tone (a high shelf at
+    2.5 kHz), timing (later) and tuning (cents off). 0 = as without it, bit for bit. A timing change cross-fades
+    between the old and new delay (30 ms), so moving it never clicks or bends the pitch. */
 namespace vox {
 
 inline constexpr int kMaxVoices = 8;
@@ -37,6 +40,7 @@ struct VoicesParams
     double width = 70.0;                    // % how far left / right
     int stack = 0;                          // index into kStackSizes: 0 / 2 / 4 / 6 more unison singers
     bool midi = false;                      // the voices sing the MIDI notes you hold (instead of Voice 1 / 2 / Stack)
+    double crew = 0.0;                      // %: each voice its own singer (formant, tone, timing, tuning)
     std::array<int, kMaxVoices> notes { -1, -1, -1, -1, -1, -1, -1, -1 };   // MIDI: the held notes, lowest first (-1 = none)
 };
 
@@ -54,7 +58,14 @@ public:
     /** MIDI voices: a little looser than a keyboard chord (each slightly off and later, like separate singers). */
     static constexpr std::array<double, kMaxVoices> kMidiCents { 3.0, -3.0, 5.0, -5.0, 2.0, -2.0, 4.0, -4.0 };
     static constexpr std::array<double, kMaxVoices> kMidiMs { 0.0, 7.0, 13.0, 4.0, 10.0, 2.0, 15.0, 9.0 };
-    static constexpr double kMaxLateMs = 40.0;
+    /** Crew at 100 %, per voice: formant (semitones; - deeper), tone (dB above 2.5 kHz), later (ms), tuning (cents).
+        Deeper voices are a little darker, like real ones. */
+    static constexpr std::array<double, kMaxVoices> kCrewFormant { -2.5, 2.0, -1.5, 3.0, -3.0, 1.5, -1.0, 2.5 };
+    static constexpr std::array<double, kMaxVoices> kCrewToneDb { -3.0, 2.0, -2.0, 3.0, -4.0, 1.0, -1.0, 2.0 };
+    static constexpr std::array<double, kMaxVoices> kCrewMs { 12.0, 4.0, 20.0, 8.0, 16.0, 2.0, 24.0, 10.0 };
+    static constexpr std::array<double, kMaxVoices> kCrewCents { 6.0, -5.0, -8.0, 4.0, 9.0, -3.0, -6.0, 7.0 };
+    static constexpr double kCrewToneHz = 2500.0;
+    static constexpr double kMaxLateMs = 70.0;
     static constexpr double kFadeSeconds = 0.020;   // a voice starting / stopping (a MIDI note on / off)
     static constexpr int kMaxGlide = 5;             // semitones: a released voice slides to a new note this close
 
@@ -102,8 +113,12 @@ private:
     std::vector<double> align;                       // Saturation's latency, so they match the finished lead
     int alignPos = 0;
     std::array<double, kMaxVoices> voiceMs {};
-    std::array<std::vector<double>, kMaxVoices> late;        // unison: each voice a little after the lead
-    std::array<int, kMaxVoices> latePos {}, lateLen {};
+    std::array<std::vector<double>, kMaxVoices> late;        // each voice a little after the lead (unison, Crew)
+    std::array<int, kMaxVoices> latePos {}, lateA {}, lateB {}, lateTarget {};   // delays (samples): fading from A to B
+    std::array<double, kMaxVoices> lateXf {};                // 1 = on B
+    double lateXfStep = 0.0;
+    std::array<Biquad, kMaxVoices> tone {};                  // Crew: each voice's tone
+    std::array<double, kMaxVoices> toneDb {};                // (as designed; 0 = not filtered)
     double leadMs = 0.0, leadPeak = 0.0, peakFall = 0.0, follow = 0.0, followCoeff = 0.0, gain = 0.0, gainCoeff = 0.0;
     std::array<double, kMaxVoices> panL {}, panR {}, panLTarget {}, panRTarget {};   // (smoothed: a MIDI voice can move)
     double voiceWeight = 1.0, weightTarget = 1.0;     // sqrt (2 / voices): more voices, each a little quieter

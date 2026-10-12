@@ -16,7 +16,7 @@ namespace VoxParams
 
     inline juce::StringArray sliderIds()
     {
-        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "clClicks" };
+        juce::StringArray ids { "ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "hvCrew", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "clClicks" };
         for (int b = 0; b < vox::kEqBands; ++b) { ids.add (n ("eqGain", b)); ids.add (n ("eqFreq", b)); }
         ids.add ("dqSens");
         for (int b = 0; b < vox::kDynBands; ++b) { ids.add (n ("dqCut", b)); ids.add (n ("dqFreq", b)); }
@@ -100,6 +100,7 @@ namespace VoxParams
         choice ("hv1", "Voice 1", intervals, 0);
         choice ("hv2", "Voice 2", intervals, 0);
         choice ("hvStack", "Voices Stack", { "Off", "2", "4", "6" }, 0);
+        slider ("hvCrew", "Voices Crew", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
         toggle ("hvMidi", "Voices MIDI", false);
         slider ("hvLevel", "Voices Level", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f, "%", pctText);
         slider ("hvFormant", "Voices Formant", NormalisableRange<float> (-fm, fm, 0.1f), 0.0f, "st", stText);
@@ -304,6 +305,7 @@ namespace VoxParams
             p.voices.formant = d ("hvFormant");
             p.voices.stack = idx ("hvStack", static_cast<int> (vox::kStackSizes.size()) - 1);
             p.voices.midi = on ("hvMidi");
+            p.voices.crew = d ("hvCrew");
             p.voices.width = d ("dbWidth");
             p.cleanup = { on ("clOn"), d ("clLowCut"), d ("clGateThr"), d ("clGateRange"), d ("clPops"), d ("clBreath"), d ("clNoise"), d ("clRoom"), d ("clClicks") };
             p.eq.enabled = on ("eqOn");

@@ -8,7 +8,7 @@
   const centre = (start, end, c, value, interval = 1) => ({ start, end, skew: Math.log(0.5) / Math.log((c - start) / (end - start)), interval, value });
   const sliders = {
     ptAmount: lin(0, 100, 0), ptSpeed: centre(0, 400, 60, 50), ptHumanize: lin(0, 100, 0), ptFormant: lin(-6, 6, 0), ptVibrato: lin(-100, 100, 0, 1), ptTranspose: lin(-12, 12, 0, 1),
-    hvLevel: lin(0, 100, 50), hvFormant: lin(-6, 6, 0),
+    hvLevel: lin(0, 100, 50), hvFormant: lin(-6, 6, 0), hvCrew: lin(0, 100, 0),
     dmAmount: lin(0, 100, 30), dmRate: centre(0.05, 5, 0.6, 0.5, 0.01), dmWidth: lin(0, 100, 70),
     clLowCut: centre(20, 400, 80, 20), clGateThr: lin(-80, -20, -60), clGateRange: lin(0, 30, 0), clPops: lin(0, 100, 0), clBreath: lin(0, 24, 0), clNoise: lin(0, 24, 0), clRoom: lin(0, 100, 0), clClicks: lin(0, 100, 0),
     dsAmount: lin(0, 100, 0), dsSens: lin(0, 100, 50), dsFreq: centre(3000, 12000, 6000, 6000, 10),

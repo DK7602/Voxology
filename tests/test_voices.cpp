@@ -383,3 +383,61 @@ TEST_CASE ("Voices MIDI: chord changes slide, new notes come in, released ones f
     CHECK (std::abs (rmsDb (inM, after, after + 9600) - rmsDb (mid (held), after, after + 9600)) < 3.0);
     CHECK (rmsDb (inM, static_cast<size_t> (2.2 * kSr), static_cast<size_t> (2.5 * kSr)) < -70.0);
 }
+
+TEST_CASE ("Voices Crew: each voice its own singer (tone, formant, timing); moving it doesn't click", "[voices]")
+{
+    const auto x = sungA (6.0);
+    const std::vector<std::vector<float>> st { x, x };
+    auto stack = [] (double crew)
+    {
+        auto p = harmonyIn (0, 0);
+        p.voices.stack = 1;   // two singers: slot 2 left (Crew: deeper, darker, 20 ms), slot 3 right (brighter, 8 ms)
+        p.voices.crew = crew;
+        return p;
+    };
+    auto centroid = [] (const std::vector<double>& s)
+    {
+        const size_t N = 32768;
+        std::vector<double> w (N);
+        for (size_t i = 0; i < N; ++i) w[i] = s[static_cast<size_t> (2.2 * kSr) + i] * (0.5 - 0.5 * std::cos (2.0 * std::numbers::pi * static_cast<double> (i) / N));
+        const auto p = powerSpectrum (w.data(), N);
+        double num = 0.0, den = 0.0;
+        for (size_t k = 1; k < p.size(); ++k) { const double f = static_cast<double> (k) * kSr / N; if (f > 8000.0) break; num += f * p[k]; den += p[k]; }
+        return num / den;
+    };
+    const auto plain = voicesLive (st, [&] (double) { return stack (0.0); });
+    const auto crew = voicesLive (st, [&] (double) { return stack (100.0); });
+    const double plainRatio = centroid (plain[1]) / centroid (plain[0]), crewRatio = centroid (crew[1]) / centroid (crew[0]);
+    INFO ("right / left brightness: plain " << plainRatio << ", crew " << crewRatio);
+    CHECK (std::abs (plainRatio - 1.0) < 0.05);   // the same singer twice
+    CHECK (crewRatio > 1.2);                      // two different singers: the right one brighter (measured 1.35)
+
+    // Later on average (20 and 8 ms more), and about as loud.
+    auto onset = [&] (const std::vector<double>& s)
+    {
+        const auto n0 = static_cast<size_t> (2.0 * kSr) - 2400;
+        const double ref = std::pow (10.0, rmsDb (s, static_cast<size_t> (2.3 * kSr), static_cast<size_t> (3.0 * kSr)) / 20.0) * 0.5;
+        double e = 0.0;
+        for (size_t i = n0; i < n0 + 9600; ++i)
+        {
+            e += (s[i] * s[i] - e) * 0.02;
+            if (std::sqrt (e) > ref) return static_cast<double> (i - n0) / kSr;
+        }
+        return 1.0;
+    };
+    std::vector<double> pm (plain[0].size()), cm (crew[0].size());
+    for (size_t i = 0; i < pm.size(); ++i) { pm[i] = plain[0][i] + plain[1][i]; cm[i] = crew[0][i] + crew[1][i]; }
+    INFO ("onset plain " << onset (pm) * 1000.0 << " ms, crew " << onset (cm) * 1000.0 << " ms");
+    CHECK (onset (cm) - onset (pm) > 0.005);
+    const auto a = static_cast<size_t> (2.3 * kSr), b = static_cast<size_t> (3.0 * kSr);
+    CHECK (std::abs (rmsDb (cm, a, b) - rmsDb (pm, a, b)) < 2.0);
+
+    // Turned up mid-note: no click (the new timing fades in over the old).
+    const auto moved = voicesLive (st, [&] (double t) { return stack (t < 2.6 ? 0.0 : 100.0); });
+    for (size_t c = 0; c < 2; ++c)
+    {
+        const double steady = topPeak (crew[c], static_cast<size_t> (2.2 * kSr), static_cast<size_t> (2.55 * kSr));
+        INFO ("channel " << c << ": " << topPeak (moved[c], static_cast<size_t> (2.55 * kSr), static_cast<size_t> (2.75 * kSr)) << " vs " << steady);
+        CHECK (topPeak (moved[c], static_cast<size_t> (2.55 * kSr), static_cast<size_t> (2.75 * kSr)) < 1.5 * steady);
+    }
+}

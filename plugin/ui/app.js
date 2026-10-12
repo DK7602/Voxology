@@ -122,7 +122,7 @@ window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !manual.hi
 // ---------------------------------------------------------------------------------------------
 // Parameters
 const NOTES_C = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "clClicks", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
+const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "hvCrew", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "clClicks", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
   "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth", "dmAmount", "dmRate", "dmWidth",
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "outGain", "umAmount",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
@@ -362,8 +362,38 @@ function beatKeyCell() {
   return cell;
 }
 
-/** Voices page: with MIDI on, the voices sing the held notes, so Voice 1 / 2 and Stack are dimmed. */
+/** Stack: Off / 2 / 4 / 6 more singers, or MIDI (the voices sing the chords you play instead). */
 const STACK = ["Off", "2", "4", "6"];
+function stackCell(onChange) {
+  const cell = document.createElement("div");
+  cell.className = "cell";
+  cell.innerHTML = `<span class="cell-label">Stack</span><span class="cell-sub">more singers \u00B7 or MIDI</span><div class="vseg keys"></div>`;
+  const box = cell.querySelector(".vseg");
+  box.style.gridTemplateColumns = "repeat(2, 1fr)";
+  const pick = (fn) => () => { fn(); refresh(); onChange(); anyEdited(); };
+  const button = (label) => { const b = document.createElement("button"); b.type = "button"; b.textContent = label; return b; };
+  const btns = STACK.map((label, i) => {
+    const b = button(label);
+    b.addEventListener("click", pick(() => { P.hvStack.setChoiceIndex(i); P.hvMidi.setValue(false); }));
+    box.append(b);
+    return b;
+  });
+  const midi = button("MIDI chords");
+  midi.className = "wide";
+  midi.title = "The voices sing the notes held on a MIDI track routed to Voxology (instead of Voice 1, Voice 2 and Stack). Click again to go back.";
+  midi.addEventListener("click", pick(() => P.hvMidi.setValue(!on("hvMidi"))));
+  box.append(midi);
+  const refresh = () => {
+    const m = on("hvMidi");
+    btns.forEach((b, i) => b.classList.toggle("sel", !m && i === choice("hvStack")));
+    midi.classList.toggle("sel", m);
+  };
+  for (const id of ["hvStack", "hvMidi"]) { P[id].valueChangedEvent.addListener(() => { refresh(); onChange(); }); P[id].propertiesChangedEvent.addListener(refresh); }
+  refresh();
+  cell.refresh = refresh;
+  return cell;
+}
+/** Voices page: with MIDI on, the voices sing the held notes, so Voice 1 / 2 are dimmed. */
 function voicesCells() {
   const tag = (cell, cls) => { cell.classList.add(cls); return cell; };
   const cells = [
@@ -373,14 +403,12 @@ function voicesCells() {
     tag(grid("hv2", "Voice 2", "right voice", INTERVALS_SHORT, 2, INTERVAL_ORDER), "vc-v2"),
     tag(knob("hvLevel", "Level", "voices vs lead", fmtPct, 50), "vc-lvl"),
     tag(knob("hvFormant", "Formant", "voices' tone", fmtSt, 0, true), "vc-fmt"),
-    tag(grid("hvStack", "Stack", "more singers", STACK, 2), "vc-stk"),
-    tag(toggle("hvMidi", "MIDI", "chords you play", "ON", "OFF"), "vc-midi"),
+    tag(stackCell(() => refresh()), "vc-stk"),
+    tag(knob("hvCrew", "Crew", "different singers", fmtPct, 0), "vc-crew"),
   ];
-  const [, , v1, v2, , , stack] = cells;
-  const refresh = () => [v1, v2, stack].forEach((c) => c.classList.toggle("inactive", on("hvMidi")));
-  P.hvMidi.valueChangedEvent.addListener(refresh);
+  const [, , v1, v2] = cells;
+  const refresh = () => [v1, v2].forEach((c) => c.classList.toggle("inactive", on("hvMidi")));
   P.hvMidi.propertiesChangedEvent.addListener(refresh);
-  cells[7].querySelector("button").addEventListener("click", refresh);   // (a click here doesn't come back as an event)
   refresh();
   return cells;
 }
@@ -543,6 +571,7 @@ const MODULES = [
       if (on("hvMidi")) return M.heldNotes > 0 ? [`MIDI · ${M.heldNotes} held`, true] : ["MIDI: no notes", false];
       const h = [choice("hv1"), choice("hv2")].filter((i) => i > 0).map((i) => INTERVALS_SHORT[i]);
       if (choice("hvStack") > 0) h.push(`stack ${STACK[choice("hvStack")]}`);
+      if (h.length && val("hvCrew") >= 0.5) h.push("crew");
       if (h.length) return [h.join(" + "), true];
       return val("dbAmount") < 0.05 ? ["idle", false] : [`double ${fmtPct(val("dbAmount"))}`, true];
     } },
@@ -1313,11 +1342,12 @@ const LEARN = {
       return t;
     } },
   double: {
-    does: "Backing vocals from your own voice, up to 8 voices. Double stacks two slightly late copies left and right, like a second take. Voice 1 and Voice 2 are extra singers: Unison sings your own notes (same octave, tuned onto them, a few cents off you and a moment later, like a second singer), or they sing harmonies with you, a 3rd, 5th or octave away, always in the key and scale set in the Pitch module, so they never clash. Stack adds 2, 4 or 6 more singers on your notes. MIDI: the voices sing the chords you play instead. They get your lead's EQ and de-essing, follow its level, and go into the delay and reverb too.",
+    does: "Backing vocals from your own voice, up to 8 voices. Double stacks two slightly late copies left and right, like a second take. Voice 1 and Voice 2 are extra singers: Unison sings your own notes (same octave, tuned onto them, a few cents off you and a moment later, like a second singer), or they sing harmonies with you, a 3rd, 5th or octave away, always in the key and scale set in the Pitch module, so they never clash. Stack adds 2, 4 or 6 more singers on your notes; MIDI chords: the voices sing the chords you play instead. Crew makes each voice its own singer. They get your lead's EQ and de-essing, follow its level, and go into the delay and reverb too.",
     how: ["Set Key and Scale in the Pitch module first (your beat's key): the harmonies use it. Chromatic gives plain intervals that can clash.",
       "Voice 1 / Voice 2: Unison on both = a wide, stacked lead in your own octave (try Formant a little - or + so they sound like other singers). A 3rd up is the classic harmony; add a 5th down or an octave down for a full stack. Octave down is the deep ad-lib voice.",
       "Stack: 2, 4 or 6 more singers on your notes, spread left and right, for a big stacked hook. More singers sound bigger, not louder.",
-      "MIDI: in Cubase, make a MIDI track and set its output to Voxology, then play or draw chords under the vocal: the voices sing those notes (up to 8), lowest on the left, highest on the right. Voice 1, Voice 2 and Stack wait while MIDI is on.",
+      "MIDI chords (under Stack): in Cubase, make a MIDI track and set its output to Voxology, then play or draw chords under the vocal: the voices sing those notes (up to 8), lowest on the left, highest on the right. Voice 1 and Voice 2 wait while it's on.",
+      "Crew: each backing voice becomes its own singer (its own voice, tone, timing and tuning). 40 - 70 % sounds like your crew behind you instead of copies of you.",
       "Level: 30 - 50 % keeps them behind you. Width spreads Voice 1 left and Voice 2 right (and the double and the stack).",
       "Formant: - makes the voices deeper and darker (a different singer behind you), + thinner and brighter.",
       "Use harmonies on hooks and ad-libs rather than whole verses: automate the module's ON button in Cubase."],
@@ -1326,7 +1356,7 @@ const LEARN = {
       if ([choice("hv1"), choice("hv2")].some((i) => i > 0 && i !== 8) && choice("ptScale") === 0) t.push(tip("CHROMATIC KEY", "The Pitch module's scale is Chromatic, so the harmonies use plain intervals (a major 3rd), which can clash with a minor beat.", "warn",
         { need: "Yes, if the harmonies sound sour.", steps: ["Open 01 PITCH and set Key and Scale to your beat's key.", "Run Auto-Edit on a sung part: it suggests a key in its report."] }));
       if (on("hvMidi") && M.heldNotes === 0) t.push(tip("PLAY A CHORD", "MIDI is on, so the voices sing only the notes held on a MIDI track, and none are held right now.", "calm",
-        { need: "Only if you want MIDI chords.", steps: ["In Cubase, add a MIDI track and set its output to Voxology (the routing at the top of the Inspector).", "Play or draw chords on it under the vocal part.", "Or switch MIDI off to use Voice 1, Voice 2 and Stack."] }));
+        { need: "Only if you want MIDI chords.", steps: ["In Cubase, add a MIDI track and set its output to Voxology (the routing at the top of the Inspector).", "Play or draw chords on it under the vocal part.", "Or click MIDI chords again (under Stack) to use Voice 1, Voice 2 and Stack."] }));
       return t;
     } },
   dimension: {

@@ -1511,3 +1511,22 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   SEASICK? tip (fast, deep chorus). Quick Look "Wide Chorus" (9 looks now). Manual: "The 13 modules", Dimension row +
   paragraph, Quick Looks list.
 - Tests: tests/test_dimension.cpp (2). Chains harness re-run on the new build: ALL OK (9 looks, dm* round trip).
+- v0.39.0 CI green: Actions run 38271196402 (commit 9dc78a2).
+
+## v0.40.0 Crew (#6, "Backer-lite"; user chose the option and asked for a new name) (2026-10-12)
+- #6 / #7 assessed for the user first (AskUserQuestion): true AI voice swap = voice-conversion models (500+ MB,
+  render-only on CPU, needs consenting singers per voice; community models are mostly celebrity clones) -> parked;
+  user picked Backer-lite, renamed "Crew". #7: separation weights aren't cleared for sale (Demucs v4 weights reported
+  research-only, Spleeter models no stated licence; Deezer sells Spleeter Pro) -> user picked the "split-vocal check"
+  (they split with UVR themselves; Voxology detects a separated vocal and matches tone only).
+- dsp/Voices: VoicesParams.crew (%). Per slot at 100 %: formant kCrewFormant {-2.5, 2, -1.5, 3, -3, 1.5, -1, 2.5} st
+  (added to Formant, clamped +-6), tone high shelf 2.5 kHz kCrewToneDb {-3, 2, -2, 3, -4, 1, -1, 2} (deeper = darker),
+  later kCrewMs {12, 4, 20, 8, 16, 2, 24, 10}, tuning kCrewCents {6, -5, -8, 4, 9, -3, -6, 7}. 0 % = untouched (filter
+  skipped, offsets 0). Late lines rewritten: always written, integer taps, a delay change cross-fades A -> B over 30 ms
+  (no clear, no click, no pitch bend; the old "clear on lateMs change" is gone). kMaxLateMs 70. hold[] now includes the
+  voice's late delay.
+- Measured (test): Stack 2, right / left spectral centroid 0.99 plain -> 1.35 Crew 100; onset +19 ms; level within
+  2 dB; Crew 0 -> 100 mid-note: top-end peak <= the steady Crew sound per channel.
+- Param hvCrew (0 - 100 %). UI: Voices page column 5 = Stack (Off / 2 / 4 / 6 + a wide "MIDI chords" button that
+  toggles hvMidi; numbers set hvMidi off) over the Crew knob (the MIDI toggle cell is gone). MIDI dims Voice 1 / 2.
+  Stat adds "crew". Stacked Hook look now sets Crew 50. Manual + Learn updated. Chains harness: ALL OK.

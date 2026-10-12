@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.39.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.40.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.39.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.40.0**).
 
 Where each one goes in Cubase:
 
@@ -74,7 +74,7 @@ Every knob:
 | 06 | Rider | Rides the level word by word, like a hand on the fader | Target, Range, Speed (Slow, Med, Fast) |
 | 07 | Compressor | Evens the performance | Peak (catches spikes), Threshold + Ratio (smooth leveler), Makeup, Mix (parallel blend) |
 | 08 | Saturation | Adds harmonics: warmth, density, presence | Mode (Tape, Tube, Clip), Drive, Mix |
-| 09 | Voices | Doubles, extra voices and harmonies in key, up to 8 voices | Double, Width, Voice 1 (left) + Voice 2 (right): **Unison** (a second singer on your own notes, same octave) or a harmony: 3rd, 5th or octave, up or down, Stack (2, 4 or 6 more singers on your notes), MIDI (the voices sing the chords you play), Level, Formant |
+| 09 | Voices | Doubles, extra voices and harmonies in key, up to 8 voices | Double, Width, Voice 1 (left) + Voice 2 (right): **Unison** (a second singer on your own notes, same octave) or a harmony: 3rd, 5th or octave, up or down, Stack (2, 4 or 6 more singers on your notes, or **MIDI chords**: the voices sing the chords you play), Crew (each voice its own singer), Level, Formant |
 | 10 | Dimension | Movement and width: chorus, flanger or phaser | Mode (Chorus, Flanger, Phaser), Amount, Speed, Width |
 | 11 | Delay | Echoes locked to the song's tempo | Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong |
 | 12 | Reverb | A vocal plate: a space for the voice | Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps) |
@@ -94,11 +94,12 @@ Every knob:
 - 40 - 60 % catches most clicks. Auto-Edit turns it on when it hears a few clicks a minute, and says how many it found. If it hears a lot, you get a DRY MOUTH tip (water, a bite of green apple).
 - Record mode leaves it out: it needs to listen about 16 ms ahead.
 
-**Stack and MIDI chords (Voices)** make the voices bigger.
+**Stack, MIDI chords and Crew (Voices)** make the voices bigger.
 
 - **Stack** adds 2, 4 or 6 more singers on your own notes, spread left and right, each a little off and a little late, like a stacked hook. More singers make it bigger, not louder: the stack stays at the Level you set.
-- **MIDI** makes the voices sing the notes you hold on a keyboard, whatever note you sing (up to 8 notes; Voice 1, Voice 2 and Stack are dimmed and ignored). Lowest note on the left, highest on the right. Change the chord and each voice slides to the nearest new note; let go and they fade out. Play the chord with the words and hold it through them.
+- **MIDI chords** (the wide button under Stack) makes the voices sing the notes you hold on a keyboard, whatever note you sing (up to 8 notes; Voice 1 and Voice 2 are dimmed and ignored; click it again to go back). Lowest note on the left, highest on the right. Change the chord and each voice slides to the nearest new note; let go and they fade out. Play the chord with the words and hold it through them.
 - To play chords into Voxology in Cubase: add a MIDI track (no instrument), open its output menu (the routing at the top of the Inspector) and choose Voxology on your vocal track. Record or draw the chords on that track, under the vocal part.
+- **Crew** makes every backing voice its own singer: each gets its own voice (formant, deeper or brighter), tone (darker or brighter), timing (a little later) and tuning (a few cents off). 0 % = all your own voice; 40 - 70 % sounds like your crew behind you. It isn't AI: it won't sound like a stranger, but the stack stops sounding like copies of you. Turning it never clicks.
 - Each voice costs about 2 % of one CPU core: 8 voices about 16 %. Record mode leaves the voices out.
 
 **Dimension** adds movement and width to the finished vocal (after Voices; the delay and reverb hear the vocal without it).
@@ -131,7 +132,7 @@ Click **MY CHAINS** (under INTENSITY).
 - **Load**: click a name. Every module is set the way you saved it. With **Keep this song's key when loading** ticked (the default), the song's Key, Scale, key source, MIDI mode and switched-off notes stay as they are.
 - Not part of a chain: REC, the power button, A / B, MATCH, Auto-Edit's Style and Intensity, and BEAT mode.
 - **✕** next to a name deletes it.
-- **Quick Looks** change only their own modules, on top of what you have: **Hard Robot** and **Smooth Tune** (Pitch), **Stacked Hook**, **Harmony 3rd + 5th** and **Deep Ad-lib** (Voices), **Phone Voice** (Low Cut, Tone EQ, Saturation), **Wide Chorus** (Dimension), **Ad-lib Echo** (Delay) and **Big Space** (Reverb).
+- **Quick Looks** change only their own modules, on top of what you have: **Hard Robot** and **Smooth Tune** (Pitch), **Stacked Hook** (with Crew), **Harmony 3rd + 5th** and **Deep Ad-lib** (Voices), **Phone Voice** (Low Cut, Tone EQ, Saturation), **Wide Chorus** (Dimension), **Ad-lib Echo** (Delay) and **Big Space** (Reverb).
 - **Start fresh** sets every module back to neutral (the key stays when ticked).
 - **UNDO** takes back the last chain, look or Start fresh (the Auto-Edit report stays).
 - A chain saved with an older Voxology still loads; anything newer than the chain starts off.
@@ -282,5 +283,5 @@ Quick rule: a fast trap or robot effect = Voxology's Pitch alone (Robot or Class
 | Report says YOUR VOCAL IS IN THE BEAT | The side-chain gets a mix with your vocal in it. Send only the instrumental track (or a music-only group) to "Voxology - Side-Chain", then run Auto-Edit again |
 | Unmask doesn't dip the beat | Both Voxologys must be in the same project, and the vocal must be playing. The beat's Learn panel says NO VOCAL HEARD if the link is missing |
 | Hearing yourself late while recording | Turn on REC in Voxology's top bar (about 6 ms). Turn it off for mixing |
-| MIDI is on in Voices but nothing sings | The voices sing only while a MIDI note is held. Set a MIDI track's output to Voxology and play or draw notes (see Stack and MIDI chords) |
+| MIDI chords is on in Voices but nothing sings | The voices sing only while a MIDI note is held. Set a MIDI track's output to Voxology and play or draw notes (see Stack, MIDI chords and Crew) |
 | B always sounds better than A | Turn on MATCH so both play at the same loudness |
