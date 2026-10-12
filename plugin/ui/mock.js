@@ -48,6 +48,7 @@
 
   const send = (id, obj) => setTimeout(() => window.__JUCE__.backend && window.__JUCE__.backend.emitByBackend(id, JSON.stringify(obj)), 0);
   const setSlider = (k, v) => { sliders[k].value = v; send("__juce__slider" + k, { eventType: "valueChanged", value: v }); };
+  const chains = { yours: ["My Lead", "Hook Stack"], name: "" };
   const setToggle = (k, v) => { toggles[k] = v; send("__juce__toggle" + k, { eventType: "valueChanged", value: v }); };
   const setCombo = (k, i) => { const c = combos[k]; c.value = i / (c.choices.length - 1); send("__juce__comboBox" + k, { eventType: "valueChanged", value: c.value }); };
 
@@ -168,6 +169,13 @@
         if (payload.name === "deleteReference") { ref.yours = ref.yours.filter((n) => n !== payload.params[0]); ref.version++; }
         if (payload.name === "getUnmaskSources") result = JSON.stringify({ sources: [{ name: "Lead Vocal" }, { name: "Ad-libs" }], selected: um.selected });
         if (payload.name === "setUnmaskSource") um.selected = (payload.params && payload.params[0]) || "";
+        if (payload.name === "listChains") result = JSON.stringify({ yours: chains.yours.map((n) => ({ name: n })), folder: "C:\\Users\\you\\Documents\\Voxology\\Chains",
+          looks: [["Hard Robot", "Pitch: Robot, instant."], ["Smooth Tune", "Pitch: Natural and gentle."], ["Stacked Hook", "Voices: Unison both sides, Stack 6."], ["Harmony 3rd + 5th", "Voices: a 3rd up and a 5th down."],
+            ["Deep Ad-lib", "Voices: an octave down."], ["Phone Voice", "Low Cut, Tone EQ and Saturation."], ["Ad-lib Echo", "Delay: dotted 1/8 ping-pong."], ["Big Space", "Reverb: a long, wide plate."]].map(([name, about]) => ({ name, about })) });
+        if (payload.name === "getChainName") result = chains.name;
+        if (payload.name === "saveChain") { const n = String(payload.params[0]).trim(); if (!chains.yours.includes(n)) chains.yours.push(n); chains.name = n; }
+        if (payload.name === "loadChain") { chains.name = payload.params[0] === "yours" ? payload.params[1] : ""; ae.undo = true; }
+        if (payload.name === "deleteChain") { chains.yours = chains.yours.filter((n) => n !== payload.params[0]); if (chains.name === payload.params[0]) chains.name = ""; }
         if (payload.name === "undoAutoEdit") {
           result = ae.undo;
           if (ae.snapshot) {

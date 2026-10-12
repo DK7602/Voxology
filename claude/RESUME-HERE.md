@@ -1443,7 +1443,7 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   >= 3 and >= 4 / min -> 40 / 60 / 80 % (Light / Balanced / Strong); > 20 / min -> DRY MOUTH note. Real vocals: 0 - 2
   clicks on all but one pro dry stem (Make_Love 6 -> 60 %).
 - Tests: tests/test_declick.cpp (3).
-v0.36.0 CI green: Actions run 38259827951 (commit 6242ce2).
+- v0.36.0 CI green: Actions run 38259827951 (commit 6242ce2).
 
 ## v0.37.0 Voices: 8 voices, Stack, MIDI chords (2026-10-12)
 - dsp/Voices.h/.cpp: kMaxVoices 8 PitchCorrector slots. Slot {on, harmony, fixedNote, cents, lateMs, pan}. Normal mode:
@@ -1468,3 +1468,26 @@ v0.36.0 CI green: Actions run 38259827951 (commit 6242ce2).
   A3), none held = bit-exact; chord change C -> Dm (old chord 43 dB down, top-end peak at the change <= held), release,
   add a note, chord from nothing (level within 3 dB of a held chord, nothing before)).
 - CPU: ~2 % of a core per voice (8 voices ~16 %).
+- v0.37.0 CI green: Actions run 38263807774 (commit be16e97).
+
+## v0.38.0 My Chains + Quick Looks (2026-10-12)
+- plugin/ChainLibrary.h/.cpp (JUCE, message thread): Documents/Voxology/Chains/<legal name>.voxchain = JSON {voxology
+  version, name, values {id: real value}} of every chain parameter (all but recMode, bypass, listenA, levelMatch,
+  aeStyle, aeIntensity, mode, umAmount, umFocus). load("yours"): every chain param; a param missing from the file (older
+  Voxology) -> its default (new features start off). keepKey (UI checkbox, localStorage, default on) skips ptKey,
+  ptScale, ptKeySrc, ptMidi, ptRm*. load("look"): 8 built-in Quick Looks set only their own params (Hard Robot, Smooth
+  Tune, Stacked Hook, Harmony 3rd + 5th, Deep Ad-lib, Phone Voice, Ad-lib Echo, Big Space). load("fresh"): every chain
+  param -> default. Every load: AutoEditController::takeUndoSnapshot(false) first -> UNDO restores it (and leaves the
+  Auto-Edit report; an Auto-Edit undo still clears it). processor.chainName saved with the project (chip shows it).
+- Editor native functions: listChains, getChainName, saveChain(name), loadChain(kind, name, keepKey), deleteChain(name).
+- UI: MY CHAINS chip under INTENSITY (aligns the INTENSITY label with STYLE); menu reuses .ref-menu: MY CHAINS list (x =
+  delete), name box + SAVE (Enter), keep-key checkbox, QUICK LOOKS, Start fresh. Mock has the functions.
+- Verified with a scratch harness linked against the real SharedCode (scratchpad/harness, not in the repo): save ->
+  fresh -> undo -> load, keepKey both ways, recMode untouched, older file (missing hvStack) -> default, all 8 looks'
+  ids exist, bad name / missing chain / unknown look rejected, delete. No Catch2 test (JUCE-only code).
+- Gemini reference-data advice assessed for the user: MVSEP Multisong = 100 one-minute internet songs, only mixtures
+  downloadable, stems hidden on the server for scoring, no licence -> unusable. spotDL / yt-dlp + Demucs scraping ->
+  copyright + streaming terms problem (same as Sample Snagger) and separated vocals skew exactly what references
+  measure (s brightness, punch, top end). Recommended: commissioned vocals with a written licence (work-for-hire:
+  dry + pro-mixed acapellas, male / female trap, rap, R&B), or written permission from a pack vendor, or CC BY acapellas
+  (ccMixter: commercial use with credit, little trap).

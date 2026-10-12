@@ -43,7 +43,8 @@ set_target_properties(VoxologyUIData PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_sources(Voxology PRIVATE
     PluginProcessor.cpp
     VoxWebEditor.cpp
-    AutoEditController.cpp)
+    AutoEditController.cpp
+    ChainLibrary.cpp)
 
 target_compile_definitions(Voxology PUBLIC
     JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1

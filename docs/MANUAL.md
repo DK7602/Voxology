@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.37.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.38.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.37.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.38.0**).
 
 Where each one goes in Cubase:
 
@@ -44,8 +44,9 @@ The top bar holds everything you need for a quick mix; the panels below are for 
 | STYLE | What the finished vocal should sound like. Auto-Edit aims for it | Pick before Auto-Edit |
 | INTENSITY | Light, Balanced or Strong: how far Auto-Edit pushes | Light for a good recording, Strong for a rough one |
 | + REFERENCE | Aim at a pro vocal's sound instead of the style's target | When you want a specific sound |
+| MY CHAINS | Save your whole setup under a name and load it on any song; Quick Looks (Hard Robot, Stacked Hook ...) | Your next song with the same voice and mic |
 | AUTO-EDIT | Listens to about 12 s of voice, then sets every module | Start of every mix |
-| UNDO | Puts back the settings from before Auto-Edit | If you don't like the result |
+| UNDO | Puts back the settings from before the last Auto-Edit, chain or Quick Look | If you don't like the result |
 | A / B | A = your original vocal, B = through Voxology | Checking it really is better |
 | MATCH | A and B play at the same loudness | Always on while comparing (louder always sounds better) |
 | REC | Record mode: about 6 ms delay instead of about 55 ms, so you hear yourself tuned while recording. A little rougher; Voices, Formant, Noise, Room and Clicks are off | On while recording, off for mixing |
@@ -113,6 +114,21 @@ How to read a warning card:
 - **Red card** = worth your attention (for example CLIPPED RECORDING).
 - **Blue card** = calm: optional or just information. In red mode (logo clicked) these turn red too.
 - Every card answers **"Do I need to fix it?"** and then gives numbered steps. If the answer is "No" or "Optional", you can ignore it.
+
+## My Chains: your setup, on every song
+
+Click **MY CHAINS** (under INTENSITY).
+
+- **Save**: get a sound you like (Auto-Edit, then your own tweaks), type a name in the box (for example "My Lead") and press **Enter** or **SAVE**. It's saved on your computer (Documents\Voxology\Chains), so it's there in every project. Saving with a name you already have replaces it. The button then shows the chain's name.
+- **Load**: click a name. Every module is set the way you saved it. With **Keep this song's key when loading** ticked (the default), the song's Key, Scale, key source, MIDI mode and switched-off notes stay as they are.
+- Not part of a chain: REC, the power button, A / B, MATCH, Auto-Edit's Style and Intensity, and BEAT mode.
+- **✕** next to a name deletes it.
+- **Quick Looks** change only their own modules, on top of what you have: **Hard Robot** and **Smooth Tune** (Pitch), **Stacked Hook**, **Harmony 3rd + 5th** and **Deep Ad-lib** (Voices), **Phone Voice** (Low Cut, Tone EQ, Saturation), **Ad-lib Echo** (Delay) and **Big Space** (Reverb).
+- **Start fresh** sets every module back to neutral (the key stays when ticked).
+- **UNDO** takes back the last chain, look or Start fresh (the Auto-Edit report stays).
+- A chain saved with an older Voxology still loads; anything newer than the chain starts off.
+
+Tip: one chain per kind of part works well: "Lead", "Hook stack", "Ad-libs". Auto-Edit fits a chain to a new recording, but it sets every module, so run Auto-Edit first and load a Quick Look on top, not the other way round.
 
 ## References: aim at a pro sound
 

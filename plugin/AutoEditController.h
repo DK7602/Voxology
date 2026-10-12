@@ -113,6 +113,8 @@ public:
     float getProgress() const noexcept;
     bool isHearingAudio() const noexcept       { return hearingAudio; }
     bool canUndo() const noexcept              { return undoValid.load() && ! undoSnapshot.empty(); }
+    /** Keeps every setting for UNDO (Auto-Edit, or a chain / look loaded: then UNDO leaves the report alone). */
+    void takeUndoSnapshot (bool byAutoEdit);
     int getReportVersion() const noexcept      { return reportVersion.load(); }
     juce::String getReportJson() const         { return getReportForSaving(); }
 
@@ -150,6 +152,7 @@ private:
 
     std::vector<std::pair<juce::RangedAudioParameter*, float>> undoSnapshot;
     std::atomic<bool> undoValid { false };
+    bool undoClearsReport = true;
     std::atomic<int> reportVersion { 0 };
     mutable juce::CriticalSection reportLock;
     juce::String report;

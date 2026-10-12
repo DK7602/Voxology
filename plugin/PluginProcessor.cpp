@@ -33,6 +33,7 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
         s.beatKeyFromVoice = source == 3;
     };
     autoEdit.unmaskOnBeatSource = [this] { return vox::UnmaskLink::instance().readBeatKey (linkSlot).present; };
+    chains.beforeLoad = [this] { autoEdit.takeUndoSnapshot (false); };
     startTimerHz (1);
 }
 
@@ -455,6 +456,7 @@ void VoxologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
         xml->setAttribute ("umSource", unmaskSourceName);
         xml->setAttribute ("midiLearned", midiLearned.load());
         xml->setAttribute ("uiRed", uiRed.load() ? 1 : 0);
+        xml->setAttribute ("chainName", chainName);
         copyXmlToBinary (*xml, destData);
     }
 }
@@ -473,6 +475,8 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
             midiLearned.store (xml->getIntAttribute ("midiLearned", 0) & 0xFFF);
             xml->removeAttribute ("umSource");
             uiRed.store (xml->getIntAttribute ("uiRed", 0) != 0);
+            chainName = xml->getStringAttribute ("chainName");
+            xml->removeAttribute ("chainName");
             xml->removeAttribute ("midiLearned");
             xml->removeAttribute ("uiRed");
             parameters.replaceState (juce::ValueTree::fromXml (*xml));

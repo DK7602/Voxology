@@ -8,6 +8,7 @@
 #include "vox/Unmask.h"
 #include "vox/VocalChain.h"
 #include "AutoEditController.h"
+#include "ChainLibrary.h"
 #include "Params.h"
 #include "SpectrumTap.h"
 
@@ -101,6 +102,8 @@ public:
     SpectrumTap inputTap, outputTap;
     std::atomic<double> hostBpm { 0.0 };
     AutoEditController autoEdit { parameters, [this] { return hostBpm.load(); } };
+    ChainLibrary chains { parameters };   // My Chains + Quick Looks (message thread)
+    juce::String chainName;               // the chain last saved / loaded here (saved with the project; message thread)
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 

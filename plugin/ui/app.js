@@ -1596,7 +1596,81 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeRefMe
 $("ref").addEventListener("click", async () => { if (refMenu) closeRefMenu(); else await openRefMenu(); });
 $("ref-clear").addEventListener("click", async () => { await refClear(); fetchReference(); });
 
-$("undo").addEventListener("click", async () => { if (await aeUndo()) { report = null; learnTab = "report"; renderLearn(); refreshAll(); } });
+// My Chains: your setups saved under a name (every project), Quick Looks (set only their modules), Start fresh.
+const chList = Juce.getNativeFunction("listChains");
+const chSave = Juce.getNativeFunction("saveChain");
+const chLoad = Juce.getNativeFunction("loadChain");
+const chDelete = Juce.getNativeFunction("deleteChain");
+const chGetName = Juce.getNativeFunction("getChainName");
+let chainMenu = null, lastChain = "";
+const keepKeyPref = () => { try { return localStorage.getItem("voxKeepKey") !== "0"; } catch { return true; } };
+function closeChainMenu() { if (chainMenu) { chainMenu.remove(); chainMenu = null; } }
+async function openChainMenu() {
+  closeChainMenu();
+  let lib = { yours: [], looks: [], folder: "" };
+  try { lib = Object.assign(lib, JSON.parse((await chList()) || "{}")); } catch { /* keep the empty library */ }
+  const m = el("div", "ref-menu chain-menu");
+  const item = (label, title, onPick, onDelete) => {
+    const row = el("div", "ref-item" + (label === lastChain ? " current" : ""));
+    const b = el("button", "ref-pick", label);
+    b.type = "button";
+    if (title) b.title = title;
+    b.addEventListener("click", async () => { closeChainMenu(); await onPick(); });
+    row.append(b);
+    if (onDelete) {
+      const x = el("button", "ref-del", "✕");
+      x.type = "button";
+      x.title = `Delete "${label}"`;
+      x.addEventListener("click", async (e) => { e.stopPropagation(); await onDelete(); openChainMenu(); });
+      row.append(x);
+    }
+    m.append(row);
+  };
+  const loaded = async (kind, name) => {
+    if (await chLoad(kind, name, keepKeyPref())) { lastChain = kind === "yours" ? name : ""; renderChainChip(); refreshAll(); }
+  };
+  m.append(el("div", "ref-head", "MY CHAINS · your whole setup, in every project"));
+  if (!lib.yours.length) m.append(el("div", "ref-hint", "Get a sound you like (Auto-Edit, then your tweaks), then save it here to use on your next song."));
+  for (const c of lib.yours) item(c.name, "Load it: every module as you saved it" + (keepKeyPref() ? " (this song's key stays)" : ""), () => loaded("yours", c.name), () => chDelete(c.name));
+  // Save: a name box right in the menu.
+  const saveRow = el("div", "ref-item chain-save");
+  const input = el("input", "chain-name");
+  input.type = "text"; input.maxLength = 60; input.placeholder = "Name, then Enter (e.g. My Lead)";
+  input.value = lastChain;
+  const saveBtn = el("button", "ref-chip", "SAVE");
+  saveBtn.type = "button";
+  const doSave = async () => {
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    if (await chSave(name)) { lastChain = name; renderChainChip(); closeChainMenu(); }   // (the chip shows its name: saved)
+  };
+  saveBtn.addEventListener("click", doSave);
+  input.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") doSave(); if (e.key === "Escape") closeChainMenu(); });
+  saveRow.append(input, saveBtn);
+  m.append(saveRow);
+  const keep = el("label", "chain-keep");
+  const box = el("input");
+  box.type = "checkbox"; box.checked = keepKeyPref();
+  box.addEventListener("change", () => { try { localStorage.setItem("voxKeepKey", box.checked ? "1" : "0"); } catch { /* not kept */ } });
+  keep.append(box, document.createTextNode(" Keep this song's key when loading"));
+  m.append(keep);
+  m.append(el("div", "ref-head", "QUICK LOOKS · change only their modules"));
+  for (const l of lib.looks) item(l.name, l.about, () => loaded("look", l.name), null);
+  m.append(el("div", "ref-sep"));
+  item("Start fresh (every module neutral)", "Every module back to its neutral start" + (keepKeyPref() ? " (this song's key stays)" : "") + ". UNDO brings your setup back.", () => loaded("fresh", ""), null);
+  const r = $("chains").getBoundingClientRect();
+  m.style.left = `${Math.round(r.left)}px`;
+  m.style.top = `${Math.round(r.bottom + 4)}px`;
+  document.body.append(m);
+  chainMenu = m;
+}
+function renderChainChip() { $("chains").textContent = lastChain ? `☰ ${lastChain}` : "MY CHAINS"; }
+document.addEventListener("mousedown", (e) => { if (chainMenu && !chainMenu.contains(e.target) && e.target !== $("chains")) closeChainMenu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeChainMenu(); });
+$("chains").addEventListener("click", async () => { if (chainMenu) closeChainMenu(); else await openChainMenu(); });
+
+// UNDO: back to before the last Auto-Edit (its report goes) or the last chain / look loaded (the report stays).
+$("undo").addEventListener("click", async () => { if (await aeUndo()) { await fetchReport(false); if (!report) learnTab = "report"; renderLearn(); refreshAll(); } });
 
 function refreshAutoEdit() {
   const b = $("auto-edit"), text = $("ae-text"), sub = $("ae-sub");

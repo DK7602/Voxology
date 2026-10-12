@@ -91,6 +91,30 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
             if (args.size() >= 1) audioProcessor.autoEdit.deleteUserReference (args[0].toString());
             complete (true);
         })
+        .withNativeFunction ("listChains", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.chains.listJson()); })
+        .withNativeFunction ("getChainName", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.chainName); })
+        .withNativeFunction ("saveChain", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            const bool ok = args.size() >= 1 && audioProcessor.chains.save (args[0].toString());
+            if (ok) audioProcessor.chainName = args[0].toString().trim().substring (0, 60);
+            complete (ok);
+        })
+        .withNativeFunction ("loadChain", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            // (kind: "yours", "look" or "fresh"; name; keep this song's key)
+            const bool ok = args.size() >= 3 && audioProcessor.chains.load (args[0].toString(), args[1].toString(), static_cast<bool> (args[2]));
+            if (ok) audioProcessor.chainName = args[0].toString() == "yours" ? args[1].toString() : juce::String();
+            complete (ok);
+        })
+        .withNativeFunction ("deleteChain", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            if (args.size() >= 1)
+            {
+                audioProcessor.chains.remove (args[0].toString());
+                if (audioProcessor.chainName == args[0].toString()) audioProcessor.chainName = {};
+            }
+            complete (true);
+        })
         .withNativeFunction ("getUiRed", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.uiRed.load()); })
         .withNativeFunction ("setUiRed", [this] (const juce::Array<juce::var>& args, auto complete)
         {

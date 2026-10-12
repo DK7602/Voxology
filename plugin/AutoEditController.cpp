@@ -170,15 +170,7 @@ void AutoEditController::apply (const vox::AutoEditResult& r, const vox::AutoEdi
 
     if (r.ok)
     {
-        undoSnapshot.clear();
-        undoValid.store (true);
-        for (auto* p : state.processor.getParameters())
-            if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
-            {
-                const auto id = rp->getParameterID();
-                if (! id.startsWith ("ae") && id != "listenA" && id != "levelMatch")
-                    undoSnapshot.emplace_back (rp, rp->getValue());
-            }
+        takeUndoSnapshot (true);
 
         auto* values = new juce::DynamicObject();
         setParam ("bypass", 0.0f);
@@ -272,6 +264,20 @@ juce::String AutoEditController::getReportForSaving() const
     return report;
 }
 
+void AutoEditController::takeUndoSnapshot (bool byAutoEdit)
+{
+    undoSnapshot.clear();
+    undoValid.store (true);
+    undoClearsReport = byAutoEdit;
+    for (auto* p : state.processor.getParameters())
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
+        {
+            const auto id = rp->getParameterID();
+            if (! id.startsWith ("ae") && id != "listenA" && id != "levelMatch")
+                undoSnapshot.emplace_back (rp, rp->getValue());
+        }
+}
+
 bool AutoEditController::undo()
 {
     if (! canUndo())
@@ -284,7 +290,7 @@ bool AutoEditController::undo()
     }
     undoSnapshot.clear();
     undoValid.store (false);
-    setReport ({});
+    if (undoClearsReport) setReport ({});
     return true;
 }
 
