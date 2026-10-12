@@ -61,7 +61,7 @@ int main (int argc, char** argv)
     HoneyPanel panel;
     panel.setSize (500, 300);   // hosts open small, then enlarge
     panel.setModel (&m);
-    panel.setSize (1200, std::getenv ("HONEY_H") ? std::atoi (std::getenv ("HONEY_H")) : 720);
+    panel.setSize (std::getenv ("HONEY_W") ? std::atoi (std::getenv ("HONEY_W")) : 1280, std::getenv ("HONEY_H") ? std::atoi (std::getenv ("HONEY_H")) : 720);
     panel.setModel (&m);
     // A few hand edits so every look shows: fixed by hand, moved a whole note, and a selection.
     int shown = 0;

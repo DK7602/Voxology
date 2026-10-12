@@ -1,5 +1,7 @@
 #pragma once
 
+#include <utility>
+
 #include "HoneyRoll.h"
 #include "HoneyTheme.h"
 
@@ -43,6 +45,8 @@ private:
     void applyNoteEdit();
 
     juce::Rectangle<float> frameArea() const;
+    /** Lays out the top and bottom bars, each on one row or two; returns whether each fitted on the rows it was given. */
+    std::pair<bool, bool> layoutBars (bool twoRowTop, bool twoRowBottom);
     void drawDrips (juce::Graphics&, juce::Rectangle<float> frame);
 
     std::unique_ptr<honeytheme::Look> look;

@@ -42,10 +42,7 @@ void HoneyRoll::refresh()
     snap = model->snapshot();
     if (selected >= static_cast<int> (snap.notes.size())) selected = -1;
     if (! fitted && snap.status == 2 && ! snap.notes.empty())
-    {
-        fitAll();
-        fitted = true;
-    }
+        fitted = fitAll();   // false while the roll is still too small to fit into: resized() tries again
     updateScrollBars();
     repaint();
 }
@@ -58,13 +55,13 @@ void HoneyRoll::setSelected (int index)
     if (onSelectionChanged) onSelectionChanged();
 }
 
-void HoneyRoll::fitAll()
+bool HoneyRoll::fitAll()
 {
     userZoomed = false;
     // Opens on the first ~6 seconds of singing (cells big enough to grab), the clip's main range
     // in height (the middle 90 % of its notes, so one stray high note doesn't shrink everything).
     const auto grid = gridArea();
-    if (grid.getWidth() < 10.0f || snap.seconds <= 0.0) return;
+    if (grid.getWidth() < 10.0f || grid.getHeight() < 40.0f || snap.seconds <= 0.0) return false;
     const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
     const double firstNote = snap.notes.empty() ? 0.0 : snap.notes.front().note.start / sr;
     pixelsPerSecond = defaultZoom();
@@ -94,6 +91,7 @@ void HoneyRoll::fitAll()
     topMidi = jlimit (kLowestMidi + rows, kHighestMidi, centre + rows / 2.0);
     updateScrollBars();
     repaint();
+    return true;
 }
 
 void HoneyRoll::setPlayhead (double seconds)
@@ -177,13 +175,12 @@ void HoneyRoll::resized()
     hBar.setBounds (b.getX() + kKeysWidth, b.getBottom() - kBar, b.getWidth() - kKeysWidth - kBar, kBar);
     vBar.setBounds (b.getRight() - kBar, b.getY() + kRulerHeight, kBar, b.getHeight() - kRulerHeight - kBar);
     honeycomb = {};
-    if (! fitted) fitAll();
-    else
-    {
-        if (! userZoomed)
-            pixelsPerSecond = defaultZoom();   // hosts open the editor small, then enlarge it
-    }
-    if (fitted && lastGridHeight > 0.0f)
+    bool justFitted = false;
+    if (! fitted && snap.status == 2 && ! snap.notes.empty())
+        fitted = justFitted = fitAll();   // hosts open the editor small, then enlarge it: fit once there's room
+    else if (! userZoomed)
+        pixelsPerSecond = defaultZoom();
+    if (fitted && ! justFitted && lastGridHeight > 0.0f && gridArea().getHeight() > 0.0f)
     {
         // Keep the same pitch in the middle when the window changes size (hosts resize the editor).
         const double rowsBefore = lastGridHeight / rowHeight, rowsNow = gridArea().getHeight() / rowHeight;

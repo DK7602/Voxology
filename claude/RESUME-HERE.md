@@ -1352,3 +1352,18 @@ User OK'd all four audit items.
   other mix). Manual: Vocal Fit "send the beat only" paragraph, Covers row, troubleshooting row. 8 Vocal Fit tests.
 - Vocal Fit plan (3 steps) COMPLETE. Left: reverb / delay for the beat (needs full-song data); user's Cubase test.
 - v0.34.0 CI green: Actions run 38206016363 (commit 9f46b80).
+
+## v0.34.1 Honey Tune: narrow windows wrap instead of hiding controls (2026-10-12)
+- The "clipped KEEP VIBRATO" item was worse than a label: below ~1240 px the top row overflowed (1200 default: "KEEP
+  VIBRAT"; 1050: KEEP VIBRATO gone; 900 (the minimum): both KEEP sliders gone, and Undo / Redo / Snap note hidden in
+  the bottom bar).
+- HoneyPanel::layoutBars (twoRowTop, twoRowBottom) -> {topFits, bottomFits}; resized() lays out on one row each, and
+  redoes it with a second row for whichever didn't fit (top +52 px: the three KEEP sliders under key ... legend;
+  bottom +32 px: buttons under the note sliders). Slider columns >= their label's real width (GlyphArrangement::
+  getStringWidth, 12.5 px bold, as paint draws them). Legend drawn only if legendArea isn't empty (always fits >= 900).
+- Default editor size 1200 -> 1280 x 720 (one row). Also fixed: HoneyRoll::fitAll now returns false when the roll is
+  too small (< 40 px tall) and refresh / resized only mark it fitted once it really fitted (before, a host opening the
+  editor tiny left the notes off-centre for good); no "keep the middle" shift in the same resize that first fits.
+- Checked with the preview tool (HONEY_W / HONEY_H env, -DVOX_HONEY_PREVIEW=ON; built on Linux after apt-get
+  libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev libasound2-dev) at 900x460, 900, 1050, 1200, 1280,
+  1400; HoneyTune_VST3 compiled on Linux. Manual: Honey Tune "Window size" paragraph.

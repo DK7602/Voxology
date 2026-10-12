@@ -733,7 +733,7 @@ public:
         panel.setModel (dc != nullptr ? this : nullptr);
         setResizable (true, false);
         setResizeLimits (900, 460, 4000, 2400);
-        setSize (1200, 720);
+        setSize (1280, 720);   // everything on one row from about 1240 px; narrower windows wrap (HoneyPanel::layoutBars)
     }
 
     ~HoneyEditor() override

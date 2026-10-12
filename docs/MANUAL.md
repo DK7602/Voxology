@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.34.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.34.1. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.34.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.34.1**).
 
 Where each one goes in Cubase:
 
@@ -175,6 +175,8 @@ Without a beat, Auto-Edit works exactly as before. The pro numbers come from 143
 Honey Tune shows each sung note as a honeycomb cell on a piano roll, so you can fix single notes by hand. It needs a DAW with ARA (Cubase Artist or Pro, Studio One, Logic, Reaper, Cakewalk). Cubase Elements has no ARA.
 
 **Open it in Cubase**: select the vocal clip, then **Audio > Extensions > Honey Tune**. It listens to the clip first (a few seconds per minute of audio), including an AI pitch check that fixes octave slips and finds missed notes. The status line reports what it found. The **?** button at the top right opens this manual.
+
+**Window size**: drag the window's corner to resize it. It opens 1280 px wide with every control on one row. In a narrower window (down to 900 px) the KEEP sliders and the Undo / Snap / Reset buttons move to a second row, so nothing gets cut off.
 
 **Reading the notes**
 

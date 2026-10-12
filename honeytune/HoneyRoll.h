@@ -40,7 +40,7 @@ public:
     double getPlayhead() const { return playhead; }
 
     /** Fit the whole clip and its notes into view. */
-    void fitAll();
+    bool fitAll();   // false (nothing changed) while the roll is too small
 
 private:
     void scrollBarMoved (juce::ScrollBar*, double) override;

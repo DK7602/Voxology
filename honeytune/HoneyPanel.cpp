@@ -301,7 +301,8 @@ void HoneyPanel::paint (Graphics& g)
     for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
         drawCaps (g, l->getText(), l->getBounds().toFloat(), FontOptions (12.5f, Font::bold), Justification::centredLeft);
 
-    // Legend
+    // Legend (left out when the window is too narrow for it)
+    if (! legendArea.isEmpty())
     {
         auto legend = legendArea.reduced (8.0f, 5.0f);
         g.setFont (FontOptions (11.0f, Font::bold));
@@ -386,29 +387,45 @@ Rectangle<float> HoneyPanel::frameArea() const
 
 void HoneyPanel::resized()
 {
+    // Everything on one row each when it fits (about 1240 px and wider). A narrower window gives the top's three
+    // sliders and / or the bottom's buttons a row of their own instead of squeezing them out of sight.
+    const auto [topFits, bottomFits] = layoutBars (false, false);
+    if (! topFits || ! bottomFits)
+        layoutBars (! topFits, ! bottomFits);
+}
+
+std::pair<bool, bool> HoneyPanel::layoutBars (bool twoRowTop, bool twoRowBottom)
+{
     const auto inner = frameArea().reduced (kFrame);
     auto r = inner;
-    topBar = r.removeFromTop (76.0f);
+    topBar = r.removeFromTop (twoRowTop ? 76.0f + 52.0f : 76.0f);
     r.removeFromTop (kSeparator);
-    bottomBar = r.removeFromBottom (78.0f);
+    bottomBar = r.removeFromBottom (twoRowBottom ? 78.0f + 32.0f : 78.0f);
     r.removeFromBottom (kSeparator);
     roll.setBounds (r.toNearestInt());
     manual.setBounds (inner.toNearestInt());
     cards.clear();
 
-    // Top: title | key | scale | snap | drift | vibrato | fit ... legend | logo
+    // Top: title | key | scale | snap | drift | vibrato | fit ... legend | logo (two rows: the sliders under key ... legend).
     // The title's drips run down to just above the gold trim.
-    titleArea = topBar.withTrimmedLeft (10.0f).withTrimmedTop (5.0f).withTrimmedBottom (3.0f).withWidth (190.0f);
-    auto top = topBar.reduced (8.0f, 4.0f);
-    top.removeFromLeft (192.0f);
-    top.removeFromLeft (6.0f);
-    top = top.withSizeKeepingCentre (top.getWidth(), 54.0f);
-    // The logo only when there's room; the controls come first.
-    logoArea = getWidth() >= 1320 ? top.removeFromRight (120.0f) : Rectangle<float>();
-    top.removeFromRight (6.0f);
-    legendArea = top.removeFromRight (122.0f);
-    cards.push_back (legendArea);
-    top.removeFromRight (10.0f);
+    titleArea = topBar.withHeight (76.0f).withTrimmedLeft (10.0f).withTrimmedTop (5.0f).withTrimmedBottom (3.0f).withWidth (190.0f);
+    auto band = topBar.reduced (8.0f, 4.0f);
+    band.removeFromLeft (192.0f);
+    band.removeFromLeft (6.0f);
+    auto top = band.removeFromTop (68.0f).withSizeKeepingCentre (band.getWidth(), 54.0f);
+    auto sliderRow = twoRowTop ? band : top;
+    // The logo only when there's room; the controls come first. The legend goes before the sliders would.
+    constexpr float kKeyW = 70.0f, kScaleW = 136.0f, kGap = 8.0f, kLegend = 6.0f + 122.0f + 10.0f, kButtons = 30.0f + 6.0f + 52.0f + 6.0f + 148.0f + 8.0f;
+    logoArea = ! twoRowTop && getWidth() >= 1320 ? top.removeFromRight (120.0f) : Rectangle<float>();
+    const bool legend = top.getWidth() >= kLegend + kButtons + kKeyW + kScaleW + 2.0f * kGap;
+    legendArea = {};
+    if (legend)
+    {
+        top.removeFromRight (6.0f);
+        legendArea = top.removeFromRight (122.0f);
+        cards.push_back (legendArea);
+        top.removeFromRight (10.0f);
+    }
     help.setBounds (top.removeFromRight (30.0f).withSizeKeepingCentre (30.0f, 28.0f).translated (0.0f, 8.0f).toNearestInt());
     top.removeFromRight (6.0f);
     fit.setBounds (top.removeFromRight (52.0f).withSizeKeepingCentre (52.0f, 28.0f).translated (0.0f, 8.0f).toNearestInt());
@@ -416,23 +433,33 @@ void HoneyPanel::resized()
     auto abArea = top.removeFromRight (148.0f).withSizeKeepingCentre (148.0f, 28.0f).translated (0.0f, 8.0f);
     tuned.setBounds (abArea.removeFromRight (70.0f).toNearestInt());
     original.setBounds (abArea.toNearestInt());
-    top.removeFromRight (8.0f);
-    auto column = [this, &top] (float width, Label& l, Component& c)
+    top.removeFromRight (kGap);
+    auto column = [] (Rectangle<float>& area, float width, Label& l, Component& c)
     {
-        auto col = top.removeFromLeft (width);
-        top.removeFromLeft (8.0f);
+        auto col = area.removeFromLeft (width);
+        area.removeFromLeft (kGap);
         col = col.reduced (4.0f, 4.0f);
         l.setBounds (col.removeFromTop (16.0f).toNearestInt());
         c.setBounds (col.removeFromTop (26.0f).toNearestInt());
     };
-    column (70.0f, keyLabel, key);
-    column (136.0f, scaleLabel, scale);
-    const float sliderW = jlimit (120.0f, 210.0f, (top.getWidth() - 3 * 8.0f) / 3.0f);
-    column (sliderW, snapLabel, snap);
-    column (sliderW, driftLabel, drift);
-    column (sliderW, vibratoLabel, vibrato);
+    column (top, kKeyW, keyLabel, key);
+    column (top, kScaleW, scaleLabel, scale);
+    if (! twoRowTop)
+        sliderRow = top;
+    // Each slider column is at least as wide as its label (drawn in paint() at 12.5 px bold), so none is cut off.
+    float labelW = 0.0f;
+    for (auto* l : { &snapLabel, &driftLabel, &vibratoLabel })
+        labelW = std::max (labelW, GlyphArrangement::getStringWidth (Font (FontOptions (12.5f, Font::bold)), l->getText()));
+    const float colMin = std::max (120.0f, std::ceil (labelW) + 12.0f);
+    const bool topFits = twoRowTop || sliderRow.getWidth() >= 3.0f * (colMin + kGap);
+    if (twoRowTop)
+        sliderRow = sliderRow.withSizeKeepingCentre (sliderRow.getWidth(), 52.0f);
+    const float sliderW = jlimit (colMin, 210.0f, (sliderRow.getWidth() - 3.0f * kGap) / 3.0f);
+    column (sliderRow, sliderW, snapLabel, snap);
+    column (sliderRow, sliderW, driftLabel, drift);
+    column (sliderRow, sliderW, vibratoLabel, vibrato);
 
-    // Bottom: note info line, then per-note sliders and buttons, then the status line.
+    // Bottom: note info line, then per-note sliders and buttons (two rows: buttons below), then the status line.
     auto bottom = bottomBar.reduced (8.0f, 4.0f);
     noteInfoArea = bottom.removeFromTop (22.0f);
     readoutArea = noteInfoArea.removeFromRight (230.0f);
@@ -441,28 +468,38 @@ void HoneyPanel::resized()
     cards.push_back (noteInfoArea);
     cards.push_back (statusArea);
     auto row = bottom.reduced (0.0f, 3.0f);
-    auto pair = [this, &row] (float width, Label& l, Slider& s)
+    auto buttons = row;
+    if (twoRowBottom)
+    {
+        buttons = row.removeFromBottom ((row.getHeight() - 6.0f) / 2.0f);
+        row.removeFromBottom (6.0f);
+    }
+    constexpr float kPairMin = 200.0f, kButtonsW = 116.0f + 6.0f + 96.0f + 6.0f + 130.0f + 10.0f + 62.0f + 6.0f + 62.0f;
+    const bool bottomFits = twoRowBottom || row.getWidth() >= 3.0f * (kPairMin + kGap) + kButtonsW;
+    auto pair = [this, &row] (float width, Label& l, Slider& sl)
     {
         auto c = row.removeFromLeft (width);
-        row.removeFromLeft (8.0f);
+        row.removeFromLeft (kGap);
         cards.push_back (c);
         c = c.reduced (8.0f, 2.0f);
         l.setBounds (c.removeFromLeft (100.0f).toNearestInt());
-        s.setBounds (c.toNearestInt());
+        sl.setBounds (c.toNearestInt());
     };
-    const float pairW = jlimit (200.0f, 300.0f, (row.getWidth() - 530.0f) / 3.0f);
+    const float pairW = twoRowBottom ? jlimit (kPairMin, 320.0f, (row.getWidth() - 2.0f * kGap) / 3.0f)
+                                     : jlimit (kPairMin, 300.0f, (row.getWidth() - (kButtonsW + 6.0f)) / 3.0f);
     pair (pairW, noteDriftLabel, noteDrift);
     pair (pairW, noteVibratoLabel, noteVibrato);
     pair (pairW, noteFormantLabel, noteFormant);
-    resetAll.setBounds (row.removeFromRight (116.0f).toNearestInt());
-    row.removeFromRight (6.0f);
-    resetNote.setBounds (row.removeFromRight (96.0f).toNearestInt());
-    row.removeFromRight (6.0f);
-    snapNote.setBounds (row.removeFromRight (130.0f).toNearestInt());
-    row.removeFromRight (10.0f);
-    redoBtn.setBounds (row.removeFromRight (62.0f).toNearestInt());
-    row.removeFromRight (6.0f);
-    undoBtn.setBounds (row.removeFromRight (62.0f).toNearestInt());
+    resetAll.setBounds (buttons.removeFromRight (116.0f).toNearestInt());
+    buttons.removeFromRight (6.0f);
+    resetNote.setBounds (buttons.removeFromRight (96.0f).toNearestInt());
+    buttons.removeFromRight (6.0f);
+    snapNote.setBounds (buttons.removeFromRight (130.0f).toNearestInt());
+    buttons.removeFromRight (10.0f);
+    redoBtn.setBounds (buttons.removeFromRight (62.0f).toNearestInt());
+    buttons.removeFromRight (6.0f);
+    undoBtn.setBounds (buttons.removeFromRight (62.0f).toNearestInt());
+    return { topFits, bottomFits };
 }
 
 //==============================================================================
