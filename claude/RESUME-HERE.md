@@ -1253,3 +1253,21 @@ User OK'd all four audit items.
   scratch only); only averaged measurements ship. Add to the legal check before selling (with MUSDB18 / MoisesDB). Clean
   option: user buys trap vocal packs -> rebuild both references from those (and they can go in test-audio).
 - CI green: Actions run 38176808096 (v0.31.0, commit 46f3de3; includes v0.30.0, whose own run was cancelled by the newer push).
+
+## Thread handoff (2026-10-12): "Voxology manual values" thread -> "Voxology upgrades" thread
+- State: v0.31.0, CI green (run 38176808096). ALL of this thread's work is on branch claude/upbeat-faraday-iyzicv
+  (that session could only push there); claude/voxology is still at v0.25.0 + notes. The new thread should start from
+  claude/upbeat-faraday-iyzicv (or merge it into claude/voxology if the user agrees).
+- This thread: v0.26.0 double-click a knob's number to type a value (Honey Tune boxes were already click-to-type);
+  v0.27.0 Cymatics test set (test-audio/cymatics, keys labelled as SUNG: pack names often a semitone off) + Auto-Edit
+  key cross-check (keybench); v0.28.0 reference sections MALE / FEMALE / MIXED, consistent names, Male / Female R&B;
+  v0.29.0 italic measured "Pitch:" tag per reference; v0.30.0 Male trap melodic (Classic) + Male trap rap (from
+  Sample Snagger previews: measurements only, test-audio/trap-measurements, legal check before selling);
+  v0.31.0 Voices: Unison.
+- Lessons: never guess male / female from formants (use the user's labels); label keys from what's sung, not file names;
+  measure Pitch tags, don't guess; keep unlicensed audio out of the repo.
+- Open: female trap / rap references (none yet); more melodic trap clips would firm up "Male trap, melodic" (7);
+  confirm Honey Tune menu path in Cubase; clipped "KEEP VIBRATO" label at Honey Tune's smallest width; ask the user to
+  test v0.31 in Cubase (typing values, reference menu, Unison voices).
+- User prefs (unchanged): short replies, plain language, honest, a plan with warnings; Actions link when green +
+  Ctrl+J -> Keep; keep this file AND docs/MANUAL.md updated (MANUAL rule); no PRs.
