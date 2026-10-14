@@ -7,6 +7,7 @@
 #include "vox/LoudnessMeter.h"
 #include "vox/Unmask.h"
 #include "vox/VocalChain.h"
+#include "suite/SuiteLink.h"
 #include "AutoEditController.h"
 #include "ChainLibrary.h"
 #include "Params.h"
@@ -70,6 +71,7 @@ public:
         std::atomic<int> clipRuns { 0 }, overs { 0 };                      // incoming vocal: clipped stretches, samples over 0 dBFS (running totals)
         std::array<std::atomic<float>, vox::kDynBands> dynEq {};            // dB per band, held until read
         std::atomic<float> peakGr { 0.0f }, levelGr { 0.0f };             // dB, held until read
+        std::atomic<float> suiteGr { 0.0f };                              // dB the compressor takes off (>= 0), held until the suite link reads it
         std::atomic<float> satResidual { 0.0f }, satSignal { 0.0f };      // energies, drained by the editor
         std::atomic<float> matchDb { 0.0f };
         std::atomic<float> bpm { 0.0f };
@@ -104,6 +106,9 @@ public:
     AutoEditController autoEdit { parameters, [this] { return hostBpm.load(); } };
     ChainLibrary chains { parameters };   // My Chains + Quick Looks (message thread)
     juce::String chainName;               // the chain last saved / loaded here (saved with the project; message thread)
+
+    /** The suite link (Voxology, Mixology, Masterology): a Mixology is in this project and sees this vocal. */
+    std::atomic<bool> mixologyHere { false };
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -149,6 +154,15 @@ private:
     juce::String unmaskSourceName, pendingSourceName;   // message thread
     void resolveUnmaskSource();
     void timerCallback() override;
+    int timerTicks = 0;
+
+    // The suite link: Mixology learns the track Voxology sits on and what it does there (so it never adds a second
+    // compressor or reverb to this vocal). Message thread, a few times a second.
+    void publishSuite();
+    int suiteSlot = -1;
+    std::uint64_t suiteId = 0;
+    float suiteCompDb = 0.0f;
+    juce::String trackName;
     vox::BandAnalyser vocalBands;
     int hopCount = 0;
     vox::Unmask unmask;

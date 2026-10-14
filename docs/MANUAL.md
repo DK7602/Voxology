@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.46.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.47.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.46.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.47.0**).
 
 Where each one goes in Cubase:
 
@@ -285,6 +285,17 @@ Use Honey Tune for the tuning and Voxology for everything else, and switch Voxol
 
 Quick rule: a fast trap or robot effect = Voxology's Pitch alone (Robot or Classic mode). A natural, polished sung vocal = Honey Tune + Voxology with Pitch off.
 
+## With Mixology and Masterology
+
+**Voxology** makes each vocal sound great, **Mixology** makes all your tracks work together, **Masterology** turns the
+finished mix into the master. In the same Cubase project they tell each other what they do: nothing to set up.
+
+- Voxology tells Mixology the track it sits on and what it does there (its compressor, de-esser, reverb, delay...).
+  Mixology then treats that track as a vocal and never adds a second compressor, reverb or delay on top of
+  Voxology's. Mixology's Tracks page shows a gold **VOX** tag on the track (**BEAT** for Voxology in BEAT mode).
+- The bottom bar shows **MIXOLOGY ✓** when a Mixology is in the project (hover it for what that means).
+- Needs Mixology 0.8 (and Masterology 0.26) or newer.
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -305,3 +316,4 @@ Quick rule: a fast trap or robot effect = Voxology's Pitch alone (Robot or Class
 | Hearing yourself late while recording | Turn on REC in Voxology's top bar (about 6 ms). Turn it off for mixing |
 | MIDI chords is on in Voices but nothing sings | The voices sing only while a MIDI note is held. Set a MIDI track's output to Voxology and play or draw notes (see Stack, MIDI chords and Crew) |
 | B always sounds better than A | Turn on MATCH so both play at the same loudness |
+| Mixology doesn't show the VOX tag on your vocal | Update Voxology (0.47+) and Mixology (0.8+). The tag follows the track's name: if two tracks share a name, rename one |

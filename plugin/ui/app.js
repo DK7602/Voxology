@@ -1799,7 +1799,8 @@ window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
   if (M.refVersion !== refVersionSeen) { refVersionSeen = M.refVersion; fetchReference(); }
   if (M.aeReport !== reportVersion) { const first = reportVersion === -1; reportVersion = M.aeReport; fetchReport(!first); }
   const match = (on("levelMatch") ? ` · MATCH ${fmtSigned(M.matchDb)}` : "") + (M.recMode ? ` · REC ${M.latencyMs.toFixed(1)} ms` : "");
-  $("status").textContent = `${on("bypass") ? "BYPASSED" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY"}${match}${M.bpm > 0 ? ` · ${M.bpm.toFixed(0)} BPM` : ""}`;
+  $("status").textContent = `${on("bypass") ? "BYPASSED" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY"}${match}${M.bpm > 0 ? ` · ${M.bpm.toFixed(0)} BPM` : ""}${M.mixology ? " · MIXOLOGY ✓" : ""}`;
+  $("status").title = M.mixology ? (beat ? "Mixology is in this project: it knows this track is the beat." : "Mixology is in this project: it sees what Voxology does on this vocal and won't add a second compressor, reverb or delay.") : "";
   draw();
   if (learnTab === "module") renderLearn(false);
 });

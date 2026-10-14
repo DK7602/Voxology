@@ -34,7 +34,9 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
     };
     autoEdit.unmaskOnBeatSource = [this] { return vox::UnmaskLink::instance().readBeatKey (linkSlot).present; };
     chains.beforeLoad = [this] { autoEdit.takeUndoSnapshot (false); };
-    startTimerHz (1);
+    suiteId = static_cast<std::uint64_t> (juce::Random::getSystemRandom().nextInt64()) ^ reinterpret_cast<std::uintptr_t> (this);
+    if (suiteId == 0) suiteId = 1;
+    startTimerHz (4);
 }
 
 VoxologyAudioProcessor::~VoxologyAudioProcessor()
@@ -42,6 +44,7 @@ VoxologyAudioProcessor::~VoxologyAudioProcessor()
     stopTimer();
     cancelPendingUpdate();
     vox::UnmaskLink::instance().release (linkSlot);
+    suite::Link::process().releaseVocal (suiteSlot, suiteId);
 }
 
 void VoxologyAudioProcessor::storeBeatMeters (const vox::BeatKey::Result& r) noexcept
@@ -78,6 +81,9 @@ void VoxologyAudioProcessor::resolveUnmaskSource()
 
 void VoxologyAudioProcessor::timerCallback()
 {
+    publishSuite();   // four times a second (its heartbeat)
+    if (++timerTicks % 4 != 0) return;
+
     resolveUnmaskSource();   // a saved choice: wait for that vocal's Voxology to appear (project loading)
 
     // Share a Voxology-on-the-beat's key with Honey Tune in this host (it can't see the link: another plug-in file).
@@ -93,7 +99,52 @@ void VoxologyAudioProcessor::timerCallback()
 void VoxologyAudioProcessor::updateTrackProperties (const TrackProperties& properties)
 {
     if (properties.name.has_value() && properties.name->isNotEmpty())
+    {
         vox::UnmaskLink::instance().setName (linkSlot, properties.name->toStdString());
+        trackName = *properties.name;
+        publishSuite();
+    }
+}
+
+void VoxologyAudioProcessor::publishSuite()
+{
+    auto& link = suite::Link::process();
+    const auto now = suite::nowMs();
+    suite::MixInfo mix;
+    mixologyHere.store (link.readMix (mix, now));
+    if (suiteSlot < 0) suiteSlot = link.claimVocal (suiteId, now);
+    if (suiteSlot < 0) return;   // 64 vocals already: try again later
+
+    vox::ChainParams p;
+    reader.read (p, hostBpm.load());
+    using F = suite::VocalInfo;
+    F v;
+    v.trackName = trackName.toStdString();
+    v.version = static_cast<std::uint32_t> (JucePlugin_VersionCode);
+    if (! p.bypass) v.flags |= F::processing;
+    if (isBeatMode())
+        v.flags |= F::beat;   // on the beat: only listening for the key (and Unmask)
+    else
+    {
+        auto any = [] (const auto& gains) { return std::any_of (gains.begin(), gains.end(), [] (double g) { return std::abs (g) >= 0.5; }); };
+        if (! vox::VocalCompressor::isNeutral (p.comp) || ! vox::Rider::isNeutral (p.rider)) v.flags |= F::compressor;
+        if (! vox::DeEsser::isNeutral (p.deEsser)) v.flags |= F::deEsser;
+        if (p.reverb.enabled && (p.reverb.mix >= 0.05 || p.throws.wash >= 0.05)) v.flags |= F::reverb;
+        if (p.delay.enabled && (p.delay.mix >= 0.05 || p.throws.echo >= 0.05)) v.flags |= F::delay;
+        if (! vox::Doubler::isNeutral (p.doubler) || (p.doubler.enabled && ! vox::HarmonyVoices::isNeutral (p.voices))) v.flags |= F::doubler;
+        if (! vox::PitchCorrector::isNeutral (p.pitch)) v.flags |= F::pitch;
+        if (p.eq.enabled && any (p.eq.gainDb)) v.flags |= F::eq;
+        if (! vox::Saturation::isNeutral (p.saturation)) v.flags |= F::saturation;
+        if (p.cleanup.enabled && p.cleanup.gateRangeDb >= 0.05) v.flags |= F::gate;
+        const auto style = juce::roundToInt (parameters.getRawParameterValue ("aeStyle")->load());
+        v.style = static_cast<F::Style> (static_cast<std::uint32_t> (juce::jlimit (0, static_cast<int> (F::kStyles) - 1, style)) + 1u);
+        v.reverbMix = p.reverb.enabled ? static_cast<float> (p.reverb.mix / 100.0) : 0.0f;
+        v.delayMix = p.delay.enabled ? static_cast<float> (p.delay.mix / 100.0) : 0.0f;
+    }
+    // How much the compressor takes off lately (its loudest moments fall away over a few seconds).
+    suiteCompDb = std::max (meters.suiteGr.exchange (0.0f), suiteCompDb * 0.9f);
+    v.compressionDb = (v.flags & F::compressor) != 0 ? suiteCompDb : 0.0f;
+    if (! link.publishVocal (suiteSlot, suiteId, v, now)) suiteSlot = -1;   // taken over while this one was silent: claim again
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout VoxologyAudioProcessor::createParameterLayout()
@@ -409,6 +460,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     meters.rider.store (static_cast<float> (m.riderDb));
     holdMin (meters.peakGr, static_cast<float> (m.peakGrDb));
     holdMin (meters.levelGr, static_cast<float> (m.levelGrDb));
+    holdMax (meters.suiteGr, static_cast<float> (-(m.peakGrDb + m.levelGrDb)));
     addTo (meters.satResidual, static_cast<float> (m.satResidual));
     addTo (meters.satSignal, static_cast<float> (m.satSignal));
     meters.matchDb.store (static_cast<float> (chainParams.listenOriginal ? levelMatch.gainForADb() : levelMatch.gainForBDb()));

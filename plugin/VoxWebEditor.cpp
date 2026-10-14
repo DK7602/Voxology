@@ -314,6 +314,7 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("satHarm", roundTo (ratio > 1.0e-10 ? static_cast<float> (10.0 * std::log10 (ratio)) : -100.0f, 0.1f));
     frame->setProperty ("matchDb", roundTo (m.matchDb.load(), 0.1f));
     frame->setProperty ("bpm", roundTo (m.bpm.load(), 0.1f));
+    frame->setProperty ("mixology", audioProcessor.mixologyHere.load());   // the suite link: Mixology sees this vocal
     frame->setProperty ("pitchSung", roundTo (m.pitchSung.load(), 0.01f));
     frame->setProperty ("pitchTarget", m.pitchTarget.load());
     frame->setProperty ("pitchCorr", roundTo (m.pitchCorr.load(), 0.01f));

@@ -1637,3 +1637,20 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   leads: EQ up to +4.5 @ 5 kHz / +6 @ 8 kHz, tone distance 6.5 -> 3.3, 5.6 -> 5.0, 6.6 -> 6.1 dB. 17 built-ins.
 - File: test-audio/looperman/Female_Trap_Rap_user-cut-of-this-is-revolution.mp3.
 - v0.46.0 CI green: run 38309203335 (commit 3623d52).
+
+## v0.47.0 The suite link: Mixology sees Voxology (2026-10-14)
+- The user asked whether Voxology, Mixology and Masterology talk to each other; Mixology's M6 adds it. One named shared
+  block per host process, "VoxMixMasterSuite.v1.<pid>": `dsp/include/suite/SuiteLink.h` + `dsp/src/SuiteLink.cpp`, THE SAME
+  FILES in all three repos (Mixology DK7602/mixology is the master copy; change there, copy here, bump kLayout when the
+  memory layout changes). Lock-free (seqlocks), heartbeats (kAliveMs 2 s), stale slots taken over by CAS on the heartbeat.
+- Voxology publishes (processor timer, now 4 Hz; the old 1 Hz work runs every 4th tick): the track name (from
+  updateTrackProperties), flags from the ChainParams + each module's isNeutral (processing = not bypassed, beat = BEAT mode,
+  compressor = Compressor or Rider active, deEsser, reverb incl. Throw wash, delay incl. Throw echo, doubler / voices,
+  pitch, eq (a band >= 0.5 dB), saturation, gate), aeStyle + 1 as the style, reverb / delay mix, and the compression
+  lately (meters.suiteGr: -(peakGr + levelGr), held max, decays x0.9 per tick).
+- Mixology (0.8.0) then: the track is a vocal (ad-libs if its name says so), Polish adds no second compressor / lead reverb /
+  ad-lib delay where Voxology does that, a gold VOX tag (BEAT for BEAT mode) on its Tracks page.
+- Voxology's bottom bar shows "· MIXOLOGY ✓" when a Mixology publishes its hand-off in the project (mixologyHere).
+- Tests: tests/test_suite.cpp (same as Mixology's, minus its bridge hash check). Checked against the real plug-ins:
+  Mixology's linkcheck loads Voxology.vst3 (optional 3rd argument), names the track "Lead Vox", sees it, its compressor and
+  reverb once on, and nothing after removal.

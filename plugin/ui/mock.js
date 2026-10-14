@@ -233,7 +233,7 @@
       peakGr: active("cpOn") && s("cpPeak") < 0 ? +(-5 * word * word).toFixed(1) : 0,
       levelGr: active("cpOn") && s("cpRatio") > 1.01 ? +(-4 * word).toFixed(1) : 0,
       satHarm: active("saOn") && s("saDrive") > 0 ? +(-42 + s("saDrive") * 3 + 2 * word).toFixed(1) : -100,
-      matchDb: -1.2, bpm: 140, sr: 48000,
+      matchDb: -1.2, bpm: 140, sr: 48000, mixology: true,
       bkState: location.hash === "#beat" ? 5 : 1, bkKey: 7, bkMode: 7, bkSet: 0, bkUnclear: 0, bkConf: 0.86, bkTune: -28, bkHeard: 24, keyUsed: 11, scaleUsed: 2, midiNotes: (1 << 11) | (1 << 2), notesUsed: 0b110010101101 & ~(1 << 6), recMode: 1, latencyMs: 6.1,
       pitchSung: sing ? +(57 + 0.25 * Math.sin(t * 3)).toFixed(2) : 0, pitchTarget: sing ? 57 : -1,
       pitchCorr: sing && sliders.ptAmount.value > 0 ? +(-0.25 * Math.sin(t * 3) * sliders.ptAmount.value / 100).toFixed(2) : 0,

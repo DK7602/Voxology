@@ -28,6 +28,8 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   reverb), `VocalChain`, `AutoEdit` (analysis + decisions + report). Shared with the tests.
 - `plugin/` JUCE wrapper: `Params.h` (all parameters), processor, `AutoEditController`, web editor.
 - `plugin/ui/` HTML / CSS / JS interface (embedded in the binary).
+- `dsp/include/suite/SuiteLink.h` the suite link: Voxology, Mixology and Masterology tell each other what they do (the
+  same file in all three repos; Voxology publishes each vocal it sits on).
 - `tests/` Catch2 tests; `tools/report.cpp` prints Auto-Edit's report for a test vocal or a raw file.
 
 ## Third-party
