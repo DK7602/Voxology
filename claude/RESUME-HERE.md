@@ -1768,3 +1768,6 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - User: "add bandlab to the DAWs list". BandLab's web studio can't host plug-ins; added "cakewalk" (Cakewalk by BandLab,
   Sonar) to daws.js and SuiteLink.h (dawFromHostPath / dawName, tests). No layout change.
 - CI green: run 38806349818 (832610a; includes v0.50.0, whose own run was cancelled). Download: its Voxology-Windows.
+- CI: v0.49.2's run (and v0.50.0's) were cancelled by the next pushes from the Mixology thread; v0.50.1 run 38806349818
+  (commit 832610a, includes v0.48 Auto Analyze and v0.49.2's STYLE pill) is fully green (Windows + pluginval + VST3
+  validator, ASan / UBSan tests).
