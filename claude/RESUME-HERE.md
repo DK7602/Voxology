@@ -1654,3 +1654,4 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Tests: tests/test_suite.cpp (same as Mixology's, minus its bridge hash check). Checked against the real plug-ins:
   Mixology's linkcheck loads Voxology.vst3 (optional 3rd argument), names the track "Lead Vox", sees it, its compressor and
   reverb once on, and nothing after removal.
+- v0.47.0 CI green: run 38655919112 (commit a226824).
