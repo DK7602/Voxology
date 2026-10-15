@@ -2,7 +2,7 @@
 // event (30 Hz) and four native functions (Auto-Edit).
 
 import * as Juce from "./juce/index.js";
-import { GENRES as SONG_GENRES, STYLES as SONG_STYLES } from "./mixstyles.js";
+import { STYLES as SONG_STYLES } from "./mixstyles.js";
 
 const $ = (id) => document.getElementById(id);
 const MINUS = "−";
@@ -1650,7 +1650,7 @@ function setVocalStyle(i) {
   vocalStyleMineSet(true);
   SONG.vocalMine = true;
   refreshStyle();
-  refreshSongChip();
+  refreshSongInfo();
 }
 const STYLE_ABOUT = ["Upfront, bright and controlled: the hard trap lead", "Dry, punchy and clear: every word upfront", "Melodic trap: tuned, smooth, a wetter space",
   "The hard-tuned robot effect", "Smooth, warm and airy", "Polished and bright", "Natural and warm, light on effects", "Your voice as sung, cleaned up and balanced"];
@@ -1660,11 +1660,24 @@ function openStyleMenu() {
   closeStyleMenu();
   const m = el("div", "ref-menu style-menu");
   m.append(el("div", "ref-head", "STYLE \u00B7 what Auto-Edit aims for"));
-  STYLES.forEach((name, i) => {
-    const row = el("div", "ref-item" + (i === choice("aeStyle") ? " current" : ""));
-    const b = el("button", "ref-pick", (i === choice("aeStyle") ? "\u266A " : "") + name);
+  // The song's style, picked in Mixology or Masterology: it suggests a STYLE until you pick one yourself.
+  const song = SONG_STYLES.find((x) => x.key === SONG.key);
+  const suggest = song ? SONG.suggest : -1;
+  if (song && suggest >= 0) {
+    const row = el("div", "ref-item" + (!SONG.vocalMine ? " current" : ""));
+    const b = el("button", "ref-pick", `${!SONG.vocalMine ? "\u266A " : ""}Follow the song: ${STYLES[suggest]}`);
     b.type = "button";
-    b.append(el("span", "ref-pitch", STYLE_ABOUT[i]));
+    b.append(el("span", "ref-pitch", `Song: ${song.fullName}`));
+    b.addEventListener("click", () => { closeStyleMenu(); vocalStyleMineSet(false); SONG.vocalMine = false; P.aeStyle.setChoiceIndex(suggest); refreshStyle(); refreshSongInfo(); });
+    row.append(b);
+    m.append(row, el("div", "ref-section", "OR PICK ONE FOR THIS TRACK"));
+  } else m.append(el("div", "ref-hint", "Pick the song's style in Mixology or Masterology and Voxology suggests a STYLE from it."));
+  STYLES.forEach((name, i) => {
+    const mine = SONG.vocalMine || suggest < 0;
+    const row = el("div", "ref-item" + (mine && i === choice("aeStyle") ? " current" : ""));
+    const b = el("button", "ref-pick", (mine && i === choice("aeStyle") ? "\u266A " : "") + name);
+    b.type = "button";
+    b.append(el("span", "ref-pitch", STYLE_ABOUT[i] + (i === suggest ? " \u00B7 the song's pick" : "")));
     b.addEventListener("click", () => { closeStyleMenu(); setVocalStyle(i); });
     row.append(b);
     m.append(row);
@@ -1679,64 +1692,24 @@ $("style-pill").addEventListener("click", () => { if (styleMenu) closeStyleMenu(
 document.addEventListener("mousedown", (e) => { if (styleMenu && !styleMenu.contains(e.target) && !$("style-pill").contains(e.target)) closeStyleMenu(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeStyleMenu(); });
 
-// The song's style: Mixology's list of 75 (mixstyles.js, the same file in all three plug-ins), shared through the
-// suite link. On a track where you haven't picked the vocal STYLE yourself, it suggests one (Rap for Hip Hop,
-// Melodic for melodic trap...).
-const SONG = { key: "", name: "", version: -1, vocalMine: false };
-const pickStyleNative = Juce.getNativeFunction("pickStyle");
-function refreshSongChip() {
-  const chip = $("song-style");
+// The song's style: Mixology's list of 75 (mixstyles.js, the same file in all three plug-ins), picked in Mixology or
+// Masterology and shared through the suite link. On a track where you haven't picked the vocal STYLE yourself, it
+// suggests one (Rap for Hip Hop, Melodic for melodic trap...): the plug-in sends that suggestion with the meters.
+const SONG = { key: "", name: "", version: -1, vocalMine: false, suggest: -1 };
+function refreshSongInfo() {
   const st = SONG_STYLES.find((s) => s.key === SONG.key);
-  chip.querySelector("b").textContent = st ? st.name : "Pick a style";
-  chip.classList.toggle("set", !!st);
-  chip.title = (st ? `Song style: ${st.fullName}. ${st.about}` : "Pick your song's style")
-    + " (the same list as Mixology and Masterology: pick it in any of them and all three follow). "
-    + (SONG.vocalMine ? "You picked this track's vocal STYLE yourself, so it stays." : "It suggests this track's vocal STYLE until you pick one yourself.");
+  $("style-pill").title = "What finished should sound like: Auto-Edit aims for this. Click to pick. "
+    + (!st ? "Pick the song's style in Mixology or Masterology and Voxology suggests one."
+      : `Song: ${st.fullName}. ` + (SONG.vocalMine ? "You picked this track's STYLE yourself, so it stays (\"Follow the song\" in the list goes back)."
+        : "This track follows the song's suggestion until you pick a STYLE yourself."));
 }
-function openSongPicker() {
-  const box = $("song-picker");
-  const now = SONG_STYLES.find((s) => s.key === SONG.key) || SONG_STYLES[0];
-  let shown = now.genre;
-  const draw = () => {
-    $("song-genres").replaceChildren(...SONG_GENRES.map((gn) => {
-      const b = el("button", "", "");
-      b.type = "button";
-      b.className = (gn === shown ? "sel" : "") + (gn === now.genre && SONG.key ? " cur" : "");
-      b.innerHTML = `<i style="background:${gn.colour}"></i>${gn.name}`;
-      b.addEventListener("click", () => { shown = gn; draw(); });
-      return b;
-    }));
-    $("song-styles").replaceChildren(...shown.styles.map((s) => {
-      const key = `${shown.id}.${s.id}`;
-      const b = el("button", key === SONG.key ? "sel" : "", "");
-      b.type = "button";
-      b.innerHTML = `<b>${s.name}</b><span>${s.about}</span>`;
-      b.addEventListener("click", () => {
-        SONG.key = key;
-        SONG.name = `${shown.name} - ${s.name}`;
-        pickStyleNative(key, SONG.name);
-        refreshSongChip();
-        box.hidden = true;
-      });
-      return b;
-    }));
-  };
-  draw();
-  box.hidden = false;
-}
-$("song-style").addEventListener("click", openSongPicker);
-$("song-picker-close").addEventListener("click", () => { $("song-picker").hidden = true; });
-window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("song-picker").hidden) $("song-picker").hidden = true; });
 function songFromFrame(ss) {
   if (!ss) return;
-  SONG.vocalMine = !!ss.vocalMine;
-  if (ss.version === SONG.version) return;
-  SONG.version = ss.version;
-  SONG.key = ss.key;
-  SONG.name = ss.name;
-  refreshSongChip();
+  const changed = ss.version !== SONG.version || !!ss.vocalMine !== SONG.vocalMine || ss.suggest !== SONG.suggest;
+  Object.assign(SONG, { key: ss.key, name: ss.name, version: ss.version, vocalMine: !!ss.vocalMine, suggest: ss.suggest ?? -1 });
+  if (changed) refreshSongInfo();
 }
-refreshSongChip();
+refreshSongInfo();
 P.aeStyle.valueChangedEvent.addListener(refreshStyle);
 P.aeStyle.propertiesChangedEvent.addListener(refreshStyle);
 

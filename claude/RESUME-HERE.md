@@ -1730,3 +1730,13 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   picker, STYLE opens a ref-menu-style list of the 8 styles with a one-line "about" each (picking one = vocalStyleMine, as
   the arrows did), REFERENCE opens the reference menu (the separate ✕ is gone; "No reference (use the style)" in the menu).
   Old .picker / .song-chip / .h-label-row CSS removed. Manual updated (top bar, quick start, references, suite section).
+
+## v0.49.2 No song picker in Voxology: STYLE follows the song from Mixology / Masterology (2026-10-15)
+- User asked "aren't song and style the same thing?"; agreed option: drop the SONG pill from Voxology (the song's style is
+  picked in Mixology or Masterology; Voxology still receives it over the suite link and suggests the vocal STYLE).
+- UI: two pills (STYLE, REFERENCE; 236 x 38 px). The STYLE list starts with "Follow the song: <style>" (Song: <genre -
+  style>) when a song style is known, then "OR PICK ONE FOR THIS TRACK" and the 8 styles (the suggested one tagged "the
+  song's pick"); with no song style a hint says to pick it in Mixology or Masterology. Follow the song =
+  setVocalStyleMine(false), which now calls suggestVocalStyle() (PluginProcessor.h). Meters frame songStyle gets
+  "suggest" (vox::songstyle::vocalStyleFor). #song-picker section, its CSS and openSongPicker removed; mixstyles.js stays
+  (names; tests/test_songstyle.cpp). Native pickStyle kept (unused by the UI) for the suite. Manual updated.

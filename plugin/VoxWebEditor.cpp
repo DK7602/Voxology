@@ -1,4 +1,5 @@
 #include "VoxWebEditor.h"
+#include "vox/SongStyle.h"
 
 #include "VoxologyUIData.h"
 
@@ -72,8 +73,9 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
                              { complete (args.size() >= 1 && audioProcessor.autoEdit.applyNeed (args[0].toString())); })
         .withNativeFunction ("dismissAutoAnalyze", [this] (const juce::Array<juce::var>& args, auto complete)
                              { complete (args.size() >= 1 && audioProcessor.autoEdit.dismissNeed (args[0].toString())); })
-        // The song's style (Mixology's list, the same in all three): pickStyle(key, name); setVocalStyleMine(bool):
-        // you picked this track's vocal STYLE yourself, so the song's style no longer suggests it.
+        // The song's style (Mixology's list, the same in all three): pickStyle(key, name) (picked in Mixology or Masterology
+        // since v0.49.2; kept for the suite); setVocalStyleMine(bool): true = you picked this track's vocal STYLE yourself,
+        // so the song's style no longer suggests it; false = follow the song again.
         .withNativeFunction ("pickStyle", [this] (const juce::Array<juce::var>& args, auto complete)
                              {
                                  if (args.size() >= 2) audioProcessor.pickStyle (args[0].toString().toStdString(), args[1].toString().toStdString());
@@ -342,6 +344,7 @@ void VoxWebEditor::timerCallback()
         so->setProperty ("from", static_cast<int> (st.from));   // 1 Voxology, 2 Mixology, 3 Masterology
         so->setProperty ("version", static_cast<int> (audioProcessor.songStyleVersion()));
         so->setProperty ("vocalMine", audioProcessor.isVocalStyleMine());
+        so->setProperty ("suggest", vox::songstyle::vocalStyleFor (st.key));   // the vocal STYLE it suggests (-1 = none)
         frame->setProperty ("songStyle", juce::var (so));
     }
     frame->setProperty ("pitchSung", roundTo (m.pitchSung.load(), 0.01f));

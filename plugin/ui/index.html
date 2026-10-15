@@ -17,8 +17,7 @@
   <header id="header" class="card">
     <img class="logo" id="logo" src="assets/logo.webp" alt="Voxology logo">
     <div class="h-group g-style">
-      <button type="button" id="song-style" class="style-pill" title="The song's style (the same list as Mixology and Masterology): click to pick"><i>SONG</i><b>Pick a style</b></button>
-      <button type="button" id="style-pill" class="style-pill" title="What finished should sound like: Auto-Edit aims for this. Click to pick"><i>STYLE</i><b id="style-name">Trap Lead</b></button>
+      <button type="button" id="style-pill" class="style-pill" title="What finished should sound like: Auto-Edit aims for this. Click to pick (or follow the song's style from Mixology / Masterology)"><i>STYLE</i><b id="style-name">Trap Lead</b></button>
       <button type="button" id="ref" class="style-pill" title="Reference Match: pick a built-in pro vocal or add an acapella you love, and Auto-Edit aims at its sound"><i>REFERENCE</i><b>None</b></button>
     </div>
     <div class="h-group g-int">
@@ -109,20 +108,9 @@
     <div class="meter"><span class="m-label">OUT</span><div class="bar"><i id="out-bar"></i></div><span class="mono" id="out-text">−inf</span></div>
     <span class="grow"></span>
     <span class="mono dim" id="status"></span>
-    <span class="mono dim">VOXOLOGY v0.49.1</span>
+    <span class="mono dim">VOXOLOGY v0.49.2</span>
   </footer>
 
-  <!-- SONG STYLE: Mixology's list (mixstyles.js, the same in all three plug-ins), shared through the suite link -->
-  <section id="song-picker" class="card" hidden>
-    <div class="card-head">
-      <span class="caps">SONG STYLE</span>
-      <span class="dim m-sub">The same list as Mixology and Masterology: pick it in any of them and all three follow.</span>
-      <span class="grow"></span>
-      <button type="button" id="song-picker-close" class="chip" title="Close (Esc)">CLOSE &#10005;</button>
-    </div>
-    <nav id="song-genres"></nav>
-    <div id="song-styles"></div>
-  </section>
 
   <!-- MANUAL (docs/MANUAL.md, built into the plug-in) -->
   <section id="manual" class="card" hidden>

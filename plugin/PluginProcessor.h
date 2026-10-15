@@ -115,7 +115,7 @@ public:
     /** You picked a song style in Voxology's window: the others follow. */
     void pickStyle (const std::string& key, const std::string& name);
     /** You picked this track's vocal style yourself (the STYLE arrows): the song's style no longer changes it. */
-    void setVocalStyleMine (bool mine) { vocalStyleMine.store (mine); }
+    void setVocalStyleMine (bool mine) { vocalStyleMine.store (mine); if (! mine) suggestVocalStyle(); }
     bool isVocalStyleMine() const { return vocalStyleMine.load(); }
     suite::StyleInfo songStyleNow() const { const juce::ScopedLock sl (styleLock); return songStyle.style(); }
     std::uint32_t songStyleVersion() const { return styleVersion.load(); }

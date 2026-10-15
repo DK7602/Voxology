@@ -141,7 +141,7 @@
   setInterval(() => { if (ae.state === 1) { ae.progress = Math.min(1, ae.progress + 0.1 / 4); if (ae.progress >= 1) { ae.state = 2; setTimeout(aeFinish, 900); } } }, 100);
 
   // The song's style, shared with Mixology and Masterology (as if Mixology picked it).
-  const song = { key: "hiphop.gfunk", name: "Hip Hop - G-Funk", from: 2, version: 1, vocalMine: false };
+  const song = { key: "hiphop.gfunk", name: "Hip Hop - G-Funk", from: 2, version: 1, vocalMine: false, suggest: 1 };
   window.__JUCE__ = {
     initialisationData: {
       __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "getAutoAnalyze", "setAutoAnalyze", "applyAutoAnalyze", "dismissAutoAnalyze", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed", "pickStyle", "setVocalStyleMine"],
