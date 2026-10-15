@@ -1763,3 +1763,7 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - publishSuite: recordedPeakDb / clippedSpots from AutoEditController (parsed from the report's analysis peakDb /
   clipped in setReport); flags recordedHot (peak > 0) and recordedClipped (>= 3 spots), the TOO HOT / CLIPPED rules.
 - Bottom bar: meter bars 170 px, readouts 156 px, status never shrinks, so the DAW pick fits on one line.
+
+## v0.50.1: Cakewalk (BandLab) in the DAW list (2026-10-15, from Mixology's thread)
+- User: "add bandlab to the DAWs list". BandLab's web studio can't host plug-ins; added "cakewalk" (Cakewalk by BandLab,
+  Sonar) to daws.js and SuiteLink.h (dawFromHostPath / dawName, tests). No layout change.

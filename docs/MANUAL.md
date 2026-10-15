@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.50.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.50.1. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.50.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.50.1**).
 
 Where each one goes in Cubase:
 
@@ -57,11 +57,12 @@ The top bar holds everything you need for a quick mix; the panels below are for 
 The round **?** next to LEARN opens this manual (Esc or CLOSE to go back). The bottom bar shows **IN** and **OUT** loudness (LUFS) and peak level, your **DAW** and the version number.
 
 **Your DAW** (bottom bar, next to the version): Voxology finds the program it runs in (Cubase, Studio One, FL Studio,
-Ableton Live, REAPER, Bitwig Studio, Logic Pro) and writes every tip and report line for it: how to lower a clip's gain,
+Ableton Live, REAPER, Bitwig Studio, Logic Pro, Cakewalk by BandLab / Sonar) and writes every tip and report line for it: how to lower a clip's gain,
 send the beat to the side-chain, play MIDI into Voxology, record in mono, automate a switch. "Found: ..." uses the one it
 found; pick another if it got it wrong. Mixology and Masterology share it: pick it in any of the three and the others
 follow (the newest choice wins, also after you reopen the project). Logic can't send MIDI to an audio effect, so there
-Voxology tells you to use Key AUTO instead of MIDI notes. The middle card, **VOCAL SPECTRUM**, shows your vocal (grey-blue), the result (gold), the Tone EQ curve (blue line, drag its 5 points) and Dynamic EQ cuts (orange).
+Voxology tells you to use Key AUTO instead of MIDI notes. BandLab: pick **Cakewalk** (BandLab's desktop DAW for
+Windows); BandLab's web studio (browser or app) can't load plug-ins. The middle card, **VOCAL SPECTRUM**, shows your vocal (grey-blue), the result (gold), the Tone EQ curve (blue line, drag its 5 points) and Dynamic EQ cuts (orange).
 
 ## The 13 modules
 
