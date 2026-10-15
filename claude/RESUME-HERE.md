@@ -1655,3 +1655,24 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   Mixology's linkcheck loads Voxology.vst3 (optional 3rd argument), names the track "Lead Vox", sees it, its compressor and
   reverb once on, and nothing after removal.
 - v0.47.0 CI green: run 38655919112 (commit a226824).
+
+## Thread handoff (2026-10-15): "Voxology upgrades" thread -> "Voxology Auto Analyze" thread
+- State: v0.47.0, CI green (run 38655919112, commit a226824; v0.47 = the suite link, done from the Mixology thread:
+  dsp/include/suite/SuiteLink.h + dsp/src/SuiteLink.cpp, master copy in DK7602/mixology). ALL work since v0.26 is on branch
+  claude/upbeat-faraday-iyzicv; claude/voxology is still at v0.25.0 + notes (offered to fast-forward it: 0 commits
+  behind, no conflicts; the user hasn't answered yet - ask before touching it). Start from claude/upbeat-faraday-iyzicv.
+- This thread: v0.32 - v0.34 Vocal Fit (Auto-Edit hears the beat, FIT LEVEL, Unmask card); v0.34.1 Honey Tune narrow
+  windows; then the user's upgrade queue, all done: v0.35 Noise + Room, v0.36 mouth de-click, v0.37 Voices (8 voices,
+  Stack, MIDI chords), v0.38 My Chains + Quick Looks, v0.39 Dimension, v0.40 Crew, v0.41 split-vocal references,
+  v0.42 Throws, v0.43 Smooth (resonance smoother); references: v0.44 Cymatics Infinity trap (licensed packs),
+  v0.45 Male trap rap from Looperman (lowFromStyle), v0.46 Voices 4th up + Female trap rap (one voice, very bright).
+  17 built-in references.
+- Lessons: licence first (Sample Snagger, MUSDB18 / MoisesDB audio stay out of the repo, measurements only; Looperman
+  and Cymatics files the user cleared are in test-audio/); one voice = one artist's tone (say so in its "about");
+  split / boomy sources: use the STYLE's low end; measure Pitch tags; never guess voice gender or key from file names.
+- Open: Cubase test by the user of MIDI chords routing, the My Chains name box (typing), Throws timing; more female trap
+  rap vocals would broaden "Female trap rap"; licence proof (Looperman page screenshots, Cymatics licence) before
+  selling; optional rename button for YOURS references (name = audio file name today); claude/voxology fast-forward.
+- Next thread: "Voxology Auto Analyze" - the user hasn't described it yet: ask what they want before changing code.
+- User prefs (unchanged): short replies, plain language, honest, a plan with warnings; Actions link when green +
+  Ctrl+J -> Keep; keep this file AND docs/MANUAL.md updated (MANUAL rule); no PRs; no model names in commits.
