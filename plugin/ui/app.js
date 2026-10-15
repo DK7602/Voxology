@@ -3,6 +3,10 @@
 
 import * as Juce from "./juce/index.js";
 import { STYLES as SONG_STYLES } from "./mixstyles.js";
+import { DAWS, dawOf, dawName, fillDaw } from "./daws.js";
+
+// The DAW you work in: found from the host, or picked here / in Mixology / in Masterology (all three follow).
+const DAW = { key: "cubase", picked: false, detected: "cubase", from: 0 };
 
 const $ = (id) => document.getElementById(id);
 const MINUS = "−";
@@ -1185,7 +1189,7 @@ function draw() {
 const body = $("learn-body");
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const head = (t) => el("span", "l-h", t);
-const para = (t, cls = "l-p") => el("p", cls, t);
+const para = (t, cls = "l-p") => el("p", cls, typeof t === "string" ? fillDaw(t, DAW.key) : t);
 function item(name, value, why) {
   const d = el("div", "l-item");
   const top = el("div", "l-top");
@@ -1195,29 +1199,32 @@ function item(name, value, why) {
   return d;
 }
 /** A tip with a plan: kind "warn" (do something), "calm" (fine as it is) or "" (info). */
+// Every tip says how to do things in your DAW: {daw} / {daw:phrase} tokens (in the window's text and the engine's)
+// become that DAW's words here (daws.js, the same file in Mixology and Masterology).
+const D = (s) => fillDaw(s, DAW.key);
 function tip(title, text, kind, plan) {
   const d = el("div", `tip ${kind || ""}`);
-  d.append(el("div", "t-title", title), el("div", "", text));
+  d.append(el("div", "t-title", D(title)), el("div", "", D(text)));
   if (plan) {
-    d.append(el("div", "t-need", `Do I need to fix it? ${plan.need}`));
+    d.append(el("div", "t-need", `Do I need to fix it? ${D(plan.need)}`));
     if (plan.steps && plan.steps.length) {
       const ol = el("ol");
-      plan.steps.forEach((s) => ol.append(el("li", "", s)));
+      plan.steps.forEach((s) => ol.append(el("li", "", D(s))));
       d.append(ol);
     }
   }
   return d;
 }
-function list(items) { const ul = el("ul", "l-list"); items.forEach((t) => ul.append(el("li", "", t))); return ul; }
+function list(items) { const ul = el("ul", "l-list"); items.forEach((t) => ul.append(el("li", "", typeof t === "string" ? fillDaw(t, DAW.key) : t))); return ul; }
 
 /** The incoming vocal: clipped or over full scale (Cleanup and Output pages). */
 function inputTips() {
   const t = [];
   if (M.clipTotal > 0) t.push(tip("CLIPPED RECORDING", `The vocal arrives with flat-topped (clipped) peaks: ${M.clipTotal} so far. That's distortion baked in before Voxology, and it can crackle once the vocal is brightened and compressed.`, "warn",
-    { need: "Yes if you hear crackle on loud words.", steps: ["Zoom in on the audio event in Cubase: flat tops mean it was recorded too hot. Re-record with the loudest words peaking around -10 dB.",
-      "No flat tops in the event? Then something before Voxology on this track clips it (a plug-in above Voxology, or a bounce made through a limiter)."] }));
-  if (M.hotPeak > 0.05) t.push(tip("TOO HOT", `The vocal reaches +${fmtNum(M.hotPeak, 1)} dB coming in: over the top of the meter. Cubase doesn't clip inside the mix, but a limiter later (like one on the Stereo Out) has to squash it hard, and that crackles.`, "warn",
-    { need: "Yes. Leave room for the rest of the chain.", steps: ["Lower the vocal event's clip gain (or the plug-in above Voxology) until the loudest words peak around -6 dB here.", "Check your Stereo Out limiter only shaves 1 - 3 dB."] }));
+    { need: "Yes if you hear crackle on loud words.", steps: ["Zoom in on the vocal's {daw:clip} in {daw}: flat tops mean it was recorded too hot. Re-record with the loudest words peaking around -10 dB.",
+      "No flat tops in the {daw:clip}? Then something before Voxology on this track clips it (a plug-in above Voxology, or a bounce made through a limiter)."] }));
+  if (M.hotPeak > 0.05) t.push(tip("TOO HOT", `The vocal reaches +${fmtNum(M.hotPeak, 1)} dB coming in: over the top of the meter. {daw} doesn't clip inside the mix, but a limiter later (like one on the {daw:master} channel) has to squash it hard, and that crackles.`, "warn",
+    { need: "Yes. Leave room for the rest of the chain.", steps: ["Lower the vocal's clip gain (or the plug-in above Voxology) until the loudest words peak around -6 dB here. In {daw}: {daw:clipGain}.", "Check your {daw:master} limiter only shaves 1 - 3 dB."] }));
   return t;
 }
 
@@ -1225,13 +1232,13 @@ const LEARN = {
   pitch: {
     does: "Pitch correction (auto-tune). It hears the note you sing, picks the nearest note of your key, and pulls you onto it. Your voice's tone stays the same (no chipmunk sound); breaths and s sounds are never touched. Three modes: Natural (your voice, just in tune), Classic (the familiar auto-tune glide) and Robot (the hard, stepped trap effect). It's first in the chain, so everything after it hears the tuned voice.",
     how: ["Mode: Natural for a human-sounding lead (notes land on pitch; your vibrato and the start of a scoop stay). Robot for the T-Pain / melodic-trap effect: instant, flat, stepped notes whatever Retune says. Classic is in between and follows Retune.",
-      "Key, Auto (the default): Pitch follows the key it hears. Surest: let Voxology hear your beat, either by sending the beat to this Voxology's side-chain (Cubase: side-chain button in the plug-in's top bar, then a Send from the beat track), or with a second Voxology on the beat in BEAT mode. It hears the beat's notes, home key and tuning. With no beat, it learns the key from the notes you sing (about 20 - 40 s of held notes; rap may never be sure). Your Scale choice picks the flavour within those notes (Minor = the minor home, Minor Penta = the 5 safest notes); Chromatic uses the key's own mode. Key / Scale are the fallback.",
+      "Key, Auto (the default): Pitch follows the key it hears. Surest: let Voxology hear your beat, either by sending the beat to this Voxology's side-chain (in {daw}: {daw:sidechain}) track), or with a second Voxology on the beat in BEAT mode. It hears the beat's notes, home key and tuning. With no beat, it learns the key from the notes you sing (about 20 - 40 s of held notes; rap may never be sure). Your Scale choice picks the flavour within those notes (Minor = the minor home, Minor Penta = the 5 safest notes); Chromatic uses the key's own mode. Key / Scale are the fallback.",
       "Key, Manual: set Key / Scale to your beat's key (often in the beat's name, e.g. \"A min\"). Chromatic allows all 12 notes when you're not sure.",
       "Retune: how fast a note is pulled in. Natural: 10 - 40 ms (your vibrato stays at any speed). Classic: 0 - 10 ms is hard and robotic, 30 - 80 ms tuned but natural, 100+ ms only fixes drift.",
       "Vibrato (Natural): 0 keeps it as you sang it; turn it down to calm a wobbly note (all the way = flat), up to make it deeper.",
       "Humanize: lets long held notes keep their life while short notes still snap in.",
       "Notes: lit notes are the ones Pitch may pull you to. Click one to switch it off (it's never used), click again to bring it back.",
-      "MIDI: in Cubase, make a MIDI track and set its output to Voxology. Notes = while you hold notes, your voice goes to those notes (play or draw the melody for the hard robot effect); nothing held = the key as usual. Learn = play the beat's notes or chords once and they become the scale (kept with the project).",
+      "MIDI: in {daw}, {daw:midiToVoxology}. Notes = while you hold notes, your voice goes to those notes (play or draw the melody for the hard robot effect); nothing held = the key as usual. Learn = play the beat's notes or chords once and they become the scale (kept with the project).",
       "REC (header): Record mode for tracking. You hear yourself tuned with about 6 ms delay instead of 33. Slightly rougher; Voices and Formant are off until you switch it off.",
       "Transpose: moves the whole voice up or down in semitones (your tone stays the same). Small moves sound natural; an octave sounds like an effect.",
       "Amount: 100 % lands right on the note; lower keeps some of your own pitch.",
@@ -1239,15 +1246,15 @@ const LEARN = {
     live: () => {
       const t = [];
       if (M.recMode) t.push(tip("RECORD MODE", `Voxology is in Record mode: about ${M.latencyMs.toFixed(0)} ms, so you can hear yourself tuned while you record. Pitch uses a faster, slightly rougher method; Voices, Formant, Noise, Room, Clicks and Smooth are off.`, "calm",
-        { need: "Switch it off when you're done recording.", steps: ["Click REC in the header to go back to full quality for mixing (Cubase adjusts the timing for you)."] }));
+        { need: "Switch it off when you're done recording.", steps: ["Click REC in the header to go back to full quality for mixing ({daw} adjusts the timing for you)."] }));
       if (choice("ptMidi") === 2 && M.midiNotes === 0) t.push(tip("LEARN IS WAITING", "MIDI is on Learn, but no notes have been played yet, so Pitch uses the key as usual.", "calm",
-        { need: "Only if you want the MIDI scale.", steps: ["Route a MIDI track's output to Voxology (Cubase: the track's output menu).", "Play the beat's notes or chords once: they light up blue in Notes."] }));
+        { need: "Only if you want the MIDI scale.", steps: ["In {daw}: {daw:midiToVoxology}.", "Play the beat's notes or chords once: they light up blue in Notes."] }));
       if (choice("ptKeySrc") === 0 && M.scState === 1 && M.bkSource !== 2 && M.inShort > -70) t.push(tip("SIDE-CHAIN SILENT",
         "Voxology's side-chain is switched on, but no sound is coming into it, so the key can't come from your beat" + (M.bkSource === 3 ? " (it's guessing from your voice instead)." : "."), "warn",
         { need: "Yes, if you want the beat's key.", steps: ["In Voxology's window, click the small arrow next to the side-chain button (top bar) and choose Add Side-Chain Source, then pick your beat track. (Or: on the beat track, add a Send whose destination is this vocal's Voxology side-chain.)", "Make sure that send is switched on (lit) and its level is up, around 0 dB, and the beat track isn't muted.", "Press play: within a few seconds the Key status should read \"beat: \u2026\". If it still says \"beat: no sound\", send me a screenshot of the beat track's Sends."] }));
       if (val("ptAmount") >= 0.05 && choice("ptKeySrc") === 0 && M.bkSource !== 1 && M.bkSource !== 2 && M.scState !== 1) t.push(tip("NO BEAT HEARD",
         `Key is on Auto, but Voxology can't hear your beat, so it learns the key from your singing${M.bkState === 1 ? ` (now: ${beatKeyName()})` : ": that takes about 20 - 40 s of held notes, and rap may never be sure"}. ${M.bkState === 1 ? "" : "Until then Pitch uses the Key / Scale below. "}The beat is the surest way.`, "calm",
-        { need: "Optional, but it's the surest way to always be in the beat's key.", steps: ["Open Voxology on your vocal and click the side-chain button in the top bar of its window (Cubase), so it lights up.", "On your beat track, add a Send and pick this vocal's \"Voxology - Side-Chain\" as its destination, at 0 dB.", "Press play: after about 6 s the beat's key shows up here. (Or: put a second Voxology on the beat track and click BEAT.)"] }));
+        { need: "Optional, but it's the surest way to always be in the beat's key.", steps: ["Send the beat to this Voxology's side-chain. In {daw}: {daw:sidechain}.", "Press play: after about 6 s the beat's key shows up here. (Or: put a second Voxology on the beat track and click BEAT.)"] }));
       if (val("ptAmount") >= 0.05 && M.bkState === 1 && Math.abs(M.bkTune) >= 10) t.push(tip("BEAT DETUNED", `Your beat is tuned ${fmtTune(M.bkTune)} away from standard (A = 440 Hz). Pitch tunes your notes to the beat's tuning, so they sit with it.`, "calm",
         { need: "No. It's handled.", steps: ["Nothing to do. (If you also use another tuner, set its reference to match.)"] }));
       if (val("ptAmount") >= 0.05 && M.bkState !== 1 && M.scaleUsed === 0) t.push(tip("CHROMATIC", "All 12 notes are allowed, so a wrong note can't be pulled into the key; it just gets cleaned up.", "calm",
@@ -1369,23 +1376,23 @@ const LEARN = {
     how: ["Set Key and Scale in the Pitch module first (your beat's key): the harmonies use it. Chromatic gives plain intervals that can clash.",
       "Voice 1 / Voice 2: Unison on both = a wide, stacked lead in your own octave (try Formant a little - or + so they sound like other singers). A 3rd up is the classic harmony; add a 5th down or an octave down for a full stack. A 4th up sounds more open (gospel, sus). Octave down is the deep ad-lib voice.",
       "Stack: 2, 4 or 6 more singers on your notes, spread left and right, for a big stacked hook. More singers sound bigger, not louder.",
-      "MIDI chords (under Stack): in Cubase, make a MIDI track and set its output to Voxology, then play or draw chords under the vocal: the voices sing those notes (up to 8), lowest on the left, highest on the right. Voice 1 and Voice 2 wait while it's on.",
+      "MIDI chords (under Stack): in {daw}, {daw:midiToVoxology}, then play or draw chords under the vocal: the voices sing those notes (up to 8), lowest on the left, highest on the right. Voice 1 and Voice 2 wait while it's on.",
       "Crew: each backing voice becomes its own singer (its own voice, tone, timing and tuning). 40 - 70 % sounds like your crew behind you instead of copies of you.",
       "Level: 30 - 50 % keeps them behind you. Width spreads Voice 1 left and Voice 2 right (and the double and the stack).",
       "Formant: - makes the voices deeper and darker (a different singer behind you), + thinner and brighter.",
-      "Use harmonies on hooks and ad-libs rather than whole verses: automate the module's ON button in Cubase."],
+      "Use harmonies on hooks and ad-libs rather than whole verses: automate the module's ON button in {daw} ({daw:automate})."],
     live: () => {
       const t = [];
       if ([choice("hv1"), choice("hv2")].some((i) => i > 0 && i !== 8) && choice("ptScale") === 0) t.push(tip("CHROMATIC KEY", "The Pitch module's scale is Chromatic, so the harmonies use plain intervals (a major 3rd), which can clash with a minor beat.", "warn",
         { need: "Yes, if the harmonies sound sour.", steps: ["Open 01 PITCH and set Key and Scale to your beat's key.", "Run Auto-Edit on a sung part: it suggests a key in its report."] }));
       if (on("hvMidi") && M.heldNotes === 0) t.push(tip("PLAY A CHORD", "MIDI is on, so the voices sing only the notes held on a MIDI track, and none are held right now.", "calm",
-        { need: "Only if you want MIDI chords.", steps: ["In Cubase, add a MIDI track and set its output to Voxology (the routing at the top of the Inspector).", "Play or draw chords on it under the vocal part.", "Or click MIDI chords again (under Stack) to use Voice 1, Voice 2 and Stack."] }));
+        { need: "Only if you want MIDI chords.", steps: ["In {daw}: {daw:midiToVoxology}.", "Play or draw chords on it under the vocal part.", "Or click MIDI chords again (under Stack) to use Voice 1, Voice 2 and Stack."] }));
       return t;
     } },
   dimension: {
     does: "Movement and width on your finished vocal. Chorus adds a slowly moving copy of your voice, left and right moving opposite ways: thicker and wider, like a second singer right next to you. Flanger is the jet \"whoosh\" sweep; Phaser the swirling, watery sweep. The level stays the same at any Amount. Auto-Edit never changes it: it's your creative choice.",
     how: ["Chorus at 20 - 35 % with Speed around 0.5 Hz widens a sung hook or a background stack without sounding like an effect.",
-      "Flanger and Phaser are effects you notice: use them on an ad-lib, an intro or one line, and switch the module on and off with Cubase automation.",
+      "Flanger and Phaser are effects you notice: use them on an ad-lib, an intro or one line, and switch the module on and off {daw:automate}.",
       "Speed: slow (0.1 - 0.5 Hz) is smooth and wide; fast (2 - 5 Hz) wobbles.",
       "Width 0 = the same on both sides (it still moves); 100 = left and right move opposite ways."],
     live: () => (val("dmAmount") >= 50 && choice("dmMode") === 0 && val("dmRate") > 2 ? [tip("SEASICK?", "Chorus at a fast Speed and a high Amount makes the pitch wobble audibly.", "calm",
@@ -1396,7 +1403,7 @@ const LEARN = {
       "Throw: an echo on the last word of each line, on the beat, like an engineer throwing it by hand (the rest of the line stays dry). 30 - 60 % for trap hooks and ad-lib lines. It works even with Mix at 0: then only the line ends echo.",
       "Mix: keep it low (10 - 20 %) so you feel it more than hear it.",
       "Tone: lower makes the repeats darker so they sit behind the vocal."],
-    live: () => (M.bpm > 0 ? [] : [tip("NO TEMPO YET", "The delay locks to Cubase's tempo once playback runs (120 BPM until then).", "")]) },
+    live: () => (M.bpm > 0 ? [] : [tip("NO TEMPO YET", "The delay locks to {daw}'s tempo once playback runs (120 BPM until then).", "")]) },
   reverb: {
     does: "Puts the vocal in a space, like a vocal plate in a studio. Pre-delay keeps the start of each word dry and clear; Duck lets the tail bloom in the gaps. The low end of the reverb is cut so it never muddies the 808.",
     how: ["Decay: 0.8 - 1.5 s for rap, 1.5 - 3 s for sung parts.",
@@ -1410,20 +1417,20 @@ const LEARN = {
       return t;
     } },
   out: {
-    does: "The final level into your mix. Auto-Edit matches it to the loudness the vocal came in at, so it doesn't jump in your mix; set the vocal's balance against the beat with Cubase's track fader.",
+    does: "The final level into your mix. Auto-Edit matches it to the loudness the vocal came in at, so it doesn't jump in your mix; set the vocal's balance against the beat with {daw}'s track fader.",
     how: ["Use A / B with MATCH on to hear what Voxology does at equal loudness.",
       "Keep Out Peak below about -1 dB on the vocal track."],
     live: () => {
       const t = inputTips();
       if (M.outPeak > -0.5) t.push(tip("CLIPPING RISK", `The output peaks at ${fmtDb(M.outPeak)}, right at the top.`, "warn",
-        { need: "Yes, if the track meter in Cubase turns red.", steps: ["Lower Output 3 dB.", "Or lower Compressor Makeup."] }));
+        { need: "Yes, if the track meter in {daw} turns red.", steps: ["Lower Output 3 dB.", "Or lower Compressor Makeup."] }));
       return t;
     } },
 };
 
 function notesAsTips() {
   for (const raw of report.notes || []) {
-    const lines = raw.split("\n");
+    const lines = D(raw).split("\n");
     const first = lines[0], cut = first.indexOf(":");
     const title = cut > 0 && cut < 32 ? first.slice(0, cut) : "HEADS UP";
     const text = cut > 0 && cut < 32 ? first.slice(cut + 1).trim() : first;
@@ -1523,7 +1530,7 @@ function analyzeBlock() {
   body.append(h, para(analyzeStatus(), "l-p aa-status"));
   if (!analyze || !analyze.on) return;
   for (const n of analyze.needs || []) {
-    const lines = n.note.split("\n"), first = lines[0], cut = first.indexOf(":");
+    const lines = D(n.note).split("\n"), first = lines[0], cut = first.indexOf(":");
     const need = (lines.find((l) => l.startsWith("NEED:")) || "").slice(5).trim();
     const steps = lines.filter((l) => l.startsWith("STEP:")).map((l) => l.slice(5).trim());
     const text = first.slice(cut + 1).trim();
@@ -1703,6 +1710,35 @@ function refreshSongInfo() {
       : `Song: ${st.fullName}. ` + (SONG.vocalMine ? "You picked this track's STYLE yourself, so it stays (\"Follow the song\" in the list goes back)."
         : "This track follows the song's suggestion until you pick a STYLE yourself."));
 }
+// Your DAW: the bottom bar's pick ("Found: ..." = the program Voxology runs in).
+const pickDawNative = Juce.getNativeFunction("pickDaw");
+function fillDawSelect() {
+  const sel = $("daw-select");
+  const found = dawOf(DAW.detected);
+  sel.replaceChildren(...[["", `Found: ${found.key === "other" ? "not known" : found.name}`], ...DAWS.map((d) => [d.key, d.name])].map(([v, t]) => {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = t;
+    return o;
+  }));
+  sel.value = DAW.picked ? DAW.key : "";
+}
+$("daw-select").addEventListener("change", (e) => {
+  const v = e.target.value;
+  pickDawNative(v);
+  DAW.key = v || dawOf(DAW.detected).key;
+  DAW.picked = !!v;
+  learnKey = "";
+  renderLearn(true);
+});
+function dawFromFrame(d) {
+  if (!d || (d.key === DAW.key && !!d.picked === DAW.picked && d.detected === DAW.detected)) return;
+  Object.assign(DAW, { key: d.key || "other", picked: !!d.picked, detected: d.detected || "other", from: d.from || 0 });
+  fillDawSelect();
+  learnKey = "";
+  renderLearn(true);   // every tip again, in this DAW's words
+}
+fillDawSelect();
 function songFromFrame(ss) {
   if (!ss) return;
   const changed = ss.version !== SONG.version || !!ss.vocalMine !== SONG.vocalMine || ss.suggest !== SONG.suggest;
@@ -1928,6 +1964,7 @@ function meterBar(elBar, elText, short, peak) {
 window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
   Object.assign(M, typeof frame === "string" ? JSON.parse(frame) : frame);
   songFromFrame(M.songStyle);   // the song's style: this project's, or one just picked in Mixology or Masterology
+  dawFromFrame(M.daw);          // the DAW: found from the host, or picked in any of the three
   meterBar($("in-bar"), $("in-text"), M.inShort, M.inPeak);
   meterBar($("out-bar"), $("out-text"), M.outShort, M.outPeak);
   liveMeters.forEach((c) => c.update());

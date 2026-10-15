@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.49.2. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.50.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.49.2**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.50.0**).
 
 Where each one goes in Cubase:
 
@@ -54,7 +54,14 @@ The top bar holds everything you need for a quick mix; the panels below are for 
 | REC | Record mode: about 6 ms delay instead of about 55 ms, so you hear yourself tuned while recording. A little rougher; Voices, Formant, Noise, Room, Clicks and Smooth are off | On while recording, off for mixing |
 | Power button | Bypasses all of Voxology | Quick before / after |
 
-The round **?** next to LEARN opens this manual (Esc or CLOSE to go back). The bottom bar shows **IN** and **OUT** loudness (LUFS) and peak level, plus the version number. The middle card, **VOCAL SPECTRUM**, shows your vocal (grey-blue), the result (gold), the Tone EQ curve (blue line, drag its 5 points) and Dynamic EQ cuts (orange).
+The round **?** next to LEARN opens this manual (Esc or CLOSE to go back). The bottom bar shows **IN** and **OUT** loudness (LUFS) and peak level, your **DAW** and the version number.
+
+**Your DAW** (bottom bar, next to the version): Voxology finds the program it runs in (Cubase, Studio One, FL Studio,
+Ableton Live, REAPER, Bitwig Studio, Logic Pro) and writes every tip and report line for it: how to lower a clip's gain,
+send the beat to the side-chain, play MIDI into Voxology, record in mono, automate a switch. "Found: ..." uses the one it
+found; pick another if it got it wrong. Mixology and Masterology share it: pick it in any of the three and the others
+follow (the newest choice wins, also after you reopen the project). Logic can't send MIDI to an audio effect, so there
+Voxology tells you to use Key AUTO instead of MIDI notes. The middle card, **VOCAL SPECTRUM**, shows your vocal (grey-blue), the result (gold), the Tone EQ curve (blue line, drag its 5 points) and Dynamic EQ cuts (orange).
 
 ## The 13 modules
 
@@ -324,6 +331,10 @@ finished mix into the master. In the same Cubase project they tell each other wh
   Mixology then treats that track as a vocal and never adds a second compressor, reverb or delay on top of
   Voxology's. Mixology's Tracks page shows a gold **VOX** tag on the track (**BEAT** for Voxology in BEAT mode).
 - The bottom bar shows **MIXOLOGY ✓** when a Mixology is in the project (hover it for what that means).
+- **Recorded too hot?** When Auto-Edit finds the vocal clipped or over the top of the meter in the recording itself,
+  Voxology tells Mixology: its Auto Mix, Balance, Polish and Vocal Pocket then say "fix this first" above their changes
+  (lower the clip gain, then let Mixology hear it again), because their level moves depend on it.
+- **One DAW for all three**: the DAW in the bottom bar is shared the same way as the song style.
 - **One song style for all three**: pick the song's genre and style in **Mixology or Masterology** (the list of 75).
   Voxology knows it within a second, also after you reopen the project; there's no song picker in Voxology itself,
   because there it only suggests the vocal STYLE: Rap for Hip Hop, Trap Lead for hard trap, Melodic for melodic trap
@@ -331,7 +342,8 @@ finished mix into the master. In the same Cubase project they tell each other wh
   where you haven't picked the STYLE yourself (or chose **Follow the song** in the STYLE list): a song with rap verses and a melodic hook keeps each track's vocal style.
   Projects from before the shared style keep their vocal style as it was.
 - Needs Mixology 0.8 (and Masterology 0.26) or newer; the shared song style needs Voxology 0.49, Mixology 0.12 and
-  Masterology 0.28 (update all three together: older and newer ones don't see each other).
+  Masterology 0.28; the shared DAW and the "recorded too hot" note need Voxology 0.50, Mixology 0.13 and Masterology
+  0.29 (update all three together: older and newer ones don't see each other).
 
 ## Troubleshooting
 

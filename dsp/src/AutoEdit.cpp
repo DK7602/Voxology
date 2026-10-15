@@ -927,7 +927,7 @@ void vocalFit (AutoEditResult& r, const std::vector<float>& beatAudio, const Sig
     {
         r.notes.push_back ("BEAT SILENT: Voxology's side-chain is on, but no beat came in while Auto-Edit listened, so Vocal Fit couldn't compare your vocal with it."
                            "\nNEED: Optional: only for Vocal Fit. The rest of Auto-Edit worked as usual."
-                           "\nSTEP: On the beat track in Cubase, open Sends, pick \"Voxology - Side-Chain\" and switch the send on, at 0 dB."
+                           "\nSTEP: In {daw}: {daw:sidechain}."
                            "\nSTEP: Play a part with the beat and your vocal together, then press AUTO-EDIT again.");
         return;
     }
@@ -1079,13 +1079,13 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         r.notes.push_back ("CLIPPED RECORDING: the vocal hits the very top of the meter " + std::to_string (a.clippedRuns) +
                            " times. Those spots are distorted in the recording itself; no plug-in can fully undo that."
                            "\nNEED: Yes if you hear crackle on loud words. If it sounds fine to you, it's optional."
-                           "\nSTEP: Next take, turn the gain knob on your audio interface down until your loudest words peak around -10 dB on Cubase's meter."
-                           "\nSTEP: For this take, re-record the clipped lines if you can, or repair them with a declipper (Cubase Pro: SpectraLayers, or iZotope RX De-clip).");
+                           "\nSTEP: Next take, turn the gain knob on your audio interface down until your loudest words peak around -10 dB on {daw}'s meter."
+                           "\nSTEP: For this take, re-record the clipped lines if you can, or repair them with a declipper: {daw:declipper}.");
     if (a.peakDb > 0.0)
-        r.notes.push_back ("TOO HOT: the vocal reaches +" + db (a.peakDb) + ", over the top of the meter, before Voxology. Cubase doesn't clip inside a mix, "
-                           "but anything that limits later (like a limiter on the Stereo Out) has to squash it hard, which crackles."
+        r.notes.push_back ("TOO HOT: the vocal reaches +" + db (a.peakDb) + ", over the top of the meter, before Voxology. {daw} doesn't clip inside a mix, "
+                           "but anything that limits later (like a limiter on the {daw:master} channel) has to squash it hard, which crackles."
                            "\nNEED: Yes if you hear crackle or the master limiter works hard."
-                           "\nSTEP: Lower the vocal's clip gain (or the fader of whatever feeds it) until the loudest words peak around -6 dB."
+                           "\nSTEP: Lower the vocal's clip gain (or the fader of whatever feeds it) until the loudest words peak around -6 dB. In {daw}: {daw:clipGain}."
                            "\nSTEP: Check your master limiter only shaves 1 - 3 dB.");
     if (a.peakDb < -24.0)
         r.notes.push_back ("QUIET RECORDING: your loudest words only reach " + db (a.peakDb) + ". It works, but the noise of your room and interface sits closer to your voice."
@@ -1094,8 +1094,8 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
     if (a.oneSided)
         r.notes.push_back ("ONE-SIDED TRACK: the vocal is only in one side of a stereo track, so it will sit off to one side."
                            "\nNEED: Yes."
-                           "\nSTEP: In Cubase, record vocals on a MONO track (Add Track > Audio > Configuration: Mono)."
-                           "\nSTEP: For this take, put a Cubase MixConvert or Stereo Combined Panner before Voxology, or re-import the file to a mono track.");
+                           "\nSTEP: Next time, {daw:monoTrack}."
+                           "\nSTEP: For this take: {daw:toMono}.");
     const bool fewPitches = a.f0Median <= 0.0;
     if (fewPitches && a.rumbleDb > -10.0)
         r.notes.push_back ("NOT A SOLO VOCAL?: this sounds more like a beat or a full mix than a voice (strong bass, no clear pitch). Voxology is made for a single vocal track."
@@ -1171,7 +1171,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             if (! sure && ! settings.beatKeyKnown)
                 r.notes.push_back ("KEY UNSURE: from this part Auto-Edit can't be sure of the key (best guess " + keyName + "), so Pitch is set to Chromatic."
                                    "\nNEED: Optional. Chromatic works; the right key sounds tighter."
-                                   "\nSTEP: Easiest: leave Key on AUTO and let Voxology hear your beat: in Cubase, turn on Voxology's side-chain and send the beat track to it (or put a second Voxology on the beat in BEAT mode)."
+                                   "\nSTEP: Easiest: leave Key on AUTO and let Voxology hear your beat. In {daw}: {daw:sidechain} (or put a second Voxology on the beat in BEAT mode)."
                                    "\nSTEP: With no beat, AUTO learns the key from your singing after about 20 - 40 s of held notes (rap may never be sure)."
                                    "\nSTEP: Or set Key and Scale yourself (the key is often in the beat's name, e.g. \"A min\"), with Key on MANUAL.");
         }
@@ -2077,7 +2077,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         {
         reason ("delay", "Time", std::string (kDelayNames[static_cast<size_t> (spec.dlDiv)]) + " at " + num (p.delay.bpm, 0) + " BPM",
                 std::string ("Echoes on the beat grid fill the gaps between lines. Duck ") + pct (spec.dlDuck) + " keeps them quiet while you're singing or rapping, so words stay clear."
-                + (settings.bpm > 0.0 ? "" : " Your session tempo wasn't available, so 120 BPM is used: it locks to Cubase's tempo once playback runs."));
+                + (settings.bpm > 0.0 ? "" : " Your session tempo wasn't available, so 120 BPM is used: it locks to {daw}'s tempo once playback runs."));
         reason ("delay", "Mix", pct (p.delay.mix) + ", Feedback " + pct (p.delay.feedback), "Low enough to feel, not hear as a separate echo" + std::string (spec.dlPing ? "; Ping-Pong bounces the repeats left / right." : "."));
         }
 

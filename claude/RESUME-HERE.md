@@ -1740,3 +1740,26 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   setVocalStyleMine(false), which now calls suggestVocalStyle() (PluginProcessor.h). Meters frame songStyle gets
   "suggest" (vox::songstyle::vocalStyleFor). #song-picker section, its CSS and openSongPicker removed; mixstyles.js stays
   (names; tests/test_songstyle.cpp). Native pickStyle kept (unused by the UI) for the suite. Manual updated.
+
+## v0.50.0: your DAW, shared, and "recorded too hot" told to Mixology (2026-10-15, from Mixology's "Mixology part 2" thread)
+- User: a DAW line in each plug-in's settings; pick the DAW and the Learn windows give that DAW's ways to fix things;
+  changing it in one updates the rest. Also: Mixology's Auto Mix should say when Voxology found the vocal recorded too hot
+  (the two reports looked like they conflicted: Voxology = recording peaks before any plug-in, Mixology = the balance).
+- suite/SuiteLink.h + .cpp (master in DK7602/mixology), kLayout 3: Choice {style, daw} with one ChoiceSlot each
+  (shareChoice / readChoice / leaveChoice; shareStyle etc. are wrappers); SharedChoice(from, Choice) with
+  SongStyle = SharedChoice; dawFromHostPath(JUCE PluginHostType::getHostPath()) -> "cubase" (+ Nuendo), "studioone",
+  "fl", "ableton", "reaper", "bitwig", "logic", "other"; dawName(). VocalInfo: flags recordedHot / recordedClipped +
+  recordedPeakDb, clippedSpots. tests/test_suite.cpp: two new cases (same file in Masterology).
+- plugin/ui/daws.js: THE SAME FILE IN ALL THREE: DAWS list + phrasebook (clip, mixer, master, loadOnMaster, clipGain,
+  automate, sidechain, midiToVoxology, monoTrack, toMono, declipper, loopOff, rescan, exportDepth, trackOutput, and
+  Mixology's monoMeter, monoBusFix, outputsStereo, sendHow, linkAfterVoxology, manyAtOnce, monoLows, noFaderLink);
+  say(daw, phrase), fillDaw(text, daw) for {daw} / {daw:phrase} tokens. Mixology's tools/dawcheck checks every phrase
+  has words for every DAW and every token exists (run it on this repo too: node <mixology>/tools/dawcheck/dawcheck.mjs
+  plugin/ui/daws.js dsp plugin).
+- Engine text (AutoEdit.cpp, AutoAnalyze.cpp) uses tokens; app.js: D() / para() / list() / tip() fill them, and the
+  report / Auto Analyze note parsers. DAW = {key, picked, detected, from}; the bottom bar's #daw-select ("Found: X" =
+  "" = back to the one found). Processor: daw (SharedChoice, styleLock), setUnpicked(detected) at start, pickDaw(),
+  synced in publishSuite, saved as "daw" only when picked; frame.daw {key, picked, from, detected}.
+- publishSuite: recordedPeakDb / clippedSpots from AutoEditController (parsed from the report's analysis peakDb /
+  clipped in setReport); flags recordedHot (peak > 0) and recordedClipped (>= 3 spots), the TOO HOT / CLIPPED rules.
+- Bottom bar: meter bars 170 px, readouts 156 px, status never shrinks, so the DAW pick fits on one line.

@@ -54,7 +54,7 @@ std::vector<AnalyzeNeed> findNewNeeds (const VocalAnalysis& was, const BeatAnaly
         add ("clip", "CLIPPED HERE: this part of your vocal arrives clipped (" + num (a.clippedRuns) + (a.clippedRuns == 1 ? " spot" : " spots") +
                      " where the waveform hit the top), which wasn't in the part Auto-Edit heard. No plug-in can fully undo clipping: it sounds like crackle or fizz on loud words."
                      "\nNEED: Yes, if you hear crackle on the loud words. If it's only a spot or two you can't hear, no."
-                     "\nSTEP: Re-record this part with the mic input (preamp) gain 6 dB lower: aim for peaks around -10 dB in Cubase."
+                     "\nSTEP: Re-record this part with the mic input (preamp) gain 6 dB lower: aim for peaks around -10 dB on {daw}'s meter."
                      "\nSTEP: Or, if it was a printed / bounced vocal, bounce it again with the level lower.",
              {});
 
@@ -176,7 +176,7 @@ std::vector<AnalyzeNeed> findNewNeeds (const VocalAnalysis& was, const BeatAnaly
                               " dB " + (d < 0.0 ? "louder" : "quieter") + " in this part than where Auto-Edit listened, so the vocal sits " + (d < 0.0 ? "lower" : "higher") + " in the mix here."
                               "\nNEED: Optional: if this part of the song is meant to hit harder, the difference is the producer's choice."
                               "\nSTEP: Press APPLY below: Output moves so the vocal sits where pro mixes put it against this part."
-                              "\nSTEP: For different levels per part, automate the vocal fader in Cubase instead.",
+                              "\nSTEP: For different levels per part, automate the vocal fader in {daw} instead ({daw:automate}).",
              {}, true);
     }
     return out;

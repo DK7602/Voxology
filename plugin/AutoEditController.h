@@ -131,6 +131,9 @@ public:
     // Auto Analyze
     void setWatchOn (bool on);
     bool isWatchOn() const noexcept            { return watchOn.load(); }
+    /** What the last Auto-Edit heard in the recording itself (for the suite link: Mixology says fix it first). */
+    float recordedPeakDb() const noexcept      { return recordedPeak.load(); }
+    int recordedClippedSpots() const noexcept  { return recordedClips.load(); }
     void setEditorOpen (bool open) noexcept    { editorOpen.store (open); }
     void setOffline (bool isOffline) noexcept  { offline.store (isOffline, std::memory_order_relaxed); }
     /** 0 = off, 1 = waiting for an Auto-Edit, 2 = listening, 3 = checking, 4 = paused (Auto-Edit running). */
@@ -182,6 +185,8 @@ private:
     struct Shown { juce::String key, note; juce::var changes; };   // changes: [{ id, module, from, to }]
     std::atomic<bool> watchOn { false }, editorOpen { false }, offline { false };
     bool baselineOk = false;                  // the report has Auto-Edit's measurements to compare with
+    std::atomic<float> recordedPeak { -100.0f };
+    std::atomic<int> recordedClips { 0 };
     vox::VocalAnalysis baseline;
     vox::BeatAnalysis baselineBeat;
     std::vector<Shown> needs;                 // message thread

@@ -81,6 +81,8 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
                                  if (args.size() >= 2) audioProcessor.pickStyle (args[0].toString().toStdString(), args[1].toString().toStdString());
                                  complete (true);
                              })
+        .withNativeFunction ("pickDaw", [this] (const juce::Array<juce::var>& args, auto complete)
+                             { audioProcessor.pickDaw (args.size() >= 1 ? args[0].toString().toStdString() : std::string()); complete (true); })
         .withNativeFunction ("setVocalStyleMine", [this] (const juce::Array<juce::var>& args, auto complete)
                              { if (args.size() >= 1) audioProcessor.setVocalStyleMine (static_cast<bool> (args[0])); complete (true); })
         .withNativeFunction ("getAutoEditReport", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getReportJson()); })
@@ -346,6 +348,13 @@ void VoxWebEditor::timerCallback()
         so->setProperty ("vocalMine", audioProcessor.isVocalStyleMine());
         so->setProperty ("suggest", vox::songstyle::vocalStyleFor (st.key));   // the vocal STYLE it suggests (-1 = none)
         frame->setProperty ("songStyle", juce::var (so));
+        const auto d = audioProcessor.dawNow();
+        auto* dw = new juce::DynamicObject();
+        dw->setProperty ("key", juce::String::fromUTF8 (d.key.c_str()));
+        dw->setProperty ("picked", d.pickedAt != 0);   // false: found from the host
+        dw->setProperty ("from", static_cast<int> (d.from));
+        dw->setProperty ("detected", juce::String::fromUTF8 (audioProcessor.dawDetected().c_str()));
+        frame->setProperty ("daw", juce::var (dw));
     }
     frame->setProperty ("pitchSung", roundTo (m.pitchSung.load(), 0.01f));
     frame->setProperty ("pitchTarget", m.pitchTarget.load());

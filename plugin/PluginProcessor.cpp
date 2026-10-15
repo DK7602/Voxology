@@ -37,6 +37,7 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
     chains.beforeLoad = [this] { autoEdit.takeUndoSnapshot (false); };
     suiteId = static_cast<std::uint64_t> (juce::Random::getSystemRandom().nextInt64()) ^ reinterpret_cast<std::uintptr_t> (this);
     if (suiteId == 0) suiteId = 1;
+    daw.setUnpicked (detectedDaw, suite::dawName (detectedDaw));   // until you pick one (here or in Mixology / Masterology)
     startTimerHz (4);
 }
 
@@ -48,6 +49,7 @@ VoxologyAudioProcessor::~VoxologyAudioProcessor()
     suite::Link::process().releaseVocal (suiteSlot, suiteId);
     const juce::ScopedLock sl (styleLock);
     songStyle.leave (suite::Link::process(), suiteId);
+    daw.leave (suite::Link::process(), suiteId);
 }
 
 void VoxologyAudioProcessor::storeBeatMeters (const vox::BeatKey::Result& r) noexcept
@@ -120,6 +122,7 @@ void VoxologyAudioProcessor::publishSuite()
     {
         const juce::ScopedLock sl (styleLock);
         adopted = songStyle.sync (link, suiteId, now);
+        if (daw.sync (link, suiteId, now)) ++styleVersion;
     }
     if (adopted)
     {
@@ -154,6 +157,11 @@ void VoxologyAudioProcessor::publishSuite()
         v.style = static_cast<F::Style> (static_cast<std::uint32_t> (juce::jlimit (0, static_cast<int> (F::kStyles) - 1, style)) + 1u);
         v.reverbMix = p.reverb.enabled ? static_cast<float> (p.reverb.mix / 100.0) : 0.0f;
         v.delayMix = p.delay.enabled ? static_cast<float> (p.delay.mix / 100.0) : 0.0f;
+        // What the last Auto-Edit heard in the recording itself: Mixology's tools say fix it first.
+        v.recordedPeakDb = autoEdit.recordedPeakDb();
+        v.clippedSpots = static_cast<std::uint32_t> (std::max (0, autoEdit.recordedClippedSpots()));
+        if (v.recordedPeakDb > 0.0f) v.flags |= F::recordedHot;      // the same rules as Auto-Edit's TOO HOT and
+        if (v.clippedSpots >= 3) v.flags |= F::recordedClipped;      // CLIPPED RECORDING notes
     }
     // How much the compressor takes off lately (its loudest moments fall away over a few seconds).
     suiteCompDb = std::max (meters.suiteGr.exchange (0.0f), suiteCompDb * 0.9f);
@@ -170,6 +178,18 @@ void VoxologyAudioProcessor::pickStyle (const std::string& key, const std::strin
     }
     ++styleVersion;
     suggestVocalStyle();
+    publishSuite();   // the others follow at once
+}
+
+void VoxologyAudioProcessor::pickDaw (const std::string& key)
+{
+    {
+        const juce::ScopedLock sl (styleLock);
+        if (key.empty()) daw.setUnpicked (detectedDaw, suite::dawName (detectedDaw));
+        else if (key != daw.style().key || daw.style().pickedAt == 0) daw.pick (key, suite::dawName (key));
+        else return;
+    }
+    ++styleVersion;
     publishSuite();   // the others follow at once
 }
 
@@ -555,6 +575,8 @@ void VoxologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
             const juce::ScopedLock sl (styleLock);
             xml->setAttribute ("songStyle", juce::String::fromUTF8 (songStyle.save().c_str()));
             xml->setAttribute ("vsMine", vocalStyleMine.load() ? 1 : 0);
+            if (daw.style().pickedAt != 0)   // your DAW, when you picked one (else it is found from the host each time)
+                xml->setAttribute ("daw", juce::String::fromUTF8 (daw.save().c_str()));
         }
         copyXmlToBinary (*xml, destData);
     }
@@ -588,6 +610,13 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
                 ++styleVersion;
             }
             xml->removeAttribute ("songStyle");
+            {
+                const juce::ScopedLock sl (styleLock);
+                daw = suite::SharedChoice { suite::StyleInfo::From::voxology, suite::Choice::daw };
+                if (! daw.restore (xml->getStringAttribute ("daw").toStdString()))
+                    daw.setUnpicked (detectedDaw, suite::dawName (detectedDaw));
+            }
+            xml->removeAttribute ("daw");
             xml->removeAttribute ("vsMine");
             xml->removeAttribute ("midiLearned");
             xml->removeAttribute ("uiRed");

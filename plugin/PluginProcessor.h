@@ -120,6 +120,12 @@ public:
     suite::StyleInfo songStyleNow() const { const juce::ScopedLock sl (styleLock); return songStyle.style(); }
     std::uint32_t songStyleVersion() const { return styleVersion.load(); }
 
+    // The DAW you work in, shared the same way: found from the host, or picked here / in Mixology / in Masterology.
+    // Every tip and report line then says how to do things in that DAW. "" = back to the one found.
+    void pickDaw (const std::string& key);
+    suite::StyleInfo dawNow() const { const juce::ScopedLock sl (styleLock); return daw.style(); }
+    std::string dawDetected() const { return detectedDaw; }
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
@@ -175,6 +181,8 @@ private:
     suite::SongStyle songStyle { suite::StyleInfo::From::voxology };   // under styleLock
     std::atomic<std::uint32_t> styleVersion { 0 };
     std::atomic<bool> vocalStyleMine { false };   // saved with the project
+    const std::string detectedDaw = suite::dawFromHostPath (juce::PluginHostType::getHostPath().toStdString());
+    suite::SharedChoice daw { suite::StyleInfo::From::voxology, suite::Choice::daw };   // under styleLock
     void suggestVocalStyle();                     // the song style's vocal style, unless you picked one
     float suiteCompDb = 0.0f;
     juce::String trackName;

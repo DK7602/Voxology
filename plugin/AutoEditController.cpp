@@ -313,6 +313,8 @@ void AutoEditController::setReport (const juce::String& json)
     baseline = {};
     baselineBeat = {};
     baselineOk = false;
+    recordedPeak.store (-100.0f);
+    recordedClips.store (0);
     const auto doc = juce::JSON::parse (json);
     if (auto* o = doc.getDynamicObject(); o != nullptr && static_cast<bool> (o->getProperty ("ok")))
         if (auto* an = o->getProperty ("analysis").getDynamicObject())
@@ -324,6 +326,8 @@ void AutoEditController::setReport (const juce::String& json)
             b.noiseFloorDb = get ("noiseDb", -120.0);
             b.heardGaps = an->hasProperty ("heardGaps") ? static_cast<bool> (an->getProperty ("heardGaps")) : b.noiseFloorDb > -119.0;
             b.clippedRuns = static_cast<int> (get ("clipped", 0.0));
+            recordedPeak.store (static_cast<float> (get ("peakDb", -100.0)));
+            recordedClips.store (b.clippedRuns);
             b.rumbleDb = get ("rumbleDb", -120.0);
             b.f0Low = get ("f0Low", 0.0);
             b.f0Median = get ("f0", 0.0);
