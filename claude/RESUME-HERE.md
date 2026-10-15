@@ -1702,3 +1702,5 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   headless Chromium with mock.js (served over http with JUCE's javascript/index.js copied to juce/).
 - Honest limits (told the user): it listens to the raw vocal, so it doesn't judge the user's own knob changes; a louder
   hook is normal (the card's NEED says so); APPLY retunes for that part, not the whole song; Cubase test still needed.
+- v0.48 CI green: run 38752042630 (commit 8e14283; Windows build + tests + pluginval 10 + VST3 validator, ASan/UBSan tests).
+  Next: the user's Cubase test of Auto Analyze (switch on after Auto-Edit, play a louder / noisier part, APPLY, UNDO).
