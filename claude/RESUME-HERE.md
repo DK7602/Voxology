@@ -1767,3 +1767,4 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 ## v0.50.1: Cakewalk (BandLab) in the DAW list (2026-10-15, from Mixology's thread)
 - User: "add bandlab to the DAWs list". BandLab's web studio can't host plug-ins; added "cakewalk" (Cakewalk by BandLab,
   Sonar) to daws.js and SuiteLink.h (dawFromHostPath / dawName, tests). No layout change.
+- CI green: run 38806349818 (832610a; includes v0.50.0, whose own run was cancelled). Download: its Voxology-Windows.
