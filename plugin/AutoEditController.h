@@ -3,6 +3,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "vox/AutoAnalyze.h"
 #include "vox/AutoEdit.h"
 
 #include <atomic>
@@ -24,14 +25,19 @@
 
     The capture buffer is allocated once, for the highest supported sample rate, so nothing ever
     reallocates while the audio thread may be writing. Each run has a session number; a result from
-    an older session is thrown away. */
+    an older session is thrown away.
+
+    Auto Analyze (after an Auto-Edit, when switched on): the same buffers keep listening while the song plays and the
+    window is open. Every kVoiceSeconds of voice a background check measures the part (vox::findNewNeeds against what
+    Auto-Edit heard); only when it finds something new does it run the full Auto-Edit on the part, and each need
+    becomes a card in Learn with the knob moves that fix it (now -> new). Nothing changes until APPLY. */
 class AutoEditController final : private juce::Timer
 {
 public:
     static constexpr double kVoiceSeconds = 12.0;
     static constexpr double kMaxSeconds = 30.0;
     static constexpr double kMaxSampleRate = 192000.0;
-    enum State { idle = 0, listening = 1, analysing = 2 };
+    enum State { idle = 0, listening = 1, analysing = 2, watching = 3, checking = 4 };   // watching / checking: Auto Analyze
 
     AutoEditController (juce::AudioProcessorValueTreeState& state, std::function<double()> getBpm);
     ~AutoEditController() override;
@@ -43,7 +49,8 @@ public:
     template <typename Sample>
     void capture (const juce::AudioBuffer<Sample>& buffer, int numInputChannels, const juce::AudioBuffer<Sample>* side) noexcept
     {
-        if (stateFlag.load (std::memory_order_acquire) != listening)
+        const int st = stateFlag.load (std::memory_order_acquire);
+        if (st != listening && (st != watching || offline.load (std::memory_order_relaxed)))
             return;
         const int nch = std::min (numInputChannels, buffer.getNumChannels()), n = buffer.getNumSamples();
         if (nch <= 0 || n == 0)
@@ -111,7 +118,8 @@ public:
     void setReferenceSplit (const juce::String& name, bool split);
     int getReferenceVersion() const noexcept { return refVersion.load(); }
 
-    State getState() const noexcept           { return static_cast<State> (stateFlag.load()); }
+    /** Auto-Edit's state (Auto Analyze's listening shows as idle: the AUTO-EDIT button is free). */
+    State getState() const noexcept           { const int st = stateFlag.load(); return st >= watching ? idle : static_cast<State> (st); }
     float getProgress() const noexcept;
     bool isHearingAudio() const noexcept       { return hearingAudio; }
     bool canUndo() const noexcept              { return undoValid.load() && ! undoSnapshot.empty(); }
@@ -120,12 +128,30 @@ public:
     int getReportVersion() const noexcept      { return reportVersion.load(); }
     juce::String getReportJson() const         { return getReportForSaving(); }
 
+    // Auto Analyze
+    void setWatchOn (bool on);
+    bool isWatchOn() const noexcept            { return watchOn.load(); }
+    void setEditorOpen (bool open) noexcept    { editorOpen.store (open); }
+    void setOffline (bool isOffline) noexcept  { offline.store (isOffline, std::memory_order_relaxed); }
+    /** 0 = off, 1 = waiting for an Auto-Edit, 2 = listening, 3 = checking, 4 = paused (Auto-Edit running). */
+    int getWatchState() const noexcept;
+    float getWatchProgress() const noexcept    { return stateFlag.load() == watching ? getProgress() : 0.0f; }
+    int getWatchVersion() const noexcept       { return watchVersion.load(); }
+    juce::String getWatchJson() const;
+    bool applyNeed (const juce::String& key);
+    bool dismissNeed (const juce::String& key);
+
 private:
     void timerCallback() override;
     void launchAnalysis();
     void apply (const vox::AutoEditResult& result, const vox::AutoEditSettings& settings);
     void setParam (const juce::String& id, float value);
     void setReport (const juce::String& json);
+    void copyCapture (std::vector<std::vector<float>>& audio, std::shared_ptr<const std::vector<float>>& beat) const;
+    vox::AutoEditSettings currentSettings (std::shared_ptr<const vox::ReferenceProfile>& ref);
+    void launchCheck();
+    void finishCheck (const std::vector<vox::AnalyzeNeed>& needs, const vox::AutoEditResult* result);
+    void clearNeeds();
 
     juce::AudioProcessorValueTreeState& state;
     std::function<double()> bpmSource;
@@ -151,6 +177,21 @@ private:
     int pendingSession = -1;
     vox::AutoEditSettings pendingSettings;
     std::atomic<bool> resultReady { false };
+
+    // Auto Analyze
+    struct Shown { juce::String key, note; juce::var changes; };   // changes: [{ id, module, from, to }]
+    std::atomic<bool> watchOn { false }, editorOpen { false }, offline { false };
+    bool baselineOk = false;                  // the report has Auto-Edit's measurements to compare with
+    vox::VocalAnalysis baseline;
+    vox::BeatAnalysis baselineBeat;
+    std::vector<Shown> needs;                 // message thread
+    juce::StringArray dismissed;              // not shown again until the next Auto-Edit
+    int checks = 0;
+    bool lastFine = false;
+    juce::String lastCheck;                   // ISO time of the last check
+    std::atomic<int> watchVersion { 0 };
+    std::vector<vox::AnalyzeNeed> pendingNeeds;
+    bool pendingIsCheck = false;
 
     std::vector<std::pair<juce::RangedAudioParameter*, float>> undoSnapshot;
     std::atomic<bool> undoValid { false };

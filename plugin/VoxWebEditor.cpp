@@ -65,6 +65,13 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
         .withNativeFunction ("startAutoEdit", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.start()); })
         .withNativeFunction ("cancelAutoEdit", [this] (const juce::Array<juce::var>&, auto complete) { audioProcessor.autoEdit.cancel(); complete (true); })
         .withNativeFunction ("undoAutoEdit", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.undo()); })
+        .withNativeFunction ("getAutoAnalyze", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getWatchJson()); })
+        .withNativeFunction ("setAutoAnalyze", [this] (const juce::Array<juce::var>& args, auto complete)
+                             { if (args.size() >= 1) audioProcessor.autoEdit.setWatchOn (static_cast<bool> (args[0])); complete (true); })
+        .withNativeFunction ("applyAutoAnalyze", [this] (const juce::Array<juce::var>& args, auto complete)
+                             { complete (args.size() >= 1 && audioProcessor.autoEdit.applyNeed (args[0].toString())); })
+        .withNativeFunction ("dismissAutoAnalyze", [this] (const juce::Array<juce::var>& args, auto complete)
+                             { complete (args.size() >= 1 && audioProcessor.autoEdit.dismissNeed (args[0].toString())); })
         .withNativeFunction ("getAutoEditReport", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getReportJson()); })
         .withNativeFunction ("chooseReference", [this] (const juce::Array<juce::var>&, auto complete)
         {
@@ -175,12 +182,14 @@ VoxWebEditor::VoxWebEditor (VoxologyAudioProcessor& p)
 
     audioProcessor.meters.satResidual.store (0.0f);
     audioProcessor.meters.satSignal.store (0.0f);
+    audioProcessor.autoEdit.setEditorOpen (true);   // Auto Analyze listens while the window is open
     startTimerHz (30);
 }
 
 VoxWebEditor::~VoxWebEditor()
 {
     stopTimer();
+    audioProcessor.autoEdit.setEditorOpen (false);
     // A/B and MATCH are listening aids: switch them off when the window closes so they can't end up in a bounce.
     for (const char* id : { "levelMatch", "listenA" })
         if (auto* prm = audioProcessor.parameters.getParameter (id))
@@ -349,6 +358,9 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("aeUndo", ae.canUndo());
     frame->setProperty ("aeReport", ae.getReportVersion());
     frame->setProperty ("refVersion", ae.getReferenceVersion());
+    frame->setProperty ("aaState", ae.getWatchState());
+    frame->setProperty ("aaProgress", roundTo (ae.getWatchProgress(), 0.01f));
+    frame->setProperty ("aaVersion", ae.getWatchVersion());
     if (audioProcessor.isBeatMode())
     {
         juce::Array<juce::var> dips, vocal;

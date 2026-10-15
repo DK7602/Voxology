@@ -236,6 +236,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     if (! beatMode)
     {
         const auto side = sideOn ? getBusBuffer (buffer, true, 1) : juce::AudioBuffer<Sample>();
+        autoEdit.setOffline (isNonRealtime());   // Auto Analyze doesn't listen to a bounce
         autoEdit.capture (buffer, numIn, sideOn ? &side : nullptr);
     }
 
@@ -510,6 +511,7 @@ void VoxologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
         xml->setAttribute ("midiLearned", midiLearned.load());
         xml->setAttribute ("uiRed", uiRed.load() ? 1 : 0);
         xml->setAttribute ("chainName", chainName);
+        xml->setAttribute ("aeWatch", autoEdit.isWatchOn() ? 1 : 0);
         copyXmlToBinary (*xml, destData);
     }
 }
@@ -530,6 +532,8 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
             uiRed.store (xml->getIntAttribute ("uiRed", 0) != 0);
             chainName = xml->getStringAttribute ("chainName");
             xml->removeAttribute ("chainName");
+            autoEdit.setWatchOn (xml->getIntAttribute ("aeWatch", 0) != 0);
+            xml->removeAttribute ("aeWatch");
             xml->removeAttribute ("midiLearned");
             xml->removeAttribute ("uiRed");
             parameters.replaceState (juce::ValueTree::fromXml (*xml));

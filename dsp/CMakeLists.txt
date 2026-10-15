@@ -16,6 +16,7 @@ add_library(vox_dsp STATIC
     src/Throws.cpp
     src/VocalChain.cpp
     src/AutoEdit.cpp
+    src/AutoAnalyze.cpp
     src/ReferenceLibrary.cpp
     src/PitchCorrector.cpp
     src/HoneyTune.cpp

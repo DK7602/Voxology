@@ -141,6 +141,10 @@ const aeStart = Juce.getNativeFunction("startAutoEdit");
 const aeCancel = Juce.getNativeFunction("cancelAutoEdit");
 const aeUndo = Juce.getNativeFunction("undoAutoEdit");
 const aeGetReport = Juce.getNativeFunction("getAutoEditReport");
+const aaGet = Juce.getNativeFunction("getAutoAnalyze");
+const aaSet = Juce.getNativeFunction("setAutoAnalyze");
+const aaApply = Juce.getNativeFunction("applyAutoAnalyze");
+const aaDismiss = Juce.getNativeFunction("dismissAutoAnalyze");
 const refChoose = Juce.getNativeFunction("chooseReference");
 const refClear = Juce.getNativeFunction("clearReference");
 const refList = Juce.getNativeFunction("listReferences");
@@ -218,9 +222,11 @@ function typeIn(valEl, id, fmt, def, after, refocus) {
 
 // Latest meter frame.
 const M = { pitchSung: 0, pitchTarget: -1, pitchCorr: 0, inShort: -100, outShort: -100, inPeak: -100, outPeak: -100, gate: 0, pops: 0, breath: 0, noise: 0, smooth: 0, click: 0, clicks: 0, clipNow: 0, clipTotal: 0, overNow: 0, hotPeak: -100, dyn: [0, 0, 0, 0], deEss: 0, rider: 0, peakGr: 0, levelGr: 0,
-  satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1, -1, -1, -1, -1, -1, -1],
+  satHarm: -100, matchDb: 0, bpm: 0, sr: 48000, aeState: 0, aeProgress: 0, aeHearing: false, aeUndo: false, aeReport: 0, aaState: 0, aaProgress: 0, aaVersion: 0, refVersion: 0, umDip: [0, 0, 0, 0, 0, 0], umVocal: [-120, -120, -120, -120, -120, -120], umLink: 0, hvNotes: [-1, -1, -1, -1, -1, -1, -1, -1],
   bkState: 0, bkSource: 0, scState: 0, bkKey: 0, bkMode: 0, bkSet: 0, bkUnclear: 0, bkOpen: -1, bkConf: 0, bkTune: 0, bkHeard: 0, keyUsed: 0, scaleUsed: 0, midiNotes: 0, heldNotes: 0, notesUsed: 0xFFF, recMode: 0, latencyMs: 33, in: null, out: null };
 let report = null;          // last Auto-Edit report (parsed) or null
+let analyze = null;         // Auto Analyze: { on, state, checks, fine, time, needs: [{ key, note, changes: [{ id, module, from, to }] }] }
+const KNOBS = {};           // knob id -> { label, fmt } (Auto Analyze shows its moves in the knobs' own words)
 // The report's "kept" list is in the engine's module order (Dimension, added later, is last there).
 const ENGINE_ORDER = ["pitch", "cleanup", "eq", "dyneq", "deess", "rider", "comp", "sat", "double", "delay", "reverb", "out", "dimension"];
 const keptFor = (i) => !!(report && report.kept && report.kept[ENGINE_ORDER.indexOf(MODULES[i].key)]);
@@ -677,6 +683,7 @@ const arcFor = (face, a0, a1) => {
 
 function knob(id, label, sub, fmt, def, bipolar = false) {
   const s = P[id];
+  KNOBS[id] = { label, fmt };
   const [face, glyph] = faceFor(id);
   const fc = FACES[face];
   const cell = document.createElement("div");
@@ -727,6 +734,7 @@ function knob(id, label, sub, fmt, def, bipolar = false) {
 }
 
 function seg(id, label, sub, labels, vertical = false, order = null) {
+  KNOBS[id] = { label, fmt: (v) => labels[Math.round(v)] ?? String(v) };
   const s = P[id];
   const cell = document.createElement("div");
   cell.className = "cell";
@@ -1460,6 +1468,7 @@ function renderReport() {
     return;
   }
   body.append(head("AUTO-EDIT REPORT"), para(`${report.style} · ${report.intensity}${report.reference ? ` · matched to "${report.reference}"` : ""}`, "l-meta"), para(report.summary));
+  analyzeBlock();
   notesAsTips();
   if (report.fit && report.fit.length) {
     body.append(el("div", "l-sep"), head("VOCAL FIT · YOUR BEAT"));
@@ -1478,6 +1487,77 @@ function renderReport() {
     rs.forEach((r) => body.append(item(r.control, r.value, r.why)));
   });
   if (report.tips && report.tips.length) { body.append(el("div", "l-sep"), head("SUGGESTIONS"), list(report.tips)); }
+}
+
+// AUTO ANALYZE: after Auto-Edit, Voxology keeps listening while the song plays (window open). When a part needs
+// something new it shows a card here with the knob moves that fix it. Nothing changes until APPLY; UNDO puts it back.
+const AA_STATUS = ["", "Run Auto-Edit first: Auto Analyze compares every part of the song with what Auto-Edit heard.",
+  "Listening", "Checking this part…", "Paused while Auto-Edit listens."];
+function analyzeStatus() {
+  if (!analyze || !analyze.on) return "Off. Switch it on and Voxology keeps listening while the song plays: every 12 seconds of voice it checks the part against what Auto-Edit heard, and tells you here when a part needs something new (louder or quieter, more noise, sharper s sounds, another tone, clipping, the beat). It never changes anything until you press APPLY.";
+  const st = M.aaState || analyze.state;
+  if (st === 2) {
+    const last = analyze.time ? ` · last check ${new Date(analyze.time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${analyze.fine && !analyze.needs.length ? ": this part fits your settings" : ""}` : "";
+    return `${M.aeHearing ? "Listening" : "Press play · listening"} ${Math.round((M.aaProgress || 0) * 100)} %${last}.`;
+  }
+  return AA_STATUS[st] || "";
+}
+function changeLine(c) {
+  const k = KNOBS[c.id] || { label: c.id, fmt: (v) => fmtNum(v) };
+  const m = MODULES.find((x) => x.key === c.module);
+  const now = isChoice(c.id) ? choice(c.id) : val(c.id);
+  return `${m ? m.name : ""} · ${k.label}: ${k.fmt(now)} \u2192 ${k.fmt(c.to)}`;
+}
+const isChoice = (id) => COMBOS.includes(id);
+// A move you've already made by hand (or that APPLY on another card made) drops out of the list.
+const stillToDo = (c) => P[c.id] && (isChoice(c.id) ? Math.round(c.to) !== choice(c.id)
+  : Math.abs(scaledToNorm(P[c.id], c.to) - P[c.id].getNormalisedValue()) >= 0.02);
+function analyzeBlock() {
+  body.append(el("div", "l-sep"));
+  const h = head("AUTO ANALYZE");
+  const sw = el("button", `chip aa-switch${analyze && analyze.on ? " on" : ""}`, analyze && analyze.on ? "ON" : "OFF");
+  sw.type = "button";
+  sw.addEventListener("click", async () => { await aaSet(!(analyze && analyze.on)); await fetchAnalyze(); });
+  h.append(sw);
+  body.append(h, para(analyzeStatus(), "l-p aa-status"));
+  if (!analyze || !analyze.on) return;
+  for (const n of analyze.needs || []) {
+    const lines = n.note.split("\n"), first = lines[0], cut = first.indexOf(":");
+    const need = (lines.find((l) => l.startsWith("NEED:")) || "").slice(5).trim();
+    const steps = lines.filter((l) => l.startsWith("STEP:")).map((l) => l.slice(5).trim());
+    const text = first.slice(cut + 1).trim();
+    const card = tip(first.slice(0, cut), text.charAt(0).toUpperCase() + text.slice(1), /^(No|Optional)/i.test(need) ? "calm" : "warn", { need, steps });
+    const todo = (n.changes || []).filter(stillToDo);
+    if (todo.length) {
+      card.append(el("div", "t-need", "APPLY sets (now \u2192 new):"));
+      const ul = el("ul", "aa-moves");
+      todo.forEach((c) => ul.append(el("li", "", changeLine(c))));
+      card.append(ul);
+    }
+    const row = el("div", "aa-row");
+    if (todo.length) {
+      const apply = el("button", "chip on", "APPLY");
+      apply.type = "button";
+      apply.addEventListener("click", async () => { await aaApply(n.key); await fetchAnalyze(); refreshAll(); });
+      row.append(apply);
+    }
+    const skip = el("button", "chip", todo.length ? "DISMISS" : "GOT IT");
+    skip.type = "button";
+    skip.title = "Hide this card. The same kind of change isn't shown again until the next Auto-Edit.";
+    skip.addEventListener("click", async () => { await aaDismiss(n.key); await fetchAnalyze(); });
+    row.append(skip);
+    card.append(row);
+    body.append(card);
+  }
+}
+let analyzeSeen = -1;
+async function fetchAnalyze() {
+  const json = await aaGet();
+  try { analyze = json ? JSON.parse(json) : null; } catch { analyze = null; }
+  const n = analyze && analyze.on ? (analyze.needs || []).length : 0;
+  const tab = document.querySelector('#learn-tabs button[data-tab="report"]');
+  if (tab) tab.textContent = n ? `REPORT · ${n} NEW` : "AUTO-EDIT REPORT";
+  if (learnTab === "report") { const top = body.scrollTop; renderLearn(); body.scrollTop = top; }
 }
 
 // FIT LEVEL (Vocal Fit): sets Output so the vocal sits against the beat where pro mixes put it. Never automatic:
@@ -1798,6 +1878,8 @@ window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
   }
   if (M.refVersion !== refVersionSeen) { refVersionSeen = M.refVersion; fetchReference(); }
   if (M.aeReport !== reportVersion) { const first = reportVersion === -1; reportVersion = M.aeReport; fetchReport(!first); }
+  if (M.aaVersion !== analyzeSeen) { analyzeSeen = M.aaVersion; fetchAnalyze(); }
+  else if (learnTab === "report") { const st = document.querySelector(".aa-status"); if (st) st.textContent = analyzeStatus(); }
   const match = (on("levelMatch") ? ` · MATCH ${fmtSigned(M.matchDb)}` : "") + (M.recMode ? ` · REC ${M.latencyMs.toFixed(1)} ms` : "");
   $("status").textContent = `${on("bypass") ? "BYPASSED" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY"}${match}${M.bpm > 0 ? ` · ${M.bpm.toFixed(0)} BPM` : ""}${M.mixology ? " · MIXOLOGY ✓" : ""}`;
   $("status").title = M.mixology ? (beat ? "Mixology is in this project: it knows this track is the beat." : "Mixology is in this project: it sees what Voxology does on this vocal and won't add a second compressor, reverb or delay.") : "";

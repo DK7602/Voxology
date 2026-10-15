@@ -15,6 +15,7 @@ add_executable(vox_tests
     test_space.cpp
     test_chain.cpp
     test_autoedit.cpp
+    test_autoanalyze.cpp
     test_pitch.cpp
     test_honey.cpp
     test_honey_view.cpp

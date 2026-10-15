@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.47.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.48.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.47.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.48.0**).
 
 Where each one goes in Cubase:
 
@@ -130,6 +130,34 @@ The right-hand panel tells you what each module does, why Auto-Edit chose its se
 
 - **THIS MODULE**: what the open module does, how to use each control, and live warnings about it.
 - **AUTO-EDIT REPORT**: after Auto-Edit, one line per setting it chose and why. "CHECKED · KEPT" means it looked at a module and left it alone on purpose. With the beat on the side-chain, a **VOCAL FIT · YOUR BEAT** section comes first (see Vocal Fit).
+
+**AUTO ANALYZE** (in the report, after your first Auto-Edit). Switch it **ON** and Voxology keeps listening while the
+song plays. Every 12 seconds of voice it checks that part against what Auto-Edit heard, and when a part needs something new
+it adds a card here (the tab then reads "REPORT · 1 NEW"):
+
+| Card | What changed | What APPLY sets |
+| --- | --- | --- |
+| LOUDER HERE / QUIETER HERE | Your vocal comes in 4 dB or more louder or quieter (a new take, or closer to / farther from the mic) | Gate, Rider and Compressor |
+| MORE NOISE HERE | The gaps are 6 dB or more noisier (fan, AC, another room) | Cleanup (Noise, gate) |
+| MORE RUMBLE HERE / LOWER NOTES HERE | More energy under 60 Hz, or notes 3+ semitones lower than before | Cleanup (Low Cut, Pops) |
+| MORE S HERE / SOFTER S HERE | The s sounds are 3 dB sharper (or 4 dB softer) | De-Esser |
+| NEW TONE HERE | 3 dB or more change in part of the voice (another mic position, take or voice) | Tone EQ and Dynamic EQ |
+| MORE MOVEMENT HERE / STEADIER HERE | Your delivery jumps more, or stays more even, between loud and soft words | Rider and Compressor |
+| THE BEAT IS HERE NOW | Auto-Edit ran without a beat, and now one plays on the side-chain | Tone EQ, Compressor, and Output (FIT LEVEL) |
+| THE BEAT IS LOUDER / QUIETER HERE | The beat moved 1.5 dB or more against your vocal | Output (FIT LEVEL) |
+| CLIPPED HERE, YOUR VOCAL IS IN THE BEAT | Something only you can fix (no APPLY) | Nothing: follow the steps, then GOT IT |
+
+Each card lists every move it would make, **now → new**, picked by running Auto-Edit on that part (same style,
+intensity and reference). **Nothing changes until you press APPLY**, and **UNDO** puts the moves back (the report stays).
+**DISMISS** hides a card; that kind of change isn't shown again until your next Auto-Edit. A card stays until you apply
+or dismiss it, so a hook that needed something is still listed while the verse plays. If a part changed but your
+settings already handle it, there's no card. Read the "Do I need to fix it?" line first: a hook that's louder than the
+verse is normal (the Rider evens it out), so LOUDER HERE matters only when the whole song is like that part.
+
+It listens only while the song plays and Voxology's window is open, pauses while Auto-Edit listens, and never listens to
+a bounce. It hears your vocal as it comes in (before Voxology), so your own knob changes are never "corrected". Your
+ON / OFF choice is saved with the project; the cards aren't (they come back as it listens again). Each check takes a
+fraction of a second; only when it finds something does it run the full Auto-Edit in the background (a few seconds).
 
 How to read a warning card:
 
@@ -315,5 +343,7 @@ finished mix into the master. In the same Cubase project they tell each other wh
 | Unmask doesn't dip the beat | Both Voxologys must be in the same project, and the vocal must be playing. The beat's Learn panel says NO VOCAL HEARD if the link is missing |
 | Hearing yourself late while recording | Turn on REC in Voxology's top bar (about 6 ms). Turn it off for mixing |
 | MIDI chords is on in Voices but nothing sings | The voices sing only while a MIDI note is held. Set a MIDI track's output to Voxology and play or draw notes (see Stack, MIDI chords and Crew) |
+| Auto Analyze says "Run Auto-Edit first" | It compares every part with what Auto-Edit heard. Run Auto-Edit once, then it starts listening |
+| Auto Analyze never adds a card | Good news: every part so far fits your settings ("this part fits your settings"). It also needs the window open and the song playing |
 | B always sounds better than A | Turn on MATCH so both play at the same loudness |
 | Mixology doesn't show the VOX tag on your vocal | Update Voxology (0.47+) and Mixology (0.8+). The tag follows the track's name: if two tracks share a name, rename one |

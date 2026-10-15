@@ -60,6 +60,19 @@
   const um = { selected: "" };
   const ref = { json: JSON.stringify({ state: "none" }), version: 0, yours: ["My Favorite Hook (Acapella)", "Big Song_(Vocals)_UVR-MDX-NET-Voc_FT"], split: { "Big Song_(Vocals)_UVR-MDX-NET-Voc_FT": true } };
   const ae = { state: 0, progress: 0, undo: false, version: 0, report: "", snapshot: null };
+  // Auto Analyze (mock): after Auto-Edit and switched on, a check every ~6 s; the first one finds two new needs.
+  const aa = { on: false, progress: 0, version: 0, checks: 0, time: "", needs: [] };
+  const aaNeeds = () => [
+    { key: "level", note: "LOUDER HERE: your vocal comes in 6 dB louder in this part than where Auto-Edit listened (a new take, or closer to / farther from the mic). The gate and the compressor were set for the old level.\nNEED: Yes, if the whole song is like this part. If only this part is louder, no: the Rider already evens out parts of a song.\nSTEP: Press APPLY below: the gate, Rider and compressor settings Auto-Edit would choose for this part.\nSTEP: Then play a part you checked before and compare with A / B. UNDO puts everything back.",
+      changes: [{ id: "clGateThr", module: "cleanup", from: -52, to: -46 }, { id: "cpThr", module: "comp", from: -27, to: -21.5 }, { id: "cpPeak", module: "comp", from: -14, to: -9 }] },
+    { key: "clip", note: "CLIPPED HERE: this part of your vocal arrives clipped (3 spots where the waveform hit the top), which wasn't in the part Auto-Edit heard. No plug-in can fully undo clipping: it sounds like crackle or fizz on loud words.\nNEED: Yes, if you hear crackle on the loud words. If it's only a spot or two you can't hear, no.\nSTEP: Re-record this part with the mic input (preamp) gain 6 dB lower: aim for peaks around -10 dB in Cubase.", changes: [] },
+  ];
+  const aaJson = () => JSON.stringify({ on: aa.on, state: !aa.on ? 0 : ae.report ? 2 : 1, checks: aa.checks, fine: aa.checks > 0 && !aa.needs.length, time: aa.time, needs: aa.needs });
+  setInterval(() => {
+    if (!aa.on || !ae.report || ae.state !== 0) return;
+    aa.progress = Math.min(1, aa.progress + 0.1 / 6);
+    if (aa.progress >= 1) { aa.progress = 0; aa.checks++; aa.time = new Date().toISOString(); if (aa.checks === 1) aa.needs = aaNeeds(); aa.version++; }
+  }, 100);
   function aeFinish() {
     ae.snapshot = { sliders: JSON.parse(JSON.stringify(sliders)), toggles: { ...toggles }, combos: JSON.parse(JSON.stringify(combos)) };
     const v = { ptAmount: 100, ptSpeed: 10, ptHumanize: 20, clLowCut: 95, clGateThr: -40, clGateRange: 12, clPops: 80, clBreath: 8, clNoise: 12, clRoom: 25, clClicks: 50, eqGain1: 1.3, eqGain2: -1.1, eqFreq2: 630, eqGain4: 1.4, eqGain5: -3, dqCut1: 3, dqFreq1: 125, dqCut2: 4.5, dqFreq2: 400, dqCut4: 3.5, dqFreq4: 3150, dsAmount: 63, dsFreq: 5400,
@@ -129,7 +142,7 @@
 
   window.__JUCE__ = {
     initialisationData: {
-      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed"],
+      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "getAutoAnalyze", "setAutoAnalyze", "applyAutoAnalyze", "dismissAutoAnalyze", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed"],
       __juce__registeredGlobalEventIds: [], __juce__sliders: Object.keys(sliders), __juce__toggles: Object.keys(toggles), __juce__comboBoxes: Object.keys(combos),
     },
     postMessage(message) {
@@ -155,6 +168,13 @@
         if (payload.name === "startAutoEdit") { ae.state = 1; ae.progress = 0; }
         if (payload.name === "cancelAutoEdit" && ae.state === 1) ae.state = 0;
         if (payload.name === "getAutoEditReport") result = ae.report;
+        if (payload.name === "getAutoAnalyze") result = aaJson();
+        if (payload.name === "setAutoAnalyze") { aa.on = !!payload.params[0]; if (!aa.on) { aa.needs = []; aa.checks = 0; aa.time = ""; } aa.version++; }
+        if (payload.name === "applyAutoAnalyze" || payload.name === "dismissAutoAnalyze") {
+          const n = aa.needs.find((x) => x.key === payload.params[0]);
+          if (n && payload.name === "applyAutoAnalyze") { n.changes.forEach((c) => setSlider(c.id, c.to)); ae.undo = true; }
+          aa.needs = aa.needs.filter((x) => x !== n); aa.version++; result = !!n;
+        }
         if (payload.name === "chooseReference") { ref.json = JSON.stringify({ state: "loading" }); ref.version++;
           setTimeout(() => { ref.json = JSON.stringify({ state: "ok", name: "Favorite Artist - Hook (Acapella)", seconds: 41, problem: "", warning: "" }); ref.version++; }, 1200); }
         if (payload.name === "clearReference") { ref.json = JSON.stringify({ state: "none" }); ref.version++; }
@@ -238,6 +258,7 @@
       pitchSung: sing ? +(57 + 0.25 * Math.sin(t * 3)).toFixed(2) : 0, pitchTarget: sing ? 57 : -1,
       pitchCorr: sing && sliders.ptAmount.value > 0 ? +(-0.25 * Math.sin(t * 3) * sliders.ptAmount.value / 100).toFixed(2) : 0,
       aeState: ae.state, aeProgress: +ae.progress.toFixed(2), aeHearing: true, aeUndo: ae.undo, aeReport: ae.version, refVersion: ref.version,
+      aaState: !aa.on ? 0 : ae.report ? (ae.state ? 4 : 2) : 1, aaProgress: +aa.progress.toFixed(2), aaVersion: aa.version,
       in: inS, out: outS,
     }));
   }, 1000 / 30);

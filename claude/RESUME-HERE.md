@@ -1676,3 +1676,29 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Next thread: "Voxology Auto Analyze" - the user hasn't described it yet: ask what they want before changing code.
 - User prefs (unchanged): short replies, plain language, honest, a plan with warnings; Actions link when green +
   Ctrl+J -> Keep; keep this file AND docs/MANUAL.md updated (MANUAL rule); no PRs; no model names in commits.
+
+## v0.48.0 Auto Analyze (2026-10-15, "Voxology Auto Analyze" thread)
+- User's ask: like Mixology's new Auto Analyze (Mixology v0.11, dsp/include/mixology/AutoAnalyze.h there): once Auto-Edit has
+  run, Voxology should have an Auto Analyze option that keeps listening and offers edits in the Learn window as it picks up
+  changes and new edit needs.
+- Built: switch ON / OFF in the AUTO-EDIT REPORT tab (section AUTO ANALYZE, under the summary; saved with the project as
+  state attribute "aeWatch", default off, not a host parameter). While on + a report with measurements + window open + song
+  playing (not offline): AutoEditController reuses the capture buffers (states watching = 3 / checking = 4; getState() shows
+  them as idle so AUTO-EDIT stays free). Every 12 s of voice (or 30 s total) a pool job runs analyseVocal + analyseBeat
+  (~0.2 s) -> vox::findNewNeeds (dsp/src/AutoAnalyze.cpp) against the report's measurements; only if a need has modules to
+  retune (or FIT LEVEL) does it run the full autoEdit (~12 s CPU on 14 s of audio, background) with the current style /
+  intensity / reference. Needs: clip, level (4 dB), noise (6 dB, above -70), low (rumble +6 dB / lowest note 3 st lower),
+  sib (+3 / -4 dB), tone (3 dB, 3-band smoothed, 120 Hz - 10 kHz), dynamics (punch 2.5 / range 4 dB), beatnew, beatlevel
+  (1.5 dB), yourvocal. Each = a Learn card in the usual NEED / STEP format + "APPLY sets (now -> new)" list (the fresh
+  Auto-Edit's values for that need's modules, kept when >= 3 % of the knob's range; band frequencies only when the band is
+  in use; Output = fresh output + fitLevel) + APPLY (takeUndoSnapshot(false): UNDO puts it back, report stays) / DISMISS
+  (that key hidden until the next Auto-Edit) / GOT IT (advice-only). Cards merge by key (newest reading), stay until applied
+  or dismissed; a need the current settings already cover gives no card. Tab reads "REPORT · n NEW". Cards aren't saved.
+- Report JSON now also keeps analysis.heardGaps / clipped / rumbleDb / f0Low / punchDb and beat.yourVocal (older reports:
+  those checks are skipped). Meters frame: aaState (0 off, 1 needs Auto-Edit, 2 listening, 3 checking, 4 paused), aaProgress,
+  aaVersion; native functions getAutoAnalyze / setAutoAnalyze / applyAutoAnalyze / dismissAutoAnalyze (mock.js has them).
+- Tests: tests/test_autoanalyze.cpp (4 cases: no needs on the same vocal / small changes, every kind with its modules +
+  note format, older reports skipped, real analyseVocal: same take quiet, hotter + noisier take flagged). UI checked in
+  headless Chromium with mock.js (served over http with JUCE's javascript/index.js copied to juce/).
+- Honest limits (told the user): it listens to the raw vocal, so it doesn't judge the user's own knob changes; a louder
+  hook is normal (the card's NEED says so); APPLY retunes for that part, not the whole song; Cubase test still needed.

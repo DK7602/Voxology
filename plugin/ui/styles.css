@@ -223,6 +223,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .l-item .l-why { margin-top: 3px; color: var(--ink-soft); font-size: 14px; }
 .fit-level { margin: -4px 0 12px; padding: 0 2px; }
 .fit-level .chip { padding: 0 14px; }
+.aa-switch { height: 26px; padding: 0 12px; margin-left: 10px; font-size: 11px; vertical-align: middle; }
+.aa-moves { margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
+.aa-moves li { margin: 2px 0; }
+.aa-row { display: flex; gap: 8px; margin-top: 10px; }
+.aa-row .chip { height: 30px; padding: 0 14px; font-size: 12px; }
 .fit-level .l-why { margin-top: 5px; color: var(--ink-soft); font-size: 13px; }
 .tip { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: #fff6e6; box-shadow: inset 0 0 0 2px var(--gold); }
 .tip.warn { background: #fdece6; box-shadow: inset 0 0 0 1.5px var(--warn); }

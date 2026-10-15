@@ -2,7 +2,8 @@
 
 An all-in-one vocal chain plug-in (VST3 / AU / Standalone) for trap and hip-hop vocals, with
 **Auto-Edit**: it listens to your vocal, sets every module for the style you pick, and explains
-each decision (plus a plan for every warning) in the Learn panel.
+each decision (plus a plan for every warning) in the Learn panel. **Auto Analyze** keeps listening after
+that and offers new settings (APPLY / UNDO) when a part of the song needs something new.
 
 ## Chain
 01 Cleanup (low cut + gate) -> 02 Tone EQ (Body / Mud / Nasal / Presence / Air) -> 03 De-Esser ->
