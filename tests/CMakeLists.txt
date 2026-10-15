@@ -28,13 +28,15 @@ add_executable(vox_tests
     test_dimension.cpp
     test_throws.cpp
     test_smooth.cpp
-    test_suite.cpp)
+    test_suite.cpp
+    test_songstyle.cpp)
 
 target_link_libraries(vox_tests PRIVATE vox_dsp Catch2::Catch2WithMain)
 target_include_directories(vox_tests PRIVATE ${CMAKE_SOURCE_DIR}/honeytune)   # HoneyView.h (the editor's rules, no JUCE)
 target_compile_definitions(vox_tests PRIVATE
     VOX_MANUAL_PATH="${CMAKE_SOURCE_DIR}/docs/MANUAL.md"
     VOX_UI_INDEX="${CMAKE_SOURCE_DIR}/plugin/ui/index.html"
+    VOX_UI_STYLES="${CMAKE_SOURCE_DIR}/plugin/ui/mixstyles.js"
     VOX_VERSION="${PROJECT_VERSION}")
 set_target_properties(vox_tests PROPERTIES FOLDER "Voxology")
 

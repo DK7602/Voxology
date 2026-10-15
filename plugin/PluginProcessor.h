@@ -110,6 +110,16 @@ public:
     /** The suite link (Voxology, Mixology, Masterology): a Mixology is in this project and sees this vocal. */
     std::atomic<bool> mixologyHere { false };
 
+    // The song's style (Mixology's list of 75, the same in Mixology and Masterology), shared through the suite link.
+    // It suggests the vocal STYLE (aeStyle) on a track where you haven't picked one yourself. Message thread.
+    /** You picked a song style in Voxology's window: the others follow. */
+    void pickStyle (const std::string& key, const std::string& name);
+    /** You picked this track's vocal style yourself (the STYLE arrows): the song's style no longer changes it. */
+    void setVocalStyleMine (bool mine) { vocalStyleMine.store (mine); }
+    bool isVocalStyleMine() const { return vocalStyleMine.load(); }
+    suite::StyleInfo songStyleNow() const { const juce::ScopedLock sl (styleLock); return songStyle.style(); }
+    std::uint32_t songStyleVersion() const { return styleVersion.load(); }
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
@@ -161,6 +171,11 @@ private:
     void publishSuite();
     int suiteSlot = -1;
     std::uint64_t suiteId = 0;
+    mutable juce::CriticalSection styleLock;
+    suite::SongStyle songStyle { suite::StyleInfo::From::voxology };   // under styleLock
+    std::atomic<std::uint32_t> styleVersion { 0 };
+    std::atomic<bool> vocalStyleMine { false };   // saved with the project
+    void suggestVocalStyle();                     // the song style's vocal style, unless you picked one
     float suiteCompDb = 0.0f;
     juce::String trackName;
     vox::BandAnalyser vocalBands;

@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.48.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.49.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.48.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.49.0**).
 
 Where each one goes in Cubase:
 
@@ -41,7 +41,8 @@ The top bar holds everything you need for a quick mix; the panels below are for 
 | Control | What it does | When to use it |
 | --- | --- | --- |
 | Logo | Click it: every blue part turns red. Click again: blue. Saved with your project | Just for fun |
-| STYLE | What the finished vocal should sound like. Auto-Edit aims for it | Pick before Auto-Edit |
+| STYLE | What the finished vocal should sound like. Auto-Edit aims for it. The song's style (the SONG chip) suggests it until you pick one with the arrows | Pick before Auto-Edit |
+| SONG chip (next to STYLE) | The song's style: the same list of 75 as Mixology and Masterology, shared by all three (pick it in any of them, the others follow). On a track where you haven't picked the vocal STYLE yourself it suggests one: Rap for Hip Hop, Trap Lead for hard trap, Melodic for melodic trap and Afrobeats, R&B for R&B, Pop for Pop, Natural Singer for Rock, Folk for Folk | Pick once per song, in whichever plug-in you're in |
 | INTENSITY | Light, Balanced or Strong: how far Auto-Edit pushes | Light for a good recording, Strong for a rough one |
 | + REFERENCE | Aim at a pro vocal's sound instead of the style's target | When you want a specific sound |
 | MY CHAINS | Save your whole setup under a name and load it on any song; Quick Looks (Hard Robot, Stacked Hook ...) | Your next song with the same voice and mic |
@@ -322,7 +323,13 @@ finished mix into the master. In the same Cubase project they tell each other wh
   Mixology then treats that track as a vocal and never adds a second compressor, reverb or delay on top of
   Voxology's. Mixology's Tracks page shows a gold **VOX** tag on the track (**BEAT** for Voxology in BEAT mode).
 - The bottom bar shows **MIXOLOGY ✓** when a Mixology is in the project (hover it for what that means).
-- Needs Mixology 0.8 (and Masterology 0.26) or newer.
+- **One song style for all three**: click the **SONG** chip next to STYLE and pick the song's genre and style (the same
+  list as Mixology and Masterology). Pick it in any of the three and the others follow within a second; the newest
+  choice wins, also after you reopen the project. In Voxology it only suggests the vocal STYLE, and only on a track
+  where you haven't picked that yourself: a song with rap verses and a melodic hook keeps each track's vocal style.
+  Projects from before the shared style keep their vocal style as it was.
+- Needs Mixology 0.8 (and Masterology 0.26) or newer; the shared song style needs Voxology 0.49, Mixology 0.12 and
+  Masterology 0.28 (update all three together: older and newer ones don't see each other).
 
 ## Troubleshooting
 

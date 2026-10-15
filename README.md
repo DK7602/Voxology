@@ -30,7 +30,9 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
 - `plugin/` JUCE wrapper: `Params.h` (all parameters), processor, `AutoEditController`, web editor.
 - `plugin/ui/` HTML / CSS / JS interface (embedded in the binary).
 - `dsp/include/suite/SuiteLink.h` the suite link: Voxology, Mixology and Masterology tell each other what they do (the
-  same file in all three repos; Voxology publishes each vocal it sits on).
+  same file in all three repos; Voxology publishes each vocal it sits on), and since v0.49 the song's style, shared by
+  all three (`plugin/ui/mixstyles.js` is the same list in each; `dsp/include/vox/SongStyle.h` turns it into a
+  suggested vocal STYLE).
 - `tests/` Catch2 tests; `tools/report.cpp` prints Auto-Edit's report for a test vocal or a raw file.
 
 ## Third-party

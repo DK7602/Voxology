@@ -2,6 +2,7 @@
 // event (30 Hz) and four native functions (Auto-Edit).
 
 import * as Juce from "./juce/index.js";
+import { GENRES as SONG_GENRES, STYLES as SONG_STYLES } from "./mixstyles.js";
 
 const $ = (id) => document.getElementById(id);
 const MINUS = "−";
@@ -1644,8 +1645,75 @@ function refreshStyle() {
   $("style-name").textContent = name;
   $("style-name").classList.toggle("long", name.length > 10);
 }
-$("style-prev").addEventListener("click", () => { P.aeStyle.setChoiceIndex((choice("aeStyle") + STYLES.length - 1) % STYLES.length); refreshStyle(); });
-$("style-next").addEventListener("click", () => { P.aeStyle.setChoiceIndex((choice("aeStyle") + 1) % STYLES.length); refreshStyle(); });
+// The arrows are your choice for this track: the song's style no longer suggests its vocal style.
+const vocalStyleMineSet = Juce.getNativeFunction("setVocalStyleMine");
+function stepVocalStyle(d) {
+  P.aeStyle.setChoiceIndex((choice("aeStyle") + STYLES.length + d) % STYLES.length);
+  vocalStyleMineSet(true);
+  SONG.vocalMine = true;
+  refreshStyle();
+  refreshSongChip();
+}
+$("style-prev").addEventListener("click", () => stepVocalStyle(-1));
+$("style-next").addEventListener("click", () => stepVocalStyle(1));
+
+// The song's style: Mixology's list of 75 (mixstyles.js, the same file in all three plug-ins), shared through the
+// suite link. On a track where you haven't picked the vocal STYLE yourself, it suggests one (Rap for Hip Hop,
+// Melodic for melodic trap...).
+const SONG = { key: "", name: "", version: -1, vocalMine: false };
+const pickStyleNative = Juce.getNativeFunction("pickStyle");
+function refreshSongChip() {
+  const chip = $("song-style");
+  const st = SONG_STYLES.find((s) => s.key === SONG.key);
+  chip.textContent = st ? `SONG · ${st.name.toUpperCase()}` : "SONG ▾";
+  chip.title = (st ? `Song style: ${st.fullName}. ${st.about}` : "Pick your song's style")
+    + " (the same list as Mixology and Masterology: pick it in any of them and all three follow). "
+    + (SONG.vocalMine ? "You picked this track's vocal STYLE yourself, so it stays." : "It suggests this track's vocal STYLE until you pick one with the arrows.");
+}
+function openSongPicker() {
+  const box = $("song-picker");
+  const now = SONG_STYLES.find((s) => s.key === SONG.key) || SONG_STYLES[0];
+  let shown = now.genre;
+  const draw = () => {
+    $("song-genres").replaceChildren(...SONG_GENRES.map((gn) => {
+      const b = el("button", "", "");
+      b.type = "button";
+      b.className = (gn === shown ? "sel" : "") + (gn === now.genre && SONG.key ? " cur" : "");
+      b.innerHTML = `<i style="background:${gn.colour}"></i>${gn.name}`;
+      b.addEventListener("click", () => { shown = gn; draw(); });
+      return b;
+    }));
+    $("song-styles").replaceChildren(...shown.styles.map((s) => {
+      const key = `${shown.id}.${s.id}`;
+      const b = el("button", key === SONG.key ? "sel" : "", "");
+      b.type = "button";
+      b.innerHTML = `<b>${s.name}</b><span>${s.about}</span>`;
+      b.addEventListener("click", () => {
+        SONG.key = key;
+        SONG.name = `${shown.name} - ${s.name}`;
+        pickStyleNative(key, SONG.name);
+        refreshSongChip();
+        box.hidden = true;
+      });
+      return b;
+    }));
+  };
+  draw();
+  box.hidden = false;
+}
+$("song-style").addEventListener("click", openSongPicker);
+$("song-picker-close").addEventListener("click", () => { $("song-picker").hidden = true; });
+window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("song-picker").hidden) $("song-picker").hidden = true; });
+function songFromFrame(ss) {
+  if (!ss) return;
+  SONG.vocalMine = !!ss.vocalMine;
+  if (ss.version === SONG.version) return;
+  SONG.version = ss.version;
+  SONG.key = ss.key;
+  SONG.name = ss.name;
+  refreshSongChip();
+}
+refreshSongChip();
 P.aeStyle.valueChangedEvent.addListener(refreshStyle);
 P.aeStyle.propertiesChangedEvent.addListener(refreshStyle);
 
@@ -1865,6 +1933,7 @@ function meterBar(elBar, elText, short, peak) {
 
 window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
   Object.assign(M, typeof frame === "string" ? JSON.parse(frame) : frame);
+  songFromFrame(M.songStyle);   // the song's style: this project's, or one just picked in Mixology or Masterology
   meterBar($("in-bar"), $("in-text"), M.inShort, M.inPeak);
   meterBar($("out-bar"), $("out-text"), M.outShort, M.outPeak);
   liveMeters.forEach((c) => c.update());

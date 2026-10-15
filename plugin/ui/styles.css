@@ -90,6 +90,30 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #header .title { height: 76px; flex-shrink: 0; margin-left: auto; filter: drop-shadow(0 3px 4px rgba(80, 56, 14, 0.3)); }
 .h-group { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
 .h-label { font-size: 11px; letter-spacing: 0.16em; font-weight: 700; color: var(--gold-deep); text-shadow: 0 0 4px #fff, 0 0 2px #fff; }
+/* The song's style (shared with Mixology and Masterology): a small chip on the STYLE label's line. */
+.h-label-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 176px; }
+.song-chip { height: 16px; max-width: 112px; padding: 0 8px; border: 0; border-radius: 8px; background: var(--marble-cream); color: var(--blue-deep);
+  font-weight: 700; font-size: 9px; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(201, 151, 58, 0.55); }
+.song-chip:hover { box-shadow: inset 0 0 0 1.5px var(--gold); }
+#song-picker { left: 220px; top: 70px; width: 1160px; height: 720px; z-index: 60; --glass: rgba(255, 250, 240, 0.97);
+  background: linear-gradient(var(--glass), var(--glass)) padding-box, var(--gold-grad) border-box; backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: 0 24px 60px rgba(40, 26, 4, 0.55); }
+#song-picker[hidden] { display: none; }
+#song-picker .m-sub { font-size: 14px; margin-left: 12px; }
+#song-genres { position: absolute; left: 0; top: 50px; bottom: 0; width: 250px; overflow-y: auto; padding: 14px 10px 14px 18px; border-right: 2px solid rgba(201, 151, 58, 0.35); }
+#song-genres button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 9px; font-size: 15px; color: var(--ink-soft); }
+#song-genres button i { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1px rgba(60, 40, 6, 0.25); }
+#song-genres button:hover, #song-genres button.sel { background: rgba(var(--blue-pale-rgb), 0.8); color: var(--blue-deep); }
+#song-genres button.cur { font-weight: 700; }
+#song-styles { position: absolute; left: 252px; right: 0; top: 50px; bottom: 0; overflow-y: auto; padding: 16px 24px; display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; align-content: start; }
+#song-styles button { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 0; border-radius: 14px; text-align: left; color: var(--ink);
+  background: var(--marble-cream); box-shadow: inset 0 0 0 1.5px rgba(201, 151, 58, 0.45); }
+#song-styles button b { font-size: 16px; color: var(--blue-deep); }
+#song-styles button span { font-size: 13px; line-height: 1.35; color: var(--ink-soft); }
+#song-styles button:hover { box-shadow: inset 0 0 0 2px var(--gold); }
+#song-styles button.sel { background: var(--marble); box-shadow: inset 0 0 0 2px var(--gold), 0 0 10px rgba(var(--glow-rgb), 0.8); }
 .picker { display: flex; align-items: center; height: 40px; border-radius: 20px; background: var(--marble);
   box-shadow: inset 0 0 0 2px var(--gold), inset 0 2px 6px rgba(var(--blue-deep-rgb), 0.2); }
 .picker button { width: 34px; height: 40px; border: 0; background: none; font-size: 26px; line-height: 1; color: var(--blue-deep); }

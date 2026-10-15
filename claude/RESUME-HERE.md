@@ -1704,3 +1704,22 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   hook is normal (the card's NEED says so); APPLY retunes for that part, not the whole song; Cubase test still needed.
 - v0.48 CI green: run 38752042630 (commit 8e14283; Windows build + tests + pluginval 10 + VST3 validator, ASan/UBSan tests).
   Next: the user's Cubase test of Auto Analyze (switch on after Auto-Edit, play a louder / noisier part, APPLY, UNDO).
+
+## v0.49.0: one song style for the trio (2026-10-15, done from Mixology's "Mixology part 2" thread)
+- User (in the Mixology thread): one style list for all three (Mixology's 14 genres / 75 styles), a pop-up picker in
+  each, a change in one changes all in the project. "yes go ahead, do it here". Also: all three keep Auto Analyze on
+  across sessions (v0.48 already saves aeWatch + the report, so it does; reports from before v0.48 need one Auto-Edit).
+- suite/SuiteLink.h + .cpp (master copy in DK7602/mixology), kLayout 2: StyleSlot + StyleInfo + SongStyle (pick, sync,
+  save/restore "key|name|pickedAt|from", leave). The newest pick wins, also after reopening. tests/test_suite.cpp = the
+  same file as Masterology's, with the new song-style case.
+- plugin/ui/mixstyles.js: Mixology's list, THE SAME FILE IN ALL THREE (keys never change).
+- dsp/include/vox/SongStyle.h: vocalStyleFor(key) -> aeStyle index (hip hop Rap, hard trap Trap Lead, melodic trap /
+  plugg / reggaeton / afro Melodic, R&B, pop Pop, hyperpop Robot, rock / country / gospel Natural Singer, folk Folk...).
+  tests/test_songstyle.cpp checks all 75 keys of mixstyles.js map (VOX_UI_STYLES).
+- Processor: songStyle (styleLock), vocalStyleMine (saved "vsMine"; a project from before "songStyle" existed counts
+  as mine, so its vocal style never changes), pickStyle(), publishSuite() syncs; an adopted / picked style calls
+  suggestVocalStyle(): aeStyle = vocalStyleFor(key) unless mine or Beat mode. Editor: native pickStyle,
+  setVocalStyleMine; frame.songStyle {key, name, from, version, vocalMine}.
+- UI: SONG chip on the STYLE label line (.h-label-row / .song-chip), #song-picker (the manual's look: genres left,
+  styles right); the STYLE arrows call setVocalStyleMine(true). mock.js: Mixology picked Hip Hop - G-Funk.
+- Manual: top-bar table (STYLE, SONG chip) and With Mixology and Masterology.

@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "vox/KeyShare.h"
+#include "vox/SongStyle.h"
 #include "VoxWebEditor.h"
 
 VoxologyAudioProcessor::VoxologyAudioProcessor()
@@ -45,6 +46,8 @@ VoxologyAudioProcessor::~VoxologyAudioProcessor()
     cancelPendingUpdate();
     vox::UnmaskLink::instance().release (linkSlot);
     suite::Link::process().releaseVocal (suiteSlot, suiteId);
+    const juce::ScopedLock sl (styleLock);
+    songStyle.leave (suite::Link::process(), suiteId);
 }
 
 void VoxologyAudioProcessor::storeBeatMeters (const vox::BeatKey::Result& r) noexcept
@@ -112,6 +115,17 @@ void VoxologyAudioProcessor::publishSuite()
     const auto now = suite::nowMs();
     suite::MixInfo mix;
     mixologyHere.store (link.readMix (mix, now));
+    // The song's style: the newest choice in Voxology, Mixology or Masterology wins.
+    bool adopted = false;
+    {
+        const juce::ScopedLock sl (styleLock);
+        adopted = songStyle.sync (link, suiteId, now);
+    }
+    if (adopted)
+    {
+        ++styleVersion;
+        suggestVocalStyle();
+    }
     if (suiteSlot < 0) suiteSlot = link.claimVocal (suiteId, now);
     if (suiteSlot < 0) return;   // 64 vocals already: try again later
 
@@ -145,6 +159,29 @@ void VoxologyAudioProcessor::publishSuite()
     suiteCompDb = std::max (meters.suiteGr.exchange (0.0f), suiteCompDb * 0.9f);
     v.compressionDb = (v.flags & F::compressor) != 0 ? suiteCompDb : 0.0f;
     if (! link.publishVocal (suiteSlot, suiteId, v, now)) suiteSlot = -1;   // taken over while this one was silent: claim again
+}
+
+void VoxologyAudioProcessor::pickStyle (const std::string& key, const std::string& name)
+{
+    {
+        const juce::ScopedLock sl (styleLock);
+        if (key == songStyle.style().key) return;
+        songStyle.pick (key, name);
+    }
+    ++styleVersion;
+    suggestVocalStyle();
+    publishSuite();   // the others follow at once
+}
+
+void VoxologyAudioProcessor::suggestVocalStyle()
+{
+    // A song can have rap verses and a melodic hook: a vocal style you picked on this track stays.
+    if (vocalStyleMine.load() || isBeatMode()) return;
+    const int v = vox::songstyle::vocalStyleFor (songStyleNow().key);
+    if (v < 0) return;
+    auto* p = parameters.getParameter ("aeStyle");
+    const float norm = p->convertTo0to1 (static_cast<float> (v));
+    if (std::abs (p->getValue() - norm) > 1e-4f) p->setValueNotifyingHost (norm);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout VoxologyAudioProcessor::createParameterLayout()
@@ -512,6 +549,13 @@ void VoxologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
         xml->setAttribute ("uiRed", uiRed.load() ? 1 : 0);
         xml->setAttribute ("chainName", chainName);
         xml->setAttribute ("aeWatch", autoEdit.isWatchOn() ? 1 : 0);
+        {
+            // The song's style (shared with Mixology and Masterology) + when it was picked; and whether you picked
+            // this track's vocal style yourself.
+            const juce::ScopedLock sl (styleLock);
+            xml->setAttribute ("songStyle", juce::String::fromUTF8 (songStyle.save().c_str()));
+            xml->setAttribute ("vsMine", vocalStyleMine.load() ? 1 : 0);
+        }
         copyXmlToBinary (*xml, destData);
     }
 }
@@ -534,6 +578,17 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
             xml->removeAttribute ("chainName");
             autoEdit.setWatchOn (xml->getIntAttribute ("aeWatch", 0) != 0);
             xml->removeAttribute ("aeWatch");
+            {
+                // The song's style. A project from before it existed keeps its vocal style as it was (you chose it).
+                const bool hasStyle = xml->hasAttribute ("songStyle");
+                const juce::ScopedLock sl (styleLock);
+                songStyle = suite::SongStyle { suite::StyleInfo::From::voxology };
+                songStyle.restore (xml->getStringAttribute ("songStyle").toStdString());
+                vocalStyleMine.store (hasStyle ? xml->getIntAttribute ("vsMine", 0) != 0 : true);
+                ++styleVersion;
+            }
+            xml->removeAttribute ("songStyle");
+            xml->removeAttribute ("vsMine");
             xml->removeAttribute ("midiLearned");
             xml->removeAttribute ("uiRed");
             parameters.replaceState (juce::ValueTree::fromXml (*xml));

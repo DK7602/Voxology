@@ -72,6 +72,15 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
                              { complete (args.size() >= 1 && audioProcessor.autoEdit.applyNeed (args[0].toString())); })
         .withNativeFunction ("dismissAutoAnalyze", [this] (const juce::Array<juce::var>& args, auto complete)
                              { complete (args.size() >= 1 && audioProcessor.autoEdit.dismissNeed (args[0].toString())); })
+        // The song's style (Mixology's list, the same in all three): pickStyle(key, name); setVocalStyleMine(bool):
+        // you picked this track's vocal STYLE yourself, so the song's style no longer suggests it.
+        .withNativeFunction ("pickStyle", [this] (const juce::Array<juce::var>& args, auto complete)
+                             {
+                                 if (args.size() >= 2) audioProcessor.pickStyle (args[0].toString().toStdString(), args[1].toString().toStdString());
+                                 complete (true);
+                             })
+        .withNativeFunction ("setVocalStyleMine", [this] (const juce::Array<juce::var>& args, auto complete)
+                             { if (args.size() >= 1) audioProcessor.setVocalStyleMine (static_cast<bool> (args[0])); complete (true); })
         .withNativeFunction ("getAutoEditReport", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getReportJson()); })
         .withNativeFunction ("chooseReference", [this] (const juce::Array<juce::var>&, auto complete)
         {
@@ -324,6 +333,17 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("matchDb", roundTo (m.matchDb.load(), 0.1f));
     frame->setProperty ("bpm", roundTo (m.bpm.load(), 0.1f));
     frame->setProperty ("mixology", audioProcessor.mixologyHere.load());   // the suite link: Mixology sees this vocal
+    {
+        // The song's style, shared with Mixology and Masterology ("" = none chosen yet).
+        const auto st = audioProcessor.songStyleNow();
+        auto* so = new juce::DynamicObject();
+        so->setProperty ("key", juce::String::fromUTF8 (st.key.c_str()));
+        so->setProperty ("name", juce::String::fromUTF8 (st.name.c_str()));
+        so->setProperty ("from", static_cast<int> (st.from));   // 1 Voxology, 2 Mixology, 3 Masterology
+        so->setProperty ("version", static_cast<int> (audioProcessor.songStyleVersion()));
+        so->setProperty ("vocalMine", audioProcessor.isVocalStyleMine());
+        frame->setProperty ("songStyle", juce::var (so));
+    }
     frame->setProperty ("pitchSung", roundTo (m.pitchSung.load(), 0.01f));
     frame->setProperty ("pitchTarget", m.pitchTarget.load());
     frame->setProperty ("pitchCorr", roundTo (m.pitchCorr.load(), 0.01f));

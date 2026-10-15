@@ -140,9 +140,11 @@
   }
   setInterval(() => { if (ae.state === 1) { ae.progress = Math.min(1, ae.progress + 0.1 / 4); if (ae.progress >= 1) { ae.state = 2; setTimeout(aeFinish, 900); } } }, 100);
 
+  // The song's style, shared with Mixology and Masterology (as if Mixology picked it).
+  const song = { key: "hiphop.gfunk", name: "Hip Hop - G-Funk", from: 2, version: 1, vocalMine: false };
   window.__JUCE__ = {
     initialisationData: {
-      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "getAutoAnalyze", "setAutoAnalyze", "applyAutoAnalyze", "dismissAutoAnalyze", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed"],
+      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "getAutoAnalyze", "setAutoAnalyze", "applyAutoAnalyze", "dismissAutoAnalyze", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed", "pickStyle", "setVocalStyleMine"],
       __juce__registeredGlobalEventIds: [], __juce__sliders: Object.keys(sliders), __juce__toggles: Object.keys(toggles), __juce__comboBoxes: Object.keys(combos),
     },
     postMessage(message) {
@@ -169,6 +171,8 @@
         if (payload.name === "cancelAutoEdit" && ae.state === 1) ae.state = 0;
         if (payload.name === "getAutoEditReport") result = ae.report;
         if (payload.name === "getAutoAnalyze") result = aaJson();
+        if (payload.name === "pickStyle") Object.assign(song, { key: payload.params[0], name: payload.params[1], from: 1, version: song.version + 1 });
+        if (payload.name === "setVocalStyleMine") song.vocalMine = !!payload.params[0];
         if (payload.name === "setAutoAnalyze") { aa.on = !!payload.params[0]; if (!aa.on) { aa.needs = []; aa.checks = 0; aa.time = ""; } aa.version++; }
         if (payload.name === "applyAutoAnalyze" || payload.name === "dismissAutoAnalyze") {
           const n = aa.needs.find((x) => x.key === payload.params[0]);
@@ -253,7 +257,7 @@
       peakGr: active("cpOn") && s("cpPeak") < 0 ? +(-5 * word * word).toFixed(1) : 0,
       levelGr: active("cpOn") && s("cpRatio") > 1.01 ? +(-4 * word).toFixed(1) : 0,
       satHarm: active("saOn") && s("saDrive") > 0 ? +(-42 + s("saDrive") * 3 + 2 * word).toFixed(1) : -100,
-      matchDb: -1.2, bpm: 140, sr: 48000, mixology: true,
+      matchDb: -1.2, bpm: 140, sr: 48000, mixology: true, songStyle: song,
       bkState: location.hash === "#beat" ? 5 : 1, bkKey: 7, bkMode: 7, bkSet: 0, bkUnclear: 0, bkConf: 0.86, bkTune: -28, bkHeard: 24, keyUsed: 11, scaleUsed: 2, midiNotes: (1 << 11) | (1 << 2), notesUsed: 0b110010101101 & ~(1 << 6), recMode: 1, latencyMs: 6.1,
       pitchSung: sing ? +(57 + 0.25 * Math.sin(t * 3)).toFixed(2) : 0, pitchTarget: sing ? 57 : -1,
       pitchCorr: sing && sliders.ptAmount.value > 0 ? +(-0.25 * Math.sin(t * 3) * sliders.ptAmount.value / 100).toFixed(2) : 0,
