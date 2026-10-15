@@ -1723,3 +1723,10 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - UI: SONG chip on the STYLE label line (.h-label-row / .song-chip), #song-picker (the manual's look: genres left,
   styles right); the STYLE arrows call setVocalStyleMine(true). mock.js: Mixology picked Hip Hop - G-Funk.
 - Manual: top-bar table (STYLE, SONG chip) and With Mixology and Masterology.
+
+## v0.49.1 Header: SONG / STYLE / REFERENCE as three equal pills (2026-10-15)
+- User (Cubase screenshot, v0.49.0): the SONG chip was too small; stack style, Auto-Edit target and reference as equal-sized
+  pills, all three pop-ups. Now .style-pill x3 in .g-style (236 x 31 px, label left, value, caret): SONG opens the song
+  picker, STYLE opens a ref-menu-style list of the 8 styles with a one-line "about" each (picking one = vocalStyleMine, as
+  the arrows did), REFERENCE opens the reference menu (the separate ✕ is gone; "No reference (use the style)" in the menu).
+  Old .picker / .song-chip / .h-label-row CSS removed. Manual updated (top bar, quick start, references, suite section).

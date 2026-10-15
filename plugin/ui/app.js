@@ -1436,7 +1436,7 @@ function notesAsTips() {
 
 function referenceBlock() {
   if (refInfo.state === "none") {
-    body.append(head("REFERENCE MATCH"), para("Click + REFERENCE (under STYLE) to aim Auto-Edit at a sound you like: pick one of the BUILT-IN finished pro vocals (male / female, singer / rap), or add the acapella of a vocal you love. Auto-Edit then matches its tone, how bright its s sounds are and its punch, instead of the style's built-in target. Every vocal you add is saved under YOURS, so it's there in every project. No acapella? Split the song with the free UVR app (Vocals only) and add the vocal it makes: Voxology marks it \u2702 and uses its tone from 250 Hz up, its s and its punch, not its low end or space (splitting gets those wrong)."));
+    body.append(head("REFERENCE MATCH"), para("Click the REFERENCE pill (under STYLE) to aim Auto-Edit at a sound you like: pick one of the BUILT-IN finished pro vocals (male / female, singer / rap), or add the acapella of a vocal you love. Auto-Edit then matches its tone, how bright its s sounds are and its punch, instead of the style's built-in target. Every vocal you add is saved under YOURS, so it's there in every project. No acapella? Split the song with the free UVR app (Vocals only) and add the vocal it makes: Voxology marks it \u2702 and uses its tone from 250 Hz up, its s and its punch, not its low end or space (splitting gets those wrong)."));
     body.append(tip("WHERE TO GET ONE", "Use the vocal on its own (an acapella or vocal stem), not the full song: a beat under it throws the reading off by about 7 dB.", "calm",
       { need: "Optional. The styles work without one.", steps: ["Search for \"<song name> acapella\" (many artists release them), or ask the producer for the vocal stem.", "WAV, AIFF, FLAC, MP3 or OGG all work. A verse or hook (10 s+) is plenty."] }));
     return;
@@ -1444,7 +1444,7 @@ function referenceBlock() {
   body.append(head("REFERENCE MATCH"));
   if (refInfo.state === "loading") { body.append(para("Reading the reference…")); return; }
   if (refInfo.state === "problem") {
-    body.append(tip("CAN'T USE THIS ONE", refInfo.problem || "This file can't be used as a reference.", "warn", { need: "Yes, to use Reference Match.", steps: ["Choose another file with + REFERENCE.", "Or remove it (✕) to use the style's target."] }));
+    body.append(tip("CAN'T USE THIS ONE", refInfo.problem || "This file can't be used as a reference.", "warn", { need: "Yes, to use Reference Match.", steps: ["Choose another one with the REFERENCE pill.", "Or pick \"No reference (use the style)\" at the bottom of its list."] }));
     return;
   }
   body.append(para(`Auto-Edit will match "${refInfo.name}" (${Number(refInfo.seconds || 0).toFixed(0)} s of voice heard): its tone, s brightness, punch and space. Pitch, clean-up and saturation still follow the STYLE.`));
@@ -1641,21 +1641,43 @@ document.querySelectorAll("#learn-tabs button").forEach((b) => b.addEventListene
 // ---------------------------------------------------------------------------------------------
 // Header
 function refreshStyle() {
-  const name = STYLES[choice("aeStyle")] || STYLES[0];
-  $("style-name").textContent = name;
-  $("style-name").classList.toggle("long", name.length > 10);
+  $("style-name").textContent = STYLES[choice("aeStyle")] || STYLES[0];
 }
-// The arrows are your choice for this track: the song's style no longer suggests its vocal style.
+// Picking the STYLE is your choice for this track: the song's style no longer suggests its vocal style.
 const vocalStyleMineSet = Juce.getNativeFunction("setVocalStyleMine");
-function stepVocalStyle(d) {
-  P.aeStyle.setChoiceIndex((choice("aeStyle") + STYLES.length + d) % STYLES.length);
+function setVocalStyle(i) {
+  P.aeStyle.setChoiceIndex(i);
   vocalStyleMineSet(true);
   SONG.vocalMine = true;
   refreshStyle();
   refreshSongChip();
 }
-$("style-prev").addEventListener("click", () => stepVocalStyle(-1));
-$("style-next").addEventListener("click", () => stepVocalStyle(1));
+const STYLE_ABOUT = ["Upfront, bright and controlled: the hard trap lead", "Dry, punchy and clear: every word upfront", "Melodic trap: tuned, smooth, a wetter space",
+  "The hard-tuned robot effect", "Smooth, warm and airy", "Polished and bright", "Natural and warm, light on effects", "Your voice as sung, cleaned up and balanced"];
+let styleMenu = null;
+function closeStyleMenu() { if (styleMenu) { styleMenu.remove(); styleMenu = null; } }
+function openStyleMenu() {
+  closeStyleMenu();
+  const m = el("div", "ref-menu style-menu");
+  m.append(el("div", "ref-head", "STYLE \u00B7 what Auto-Edit aims for"));
+  STYLES.forEach((name, i) => {
+    const row = el("div", "ref-item" + (i === choice("aeStyle") ? " current" : ""));
+    const b = el("button", "ref-pick", (i === choice("aeStyle") ? "\u266A " : "") + name);
+    b.type = "button";
+    b.append(el("span", "ref-pitch", STYLE_ABOUT[i]));
+    b.addEventListener("click", () => { closeStyleMenu(); setVocalStyle(i); });
+    row.append(b);
+    m.append(row);
+  });
+  const r = $("style-pill").getBoundingClientRect();
+  m.style.left = `${Math.round(r.left)}px`;
+  m.style.top = `${Math.round(r.bottom + 4)}px`;
+  document.body.append(m);
+  styleMenu = m;
+}
+$("style-pill").addEventListener("click", () => { if (styleMenu) closeStyleMenu(); else openStyleMenu(); });
+document.addEventListener("mousedown", (e) => { if (styleMenu && !styleMenu.contains(e.target) && !$("style-pill").contains(e.target)) closeStyleMenu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeStyleMenu(); });
 
 // The song's style: Mixology's list of 75 (mixstyles.js, the same file in all three plug-ins), shared through the
 // suite link. On a track where you haven't picked the vocal STYLE yourself, it suggests one (Rap for Hip Hop,
@@ -1665,10 +1687,11 @@ const pickStyleNative = Juce.getNativeFunction("pickStyle");
 function refreshSongChip() {
   const chip = $("song-style");
   const st = SONG_STYLES.find((s) => s.key === SONG.key);
-  chip.textContent = st ? `SONG · ${st.name.toUpperCase()}` : "SONG ▾";
+  chip.querySelector("b").textContent = st ? st.name : "Pick a style";
+  chip.classList.toggle("set", !!st);
   chip.title = (st ? `Song style: ${st.fullName}. ${st.about}` : "Pick your song's style")
     + " (the same list as Mixology and Masterology: pick it in any of them and all three follow). "
-    + (SONG.vocalMine ? "You picked this track's vocal STYLE yourself, so it stays." : "It suggests this track's vocal STYLE until you pick one with the arrows.");
+    + (SONG.vocalMine ? "You picked this track's vocal STYLE yourself, so it stays." : "It suggests this track's vocal STYLE until you pick one yourself.");
 }
 function openSongPicker() {
   const box = $("song-picker");
@@ -1756,11 +1779,10 @@ async function fetchReference() {
   const b = $("ref");
   b.classList.toggle("ok", refInfo.state === "ok");
   b.classList.toggle("warn", refInfo.state === "problem" || !!refInfo.warning);
-  b.textContent = refInfo.state === "loading" ? "READING…" : refInfo.state === "none" ? "+ REFERENCE"
+  b.querySelector("b").textContent = refInfo.state === "loading" ? "Reading…" : refInfo.state === "none" ? "None"
     : `${refInfo.state === "ok" ? (refInfo.split ? "\u2702" : "\u266A") : "\u26A0"} ${refInfo.name || "reference"}`;
   b.title = refInfo.state === "none" ? "Reference Match: pick a built-in pro vocal or add an acapella you love, and Auto-Edit aims at its sound"
     : refInfo.problem || refInfo.warning || `Auto-Edit will match "${refInfo.name}". Click to choose another.`;
-  $("ref-clear").hidden = refInfo.state === "none" || refInfo.state === "loading";
   if (learnTab === "report") renderLearn();
 }
 // The reference menu: built-in pro references, the vocals you've loaded (saved for every project), add a file, none.
@@ -1815,10 +1837,9 @@ async function openRefMenu() {
   document.body.append(m);
   refMenu = m;
 }
-document.addEventListener("mousedown", (e) => { if (refMenu && !refMenu.contains(e.target) && e.target !== $("ref")) closeRefMenu(); });
+document.addEventListener("mousedown", (e) => { if (refMenu && !refMenu.contains(e.target) && !$("ref").contains(e.target)) closeRefMenu(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeRefMenu(); });
 $("ref").addEventListener("click", async () => { if (refMenu) closeRefMenu(); else await openRefMenu(); });
-$("ref-clear").addEventListener("click", async () => { await refClear(); fetchReference(); });
 
 // My Chains: your setups saved under a name (every project), Quick Looks (set only their modules), Start fresh.
 const chList = Juce.getNativeFunction("listChains");

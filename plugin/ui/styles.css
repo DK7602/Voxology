@@ -90,12 +90,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #header .title { height: 76px; flex-shrink: 0; margin-left: auto; filter: drop-shadow(0 3px 4px rgba(80, 56, 14, 0.3)); }
 .h-group { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
 .h-label { font-size: 11px; letter-spacing: 0.16em; font-weight: 700; color: var(--gold-deep); text-shadow: 0 0 4px #fff, 0 0 2px #fff; }
-/* The song's style (shared with Mixology and Masterology): a small chip on the STYLE label's line. */
-.h-label-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 176px; }
-.song-chip { height: 16px; max-width: 112px; padding: 0 8px; border: 0; border-radius: 8px; background: var(--marble-cream); color: var(--blue-deep);
-  font-weight: 700; font-size: 9px; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(201, 151, 58, 0.55); }
-.song-chip:hover { box-shadow: inset 0 0 0 1.5px var(--gold); }
+/* SONG (shared with Mixology and Masterology), STYLE (Auto-Edit's target) and REFERENCE: three equal pills, each opens its list. */
+.g-style { gap: 4px; }
+.style-pill { display: flex; align-items: center; gap: 8px; width: 236px; height: 31px; padding: 0 12px 0 14px; border: 0; border-radius: 16px; background: var(--marble-cream);
+  box-shadow: inset 0 0 0 2px var(--gold), 0 2px 4px rgba(60, 40, 6, 0.2); cursor: pointer; text-align: left; }
+.style-pill i { flex: none; width: 74px; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: 0.14em; color: var(--gold-deep); }
+.style-pill b { flex: 1; min-width: 0; font-size: 14px; color: var(--blue-deep); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.style-pill::after { content: "\25BE"; flex: none; font-size: 12px; color: var(--blue-deep); }
+.style-pill:hover { box-shadow: inset 0 0 0 2.5px var(--gold), 0 0 8px rgba(var(--glow-rgb), 0.7); }
+.style-pill.ok, .style-pill.set { background: var(--marble); }
+.style-pill.warn b { color: var(--warn); }
 #song-picker { left: 220px; top: 70px; width: 1160px; height: 720px; z-index: 60; --glass: rgba(255, 250, 240, 0.97);
   background: linear-gradient(var(--glass), var(--glass)) padding-box, var(--gold-grad) border-box; backdrop-filter: none; -webkit-backdrop-filter: none;
   box-shadow: 0 24px 60px rgba(40, 26, 4, 0.55); }
@@ -114,11 +118,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #song-styles button span { font-size: 13px; line-height: 1.35; color: var(--ink-soft); }
 #song-styles button:hover { box-shadow: inset 0 0 0 2px var(--gold); }
 #song-styles button.sel { background: var(--marble); box-shadow: inset 0 0 0 2px var(--gold), 0 0 10px rgba(var(--glow-rgb), 0.8); }
-.picker { display: flex; align-items: center; height: 40px; border-radius: 20px; background: var(--marble);
-  box-shadow: inset 0 0 0 2px var(--gold), inset 0 2px 6px rgba(var(--blue-deep-rgb), 0.2); }
-.picker button { width: 34px; height: 40px; border: 0; background: none; font-size: 26px; line-height: 1; color: var(--blue-deep); }
-.picker span { width: 108px; text-align: center; font-weight: 700; font-size: 17px; color: var(--blue-deep); white-space: nowrap; }
-.picker span.long { font-size: 13px; letter-spacing: -0.01em; }
 .seg { display: flex; border-radius: 20px; overflow: hidden; box-shadow: inset 0 0 0 2.5px var(--gold), 0 2px 5px rgba(60, 40, 6, 0.25); background: var(--marble-cream); }
 .seg button { border: 0; background: none; height: 40px; padding: 0 14px; font-weight: 700; font-size: 13px; letter-spacing: 0.06em; color: var(--ink-soft); }
 .seg button + button { box-shadow: inset 1px 0 0 rgba(201, 151, 58, 0.5); }

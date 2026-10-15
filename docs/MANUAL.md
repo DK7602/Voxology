@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.49.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.49.1. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.49.0**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.49.1**).
 
 Where each one goes in Cubase:
 
@@ -25,8 +25,8 @@ Where each one goes in Cubase:
 Auto-Edit does the whole chain for you: pick a style, press one button, play the song.
 
 1. Put **Voxology** in the first insert slot of your vocal track. Leave the switch at the top left of SIGNAL CHAIN on **VOCAL**.
-2. Pick a **STYLE** with the arrows (Trap Lead, Rap, Melodic, Robot, R&B, Pop, Folk, Natural Singer) and an **INTENSITY** (Light, Balanced, Strong).
-3. Optional: click **+ REFERENCE** and pick a built-in pro vocal, or add a vocal you love (see References).
+2. Click the **STYLE** pill and pick one (Trap Lead, Rap, Melodic, Robot, R&B, Pop, Folk, Natural Singer) and an **INTENSITY** (Light, Balanced, Strong).
+3. Optional: click the **REFERENCE** pill and pick a built-in pro vocal, or add a vocal you love (see References).
 4. Press **AUTO-EDIT**, then play a part of the song where you are rapping or singing.
 5. After about 12 seconds of voice it sets every module. The **LEARN** panel switches to the **AUTO-EDIT REPORT** and explains each choice.
 6. Turn on **MATCH**, then click **A** (your original) and **B** (Voxology) to compare at the same loudness.
@@ -36,15 +36,17 @@ Tip: run Auto-Edit on the busiest, loudest part of the song (the hook), not a qu
 
 ## Voxology screen: the top bar and the meters
 
+On the left, three pills stacked: **SONG**, **STYLE** and **REFERENCE**. Each opens its own list.
+
 The top bar holds everything you need for a quick mix; the panels below are for fine-tuning.
 
 | Control | What it does | When to use it |
 | --- | --- | --- |
 | Logo | Click it: every blue part turns red. Click again: blue. Saved with your project | Just for fun |
-| STYLE | What the finished vocal should sound like. Auto-Edit aims for it. The song's style (the SONG chip) suggests it until you pick one with the arrows | Pick before Auto-Edit |
-| SONG chip (next to STYLE) | The song's style: the same list of 75 as Mixology and Masterology, shared by all three (pick it in any of them, the others follow). On a track where you haven't picked the vocal STYLE yourself it suggests one: Rap for Hip Hop, Trap Lead for hard trap, Melodic for melodic trap and Afrobeats, R&B for R&B, Pop for Pop, Natural Singer for Rock, Folk for Folk | Pick once per song, in whichever plug-in you're in |
+| STYLE | What the finished vocal should sound like. Auto-Edit aims for it. The song's style (the SONG pill) suggests it until you pick one yourself. Click the pill for the list | Pick before Auto-Edit |
+| SONG pill (top of the three pills) | The song's style: the same list of 75 as Mixology and Masterology, shared by all three (pick it in any of them, the others follow). On a track where you haven't picked the vocal STYLE yourself it suggests one: Rap for Hip Hop, Trap Lead for hard trap, Melodic for melodic trap and Afrobeats, R&B for R&B, Pop for Pop, Natural Singer for Rock, Folk for Folk | Pick once per song, in whichever plug-in you're in |
 | INTENSITY | Light, Balanced or Strong: how far Auto-Edit pushes | Light for a good recording, Strong for a rough one |
-| + REFERENCE | Aim at a pro vocal's sound instead of the style's target | When you want a specific sound |
+| REFERENCE pill | Aim at a pro vocal's sound instead of the style's target ("None" until you pick one) | When you want a specific sound |
 | MY CHAINS | Save your whole setup under a name and load it on any song; Quick Looks (Hard Robot, Stacked Hook ...) | Your next song with the same voice and mic |
 | AUTO-EDIT | Listens to about 12 s of voice, then sets every module | Start of every mix |
 | UNDO | Puts back the settings from before the last Auto-Edit, chain or Quick Look | If you don't like the result |
@@ -183,7 +185,7 @@ Tip: one chain per kind of part works well: "Lead", "Hook stack", "Ad-libs". Aut
 
 ## References: aim at a pro sound
 
-A reference makes Auto-Edit aim at the tone of a real finished vocal instead of the style's target. Click **+ REFERENCE** (it shows the reference's name once one is loaded) to open the menu:
+A reference makes Auto-Edit aim at the tone of a real finished vocal instead of the style's target. Click the **REFERENCE** pill (it shows the reference's name once one is loaded) to open the menu; **No reference (use the style)** at the bottom removes it:
 
 - **BUILT-IN**: 17 measured groups of finished pro vocals, in three sections: MALE, FEMALE and MIXED. Only measurements are stored, never audio. Projects saved with an older version keep their reference (renamed to today's name).
 - **YOURS**: every vocal file you've added. Click ✕ to remove one, ✂ to mark one as split from a full song (see below).
@@ -323,7 +325,7 @@ finished mix into the master. In the same Cubase project they tell each other wh
   Mixology then treats that track as a vocal and never adds a second compressor, reverb or delay on top of
   Voxology's. Mixology's Tracks page shows a gold **VOX** tag on the track (**BEAT** for Voxology in BEAT mode).
 - The bottom bar shows **MIXOLOGY ✓** when a Mixology is in the project (hover it for what that means).
-- **One song style for all three**: click the **SONG** chip next to STYLE and pick the song's genre and style (the same
+- **One song style for all three**: click the **SONG** pill (above STYLE) and pick the song's genre and style (the same
   list as Mixology and Masterology). Pick it in any of the three and the others follow within a second; the newest
   choice wins, also after you reopen the project. In Voxology it only suggests the vocal STYLE, and only on a track
   where you haven't picked that yourself: a song with rap verses and a melodic hook keeps each track's vocal style.
