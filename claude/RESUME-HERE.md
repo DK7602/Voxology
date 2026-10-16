@@ -1771,3 +1771,9 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - CI: v0.49.2's run (and v0.50.0's) were cancelled by the next pushes from the Mixology thread; v0.50.1 run 38806349818
   (commit 832610a, includes v0.48 Auto Analyze and v0.49.2's STYLE pill) is fully green (Windows + pluginval + VST3
   validator, ASan / UBSan tests).
+
+## v0.50.2 Power button removed from the top bar (2026-10-16)
+- User: Voxology's own power button looked out of place; the DAW's plug-in window has one. Removed #bypass / .power from
+  the header (the wordmark now ends the bar). The "bypass" parameter stays (older projects, automation): when it's on the
+  footer status reads "BYPASSED · CLICK TO SWITCH ON" (#status.bypassed, warn colour) and a click turns it off. Manual:
+  top-bar table row "Bypass" points to the DAW's power button.

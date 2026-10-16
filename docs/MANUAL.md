@@ -1,6 +1,6 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.50.1. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.50.2. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -10,7 +10,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.50.1**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.50.2**).
 
 Where each one goes in Cubase:
 
@@ -52,7 +52,7 @@ The top bar holds everything you need for a quick mix; the panels below are for 
 | A / B | A = your original vocal, B = through Voxology | Checking it really is better |
 | MATCH | A and B play at the same loudness | Always on while comparing (louder always sounds better) |
 | REC | Record mode: about 6 ms delay instead of about 55 ms, so you hear yourself tuned while recording. A little rougher; Voices, Formant, Noise, Room, Clicks and Smooth are off | On while recording, off for mixing |
-| Power button | Bypasses all of Voxology | Quick before / after |
+| Bypass | Use your DAW's power button on the plug-in window (Cubase: the button at the top left of the window). Voxology has no button of its own; if a project was saved with Voxology's own bypass on, the bottom bar says BYPASSED: click it to switch Voxology back on | Quick before / after (or use A / B with MATCH) |
 
 The round **?** next to LEARN opens this manual (Esc or CLOSE to go back). The bottom bar shows **IN** and **OUT** loudness (LUFS) and peak level, your **DAW** and the version number.
 
@@ -181,7 +181,7 @@ Click **MY CHAINS** (under INTENSITY).
 
 - **Save**: get a sound you like (Auto-Edit, then your own tweaks), type a name in the box (for example "My Lead") and press **Enter** or **SAVE**. It's saved on your computer (Documents\Voxology\Chains), so it's there in every project. Saving with a name you already have replaces it. The button then shows the chain's name.
 - **Load**: click a name. Every module is set the way you saved it. With **Keep this song's key when loading** ticked (the default), the song's Key, Scale, key source, MIDI mode and switched-off notes stay as they are.
-- Not part of a chain: REC, the power button, A / B, MATCH, Auto-Edit's Style and Intensity, and BEAT mode.
+- Not part of a chain: REC, bypass, A / B, MATCH, Auto-Edit's Style and Intensity, and BEAT mode.
 - **✕** next to a name deletes it.
 - **Quick Looks** change only their own modules, on top of what you have: **Hard Robot** and **Smooth Tune** (Pitch), **Stacked Hook** (with Crew), **Harmony 3rd + 5th** and **Deep Ad-lib** (Voices), **Phone Voice** (Low Cut, Tone EQ, Saturation), **Wide Chorus** (Dimension), **Ad-lib Echo** (Delay), **Line Throws** (Delay and Reverb throws) and **Big Space** (Reverb).
 - **Start fresh** sets every module back to neutral (the key stays when ticked).

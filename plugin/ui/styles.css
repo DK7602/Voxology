@@ -86,7 +86,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* ---------------------------------------------------------------- header */
 #header { --glass: rgba(255, 250, 240, 0.45); left: 16px; top: 14px; width: 1568px; height: 120px; display: flex; align-items: center; gap: 9px; padding: 0 16px 0 8px; }
 #header .logo { height: 104px; margin-right: 4px; cursor: pointer; filter: drop-shadow(0 3px 4px rgba(80, 56, 14, 0.3)); }
-/* The wordmark sits on the right, between REC and the power button. */
+/* The wordmark sits on the right, after REC (bypass: the DAW's insert power button). */
 #header .title { height: 76px; flex-shrink: 0; margin-left: auto; filter: drop-shadow(0 3px 4px rgba(80, 56, 14, 0.3)); }
 .h-group { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
 .h-label { font-size: 11px; letter-spacing: 0.16em; font-weight: 700; color: var(--gold-deep); text-shadow: 0 0 4px #fff, 0 0 2px #fff; }
@@ -115,9 +115,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .ref-chip.warn { color: var(--warn); }
 .ref-x { width: 24px; height: 24px; border: 0; border-radius: 12px; background: var(--marble-cream); color: var(--ink-soft); font-size: 11px; box-shadow: inset 0 0 0 1.5px var(--gold); cursor: pointer; }
 .chip:disabled { opacity: 0.4; cursor: default; }
-.power { flex-shrink: 0; width: 46px; height: 46px; border-radius: 50%; border: 0; background: var(--marble); color: var(--blue-deep);
-  box-shadow: inset 0 0 0 2px var(--gold), 0 2px 5px rgba(80, 56, 14, 0.25); display: grid; place-items: center; }
-.power.off { background: var(--marble-cream); color: var(--warn); }
 
 .auto-edit { position: relative; overflow: hidden; flex-shrink: 0; width: 226px; height: 76px; border: 0; border-radius: 38px; padding: 0 18px;
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 40%), var(--gold-grad); color: #3b2a07; box-shadow: 0 0 0 2px #8d641f, 0 6px 14px rgba(80, 56, 14, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.55);
@@ -263,6 +260,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--blue), var(--blue-deep) 70%, var(--gold) 88%, var(--warn)); }
 .meter .mono { font-size: 13px; width: 156px; white-space: nowrap; color: var(--ink); }
 #status { font-size: 13px; }
+#status.bypassed { color: var(--warn); cursor: pointer; text-decoration: underline; }
 
 /* Big knobs on single-row pages (EQ keeps the compact size for its two rows). */
 #cells[data-cols="6"] .cell { height: 214px; }

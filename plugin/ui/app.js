@@ -1766,12 +1766,13 @@ function refreshAB() {
   $("match").classList.toggle("on", on("levelMatch"));
   $("rec").classList.toggle("on", on("recMode"));
   document.body.classList.toggle("rec", on("recMode"));
-  $("bypass").classList.toggle("off", on("bypass"));
 }
 abBtns.forEach((b) => b.addEventListener("click", () => { P.listenA.setValue(b.dataset.ab === "a"); refreshAB(); }));
 $("match").addEventListener("click", () => { P.levelMatch.setValue(!on("levelMatch")); refreshAB(); });
 $("rec").addEventListener("click", () => { P.recMode.setValue(!on("recMode")); refreshAB(); });
-$("bypass").addEventListener("click", () => { P.bypass.setValue(!on("bypass")); refreshAB(); });
+// Voxology's own bypass (no button since v0.50.2: the DAW's insert power button does the same). A project saved
+// bypassed, or bypass automation, shows in the bottom bar: click it to switch Voxology back on.
+$("status").addEventListener("click", () => { if (on("bypass")) P.bypass.setValue(false); });
 for (const id of ["listenA", "levelMatch", "bypass", "recMode"]) P[id].valueChangedEvent.addListener(refreshAB);
 
 $("auto-edit").addEventListener("click", async () => {
@@ -1981,8 +1982,9 @@ window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
   if (M.aaVersion !== analyzeSeen) { analyzeSeen = M.aaVersion; fetchAnalyze(); }
   else if (learnTab === "report") { const st = document.querySelector(".aa-status"); if (st) st.textContent = analyzeStatus(); }
   const match = (on("levelMatch") ? ` · MATCH ${fmtSigned(M.matchDb)}` : "") + (M.recMode ? ` · REC ${M.latencyMs.toFixed(1)} ms` : "");
-  $("status").textContent = `${on("bypass") ? "BYPASSED" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY"}${match}${M.bpm > 0 ? ` · ${M.bpm.toFixed(0)} BPM` : ""}${M.mixology ? " · MIXOLOGY ✓" : ""}`;
-  $("status").title = M.mixology ? (beat ? "Mixology is in this project: it knows this track is the beat." : "Mixology is in this project: it sees what Voxology does on this vocal and won't add a second compressor, reverb or delay.") : "";
+  $("status").classList.toggle("bypassed", on("bypass"));
+  $("status").textContent = `${on("bypass") ? "BYPASSED · CLICK TO SWITCH ON" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY"}${match}${M.bpm > 0 ? ` · ${M.bpm.toFixed(0)} BPM` : ""}${M.mixology ? " · MIXOLOGY ✓" : ""}`;
+  $("status").title = on("bypass") ? "Voxology's own bypass is on (saved with the project, or automated). Click to switch Voxology back on." : M.mixology ? (beat ? "Mixology is in this project: it knows this track is the beat." : "Mixology is in this project: it sees what Voxology does on this vocal and won't add a second compressor, reverb or delay.") : "";
   draw();
   if (learnTab === "module") renderLearn(false);
 });
