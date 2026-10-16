@@ -13,7 +13,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.50.2**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.50.3**).
 
 Where each one goes in Cubase:
 

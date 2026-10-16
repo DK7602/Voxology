@@ -1778,3 +1778,10 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   footer status reads "BYPASSED · CLICK TO SWITCH ON" (#status.bypassed, warn colour) and a click turns it off. Manual:
   top-bar table row "Bypass" points to the DAW's power button.
 - v0.50.2 CI green: run 38847590331 (commit 8157917).
+
+## v0.50.3 Sonicology (2026-10-16, from Mixology's "Mixology part 2" thread)
+- Company name Sonicology (plugin + honeytune CMakeLists COMPANY_NAME); the manual says Voxology is part of the
+  Sonicology suite. The suite installers are built in the Mixology repo (Actions -> Sonicology suite), which also
+  builds Voxology for macOS (VST3 + AU).
+- daws.js synced with Mixology 0.18.0 (faders in FL Studio and Ableton Live; the same file in all three).
+- v0.50.3's own CI was cancelled; the next run (aa09d6d) caught the manual's "for example VOXOLOGY v0.50.2" line: fixed.
