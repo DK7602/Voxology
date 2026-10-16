@@ -1777,3 +1777,4 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   the header (the wordmark now ends the bar). The "bypass" parameter stays (older projects, automation): when it's on the
   footer status reads "BYPASSED · CLICK TO SWITCH ON" (#status.bypassed, warn colour) and a click turns it off. Manual:
   top-bar table row "Bypass" points to the DAW's power button.
+- v0.50.2 CI green: run 38847590331 (commit 8157917).
