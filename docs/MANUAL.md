@@ -1,6 +1,9 @@
 # Voxology & Honey Tune Manual
 
-Manual for version 0.50.2. It's built into both plug-ins (the ? button) and updated with every release.
+Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
+together. In your DAW's plug-in list they are all under Sonicology.
+
+Manual for version 0.50.3. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 

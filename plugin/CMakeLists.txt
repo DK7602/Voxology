@@ -5,8 +5,7 @@ endif()
 
 juce_add_plugin(Voxology
     PRODUCT_NAME                "Voxology"
-    COMPANY_NAME                "Voxology Audio"
-    COMPANY_WEBSITE             "https://example.com"
+    COMPANY_NAME                "Sonicology"                # the suite: Voxology, Mixology, Masterology
     BUNDLE_ID                   com.voxologyaudio.voxology
     PLUGIN_MANUFACTURER_CODE    Voxa
     PLUGIN_CODE                 Vox1

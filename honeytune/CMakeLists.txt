@@ -6,7 +6,7 @@ endif()
 # Honey Tune: the note editor. ARA extension on a clip (Cubase, Studio One, Logic, Reaper, Cakewalk...).
 juce_add_plugin(HoneyTune
     PRODUCT_NAME                "Honey Tune"
-    COMPANY_NAME                "Voxology Audio"
+    COMPANY_NAME                "Sonicology"
     BUNDLE_ID                   com.voxologyaudio.honeytune
     PLUGIN_MANUFACTURER_CODE    Voxa
     PLUGIN_CODE                 Hny1
