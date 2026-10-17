@@ -916,25 +916,37 @@ const cellsByModule = MODULES.map((m) => m.cells());
 // ---------------------------------------------------------------------------------------------
 // BEAT mode: Unmask (its own page; the vocal chain's hive is hidden)
 const UM_BANDS = [{ hz: 200, n: "200" }, { hz: 400, n: "400" }, { hz: 800, n: "800" }, { hz: 1600, n: "1.6k" }, { hz: 3150, n: "3.2k" }, { hz: 6300, n: "6.3k" }];
-let umSources = { sources: [], selected: "" };
+let umSources = { sources: [], selected: "" }, umPicked = 0;   // umPicked: counts your picks (an older answer is ignored)
 function sourceCell() {
   const cell = document.createElement("div");
   cell.className = "cell src";
   cell.innerHTML = `<span class="cell-label">Make room for</span><span class="cell-sub">which vocal</span><div class="src-list"></div>`;
   const box = cell.querySelector(".src-list");
   const make = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; e.textContent = text; return e; };
+  // Asked for every second: the buttons are rebuilt only when the list of vocals changes (so a click or the
+  // keyboard focus isn't lost); the one in use is marked in place.
+  let shown = null, btns = [];
   cell.refresh = () => {
     const list = umSources.sources || [];
-    box.replaceChildren();
-    if (!list.length) { box.append(make("div", "none", "No vocal found yet. Put Voxology on your vocal (VOCAL mode) and press play.")); return; }
-    const mk = (label, name) => {
-      const b = make("button", (umSources.selected || "") === name ? "sel" : "", label);
-      b.type = "button";
-      b.addEventListener("click", async () => { await umSetSource(name); umSources.selected = name; cell.refresh(); });
-      box.append(b);
-    };
-    mk(list.length > 1 ? `All vocals (${list.length})` : "All vocals", "");
-    list.forEach((x) => mk(x.name, x.name));
+    const key = JSON.stringify(list.map((x) => x.name));
+    if (key !== shown) {
+      shown = key;
+      btns = [];
+      box.replaceChildren();
+      if (!list.length) box.append(make("div", "none", "No vocal found yet. Put Voxology on your vocal (VOCAL mode) and press play."));
+      else {
+        const mk = (label, name) => {
+          const b = make("button", "", label);
+          b.type = "button";
+          b.addEventListener("click", () => { umPicked++; umSources.selected = name; cell.refresh(); umSetSource(name); });
+          box.append(b);
+          btns.push([b, name]);
+        };
+        mk(list.length > 1 ? `All vocals (${list.length})` : "All vocals", "");
+        list.forEach((x) => mk(x.name, x.name));
+      }
+    }
+    for (const [b, name] of btns) b.classList.toggle("sel", (umSources.selected || "") === name);
   };
   cell.refresh();
   return cell;
@@ -954,8 +966,12 @@ let lastLinkSeen = performance.now();   // the "no vocal" warning waits 2 s (the
 const cur = () => (beat ? UNMASK : MODULES[selected]);
 
 async function fetchSources() {
-  try { umSources = JSON.parse((await umGetSources()) || "{}"); } catch { umSources = { sources: [], selected: "" }; }
-  if (!umSources.sources) umSources.sources = [];
+  const picked = umPicked;
+  let got;
+  try { got = JSON.parse((await umGetSources()) || "{}"); } catch { got = { sources: [], selected: "" }; }
+  if (picked !== umPicked) return;   // asked before your last pick: it would show the old choice for a second
+  umSources = got && typeof got === "object" ? got : {};
+  if (!Array.isArray(umSources.sources)) umSources.sources = [];
   unmaskCells.forEach((c) => c.classList.contains("src") && c.refresh());
 }
 setInterval(() => { if (beat) fetchSources(); }, 1000);
@@ -1729,6 +1745,13 @@ function setVocalStyle(i) {
 }
 const STYLE_ABOUT = ["Upfront, bright and controlled: the hard trap lead", "Dry, punchy and clear: every word upfront", "Melodic trap: tuned, smooth, a wetter space",
   "The hard-tuned robot effect", "Smooth, warm and airy", "Polished and bright", "Natural and warm, light on effects", "Your voice as sung, cleaned up and balanced"];
+/** A pop-up list under its pill, never past the bottom of the window (it scrolls instead: small windows). */
+function placeMenu(m, anchor) {
+  const r = anchor.getBoundingClientRect(), top = Math.round(r.bottom + 4);
+  m.style.left = `${Math.round(r.left)}px`;
+  m.style.top = `${top}px`;
+  m.style.maxHeight = `${Math.max(80, Math.min(600, window.innerHeight - top - 8))}px`;
+}
 let styleMenu = null;
 function closeStyleMenu() { if (styleMenu) { styleMenu.remove(); styleMenu = null; } }
 function openStyleMenu() {
@@ -1757,9 +1780,7 @@ function openStyleMenu() {
     row.append(b);
     m.append(row);
   });
-  const r = $("style-pill").getBoundingClientRect();
-  m.style.left = `${Math.round(r.left)}px`;
-  m.style.top = `${Math.round(r.bottom + 4)}px`;
+  placeMenu(m, $("style-pill"));
   document.body.append(m);
   styleMenu = m;
 }
@@ -1864,12 +1885,19 @@ async function fetchReference() {
   if (learnTab === "report") renderLearn();
 }
 // The reference menu: built-in pro references, the vocals you've loaded (saved for every project), add a file, none.
-let refMenu = null;
-function closeRefMenu() { if (refMenu) { refMenu.remove(); refMenu = null; } }
-async function openRefMenu() {
-  closeRefMenu();
+// The list comes from the plug-in (a moment later): refAsk says which request may still open it, so a second click,
+// a close or Esc while it's on its way never leaves two menus or one that opens after you closed it.
+let refMenu = null, refAsk = 0;
+function closeRefMenu() { refAsk++; if (refMenu) { refMenu.remove(); refMenu = null; } }
+/** refresh: rebuild the open menu in place (after ✂ or ✕), keeping where it's scrolled to; not if it was closed. */
+async function openRefMenu(refresh = false) {
+  const old = refresh ? refMenu : null;
+  if (refresh && !old) return;
+  if (!refresh) closeRefMenu();
+  const ask = ++refAsk;
   let lib = { builtin: [], yours: [], folder: "", current: "" };
   try { lib = Object.assign(lib, JSON.parse((await refList()) || "{}")); } catch { /* keep the empty library */ }
+  if (ask !== refAsk) return;
   const m = el("div", "ref-menu");
   const item = (label, title, onPick, current, onDelete, pitch, split) => {
     const row = el("div", "ref-item" + (current ? " current" : ""));
@@ -1885,14 +1913,14 @@ async function openRefMenu() {
       sc.type = "button";
       sc.title = split.on ? `"${label}" is marked as split from a full song: Auto-Edit uses its tone from 250 Hz up, its s and its punch, not its low end or space. Click if it's a real acapella.`
         : `Split from a full song (UVR, Demucs ...)? Click to mark it: Auto-Edit then leaves out its low end and space, which splitting gets wrong.`;
-      sc.addEventListener("click", async (e) => { e.stopPropagation(); await refSetSplit(label, !split.on); openRefMenu(); fetchReference(); });
+      sc.addEventListener("click", async (e) => { e.stopPropagation(); await refSetSplit(label, !split.on); if (refMenu === m) openRefMenu(true); fetchReference(); });
       row.append(sc);
     }
     if (onDelete) {
       const x = el("button", "ref-del", "\u2715");
       x.type = "button";
       x.title = `Remove "${label}" from your references`;
-      x.addEventListener("click", async (e) => { e.stopPropagation(); await onDelete(); openRefMenu(); });
+      x.addEventListener("click", async (e) => { e.stopPropagation(); await onDelete(); if (refMenu === m) openRefMenu(true); });
       row.append(x);
     }
     m.append(row);
@@ -1909,13 +1937,11 @@ async function openRefMenu() {
   m.append(el("div", "ref-sep"));
   item("+ Add a vocal file\u2026", "An acapella you like (WAV, AIFF, FLAC, MP3 or OGG). It's measured once and saved under YOURS" + (lib.folder ? ` (${lib.folder})` : "") + ".", () => refChoose(), false, null);
   if (lib.current) item("No reference (use the style)", "", () => refClear(), false, null);
-  const r = $("ref").getBoundingClientRect();
-  m.style.left = `${Math.round(r.left)}px`;
-  m.style.top = `${Math.round(r.bottom + 4)}px`;
-  document.body.append(m);
+  placeMenu(m, $("ref"));
+  if (old) { const top = old.scrollTop; old.replaceWith(m); m.scrollTop = top; } else document.body.append(m);
   refMenu = m;
 }
-document.addEventListener("mousedown", (e) => { if (refMenu && !refMenu.contains(e.target) && !$("ref").contains(e.target)) closeRefMenu(); });
+document.addEventListener("mousedown", (e) => { if (!(refMenu && refMenu.contains(e.target)) && !$("ref").contains(e.target)) closeRefMenu(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeRefMenu(); });
 $("ref").addEventListener("click", async () => { if (refMenu) closeRefMenu(); else await openRefMenu(); });
 
@@ -1927,11 +1953,16 @@ const chDelete = Juce.getNativeFunction("deleteChain");
 const chGetName = Juce.getNativeFunction("getChainName");
 let chainMenu = null, lastChain = "", chainChanged = false;   // lastChain: the chain this project uses ("" = none)
 const keepKeyPref = () => { try { return localStorage.getItem("voxKeepKey") !== "0"; } catch { return true; } };
-function closeChainMenu() { if (chainMenu) { chainMenu.remove(); chainMenu = null; } }
-async function openChainMenu() {
-  closeChainMenu();
+let chainAsk = 0;   // (as refAsk)
+function closeChainMenu() { chainAsk++; if (chainMenu) { chainMenu.remove(); chainMenu = null; } }
+async function openChainMenu(refresh = false) {
+  const old = refresh ? chainMenu : null;
+  if (refresh && !old) return;
+  if (!refresh) closeChainMenu();
+  const ask = ++chainAsk;
   let lib = { yours: [], looks: [], folder: "" };
   try { lib = Object.assign(lib, JSON.parse((await chList()) || "{}")); } catch { /* keep the empty library */ }
+  if (ask !== chainAsk) return;
   const m = el("div", "ref-menu chain-menu");
   const item = (label, title, onPick, onDelete) => {
     const row = el("div", "ref-item" + (label === lastChain ? " current" : ""));
@@ -1944,7 +1975,7 @@ async function openChainMenu() {
       const x = el("button", "ref-del", "✕");
       x.type = "button";
       x.title = `Delete "${label}"`;
-      x.addEventListener("click", async (e) => { e.stopPropagation(); await onDelete(); openChainMenu(); });
+      x.addEventListener("click", async (e) => { e.stopPropagation(); await onDelete(); if (chainMenu === m) openChainMenu(true); });
       row.append(x);
     }
     m.append(row);
@@ -1960,7 +1991,7 @@ async function openChainMenu() {
   const saveRow = el("div", "ref-item chain-save");
   const input = el("input", "chain-name");
   input.type = "text"; input.maxLength = 60; input.placeholder = "Name, then Enter (e.g. My Lead)";
-  input.value = lastChain;
+  input.value = old ? old.querySelector(".chain-name").value : lastChain;   // (a name you were typing stays)
   const saveBtn = el("button", "ref-chip", "SAVE");
   saveBtn.type = "button";
   const doSave = async () => {
@@ -1982,10 +2013,8 @@ async function openChainMenu() {
   for (const l of lib.looks) item(l.name, l.about, () => loaded("look", l.name), null);
   m.append(el("div", "ref-sep"));
   item("Start fresh (every module neutral)", "Every module back to its neutral start" + (keepKeyPref() ? " (this song's key stays)" : "") + ". UNDO brings your setup back.", () => loaded("fresh", ""), null);
-  const r = $("chains").getBoundingClientRect();
-  m.style.left = `${Math.round(r.left)}px`;
-  m.style.top = `${Math.round(r.bottom + 4)}px`;
-  document.body.append(m);
+  placeMenu(m, $("chains"));
+  if (old) { const top = old.scrollTop; old.replaceWith(m); m.scrollTop = top; } else document.body.append(m);
   chainMenu = m;
 }
 function renderChainChip() {
@@ -1995,7 +2024,7 @@ function renderChainChip() {
 }
 // The chain this project uses (saved with it): the chip shows its name from the start.
 chGetName().then((n) => { if (!chainChanged) { lastChain = typeof n === "string" ? n : ""; renderChainChip(); } }).catch(() => {});
-document.addEventListener("mousedown", (e) => { if (chainMenu && !chainMenu.contains(e.target) && e.target !== $("chains")) closeChainMenu(); });
+document.addEventListener("mousedown", (e) => { if (!(chainMenu && chainMenu.contains(e.target)) && e.target !== $("chains")) closeChainMenu(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeChainMenu(); });
 $("chains").addEventListener("click", async () => { if (chainMenu) closeChainMenu(); else await openChainMenu(); });
 
