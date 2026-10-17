@@ -100,7 +100,7 @@ struct VocalAnalysis
     double microDynDb = 0.0;           // word-to-word punch: P95 - P50 of 50 ms levels while singing (dB; low = compressed)
     double tailDb = -120.0;            // what rings on after a phrase ends (100 - 300 ms later vs the phrase's end, dB); -120 = unknown,
                                        // -80 at the lowest (digital silence after a phrase: dry)
-    double lowBassDb = -120.0;         // energy under 100 Hz vs the whole (dB): a beat's kick and 808 live there
+    double lowBassDb = -120.0;         // energy at 40 - 100 Hz vs the whole (dB): a beat's kick and 808 live there (rumble mostly lower)
     bool stereo = false, oneSided = false;
 };
 

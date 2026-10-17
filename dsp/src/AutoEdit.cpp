@@ -172,7 +172,7 @@ std::vector<double> pitchTrack (const Signal& x, double sr, const std::vector<bo
 }
 
 // --- spectrum ----------------------------------------------------------------------------------
-constexpr double kFullSongLowDb = -14.0;   // tuned on MUSDB18-7 (vocals vs mixtures)
+constexpr double kFullSongLowDb = -15.0;   // 40 - 100 Hz vs the whole: see fullSong()
 
 /** The average spectrum's FFT size: about 11 Hz per bin at any sample rate (4096 at 44.1 / 48 kHz, 8192 at 88.2 /
     96 kHz, 16384 at 176.4 / 192 kHz). A fixed 4096 gave 47 Hz bins at 192 kHz, too coarse for the low bands: the same
@@ -537,8 +537,12 @@ double spaceDb (const Frames& f)
     return tails.size() >= 2 ? percentile (tails, 50.0) : -120.0;
 }
 
-/** A beat under the vocal: lots of energy under 100 Hz (kick, 808, bass). On MUSDB18-7, isolated vocals
-    sit at -20 dB or lower (95 %), full mixes at -10.5 dB or higher (95 %). */
+/** A beat under the vocal: lots of energy at 40 - 100 Hz (kick, 808, bass). Rumble (AC, traffic, the mic stand) sits
+    mostly lower: counting everything under 100 Hz (tuned on MUSDB18-7 at -14 dB), the user's own acapellas read up to
+    -12.8 dB and were called full songs. At 40 - 100 Hz: the user's, Looperman's and Cymatics' acapellas -18.6 dB or
+    lower (but a pitched-down effect vocal, -5.5), their full mixes and a rap with its beat under it -12.2 dB or higher
+    (a mix with only an acoustic guitar under it reads -17: no beat). MUSDB18 vocals read -21 dB or lower (95 %) even
+    with all of their low end counted. */
 bool fullSong (const VocalAnalysis& a)
 {
     return a.lowBassDb > kFullSongLowDb;
@@ -730,7 +734,7 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
     {
         double all = 0.0;
         for (size_t i = 1; i < spec.size(); ++i) all += spec[i];
-        const double low = bandEnergy (spec, 0.0, 100.0, sr);
+        const double low = bandEnergy (spec, 40.0, 100.0, sr);
         a.lowBassDb = energyDb (low) - energyDb (all);
     }
     return a;
