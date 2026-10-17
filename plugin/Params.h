@@ -285,6 +285,13 @@ namespace VoxParams
     public:
         void attach (juce::AudioProcessorValueTreeState& s)
         {
+            // Each parameter read() uses, found once here (by name it was ~75 string searches through 113 ids a block).
+            for (size_t i = 0; i < kIds.size(); ++i)
+            {
+                ptr[i] = s.getRawParameterValue (kIds[i]);
+                jassert (ptr[i] != nullptr);
+                if (ptr[i] == nullptr) ptr[i] = &missing;
+            }
             for (const auto& id : sliderIds()) add (s, id);
             for (const auto& id : toggleIds()) add (s, id);
             for (const auto& id : comboIds()) add (s, id);
@@ -292,54 +299,54 @@ namespace VoxParams
 
         void read (vox::ChainParams& p, double bpm) const noexcept
         {
-            auto on = [this] (const char* id) { return v (id) > 0.5f; };
-            auto d = [this] (const char* id) { return static_cast<double> (v (id)); };
-            auto idx = [this] (const char* id, int hi) { return juce::jlimit (0, hi, juce::roundToInt (v (id))); };
+            auto on = [this] (Id id) { return v (id) > 0.5f; };
+            auto d = [this] (Id id) { return static_cast<double> (v (id)); };
+            auto idx = [this] (Id id, int hi) { return juce::jlimit (0, hi, juce::roundToInt (v (id))); };
 
-            p.bypass = on ("bypass");
-            p.listenOriginal = on ("listenA");
-            p.pitch = { on ("ptOn"), d ("ptAmount"), idx ("ptKey", 11), idx ("ptScale", vox::kScales - 1), d ("ptSpeed"), d ("ptHumanize"), d ("ptFormant"), 0,
-                        idx ("ptMode", vox::kPitchModes - 1), d ("ptVibrato") };
-            p.pitch.transpose = juce::roundToInt (v ("ptTranspose"));
+            p.bypass = on (bypass);
+            p.listenOriginal = on (listenA);
+            p.pitch = { on (ptOn), d (ptAmount), idx (ptKey, 11), idx (ptScale, vox::kScales - 1), d (ptSpeed), d (ptHumanize), d (ptFormant), 0,
+                        idx (ptMode, vox::kPitchModes - 1), d (ptVibrato) };
+            p.pitch.transpose = juce::roundToInt (v (ptTranspose));
             p.pitch.removedNotes = 0;
             for (int k = 0; k < 12; ++k)
                 if (removed[static_cast<size_t> (k)]->load() > 0.5f) p.pitch.removedNotes |= 1 << k;
-            p.voices.interval = { idx ("hv1", vox::kHarmonies - 1), idx ("hv2", vox::kHarmonies - 1) };
-            p.voices.level = d ("hvLevel");
-            p.voices.formant = d ("hvFormant");
-            p.voices.stack = idx ("hvStack", static_cast<int> (vox::kStackSizes.size()) - 1);
-            p.voices.midi = on ("hvMidi");
-            p.voices.crew = d ("hvCrew");
-            p.voices.width = d ("dbWidth");
-            p.cleanup = { on ("clOn"), d ("clLowCut"), d ("clGateThr"), d ("clGateRange"), d ("clPops"), d ("clBreath"), d ("clNoise"), d ("clRoom"), d ("clClicks") };
-            p.eq.enabled = on ("eqOn");
+            p.voices.interval = { idx (hv1, vox::kHarmonies - 1), idx (hv2, vox::kHarmonies - 1) };
+            p.voices.level = d (hvLevel);
+            p.voices.formant = d (hvFormant);
+            p.voices.stack = idx (hvStack, static_cast<int> (vox::kStackSizes.size()) - 1);
+            p.voices.midi = on (hvMidi);
+            p.voices.crew = d (hvCrew);
+            p.voices.width = d (dbWidth);
+            p.cleanup = { on (clOn), d (clLowCut), d (clGateThr), d (clGateRange), d (clPops), d (clBreath), d (clNoise), d (clRoom), d (clClicks) };
+            p.eq.enabled = on (eqOn);
             for (size_t b = 0; b < static_cast<size_t> (vox::kEqBands); ++b)
             {
                 p.eq.gainDb[b] = eqGain[b]->load();
                 p.eq.freqHz[b] = eqFreq[b]->load();
             }
-            p.dynEq.enabled = on ("dqOn");
-            p.dynEq.sensitivity = d ("dqSens");
-            p.dynEq.smoothPct = d ("dqSmooth");
+            p.dynEq.enabled = on (dqOn);
+            p.dynEq.sensitivity = d (dqSens);
+            p.dynEq.smoothPct = d (dqSmooth);
             for (size_t b = 0; b < static_cast<size_t> (vox::kDynBands); ++b)
             {
                 p.dynEq.maxCutDb[b] = dqCut[b]->load();
                 p.dynEq.freqHz[b] = dqFreq[b]->load();
             }
-            p.deEsser = { on ("dsOn"), d ("dsAmount"), d ("dsSens"), d ("dsFreq") };
-            p.rider = { on ("rdOn"), d ("rdTarget"), d ("rdRange"), idx ("rdSpeed", 2) };
-            p.comp = { on ("cpOn"), d ("cpPeak"), d ("cpThr"), d ("cpRatio"), d ("cpMakeup"), d ("cpMix") };
-            p.saturation.enabled = on ("saOn");
-            p.saturation.mode = static_cast<vox::SaturationMode> (idx ("saMode", 2));
-            p.saturation.driveDb = d ("saDrive");
-            p.saturation.mix = d ("saMix");
-            p.doubler = { on ("dbOn"), d ("dbAmount"), d ("dbWidth") };
-            p.dimension = { on ("dmOn"), idx ("dmMode", vox::kDimensionModes - 1), d ("dmAmount"), d ("dmRate"), d ("dmWidth") };
-            p.delay = { on ("dlOn"), idx ("dlTime", vox::kDelayDivisions - 1), d ("dlFeedback"), d ("dlMix"), d ("dlTone"), d ("dlDuck"), on ("dlPing"), bpm };
-            p.reverb = { on ("rvOn"), d ("rvDecay"), d ("rvPredelay"), d ("rvMix"), d ("rvTone"), d ("rvDuck") };
-            p.throws.echo = d ("dlThrow");
-            p.throws.wash = d ("rvThrow");
-            p.outputDb = d ("outGain");
+            p.deEsser = { on (dsOn), d (dsAmount), d (dsSens), d (dsFreq) };
+            p.rider = { on (rdOn), d (rdTarget), d (rdRange), idx (rdSpeed, 2) };
+            p.comp = { on (cpOn), d (cpPeak), d (cpThr), d (cpRatio), d (cpMakeup), d (cpMix) };
+            p.saturation.enabled = on (saOn);
+            p.saturation.mode = static_cast<vox::SaturationMode> (idx (saMode, 2));
+            p.saturation.driveDb = d (saDrive);
+            p.saturation.mix = d (saMix);
+            p.doubler = { on (dbOn), d (dbAmount), d (dbWidth) };
+            p.dimension = { on (dmOn), idx (dmMode, vox::kDimensionModes - 1), d (dmAmount), d (dmRate), d (dmWidth) };
+            p.delay = { on (dlOn), idx (dlTime, vox::kDelayDivisions - 1), d (dlFeedback), d (dlMix), d (dlTone), d (dlDuck), on (dlPing), bpm };
+            p.reverb = { on (rvOn), d (rvDecay), d (rvPredelay), d (rvMix), d (rvTone), d (rvDuck) };
+            p.throws.echo = d (dlThrow);
+            p.throws.wash = d (rvThrow);
+            p.outputDb = d (outGain);
         }
 
     private:
@@ -347,7 +354,6 @@ namespace VoxParams
         {
             auto* a = s.getRawParameterValue (id);
             jassert (a != nullptr);
-            values.emplace_back (id, a);
             for (int b = 0; b < vox::kEqBands; ++b)
             {
                 if (id == n ("eqGain", b)) eqGain[static_cast<size_t> (b)] = a;
@@ -361,16 +367,27 @@ namespace VoxParams
             for (int k = 0; k < 12; ++k)
                 if (id == "ptRm" + juce::String (k)) removed[static_cast<size_t> (k)] = a;
         }
-        float v (const char* id) const noexcept
-        {
-            // Linear search comparing against a const char*: no allocation on the audio thread.
-            for (const auto& [name, a] : values)
-                if (name == id) return a->load();
-            jassertfalse;
-            return 0.0f;
-        }
+        // The parameters read() uses (kIds: their names, in the same order).
+        enum Id : int { bypass, listenA, ptOn, ptAmount, ptKey, ptScale, ptSpeed, ptHumanize, ptFormant, ptMode,
+                        ptVibrato, ptTranspose, hv1, hv2, hvLevel, hvFormant, hvStack, hvMidi, hvCrew, dbWidth, clOn,
+                        clLowCut, clGateThr, clGateRange, clPops, clBreath, clNoise, clRoom, clClicks, eqOn, dqOn,
+                        dqSens, dqSmooth, dsOn, dsAmount, dsSens, dsFreq, rdOn, rdTarget, rdRange, rdSpeed, cpOn,
+                        cpPeak, cpThr, cpRatio, cpMakeup, cpMix, saOn, saMode, saDrive, saMix, dbOn, dbAmount, dmOn,
+                        dmMode, dmAmount, dmRate, dmWidth, dlOn, dlTime, dlFeedback, dlMix, dlTone, dlDuck, dlPing,
+                        rvOn, rvDecay, rvPredelay, rvMix, rvTone, rvDuck, dlThrow, rvThrow, outGain, idCount };
+        static constexpr std::array<const char*, idCount> kIds { "bypass", "listenA", "ptOn", "ptAmount", "ptKey",
+            "ptScale", "ptSpeed", "ptHumanize", "ptFormant", "ptMode", "ptVibrato", "ptTranspose", "hv1", "hv2",
+            "hvLevel", "hvFormant", "hvStack", "hvMidi", "hvCrew", "dbWidth", "clOn", "clLowCut", "clGateThr",
+            "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "clClicks", "eqOn", "dqOn", "dqSens",
+            "dqSmooth", "dsOn", "dsAmount", "dsSens", "dsFreq", "rdOn", "rdTarget", "rdRange", "rdSpeed", "cpOn",
+            "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saOn", "saMode", "saDrive", "saMix", "dbOn",
+            "dbAmount", "dmOn", "dmMode", "dmAmount", "dmRate", "dmWidth", "dlOn", "dlTime", "dlFeedback", "dlMix",
+            "dlTone", "dlDuck", "dlPing", "rvOn", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "dlThrow",
+            "rvThrow", "outGain" };
+        float v (Id id) const noexcept { return ptr[static_cast<size_t> (id)]->load(); }
 
-        std::vector<std::pair<juce::String, std::atomic<float>*>> values;
+        std::array<std::atomic<float>*, idCount> ptr {};
+        std::atomic<float> missing { 0.0f };   // (an id not in the layout: a bug, caught by the jassert)
         std::array<std::atomic<float>*, vox::kEqBands> eqGain {}, eqFreq {};
         std::array<std::atomic<float>*, vox::kDynBands> dqCut {}, dqFreq {};
         std::array<std::atomic<float>*, 12> removed {};
