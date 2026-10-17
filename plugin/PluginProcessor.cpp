@@ -409,6 +409,8 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     appliedMatchDb = chainParams.gainProcessedDb;
     const bool wantUnmask = ! chainParams.bypass && ! chainParams.listenOriginal;   // A / B and bypass hear the beat untouched
     auto& link = vox::UnmaskLink::instance();
+    // MIDI: the notes held, in both modes (a note let go while on the beat would otherwise stay held in VOCAL).
+    handleMidi (midi);
     if (beatMode)
     {
         // BEAT: learn the beat's key and tuning from what comes in, and offer it to the vocals.
@@ -469,7 +471,6 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
         meters.bkState.store (state);
         meters.bkSource.store (source);
         // MIDI: Notes = only the notes held right now (none held: the key as usual); Learn = the last notes played.
-        handleMidi (midi);
         int held = 0;
         for (int k = 0; k < 128; ++k) if (midiHeld[static_cast<size_t> (k)] > 0) held |= 1 << (k % 12);
         const int midiMode = juce::roundToInt (midiParam->load());
