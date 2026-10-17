@@ -1325,7 +1325,7 @@ const LEARN = {
       "Humanize: lets long held notes keep their life while short notes still snap in.",
       "Notes: lit notes are the ones Pitch may pull you to. Click one to switch it off (it's never used), click again to bring it back.",
       "MIDI: in {daw}, {daw:midiToVoxology}. Notes = while you hold notes, your voice goes to those notes (play or draw the melody for the hard robot effect); nothing held = the key as usual. Learn = play the beat's notes or chords once and they become the scale (kept with the project).",
-      "REC (header): Record mode for tracking. You hear yourself tuned with about 6 ms delay instead of about 55. Slightly rougher; Voices and Formant are off until you switch it off.",
+      "REC (header): Record mode for tracking. You hear yourself tuned with about 6 ms delay instead of about 55. Slightly rougher; Voices, Formant, Noise, Room, Clicks and Smooth are off until you switch it off.",
       "Transpose: moves the whole voice up or down in semitones (your tone stays the same). Small moves sound natural; an octave sounds like an effect.",
       "Amount: 100 % lands right on the note; lower keeps some of your own pitch.",
       "Already using Auto-Tune or Melodyne? Turn this off: one tuner is enough."],
@@ -1471,7 +1471,7 @@ const LEARN = {
       "Use harmonies on hooks and ad-libs rather than whole verses: automate the module's ON button in {daw} ({daw:automate})."],
     live: () => {
       const t = [];
-      if ([choice("hv1"), choice("hv2")].some((i) => i > 0 && i !== 8) && choice("ptScale") === 0) t.push(tip("CHROMATIC KEY", "The Pitch module's scale is Chromatic, so the harmonies use plain intervals (a major 3rd), which can clash with a minor beat.", "warn",
+      if ([choice("hv1"), choice("hv2")].some((i) => i > 0 && i !== 8) && M.scaleUsed === 0) t.push(tip("CHROMATIC KEY", "The scale in use is Chromatic, so the harmonies use plain intervals (a major 3rd), which can clash with a minor beat.", "warn",
         { need: "Yes, if the harmonies sound sour.", steps: ["Open 01 PITCH and set Key and Scale to your beat's key.", "Run Auto-Edit on a sung part: it suggests a key in its report."] }));
       if (on("hvMidi") && M.heldNotes === 0) t.push(tip("PLAY A CHORD", "MIDI is on, so the voices sing only the notes held on a MIDI track, and none are held right now.", "calm",
         { need: "Only if you want MIDI chords.", steps: ["In {daw}: {daw:midiToVoxology}.", "Play or draw chords on it under the vocal part.", "Or click MIDI chords again (under Stack) to use Voice 1, Voice 2 and Stack."] }));
@@ -1518,7 +1518,7 @@ const LEARN = {
 
 function notesAsTips() {
   for (const raw of report.notes || []) {
-    const lines = D(raw).split("\n");
+    const lines = D(String(raw || "")).split("\n");
     const first = lines[0], cut = first.indexOf(":");
     const title = cut > 0 && cut < 32 ? first.slice(0, cut) : "HEADS UP";
     const text = cut > 0 && cut < 32 ? first.slice(cut + 1).trim() : first;
@@ -1593,7 +1593,7 @@ function analyzeStatus() {
   if (!analyze || !analyze.on) return "Off. Switch it on and Voxology keeps listening while the song plays: every 12 seconds of voice it checks the part against what Auto-Edit heard, and tells you here when a part needs something new (louder or quieter, more noise, sharper s sounds, another tone, clipping, the beat). It never changes anything until you press APPLY.";
   const st = M.aaState || analyze.state;
   if (st === 2) {
-    const last = analyze.time ? ` · last check ${new Date(analyze.time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${analyze.fine && !analyze.needs.length ? ": this part fits your settings" : ""}` : "";
+    const last = analyze.time ? ` · last check ${new Date(analyze.time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${analyze.fine && !(analyze.needs || []).length ? ": this part fits your settings" : ""}` : "";
     return `${M.aeHearing ? "Listening" : "Press play · listening"} ${Math.round((M.aaProgress || 0) * 100)} %${last}.`;
   }
   return AA_STATUS[st] || "";
@@ -1618,11 +1618,12 @@ function analyzeBlock() {
   body.append(h, para(analyzeStatus(), "l-p aa-status"));
   if (!analyze || !analyze.on) return;
   for (const n of analyze.needs || []) {
-    const lines = D(n.note).split("\n"), first = lines[0], cut = first.indexOf(":");
+    const lines = D(String(n.note || "")).split("\n"), first = lines[0], cut = first.indexOf(":");
     const need = (lines.find((l) => l.startsWith("NEED:")) || "").slice(5).trim();
     const steps = lines.filter((l) => l.startsWith("STEP:")).map((l) => l.slice(5).trim());
-    const text = first.slice(cut + 1).trim();
-    const card = tip(first.slice(0, cut), text.charAt(0).toUpperCase() + text.slice(1), /^(No|Optional)/i.test(need) ? "calm" : "warn", { need, steps });
+    const titled = cut > 0 && cut < 32;   // "TITLE: text" (as the report's notes)
+    const text = titled ? first.slice(cut + 1).trim() : first;
+    const card = tip(titled ? first.slice(0, cut) : "HEADS UP", text.charAt(0).toUpperCase() + text.slice(1), /^(No|Optional)/i.test(need) ? "calm" : "warn", { need, steps });
     const todo = (n.changes || []).filter(stillToDo);
     if (todo.length) {
       card.append(el("div", "t-need", "APPLY sets (now \u2192 new):"));
