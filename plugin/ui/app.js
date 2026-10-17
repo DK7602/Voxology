@@ -1254,12 +1254,13 @@ const body = $("learn-body");
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const head = (t) => el("span", "l-h", t);
 const para = (t, cls = "l-p") => el("p", cls, typeof t === "string" ? fillDaw(t, DAW.key) : t);
+/** A report line (Auto-Edit's reasons, Vocal Fit): the engine's text, in your DAW's words. */
 function item(name, value, why) {
   const d = el("div", "l-item");
   const top = el("div", "l-top");
-  top.append(el("span", "", name), el("span", "l-val", value));
+  top.append(el("span", "", D(name)), el("span", "l-val", D(value)));
   d.append(top);
-  if (why) d.append(el("div", "l-why", why));
+  if (why) d.append(el("div", "l-why", D(why)));
   return d;
 }
 /** A tip with a plan: kind "warn" (do something), "calm" (fine as it is) or "" (info). */
@@ -1296,7 +1297,7 @@ const LEARN = {
   pitch: {
     does: "Pitch correction (auto-tune). It hears the note you sing, picks the nearest note of your key, and pulls you onto it. Your voice's tone stays the same (no chipmunk sound); breaths and s sounds are never touched. Three modes: Natural (your voice, just in tune), Classic (the familiar auto-tune glide) and Robot (the hard, stepped trap effect). It's first in the chain, so everything after it hears the tuned voice.",
     how: ["Mode: Natural for a human-sounding lead (notes land on pitch; your vibrato and the start of a scoop stay). Robot for the T-Pain / melodic-trap effect: instant, flat, stepped notes whatever Retune says. Classic is in between and follows Retune.",
-      "Key, Auto (the default): Pitch follows the key it hears. Surest: let Voxology hear your beat, either by sending the beat to this Voxology's side-chain (in {daw}: {daw:sidechain}) track), or with a second Voxology on the beat in BEAT mode. It hears the beat's notes, home key and tuning. With no beat, it learns the key from the notes you sing (about 20 - 40 s of held notes; rap may never be sure). Your Scale choice picks the flavour within those notes (Minor = the minor home, Minor Penta = the 5 safest notes); Chromatic uses the key's own mode. Key / Scale are the fallback.",
+      "Key, Auto (the default): Pitch follows the key it hears. Surest: let Voxology hear your beat, either by sending the beat to this Voxology's side-chain (in {daw}: {daw:sidechain}), or with a second Voxology on the beat in BEAT mode. It hears the beat's notes, home key and tuning. With no beat, it learns the key from the notes you sing (about 20 - 40 s of held notes; rap may never be sure). Your Scale choice picks the flavour within those notes (Minor = the minor home, Minor Penta = the 5 safest notes); Chromatic uses the key's own mode. Key / Scale are the fallback.",
       "Key, Manual: set Key / Scale to your beat's key (often in the beat's name, e.g. \"A min\"). Chromatic allows all 12 notes when you're not sure.",
       "Retune: how fast a note is pulled in. Natural: 10 - 40 ms (your vibrato stays at any speed). Classic: 0 - 10 ms is hard and robotic, 30 - 80 ms tuned but natural, 100+ ms only fixes drift.",
       "Vibrato (Natural): 0 keeps it as you sang it; turn it down to calm a wobbly note (all the way = flat), up to make it deeper.",
@@ -1315,7 +1316,7 @@ const LEARN = {
         { need: "Only if you want the MIDI scale.", steps: ["In {daw}: {daw:midiToVoxology}.", "Play the beat's notes or chords once: they light up blue in Notes."] }));
       if (choice("ptKeySrc") === 0 && M.scState === 1 && M.bkSource !== 2 && M.inShort > -70) t.push(tip("SIDE-CHAIN SILENT",
         "Voxology's side-chain is switched on, but no sound is coming into it, so the key can't come from your beat" + (M.bkSource === 3 ? " (it's guessing from your voice instead)." : "."), "warn",
-        { need: "Yes, if you want the beat's key.", steps: ["In Voxology's window, click the small arrow next to the side-chain button (top bar) and choose Add Side-Chain Source, then pick your beat track. (Or: on the beat track, add a Send whose destination is this vocal's Voxology side-chain.)", "Make sure that send is switched on (lit) and its level is up, around 0 dB, and the beat track isn't muted.", "Press play: within a few seconds the Key status should read \"beat: \u2026\". If it still says \"beat: no sound\", send me a screenshot of the beat track's Sends."] }));
+        { need: "Yes, if you want the beat's key.", steps: ["In {daw}: {daw:sidechain}.", "Check the beat track isn't muted, and if the beat goes there by a send, that the send is on, at about 0 dB.", "Press play: within a few seconds the Key status should read \"beat: \u2026\"."] }));
       if (val("ptAmount") >= 0.05 && choice("ptKeySrc") === 0 && M.bkSource !== 1 && M.bkSource !== 2 && M.scState !== 1) t.push(tip("NO BEAT HEARD",
         `Key is on Auto, but Voxology can't hear your beat, so it learns the key from your singing${M.bkState === 1 ? ` (now: ${beatKeyName()})` : ": that takes about 20 - 40 s of held notes, and rap may never be sure"}. ${M.bkState === 1 ? "" : "Until then Pitch uses the Key / Scale below. "}The beat is the surest way.`, "calm",
         { need: "Optional, but it's the surest way to always be in the beat's key.", steps: ["Send the beat to this Voxology's side-chain. In {daw}: {daw:sidechain}.", "Press play: after about 6 s the beat's key shows up here. (Or: put a second Voxology on the beat track and click BEAT.)"] }));
@@ -1520,7 +1521,7 @@ function referenceBlock() {
     body.append(tip("CAN'T USE THIS ONE", refInfo.problem || "This file can't be used as a reference.", "warn", { need: "Yes, to use Reference Match.", steps: ["Choose another one with the REFERENCE pill.", "Or pick \"No reference (use the style)\" at the bottom of its list."] }));
     return;
   }
-  body.append(para(`Auto-Edit will match "${refInfo.name}" (${Number(refInfo.seconds || 0).toFixed(0)} s of voice heard): its tone, s brightness, punch and space. Pitch, clean-up and saturation still follow the STYLE.`));
+  body.append(el("p", "l-p", `Auto-Edit will match "${refInfo.name}" (${Number(refInfo.seconds || 0).toFixed(0)} s of voice heard): its tone, s brightness, punch and space. Pitch, clean-up and saturation still follow the STYLE.`));
   if (refInfo.warning) body.append(tip("FULL SONG?", refInfo.warning, "warn",
     { need: "Yes, for a close match. It still works, roughly.", steps: ["Find the song's acapella or vocal stem and load that instead."] }));
 }
@@ -1541,7 +1542,7 @@ function renderReport() {
     body.append(tip(report.tipTitle || "TRY AGAIN", report.tip || "Play a part where you're singing, then press Auto-Edit.", "warn"));
     return;
   }
-  body.append(head("AUTO-EDIT REPORT"), para(`${report.style} · ${report.intensity}${report.reference ? ` · matched to "${report.reference}"` : ""}`, "l-meta"), para(report.summary));
+  body.append(head("AUTO-EDIT REPORT"), el("p", "l-meta", `${report.style} · ${report.intensity}${report.reference ? ` · matched to "${report.reference}"` : ""}`), para(report.summary));
   analyzeBlock();
   notesAsTips();
   if (report.fit && report.fit.length) {
@@ -1859,7 +1860,7 @@ async function fetchReference() {
   b.querySelector("b").textContent = refInfo.state === "loading" ? "Reading…" : refInfo.state === "none" ? "None"
     : `${refInfo.state === "ok" ? (refInfo.split ? "\u2702" : "\u266A") : "\u26A0"} ${refInfo.name || "reference"}`;
   b.title = refInfo.state === "none" ? "Reference Match: pick a built-in pro vocal or add an acapella you love, and Auto-Edit aims at its sound"
-    : refInfo.problem || refInfo.warning || `Auto-Edit will match "${refInfo.name}". Click to choose another.`;
+    : D(refInfo.problem || refInfo.warning || "") || `Auto-Edit will match "${refInfo.name}". Click to choose another.`;
   if (learnTab === "report") renderLearn();
 }
 // The reference menu: built-in pro references, the vocals you've loaded (saved for every project), add a file, none.
