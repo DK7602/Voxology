@@ -38,7 +38,14 @@ public:
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
+    /** The DAW's own bypass (its power button): the dry vocal on both sides, delayed by the latency like Voxology's
+        own bypass, with the same 20 ms glide. (JUCE's default passed it undelayed while the DAW still made up for
+        the latency, so a bypassed vocal played early; a mono vocal also lost its right side.) */
+    void processBlockBypassed (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlockBypassed (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
     bool supportsDoublePrecisionProcessing() const override { return true; }
+    /** The DAW bypassed Voxology in the last block it played (any thread): it isn't processing the vocal now. */
+    bool isHostBypassed() const noexcept { return hostBypassed.load (std::memory_order_relaxed); }
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
@@ -130,7 +137,8 @@ public:
 
 private:
     template <typename Sample>
-    void processAnyPrecision (juce::AudioBuffer<Sample>& buffer, const juce::MidiBuffer& midi);
+    void processAnyPrecision (juce::AudioBuffer<Sample>& buffer, const juce::MidiBuffer& midi, bool hostBypass);
+    std::atomic<bool> hostBypassed { false };
     void handleMidi (const juce::MidiBuffer& midi) noexcept;
     std::atomic<float>* midiParam = nullptr;
     std::array<int, 128> midiHeld {};   // per note: how many times held (several channels)

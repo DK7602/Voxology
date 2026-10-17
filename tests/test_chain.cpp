@@ -138,3 +138,32 @@ TEST_CASE ("In the chain the gate opens before a soft word start (look-ahead fro
     for (size_t i = static_cast<size_t> (0.3 * kSr); i < static_cast<size_t> (0.6 * kSr); ++i) { gin += static_cast<double> (x[i]) * x[i]; gout += static_cast<double> (y[0][i]) * y[0][i]; }
     CHECK (10.0 * std::log10 (gout / gin) == Approx (-18.0).margin (1.0));
 }
+
+TEST_CASE ("Bypass switched on while playing (the DAW's own too): the delayed input on both sides once glided", "[chain]")
+{
+    // The plug-in runs the DAW's bypass through the chain with bypass on: the same delayed dry vocal as Voxology's
+    // own, so the DAW's latency compensation still lines it up. A mono vocal comes in on both channels.
+    const auto x = testsig::vocal (kSr, 2.0);
+    VocalChain c;
+    auto p = busy();
+    c.setParams (p);
+    c.prepare (kSr, 2);
+    std::vector<double> l (x.begin(), x.end()), r = l;
+    const size_t on = static_cast<size_t> (0.7 * kSr);
+    for (size_t s = 0; s < x.size(); s += 300)
+    {
+        if (s >= on) { p.bypass = true; c.setParams (p); }
+        std::array<double*, 2> ptr { l.data() + s, r.data() + s };
+        c.process (ptr.data(), 2, static_cast<int> (std::min<size_t> (300, x.size() - s)));
+    }
+    double err = 0.0;
+    for (size_t i = on + static_cast<size_t> (0.3 * kSr); i < x.size(); ++i)
+        err = std::max ({ err, std::abs (l[i] - x[i - kLat]), std::abs (r[i] - x[i - kLat]) });
+    CHECK (err == 0.0);
+    // ... and it glides there (no click): the step between two samples stays like the music's own (processed or dry).
+    double step = 0.0, music = 0.0;
+    for (size_t i = on; i < on + static_cast<size_t> (0.1 * kSr); ++i) step = std::max (step, std::abs (l[i] - l[i - 1]));
+    for (size_t i = kLat + 1; i < on; ++i) music = std::max (music, std::abs (l[i] - l[i - 1]));
+    for (size_t i = kLat + 1; i < x.size(); ++i) music = std::max (music, std::abs (static_cast<double> (x[i - kLat]) - x[i - kLat - 1]));
+    CHECK (step < 1.5 * music);
+}

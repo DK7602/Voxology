@@ -256,9 +256,10 @@ void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
 }
 
 template <typename Sample>
-void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buffer, const juce::MidiBuffer& midi)
+void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buffer, const juce::MidiBuffer& midi, bool hostBypass)
 {
     juce::ScopedNoDenormals noDenormals;
+    hostBypassed.store (hostBypass, std::memory_order_relaxed);
     const int numIn = getMainBusNumInputChannels();
     const int numOut = getTotalNumOutputChannels();
     const int n = buffer.getNumSamples();
@@ -324,6 +325,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
 
     // MATCH: level-matched A/B, learned while B (the processed vocal) plays; never in an offline export.
     reader.read (chainParams, hostBpm.load());
+    if (hostBypass) chainParams.bypass = true;   // the DAW's bypass: Voxology's own (delayed dry, glided)
     const bool listeningB = ! chainParams.bypass && ! chainParams.listenOriginal;
     const bool matching = levelMatchParam->load() > 0.5f && ! isNonRealtime();
     // The output meter reads after the MATCH gain; take that gain back out before comparing.
@@ -529,8 +531,10 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     for (size_t k = 0; k < meters.hvNotes.size(); ++k) meters.hvNotes[k].store (m.voiceNotes[k]);
 }
 
-void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)  { processAnyPrecision (buffer, midi); }
-void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midi) { processAnyPrecision (buffer, midi); }
+void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)  { processAnyPrecision (buffer, midi, false); }
+void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midi) { processAnyPrecision (buffer, midi, false); }
+void VoxologyAudioProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)  { processAnyPrecision (buffer, midi, true); }
+void VoxologyAudioProcessor::processBlockBypassed (juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midi) { processAnyPrecision (buffer, midi, true); }
 
 void VoxologyAudioProcessor::handleMidi (const juce::MidiBuffer& midi) noexcept
 {
