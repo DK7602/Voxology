@@ -54,7 +54,9 @@ public:
     bool acceptsMidi() const override { return true; }   // Pitch: MIDI notes / Learn
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 8.0; }   // delay + reverb tails
+    // Delay + reverb tails: a long Delay with 95 % Feedback rings for a minute. The DAW may stop calling a plug-in
+    // that has been silent for this long (8 s cut that off, and the delay later played the old echo it still held).
+    double getTailLengthSeconds() const override { return 60.0; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
