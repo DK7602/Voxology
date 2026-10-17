@@ -132,6 +132,39 @@ TEST_CASE ("Pitch: off / Amount 0 = exact delayed pass-through", "[pitch]")
     for (size_t i = static_cast<size_t> (lat); i < x.size(); ++i) REQUIRE (y[i] == x[i - static_cast<size_t> (lat)]);
 }
 
+TEST_CASE ("Pitch: switching off crossfades to the delayed input (no jump), then it is exact", "[pitch]")
+{
+    // 450 Hz, 39 cents over A: Robot holds it on 440. Switched off, the voice used to jump back to 450 in one sample.
+    const auto x = voice (450.0, 450.0, 2.5);
+    PitchParams on;
+    on.amount = 100.0; on.mode = kPitchRobot; on.speedMs = 0.0;
+    PitchParams off = on;
+    off.enabled = false;
+    int lat = 0;
+    const auto ref = run (on, x, 256, &lat);
+    const auto L = static_cast<size_t> (lat);
+    PitchCorrector pc;
+    pc.setParams (on);
+    pc.prepare (kSr, 1);
+    std::vector<double> y = x;
+    const size_t at = 281 * 256;   // about 1.5 s, on a block edge
+    for (size_t s = 0; s < y.size(); s += 256)
+    {
+        if (s == at) pc.setParams (off);
+        double* ptr = y.data() + s;
+        pc.process (&ptr, 1, static_cast<int> (std::min<size_t> (256, y.size() - s)));
+    }
+    double moved = 0.0, err = 0.0;
+    for (size_t i = at; i < at + 48; ++i)
+    {
+        moved = std::max (moved, std::abs (ref[i] - x[i - L]));
+        err = std::max (err, std::abs (y[i] - ref[i]));
+    }
+    CHECK (moved > 0.01);
+    CHECK (err < 0.15 * moved);
+    for (size_t i = at + static_cast<size_t> (0.1 * kSr); i < y.size(); ++i) REQUIRE (y[i] == x[i - L]);
+}
+
 TEST_CASE ("Pitch: chromatic, instant retune pulls a sharp note onto the note", "[pitch]")
 {
     for (double f : { 110.0 * std::pow (2.0, 0.35 / 12), 233.08 * std::pow (2.0, -0.4 / 12), 440.0 * std::pow (2.0, 0.3 / 12) })

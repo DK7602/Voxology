@@ -150,7 +150,7 @@ void VoxologyAudioProcessor::publishSuite()
     F v;
     v.trackName = trackName.toStdString();
     v.version = static_cast<std::uint32_t> (JucePlugin_VersionCode);
-    if (! p.bypass) v.flags |= F::processing;
+    if (! p.bypass && ! isHostBypassed()) v.flags |= F::processing;   // (the DAW's own bypass too)
     if (isBeatMode())
         v.flags |= F::beat;   // on the beat: only listening for the key (and Unmask)
     else
@@ -272,12 +272,17 @@ bool VoxologyAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts)
 void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
 {
     const int channels = juce::jmax (1, getTotalNumOutputChannels());
+    // Both chains are made fresh here: let a clean on the message thread finish first, and keep the next one out.
+    for (int s = standby.load(); s == standbyCleaning || ! standby.compare_exchange_weak (s, standbyCleaning);)
+        if (s == standbyCleaning) { juce::Thread::yield(); s = standby.load(); }
     reader.read (chainParams, hostBpm.load());
     chain.setParams (chainParams);
     chain.prepare (sampleRate, juce::jmin (channels, vox::kMaxChannels));
     recChain.setParams (chainParams);
     recChain.prepare (sampleRate, juce::jmin (channels, vox::kMaxChannels), true);
     usingRec = recParam->load() > 0.5f && ! isBeatMode();
+    switchPos = -1;
+    standby.store (standbyClean);
     inMeter.prepare (sampleRate, juce::jmax (1, getTotalNumInputChannels()));
     outMeter.prepare (sampleRate, channels);
     levelMatch.prepare (sampleRate);
@@ -295,15 +300,85 @@ void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
     setLatencySamples (wantedLatency.load());
 }
 
+void VoxologyAudioProcessor::handleAsyncUpdate()
+{
+    setLatencySamples (wantedLatency.load());
+    cleanStandby();   // the chain Record mode just left: ready for the next switch
+}
+
+void VoxologyAudioProcessor::cleanStandby() noexcept
+{
+    // Only from dirty: never while the audio thread may be using it (a switch starts only once it's clean).
+    if (int s = standbyDirty; ! standby.compare_exchange_strong (s, standbyCleaning))
+        return;
+    standbyChain().reset();
+    standby.store (standbyClean);
+}
+
 template <typename Sample>
-void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buffer, const juce::MidiBuffer& midi)
+void VoxologyAudioProcessor::switchChains (juce::AudioBuffer<Sample>& buffer, int nch, int n) noexcept
+{
+    // Both chains hear the vocal; the new one (fresh) plays once it's had its latency (+ 10 ms to settle), crossfaded
+    // in over 20 ms (equal power: the two are a latency apart). Then the old one is left to the message thread.
+    auto& from = active();
+    auto& to = standbyChain();
+    to.setParams (chainParams);
+    const int warm = to.latencySamples() + juce::roundToInt (0.010 * preparedRate);
+    const int fade = juce::jmax (1, juce::roundToInt (0.020 * preparedRate));
+    constexpr int kPart = 256;
+    std::array<std::array<Sample, kPart>, vox::kMaxChannels> copy;
+    for (int start = 0; start < n; start += kPart)
+    {
+        const int len = juce::jmin (kPart, n - start);
+        std::array<Sample*, vox::kMaxChannels> a {}, b {};
+        for (int c = 0; c < nch; ++c)
+        {
+            a[static_cast<size_t> (c)] = buffer.getWritePointer (c, start);
+            b[static_cast<size_t> (c)] = copy[static_cast<size_t> (c)].data();
+            std::copy_n (a[static_cast<size_t> (c)], len, b[static_cast<size_t> (c)]);
+        }
+        from.process (a.data(), nch, len);
+        to.process (b.data(), nch, len);
+        for (int i = 0; i < len; ++i, ++switchPos)
+        {
+            if (switchPos < warm) continue;
+            const double t = juce::jmin (1.0, (switchPos - warm + 1) / static_cast<double> (fade));
+            const double in = std::sin (0.5 * juce::MathConstants<double>::pi * t), out = std::cos (0.5 * juce::MathConstants<double>::pi * t);
+            for (int c = 0; c < nch; ++c)
+            {
+                auto& y = a[static_cast<size_t> (c)][i];
+                y = static_cast<Sample> (out * static_cast<double> (y) + in * static_cast<double> (b[static_cast<size_t> (c)][i]));
+            }
+        }
+    }
+    if (switchPos < warm + fade)
+        return;
+    usingRec = ! usingRec.load();
+    switchPos = -1;
+    standby.store (standbyDirty);
+    wantedLatency = active().latencySamples();
+    triggerAsyncUpdate();   // the host hears of the new latency; the old chain is cleaned
+}
+
+template <typename Sample>
+void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buffer, const juce::MidiBuffer& midi, bool hostBypass)
 {
     juce::ScopedNoDenormals noDenormals;
+    hostBypassed.store (hostBypass, std::memory_order_relaxed);
     const int numIn = getMainBusNumInputChannels();
     const int numOut = getTotalNumOutputChannels();
     const int n = buffer.getNumSamples();
     const int nch = juce::jmin (buffer.getNumChannels(), numOut, vox::kMaxChannels);
     const bool beatMode = isBeatMode();
+
+    // A bad sample from the host (NaN / inf) comes in as silence: in a filter, a meter or a key detector it would stay
+    // until the next prepare.
+    for (int c = 0; c < buffer.getNumChannels(); ++c)
+    {
+        auto* x = buffer.getWritePointer (c);
+        for (int i = 0; i < n; ++i)
+            if (! std::isfinite (x[i])) x[i] = Sample (0);
+    }
 
     // The side-chain (VOCAL: the beat, for its key and Vocal Fit). Read it first: its channels share the buffer with
     // the outputs, which the lines below write.
@@ -364,6 +439,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
 
     // MATCH: level-matched A/B, learned while B (the processed vocal) plays; never in an offline export.
     reader.read (chainParams, hostBpm.load());
+    if (hostBypass) chainParams.bypass = true;   // the DAW's bypass: Voxology's own (delayed dry, glided)
     const bool listeningB = ! chainParams.bypass && ! chainParams.listenOriginal;
     const bool matching = levelMatchParam->load() > 0.5f && ! isNonRealtime();
     // The output meter reads after the MATCH gain; take that gain back out before comparing.
@@ -373,6 +449,8 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     appliedMatchDb = chainParams.gainProcessedDb;
     const bool wantUnmask = ! chainParams.bypass && ! chainParams.listenOriginal;   // A / B and bypass hear the beat untouched
     auto& link = vox::UnmaskLink::instance();
+    // MIDI: the notes held, in both modes (a note let go while on the beat would otherwise stay held in VOCAL).
+    handleMidi (midi);
     if (beatMode)
     {
         // BEAT: learn the beat's key and tuning from what comes in, and offer it to the vocals.
@@ -433,7 +511,6 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
         meters.bkState.store (state);
         meters.bkSource.store (source);
         // MIDI: Notes = only the notes held right now (none held: the key as usual); Learn = the last notes played.
-        handleMidi (midi);
         int held = 0;
         for (int k = 0; k < 128; ++k) if (midiHeld[static_cast<size_t> (k)] > 0) held |= 1 << (k % 12);
         const int midiMode = juce::roundToInt (midiParam->load());
@@ -461,19 +538,20 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
         chainParams.bypass = true;
         chainParams.listenOriginal = false;
     }
-    // Record mode: the low-latency chain (switching starts it fresh; the host hears of the new latency).
-    if (const bool rec = recParam->load() > 0.5f && ! beatMode; rec != usingRec)
+    // Record mode: the low-latency chain. Switching starts the other chain fresh (cleaned on the message thread) and
+    // crossfades to it once it hears the vocal; then the host hears of the new latency.
+    if (const bool rec = recParam->load() > 0.5f && ! beatMode; switchPos < 0 && rec != usingRec.load())
     {
-        usingRec = rec;
-        active().reset();
-        wantedLatency = active().latencySamples();
-        triggerAsyncUpdate();
+        if (isNonRealtime()) cleanStandby();   // (a bounce: no message thread to wait for)
+        if (standby.load() == standbyClean) switchPos = 0;
+        else triggerAsyncUpdate();             // (still to be cleaned: next block)
     }
-    meters.recMode.store (usingRec ? 1 : 0);
-    meters.latencyMs10.store (juce::roundToInt (10000.0 * active().latencySamples() / juce::jmax (1.0, preparedRate)));
     auto& live = active();
     live.setParams (chainParams);
-    live.process (buffer.getArrayOfWritePointers(), nch, n);
+    if (switchPos >= 0) switchChains (buffer, nch, n);
+    else live.process (buffer.getArrayOfWritePointers(), nch, n);
+    meters.recMode.store (usingRec.load() ? 1 : 0);
+    meters.latencyMs10.store (juce::roundToInt (10000.0 * active().latencySamples() / juce::jmax (1.0, preparedRate)));
 
     // Positions of what comes out of this block (both modes have the same latency, so they line up).
     const int lat = live.latencySamples();
@@ -569,8 +647,10 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     for (size_t k = 0; k < meters.hvNotes.size(); ++k) meters.hvNotes[k].store (m.voiceNotes[k]);
 }
 
-void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)  { processAnyPrecision (buffer, midi); }
-void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midi) { processAnyPrecision (buffer, midi); }
+void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)  { processAnyPrecision (buffer, midi, false); }
+void VoxologyAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midi) { processAnyPrecision (buffer, midi, false); }
+void VoxologyAudioProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)  { processAnyPrecision (buffer, midi, true); }
+void VoxologyAudioProcessor::processBlockBypassed (juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midi) { processAnyPrecision (buffer, midi, true); }
 
 void VoxologyAudioProcessor::handleMidi (const juce::MidiBuffer& midi) noexcept
 {

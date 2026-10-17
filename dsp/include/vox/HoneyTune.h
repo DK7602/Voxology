@@ -2,6 +2,7 @@
 
 #include "PitchCorrector.h"
 
+#include <atomic>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -13,7 +14,9 @@
     findNotes()  splits it into notes: start / end, the note's pitch, how far off the nearest note it is
     edits      per note: target pitch, how much of its drift and vibrato to keep
     render()   the clip with the edits, using the live Pitch shifter driven by a plan (so it gets all of
-               its clean-up work), latency removed. Untouched notes come out unchanged. */
+               its clean-up work), latency removed. Untouched notes come out unchanged.
+    cancel (analyse, render): set it from another thread to stop early (the plug-in closing); the result is then
+    incomplete, to be thrown away. */
 namespace vox::honey {
 
 struct Track
@@ -62,9 +65,9 @@ std::vector<float> warp (const std::vector<float>& mono, double sampleRate, cons
     detector are an octave apart, the one that agrees with the moments around it wins; loud moments the
     detector called unvoiced (rasp) but the AI is sure about become notes. Offline only (a few seconds per
     minute of audio, on several threads). */
-Track analyse (const std::vector<float>& mono, double sampleRate, bool ai = true);
+Track analyse (const std::vector<float>& mono, double sampleRate, bool ai = true, const std::atomic<bool>* cancel = nullptr);
 /** The AI check on its own (analyse() runs it when ai is on). */
-void aiCheck (Track& track, const std::vector<float>& mono, double sampleRate);
+void aiCheck (Track& track, const std::vector<float>& mono, double sampleRate, const std::atomic<bool>* cancel = nullptr);
 std::vector<Note> findNotes (const Track& track);
 
 /** Pulls every note's target to the nearest note of the key / scale (amount 0..1 of the way). */
@@ -72,9 +75,12 @@ void snapToKey (std::vector<Note>& notes, int key, int scale, double amount = 1.
 /** Cents from the nearest note of the key / scale (signed). */
 double centsOff (const Note& n, int key, int scale);
 
+/** How long a moved note takes to reach its new pitch (render(), renderPart()). */
+inline constexpr double kTransitionMs = 25.0;
+
 /** The clip with the edits (same length, aligned with the input). */
 std::vector<float> render (const std::vector<float>& mono, double sampleRate, const Track& track,
-                           const std::vector<Note>& notes, double transitionMs = 25.0);
+                           const std::vector<Note>& notes, double transitionMs = kTransitionMs, const std::atomic<bool>* cancel = nullptr);
 
 /** After an edit: the stretch to re-render (moved / stretched notes take their neighbours along: the
     gaps between them change), from the middle of the gap before the first changed note to
@@ -84,6 +90,7 @@ bool changedRegion (const std::vector<Note>& before, const std::vector<Note>& af
                     double& from, double& to);
 /** Re-renders only [from, to) of `previous` (the clip's earlier render), crossfading 10 ms at each join. */
 void renderPart (const std::vector<float>& mono, double sampleRate, const Track& track, const std::vector<Note>& notes,
-                 std::vector<float>& previous, double from, double to, double transitionMs = 25.0);
+                 std::vector<float>& previous, double from, double to, double transitionMs = kTransitionMs,
+                 const std::atomic<bool>* cancel = nullptr);
 
 } // namespace vox::honey

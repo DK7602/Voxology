@@ -3,6 +3,7 @@
 #include "Modules.h"
 
 #include <array>
+#include <cstdint>
 #include <vector>
 
 /** Mouth de-click (part of the Cleanup module, after Pops): lip smacks, tongue clicks and the sticky "tk" of a dry
@@ -44,9 +45,11 @@ public:
     /** Clicks fixed since the last call, and the deepest cut (dB, <= 0). */
     int takeClicks() noexcept { const int c = clicks; clicks = 0; return c; }
     double takeCutDb() noexcept { const double v = deepest; deepest = 0.0; return v; }
+    /** Tests: reset, with the sample clock started at `sample` (as if that much had already played). */
+    void startClockAt (int64_t sample) noexcept;
 
 private:
-    void markClick (long start, long end, double cutDb) noexcept;
+    void markClick (int64_t start, int64_t end, double cutDb) noexcept;
     void judgeBlock() noexcept;
 
     DeClickParams params;
@@ -58,15 +61,15 @@ private:
     // of the kContextSeconds around it, kContextSeconds after it arrived (so the look-ahead sees both sides).
     int blockLen = 24, blockFill = 0, contextBlocks = 20;
     double blockPeak = 0.0;
-    long blocks = 0;                   // blocks finished (side-chain)
+    int64_t blocks = 0;                // blocks finished (side-chain)
     std::vector<double> peaks, fullPeaks;   // rings of block peaks: the top end, everything (2 x contextBlocks + 1)
     double blockPeakFull = 0.0, runPeakFull = 0.0, runBgFull = 0.0;
     std::vector<double> sortBuf;
-    long runStart = -1, runEnd = -1;   // flagged blocks in a row (block indices), -1 = none
+    int64_t runStart = -1, runEnd = -1;   // flagged blocks in a row (block indices), -1 = none
     double runPeak = 0.0, runBg = 0.0;
     double ratio = 1.0, floorAmp = 0.0, maxCut = 0.0;
-    long maxBlocks = 8;
-    long now = 0;                      // side-chain sample count
+    int64_t maxBlocks = 8;
+    int64_t now = 0;                   // side-chain sample count (64-bit: a long is 32 on Windows, 12 h at 48 kHz)
     std::vector<double> cutLine;       // per sample, the cut (dB, <= 0) to apply when that audio arrives (ring)
     double gainDb = 0.0, fadeStep = 0.0;
     int clicks = 0;

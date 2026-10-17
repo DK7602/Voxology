@@ -5,7 +5,9 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <chrono>
 #include <set>
+#include <thread>
 
 using namespace vox;
 using Catch::Approx;
@@ -183,4 +185,32 @@ TEST_CASE ("Auto-Edit doesn't flatten a vocal that's already compressed (a secon
     CHECK (p1 > 2.2);   // v0.19.3 flattened this take to 1.7 dB on the first pass
     CHECK (p2 > 2.2);
     CHECK (p2 > p1 - 0.6);
+}
+
+TEST_CASE ("Auto-Edit stops early when the plug-in closes (the cancel flag)", "[autoedit]")
+{
+    // Closing a project waited on a running Auto-Edit (seconds of work, more at high sample rates).
+    const auto x = testsig::vocal (kSr, 14.0, -58.0, -1.0);
+    std::atomic<bool> stop { true };
+    AutoEditSettings s { 0, 1, 140.0 };
+    s.cancel = &stop;
+    auto t0 = std::chrono::steady_clock::now();
+    const auto early = autoEdit ({ x }, kSr, s);
+    CHECK (! early.ok);
+    CHECK (std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count() < 2.0);
+
+    // Set while it works: it returns soon after.
+    stop = false;
+    std::thread closer ([&stop] { std::this_thread::sleep_for (std::chrono::milliseconds (400)); stop = true; });
+    t0 = std::chrono::steady_clock::now();
+    const auto mid = autoEdit ({ x }, kSr, s);
+    const double took = std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count();
+    closer.join();
+    CHECK (! mid.ok);
+    CHECK (took < 6.0);
+
+    // A reference stops too.
+    stop = true;
+    const auto ref = analyseReference ({ x }, kSr, "Ref", &stop);
+    CHECK (! ref.ok);
 }

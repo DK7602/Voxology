@@ -12,6 +12,7 @@
 
 #include <ARA_Library/Utilities/ARATimelineConversion.h>
 
+#include <limits>
 #include <map>
 #include <memory>
 
@@ -27,12 +28,15 @@ namespace
     /** A hand edit as saved: tied to the note's start, so it finds its note again after re-analysis. */
     struct SavedEdit { double start = 0.0; NoteEdit edit; };
 
+    using Audio = std::vector<std::vector<float>>;   // per channel
+
     /** What we know about one recording, shared between the model, the background jobs, the editor
-        and the audio thread. The rendered audio is swapped in under a spin lock (the audio thread only tries). */
+        and the audio thread. The rendered audio is swapped in under a spin lock, held only for the swap; the one
+        it replaces is freed later on the background thread, never by the audio thread (it may still be playing it). */
     struct SourceState
     {
         std::atomic<bool> alive { true };
-        std::atomic<int> status { 0 };   // 0 waiting, 1 listening, 2 ready, 3 couldn't read
+        std::atomic<int> status { 0 };   // 0 waiting, 1 listening, 2 ready, 3 couldn't read, 4 too long (not enough memory)
         std::atomic<bool> samplesChanged { true };
         std::atomic<double> playPosition { -1.0 };   // where playback is in this recording (samples), from the audio thread
         std::atomic<uint32> playStamp { 0 };          // when that was (ms counter): stale = stopped
@@ -40,9 +44,10 @@ namespace
 
         // Background thread only
         double sampleRate = 48000.0;
-        std::vector<std::vector<float>> original;   // per channel
+        std::shared_ptr<const Audio> original;            // the recording (also what plays as `recorded`: one copy)
         std::vector<vox::honey::Note> renderedNotes;      // what the current render was made from
         const vox::honey::Track* renderedTrack = nullptr;
+        std::vector<std::shared_ptr<const Audio>> retired;   // swapped out, freed once no block is playing them
 
         // Shared (dataLock)
         CriticalSection dataLock;
@@ -54,18 +59,47 @@ namespace
 
         // Render requests (coalesced: one job at a time, re-run if asked again meanwhile)
         std::atomic<int> wanted { 0 };
+        std::atomic<int> done { 0 };              // the `wanted` count the current render answers
         std::atomic<bool> queued { false };
+        std::atomic<bool> waitedOut { false };    // an offline render gave up waiting for it (until it next renders)
+
+        /** Work still to come for what plays: listening, or a render asked for and not done yet. */
+        bool busy() const { const int st = status; return st == 1 || (st == 2 && done < wanted); }
 
         SpinLock lock;
-        std::shared_ptr<const std::vector<std::vector<float>>> rendered, recorded;
+        std::shared_ptr<const Audio> rendered, recorded;
         std::atomic<bool> playOriginal { false };   // A / B
 
-        /** What to play: the tuned clip, or the recording (Original, or while it's still being tuned). */
-        std::shared_ptr<const std::vector<std::vector<float>>> getPlayback()
+        /** What to play: the tuned clip, or the recording (Original, or while it's still being tuned). Realtime:
+            a few tries at the lock (it's only held for a swap); offline (export): waits for it. */
+        std::shared_ptr<const Audio> getPlayback (bool realtime)
         {
-            const SpinLock::ScopedTryLockType sl (lock);
-            if (! sl.isLocked()) return nullptr;
-            return (playOriginal || rendered == nullptr) ? recorded : rendered;
+            if (! realtime)
+            {
+                const SpinLock::ScopedLockType sl (lock);
+                return (playOriginal || rendered == nullptr) ? recorded : rendered;
+            }
+            for (int tries = 0; tries < 32; ++tries)
+            {
+                const SpinLock::ScopedTryLockType sl (lock);
+                if (sl.isLocked())
+                    return (playOriginal || rendered == nullptr) ? recorded : rendered;
+            }
+            return nullptr;
+        }
+
+        /** Background thread: puts `next` in `slot` (rendered / recorded). The one it replaces is kept until no block
+            plays it: freeing a whole take (tens of MB) inside the lock made the audio thread's try fail (silence),
+            and the audio thread could end up freeing it itself. */
+        void swapIn (std::shared_ptr<const Audio>& slot, std::shared_ptr<const Audio> next)
+        {
+            {
+                const SpinLock::ScopedLockType sl (lock);
+                std::swap (slot, next);
+            }
+            if (next != nullptr) retired.push_back (std::move (next));
+            // Free those only held here now (once swapped out, nothing can pick them up again).
+            retired.erase (std::remove_if (retired.begin(), retired.end(), [] (const auto& a) { return a.use_count() == 1; }), retired.end());
         }
 
         /** Hand edits re-attached to the notes by start time (within 30 ms). Call with dataLock held. */
@@ -151,7 +185,7 @@ public:
         maxBlock = maximumSamplesPerBlockIn;
     }
 
-    bool processBlock (AudioBuffer<float>& buffer, AudioProcessor::Realtime,
+    bool processBlock (AudioBuffer<float>& buffer, AudioProcessor::Realtime realtime,
                        const AudioPlayHead::PositionInfo& positionInfo) noexcept override
     {
         buffer.clear();
@@ -172,13 +206,22 @@ public:
             // The recording's own sample rate can differ from the song's (a clip that wasn't converted on
             // import): read it at the matching speed (cubic) instead of playing nothing.
             auto* source = static_cast<HoneyAudioSource*> (region->getAudioModification()->getAudioSource());
+            const bool live = realtime == AudioProcessor::Realtime::yes;
+            if (! live && ! source->state->waitedOut)
+            {
+                // Export / render in place: wait for the clip's analysis or a render still on its way (it would
+                // otherwise bake in silence or the old tuning). Not forever: a clip that never gets there plays as it is.
+                for (int ms = 0; source->state->busy() && ms < kOfflineWaitMs; ms += 2)
+                    Thread::sleep (2);
+                if (source->state->busy()) source->state->waitedOut = true;
+            }
             const double ratio = source->getSampleRate() > 0.0 ? source->getSampleRate() / sampleRate : 1.0;
             const bool sameRate = std::abs (ratio - 1.0) < 1.0e-9;
             const double srcAtSongStart = region->getStartInAudioModificationTime() * source->getSampleRate();
             const double srcStart = srcAtSongStart + static_cast<double> (renderRange.getStart() - songRange.getStart()) * ratio;
             source->state->playPosition = srcStart;   // for the editor's playhead
             source->state->playStamp = Time::getMillisecondCounter();
-            auto rendered = source->state->getPlayback();
+            auto rendered = source->state->getPlayback (live);
             if (rendered == nullptr || rendered->empty())
             {
                 ok = false;   // not read yet (or swapping this instant)
@@ -216,6 +259,7 @@ public:
     using ARAPlaybackRenderer::processBlock;
 
 private:
+    static constexpr int kOfflineWaitMs = 180000;   // (an hour-long take's analysis takes minutes)
     double sampleRate = 48000.0;
     int numChannels = 2, maxBlock = 512;
 };
@@ -225,7 +269,15 @@ class HoneyDocumentController final : public ARADocumentControllerSpecialisation
 {
 public:
     using ARADocumentControllerSpecialisation::ARADocumentControllerSpecialisation;
-    ~HoneyDocumentController() override { beatKeyPoll.stopTimer(); *controllerAlive = false; pool.removeAllJobs (true, 60000); }
+    ~HoneyDocumentController() override
+    {
+        // The jobs still running stop early (an analysis or a render can take many seconds) and add no new ones, so
+        // closing the project doesn't wait on them.
+        beatKeyPoll.stopTimer();
+        *controllerAlive = false;
+        closing = true;
+        pool.removeAllJobs (true, 60000);
+    }
 
     Settings getSettings() const { const ScopedLock sl (settingsLock); return settings; }
     honeyui::HostKey getHostKey() const { const ScopedLock sl (settingsLock); return hostKey; }
@@ -396,8 +448,11 @@ protected:
 
     void didEnableAudioSourceSamplesAccess (ARAAudioSource* audioSource, bool enable) override
     {
+        // New samples, or not read yet / couldn't read. (While a listen is on its way, or the clip was too long, the
+        // same samples aren't read again: hosts enable access many times.)
         auto* src = static_cast<HoneyAudioSource*> (audioSource);
-        if (enable && (src->state->samplesChanged || src->state->status != 2))
+        const int status = src->state->status;
+        if (enable && (src->state->samplesChanged || status == 0 || status == 3))
             listen (src);
     }
 
@@ -417,15 +472,15 @@ protected:
         const bool v3 = first == kArchiveV3;
         const bool v2 = first == kArchiveV2 || v3;
         Settings s;
-        s.key = static_cast<int> (v2 ? input.readInt64() : first);
-        s.scale = static_cast<int> (input.readInt64());
+        const auto key = v2 ? input.readInt64() : first, scale = input.readInt64();
+        s.key = static_cast<int> (jlimit<int64> (0, honeyui::kAutoKey, key));
+        s.scale = static_cast<int> (jlimit<int64> (0, vox::kScales - 1, scale));
         s.snap = input.readDouble();
         s.drift = input.readDouble();
         s.vibrato = input.readDouble();
         if (input.failed())
             return false;
-        s.key = jlimit (0, honeyui::kAutoKey, s.key);
-        s.scale = jlimit (0, vox::kScales - 1, s.scale);
+        s = honeyui::sanitised (s);   // (a damaged or hand-made archive: NaN, huge values)
         if (filter == nullptr || filter->shouldRestoreDocumentData())
             setSettings (s);
         if (! v2)
@@ -451,7 +506,9 @@ protected:
                     se.edit.length = input.readDouble();
                     se.edit.formant = input.readDouble();
                 }
-                saved.push_back (se);
+                se.edit = honeyui::sanitised (se.edit);
+                if (std::isfinite (se.start) && se.start >= 0.0)
+                    saved.push_back (se);
             }
             HoneyAudioSource* target = nullptr;
             if (filter != nullptr)
@@ -503,6 +560,7 @@ private:
     /** Read the whole recording (now: sample access is enabled for this call), then analyse it in the background. */
     void listen (HoneyAudioSource* src)
     {
+        if (closing) return;
         refreshHostKey();
         pollBeatKey();
         if (! beatKeyPoll.isTimerRunning()) beatKeyPoll.startTimer (1000);
@@ -512,60 +570,106 @@ private:
         state->persistentId = src->getPersistentID();
         state->name = src->getName() != nullptr ? src->getName() : "clip";
         ARAAudioSourceReader reader (src);
-        const auto len = static_cast<int> (src->getSampleCount());
+        const auto count = src->getSampleCount();
         const int nch = std::max (1, static_cast<int> (src->getChannelCount()));
-        AudioBuffer<float> buf (nch, std::max (1, len));
-        if (! reader.isValid() || len <= 0 || ! reader.read (&buf, 0, len, 0, true, nch > 1))
+        // Read straight into the buffers that are kept (and played as the recording): one copy of the take. Too long
+        // for memory (an hour-long take is gigabytes on the way through the analysis): say so. An exception must not
+        // leave this call (it comes from the host, through ARA's C interface).
+        std::shared_ptr<Audio> chans;
+        bool read = false;
+        try
+        {
+            if (count > std::numeric_limits<int>::max()) throw std::bad_alloc();
+            const auto len = static_cast<int> (std::max<int64> (0, count));
+            chans = std::make_shared<Audio> (static_cast<size_t> (nch));
+            std::vector<float*> channels;
+            for (auto& ch : *chans) { ch.resize (static_cast<size_t> (std::max (1, len))); channels.push_back (ch.data()); }
+            AudioBuffer<float> buf (channels.data(), nch, std::max (1, len));   // (uses chans' memory)
+            read = reader.isValid() && len > 0 && reader.read (&buf, 0, len, 0, true, nch > 1);
+        }
+        catch (const std::bad_alloc&)
+        {
+            state->status = 4;
+            changes.sendChangeMessage();
+            return;
+        }
+        if (! read)
         {
             state->status = 3;
             changes.sendChangeMessage();
             return;
         }
-        std::vector<std::vector<float>> chans (static_cast<size_t> (nch));
-        for (int c = 0; c < nch; ++c)
-            chans[static_cast<size_t> (c)].assign (buf.getReadPointer (c), buf.getReadPointer (c) + len);
         changes.sendChangeMessage();
-        pool.addJob ([this, state, chans = std::move (chans), sr = src->getSampleRate()]() mutable
+        pool.addJob ([this, state, chans = std::shared_ptr<const Audio> (std::move (chans)), sr = src->getSampleRate()]
         {
-            state->sampleRate = sr;
-            state->original = std::move (chans);
+            try
             {
-                auto copy = std::make_shared<const std::vector<std::vector<float>>> (state->original);
-                const SpinLock::ScopedLockType sl (state->lock);
-                state->recorded = std::move (copy);
+                analyseClip (state, chans, sr);
             }
-            std::vector<float> mono (state->original.front().size(), 0.0f);
-            for (const auto& ch : state->original)
-                for (size_t i = 0; i < mono.size(); ++i) mono[i] += ch[i] / static_cast<float> (state->original.size());
-            auto track = std::make_shared<vox::honey::Track> (vox::honey::analyse (mono, sr));
-            auto notes = vox::honey::findNotes (*track);
-            std::vector<double> sung;
-            for (double m : track->midi) if (m > 0.0) sung.push_back (m);
-            const auto guess = vox::detectKey (sung);
+            catch (const std::bad_alloc&)
             {
-                const ScopedLock sl (state->dataLock);
-                const auto keep = state->saved();   // hand edits (or the ones restored from the project)
-                state->track = track;
-                state->notes = std::move (notes);
-                state->guess = guess;
-                state->attach (keep);
-                state->pending.clear();
+                state->status = 4;   // (the analysis of a very long take)
+                changes.sendChangeMessage();
             }
-            requestRender (state);
         });
+    }
+
+    void analyseClip (const std::shared_ptr<SourceState>& state, const std::shared_ptr<const Audio>& chans, double sr)
+    {
+        state->sampleRate = sr;
+        state->original = chans;
+        state->swapIn (state->recorded, chans);
+        // The detector hears the clip in mono (a mono take as it is: no copy).
+        std::vector<float> mixed;
+        if (chans->size() > 1)
+        {
+            mixed.assign (chans->front().size(), 0.0f);
+            for (const auto& ch : *chans)
+                for (size_t i = 0; i < mixed.size(); ++i) mixed[i] += ch[i] / static_cast<float> (chans->size());
+        }
+        const auto& mono = chans->size() > 1 ? mixed : chans->front();
+        auto track = std::make_shared<vox::honey::Track> (vox::honey::analyse (mono, sr, true, &closing));
+        if (closing) return;
+        auto notes = vox::honey::findNotes (*track);
+        std::vector<double> sung;
+        for (double m : track->midi) if (m > 0.0) sung.push_back (m);
+        const auto guess = vox::detectKey (sung);
+        {
+            const ScopedLock sl (state->dataLock);
+            const auto keep = state->saved();   // hand edits (or the ones restored from the project)
+            state->track = track;
+            state->notes = std::move (notes);
+            state->guess = guess;
+            state->attach (keep);
+            state->pending.clear();
+        }
+        requestRender (state);
     }
 
     void requestRender (const std::shared_ptr<SourceState>& state)
     {
         ++state->wanted;
-        if (state->queued.exchange (true))
-            return;   // a job is waiting: it will pick this up
+        if (closing || state->queued.exchange (true))
+            return;   // closing: no new jobs; else a job is waiting: it will pick this up
         pool.addJob ([this, state]
         {
             for (;;)
             {
                 const int asked = state->wanted;
-                if (renderNow (*state))
+                bool rendered = false;
+                try
+                {
+                    rendered = renderNow (*state);
+                }
+                catch (const std::bad_alloc&)
+                {
+                    state->status = 4;
+                    changes.sendChangeMessage();
+                }
+                if (closing) return;
+                state->done = asked;
+                state->waitedOut = false;
+                if (rendered)
                     finished (state);
                 state->queued = false;
                 if (state->wanted == asked || state->queued.exchange (true))
@@ -576,7 +680,7 @@ private:
 
     bool renderNow (SourceState& st)
     {
-        if (st.original.empty()) return false;
+        if (st.original == nullptr || st.original->empty()) return false;
         const auto s = getSettings();
         std::shared_ptr<const vox::honey::Track> track;
         std::vector<vox::honey::Note> notes;
@@ -590,33 +694,33 @@ private:
         }
         // An edit to a few notes: re-render only around them (from the gap before to the gap after),
         // on top of the current render. A new analysis, the key / settings moving most notes: all of it.
-        std::shared_ptr<const std::vector<std::vector<float>>> current;
+        std::shared_ptr<const Audio> current;
         {
             const SpinLock::ScopedLockType sl (st.lock);
             current = st.rendered;
         }
-        const double clip = st.original.empty() ? 0.0 : static_cast<double> (st.original.front().size());
+        const auto& original = *st.original;
+        const double clip = static_cast<double> (original.front().size());
         double from = 0.0, to = 0.0;
-        const bool part = current != nullptr && current->size() == st.original.size() && st.renderedTrack == track.get()
+        const bool part = current != nullptr && current->size() == original.size() && st.renderedTrack == track.get()
                           && vox::honey::changedRegion (st.renderedNotes, notes, clip, st.sampleRate, from, to) && to - from < 0.6 * clip;
         if (part && to <= from) { st.status = 2; return true; }   // nothing changed
-        auto out = std::make_shared<std::vector<std::vector<float>>>();
-        for (size_t c = 0; c < st.original.size(); ++c)
+        auto out = std::make_shared<Audio>();
+        for (size_t c = 0; c < original.size(); ++c)
         {
             if (part)
             {
                 out->push_back ((*current)[c]);
-                vox::honey::renderPart (st.original[c], st.sampleRate, *track, notes, out->back(), from, to);
+                vox::honey::renderPart (original[c], st.sampleRate, *track, notes, out->back(), from, to, vox::honey::kTransitionMs, &closing);
             }
             else
-                out->push_back (vox::honey::render (st.original[c], st.sampleRate, *track, notes));
+                out->push_back (vox::honey::render (original[c], st.sampleRate, *track, notes, vox::honey::kTransitionMs, &closing));
         }
+        if (closing) return false;   // (stopped part way: thrown away)
         st.renderedNotes = notes;
         st.renderedTrack = track.get();
-        {
-            const SpinLock::ScopedLockType sl (st.lock);
-            st.rendered = std::move (out);
-        }
+        current.reset();   // (so the old render can be freed right away, if no block is playing it)
+        st.swapIn (st.rendered, std::move (out));
         st.status = 2;
         return true;
     }
@@ -646,7 +750,8 @@ private:
     honeyui::HostKey projectKey, beatKey;   // message thread
     TimedCallback beatKeyPoll { [this] { pollBeatKey(); } };
     std::atomic<bool> playOriginal { false };
-    ThreadPool pool { 1 };
+    std::atomic<bool> closing { false };   // the document is going: jobs stop early, no new ones
+    ThreadPool pool { 1, 0, Thread::Priority::low };   // (the DAW and its audio come first)
 };
 
 //==============================================================================

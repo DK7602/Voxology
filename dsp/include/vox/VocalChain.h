@@ -14,6 +14,8 @@
 #include "Voices.h"
 
 #include <array>
+#include <atomic>
+#include <cmath>
 #include <vector>
 
 namespace vox {
@@ -96,9 +98,13 @@ public:
         for (int start = 0; start < numSamples; start += kChunk)
         {
             const int len = std::min (kChunk, numSamples - start);
+            // A bad sample (NaN / inf) comes in as silence: in a filter or a delay line it would stay forever.
             for (int c = 0; c < nch; ++c)
                 for (int i = 0; i < len; ++i)
-                    work[static_cast<size_t> (c)][static_cast<size_t> (i)] = static_cast<double> (channels[c][start + i]);
+                {
+                    const auto x = static_cast<double> (channels[c][start + i]);
+                    work[static_cast<size_t> (c)][static_cast<size_t> (i)] = std::isfinite (x) ? x : 0.0;
+                }
             processChunk (nch, len);
             for (int c = 0; c < nch; ++c)
                 for (int i = 0; i < len; ++i)
@@ -109,8 +115,10 @@ public:
     ChainMeters takeMeters() noexcept;
     double getSampleRate() const noexcept { return sr; }
 
-    /** Renders a whole clip offline (latency removed), for Auto-Edit and the tests. */
-    static std::vector<std::vector<float>> render (const std::vector<std::vector<float>>& in, double sampleRate, const ChainParams& p);
+    /** Renders a whole clip offline (latency removed), for Auto-Edit and the tests. Stops early (the rest silent)
+        once `cancel` is set (another thread: the plug-in closing). */
+    static std::vector<std::vector<float>> render (const std::vector<std::vector<float>>& in, double sampleRate, const ChainParams& p,
+                                                   const std::atomic<bool>* cancel = nullptr);
 
 private:
     void processChunk (int nch, int len) noexcept;

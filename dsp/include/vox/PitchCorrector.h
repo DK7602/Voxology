@@ -236,6 +236,7 @@ private:
     double drift = 0.0;                // anaPos - synthPos, eased back to 0 in breaths
     double gPeriod = 0.0, gRatio = 1.0;
     bool wasNeutral = true;
+    double grainMix = 0.0, grainFade = 0.0;   // the grains' share vs the delayed input: switching on / off crossfades (20 ms)
 };
 
 /** Detects the key of a vocal from its sung pitches (fractional MIDI notes): pitch-class histogram

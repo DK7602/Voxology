@@ -4,6 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <limits>
+
 using namespace honeyui;
 
 namespace {
@@ -143,4 +145,37 @@ TEST_CASE ("Honey Tune: Voxology's beat key reaches Honey Tune (fresh only); the
     CHECK (snap.keyFromBeat);
     CHECK_FALSE (snap.keyFromHost);
     CHECK_FALSE (snap.keyUnsure);
+}
+
+TEST_CASE ("Honey Tune: values from a project are made safe; a note dragged before the clip starts at 0", "[honey][view]")
+{
+    const double nan = std::numeric_limits<double>::quiet_NaN(), inf = std::numeric_limits<double>::infinity();
+    Settings s;
+    s.key = 99; s.scale = -4; s.snap = nan; s.drift = 7.0; s.vibrato = -3.0;
+    const auto ok = sanitised (s);
+    CHECK (ok.key == kAutoKey);
+    CHECK (ok.scale == 0);
+    CHECK (ok.snap == 1.0);
+    CHECK (ok.drift == 1.0);
+    CHECK (ok.vibrato == 0.0);
+
+    NoteEdit e;
+    e.moved = true; e.target = nan; e.drift = nan; e.vibrato = 0.4; e.shift = 1.0e300; e.length = -inf; e.formant = -50.0;
+    const auto safe = sanitised (e);
+    CHECK (! safe.moved);
+    CHECK (std::isfinite (safe.target));
+    CHECK (safe.drift < 0.0);   // (follows the settings)
+    CHECK (safe.vibrato == 0.4);
+    CHECK (std::abs (safe.shift) <= 3600.0);
+    CHECK (safe.length == 1.0);
+    CHECK (safe.formant == -vox::kMaxFormant);
+
+    // A note moved 2 s earlier, sung at 0.5 s: it starts at the clip's start (a negative start meant "not moved").
+    const std::vector<vox::honey::Note> notes { note (60.0, 0.5) };
+    NoteEdit early;
+    early.shift = -2.0;
+    const auto sounding = applyEdits (notes, { early }, Settings {}, 0, 1);
+    CHECK (sounding[0].outStart == 0.0);
+    CHECK (sounding[0].soundStart() == 0.0);
+    CHECK (sounding[0].timeMoved());
 }

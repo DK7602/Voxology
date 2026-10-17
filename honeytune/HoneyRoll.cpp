@@ -199,8 +199,9 @@ std::pair<double, double> HoneyRoll::span (int index) const
     double a = n.soundStart() / sr, b = n.soundEnd() / sr;
     if (dragging && index == selected)
     {
-        if (dragMode == Drag::time) { a += dragSeconds; b += dragSeconds; }
-        if (dragMode == Drag::leftEdge) a = std::min (a + dragSeconds, b - 0.03);
+        // Never before the clip's start (there it would mean "not moved": the note jumped back where it was sung).
+        if (dragMode == Drag::time) { const double d = std::max (dragSeconds, -a); a += d; b += d; }
+        if (dragMode == Drag::leftEdge) a = std::max (0.0, std::min (a + dragSeconds, b - 0.03));
         if (dragMode == Drag::rightEdge) b = std::max (b + dragSeconds, a + 0.03);
     }
     return { a, b };
@@ -292,6 +293,7 @@ void HoneyRoll::paint (Graphics& g)
     {
         const String msg = snap.status == 1 ? "Listening to the clip..."
                          : snap.status == 3 ? "Couldn't read the clip's audio."
+                         : snap.status == 4 ? "This clip is too long for Honey Tune: split it into shorter clips."
                          : snap.status == 2 ? "No sung notes found in this clip."
                                             : "Waiting for the clip's audio...";
         const auto box = grid.withSizeKeepingCentre (320.0f, 44.0f);

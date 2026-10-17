@@ -208,6 +208,7 @@ void VocalChain::processChunk (int nch, int len) noexcept
     const double gATarget = fromDb (std::min (0.0, params.listenOriginal && ! params.bypass ? params.gainOriginalDb : 0.0));
     const double gBTarget = fromDb (std::min (0.0, params.gainProcessedDb));
     const double mixTarget = wantB ? 1.0 : 0.0;
+    double check = 0.0;   // stays 0 unless an output sample is NaN / inf (x * 0 is NaN for those)
     for (int i = 0; i < len; ++i)
     {
         outGain += (outTarget - outGain) * outGlide;
@@ -222,11 +223,20 @@ void VocalChain::processChunk (int nch, int len) noexcept
             if (mixB == 1.0)       y = y * outGain * gainB;
             else if (mixB == 0.0)  y = params.bypass ? a : a * gainA;
             else                   y = mixB * y * outGain * gainB + (1.0 - mixB) * a * gainA;
+            check += y * 0.0;
         }
+    }
+    if (! std::isfinite (check))
+    {
+        // A module went bad anyway (the input is already cleaned, so this should never happen): start every module
+        // over and play silence for this moment, instead of NaN until the next prepare.
+        reset();
+        for (int c = 0; c < nch; ++c) std::fill_n (ch[static_cast<size_t> (c)], len, 0.0);
     }
 }
 
-std::vector<std::vector<float>> VocalChain::render (const std::vector<std::vector<float>>& in, double sampleRate, const ChainParams& p)
+std::vector<std::vector<float>> VocalChain::render (const std::vector<std::vector<float>>& in, double sampleRate, const ChainParams& p,
+                                                    const std::atomic<bool>* cancel)
 {
     if (in.empty()) return {};
     const int nch = std::min (static_cast<int> (in.size()), kMaxChannels);
@@ -244,6 +254,8 @@ std::vector<std::vector<float>> VocalChain::render (const std::vector<std::vecto
     const int total = n + lat;
     for (int start = 0; start < total; start += kChunk)
     {
+        if (cancel != nullptr && cancel->load (std::memory_order_relaxed))
+            break;
         const int len = std::min (kChunk, total - start);
         for (int c = 0; c < nch; ++c)
             for (int i = 0; i < len; ++i)

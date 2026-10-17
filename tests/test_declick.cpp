@@ -53,7 +53,7 @@ Clicky clicky (double seconds = 12.0)
 }
 
 /** Runs the de-clicker as in the chain: the audio kLook behind the side-chain. Returns the audio, lined up with x. */
-std::vector<double> declick (const std::vector<double>& x, double amount, int look = kLook, int* found = nullptr)
+std::vector<double> declick (const std::vector<double>& x, double amount, int look = kLook, int* found = nullptr, int64_t clock = 0)
 {
     std::vector<double> audio (x.size() + static_cast<size_t> (look), 0.0), side = x;
     std::copy (x.begin(), x.end(), audio.begin() + look);
@@ -61,6 +61,7 @@ std::vector<double> declick (const std::vector<double>& x, double amount, int lo
     DeClick d;
     d.prepare (kSr, 1, look);
     d.setParams ({ amount });
+    if (clock > 0) d.startClockAt (clock);
     for (size_t s = 0; s < audio.size(); s += 256)
     {
         double* p = audio.data() + s;
@@ -128,6 +129,18 @@ TEST_CASE ("De-click: off = untouched; too little look-ahead (Record mode) = off
         CHECK (found == 0);
         for (size_t i = 0; i < clean.size(); ++i) REQUIRE (y[i] == clean[i]);
     }
+}
+
+TEST_CASE ("De-click: the same after hours of playing (64-bit clock past 2^31 samples, 12 h at 48 kHz)", "[declick]")
+{
+    auto c = clicky (6.0);
+    c.x.insert (c.x.begin(), static_cast<size_t> (0.1 * kSr), 0.0);   // (starts in silence: no history either way)
+    int foundFresh = 0, foundLate = 0;
+    const auto fresh = declick (c.x, 60.0, kLook, &foundFresh);
+    const auto late = declick (c.x, 60.0, kLook, &foundLate, (int64_t { 1 } << 31) - static_cast<int64_t> (2.0 * kSr));
+    CHECK (foundFresh > 0);
+    CHECK (foundLate == foundFresh);
+    for (size_t i = 0; i < fresh.size(); ++i) REQUIRE (late[i] == fresh[i]);
 }
 
 TEST_CASE ("De-click in the chain, and Auto-Edit turns it on for a clicky take only", "[declick][autoedit]")

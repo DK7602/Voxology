@@ -61,6 +61,7 @@ void PitchCorrector::prepare (double sampleRate, int numChannels, bool lowLatenc
     design::apply (aa2, lp);
     hop = std::max (32, static_cast<int> (std::lround (0.00267 * sr)));
     levelCoeff = design::onePole (0.010, sr);
+    grainFade = 1.0 / (0.020 * sr);
     {
         // Vibrato band-pass over the pitch readings (one per hop): 5.5 Hz, Q 1.5 (0 dB at the centre).
         const double w0 = 2.0 * std::numbers::pi * 5.5 * hop / sr, al = std::sin (w0) / (2.0 * 1.5);
@@ -93,6 +94,7 @@ void PitchCorrector::reset() noexcept
     drift = 0.0;
     frameCount = 0;
     wasNeutral = true;
+    grainMix = 0.0;
 }
 
 int PitchCorrector::allowedMask (int key, int scale, int extraNotes, int onlyNotes, int removedNotes) noexcept
@@ -609,7 +611,8 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
         double m = 0.0;
         for (int c = 0; c < channels; ++c)
         {
-            const double v = ch[std::min (c, nch - 1)][i];
+            const double x = ch[std::min (c, nch - 1)][i];
+            const double v = std::isfinite (x) ? x : 0.0;   // a NaN / inf would stay in the level, the pitch and the rings
             in[static_cast<size_t> (c)][static_cast<size_t> (now & mask)] = v;
             auto& xo = xover[static_cast<size_t> (c)];
             loBand[static_cast<size_t> (c)][static_cast<size_t> (now & mask)] = xo[1].process (xo[0].process (v));
@@ -630,13 +633,16 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
 
         if (low) { processLow (ch, nch, i, neutral); continue; }
         const int64_t t = now - 1 - latency;   // the sample leaving now
-        if (neutral)
+        // Switched off, the grains keep going while the delayed input crossfades in (and the other way round when
+        // switched on): a voice moved off its pitch never jumps straight back to it (a click).
+        if (neutral && grainMix == 0.0)
         {
             if (! wasNeutral) wasNeutral = true;
             for (int c = 0; c < nch; ++c)
                 ch[c][i] = t >= 0 ? in[static_cast<size_t> (c)][static_cast<size_t> (t & mask)] : 0.0;
             continue;
         }
+        grainMix = neutral ? std::max (0.0, grainMix - grainFade) : std::min (1.0, grainMix + grainFade);
         if (wasNeutral)
         {
             // Starting up: grains begin just ahead of what's leaving; until they cover a sample,
@@ -650,6 +656,7 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
             drift = 0.0;
             for (auto& v : acc) std::fill (v.begin(), v.end(), 0.0);
             std::fill (wsum.begin(), wsum.end(), 0.0);
+            std::fill (wfloor.begin(), wfloor.end(), 0.0);
             markCount = markRead = 0;
         }
         synthesiseUpTo (now - 1 - static_cast<int64_t> (std::ceil (1.5 * maxP)));
@@ -665,6 +672,8 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
                 y = static_cast<double> (t) < synthStart ? in[static_cast<size_t> (c)][ti]
                   : wfloor[ti] > 0.0 ? acc[static_cast<size_t> (c)][ti] / std::max (ws, 1.0) * wfloor[ti] + highBand (c, t)
                   : ws > 1.0e-6 ? acc[static_cast<size_t> (c)][ti] / ws + highBand (c, t) : 0.0;
+            if (grainMix < 1.0 && t >= 0)
+                y = grainMix * y + (1.0 - grainMix) * in[static_cast<size_t> (c)][ti];
             ch[c][i] = y;
         }
         for (auto& v : acc) v[ti] = 0.0;

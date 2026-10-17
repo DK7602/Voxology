@@ -343,3 +343,20 @@ TEST_CASE ("AI pitch (CREPE tiny): accurate on clean notes; Honey Tune's AI chec
     CHECK (slipped.aiFixed >= 2);
     CHECK (back > 10);
 }
+
+TEST_CASE ("Honey Tune: analysis and render stop early when the plug-in closes (the cancel flag)", "[honey]")
+{
+    const auto x = sing (kLine);
+    const auto t = analyse (x, kSr);
+    const auto notes = findNotes (t);
+    REQUIRE (! notes.empty());
+    std::atomic<bool> stop { true };
+    CHECK (analyse (x, kSr, true, &stop).midi.empty());
+    const auto y = render (x, kSr, t, notes, kTransitionMs, &stop);
+    CHECK (y.size() == x.size());
+    for (float v : y) REQUIRE (v == 0.0f);   // (nothing rendered: thrown away by the caller)
+    // Never set: the same as without it.
+    stop = false;
+    const auto a = render (x, kSr, t, notes), b = render (x, kSr, t, notes, kTransitionMs, &stop);
+    for (size_t i = 0; i < a.size(); ++i) REQUIRE (a[i] == b[i]);
+}

@@ -4,6 +4,7 @@
 #include "VocalChain.h"
 
 #include <array>
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -59,6 +60,7 @@ struct AutoEditSettings
     bool beatKeyFromVoice = false;        // that key was learned from the voice (no beat to hear)
     const std::vector<float>* beat = nullptr;   // Vocal Fit: the beat from the side-chain, recorded with the vocal (mono, same length)
     bool unmaskOnBeat = false;            // a Voxology in BEAT mode is in the project (Unmask can already make room)
+    const std::atomic<bool>* cancel = nullptr;  // set it (another thread) to stop early: the plug-in is closing (result: not ok)
 };
 
 /** One explained decision: which module and control, the value chosen and why (plain language). */
@@ -158,7 +160,8 @@ BeatAnalysis analyseBeat (const std::vector<float>& beat, const std::vector<std:
 
 /** Measures a reference vocal. It should be the vocal on its own: a full song (beat + vocal) reads ~7 dB
     off the real vocal's tone (measured on 144 pro songs), so that gets a warning (it still works, roughly). */
-ReferenceProfile analyseReference (const std::vector<std::vector<float>>& audio, double sampleRate, const std::string& name);
+ReferenceProfile analyseReference (const std::vector<std::vector<float>>& audio, double sampleRate, const std::string& name,
+                                   const std::atomic<bool>* cancel = nullptr);
 
 /** The built-in reference library: finished pro vocals (measurements only), in menu order: Male, Female, Mixed. */
 const std::vector<ReferenceProfile>& builtinReferences();

@@ -38,7 +38,14 @@ public:
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
+    /** The DAW's own bypass (its power button): the dry vocal on both sides, delayed by the latency like Voxology's
+        own bypass, with the same 20 ms glide. (JUCE's default passed it undelayed while the DAW still made up for
+        the latency, so a bypassed vocal played early; a mono vocal also lost its right side.) */
+    void processBlockBypassed (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlockBypassed (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
     bool supportsDoublePrecisionProcessing() const override { return true; }
+    /** The DAW bypassed Voxology in the last block it played (any thread): it isn't processing the vocal now. */
+    bool isHostBypassed() const noexcept { return hostBypassed.load (std::memory_order_relaxed); }
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
@@ -47,7 +54,9 @@ public:
     bool acceptsMidi() const override { return true; }   // Pitch: MIDI notes / Learn
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 8.0; }   // delay + reverb tails
+    // Delay + reverb tails: a long Delay with 95 % Feedback rings for a minute. The DAW may stop calling a plug-in
+    // that has been silent for this long (8 s cut that off, and the delay later played the old echo it still held).
+    double getTailLengthSeconds() const override { return 60.0; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -139,7 +148,8 @@ public:
 
 private:
     template <typename Sample>
-    void processAnyPrecision (juce::AudioBuffer<Sample>& buffer, const juce::MidiBuffer& midi);
+    void processAnyPrecision (juce::AudioBuffer<Sample>& buffer, const juce::MidiBuffer& midi, bool hostBypass);
+    std::atomic<bool> hostBypassed { false };
     void handleMidi (const juce::MidiBuffer& midi) noexcept;
     std::atomic<float>* midiParam = nullptr;
     std::array<int, 128> midiHeld {};   // per note: how many times held (several channels)
@@ -147,11 +157,20 @@ private:
     std::atomic<int> midiLearned { 0 };   // Learn: the scale taught by MIDI (saved with the project)
 
     vox::VocalChain chain, recChain;    // recChain: Record mode (low latency), prepared alongside
-    bool usingRec = false;
+    std::atomic<bool> usingRec { false };
     std::atomic<float>* recParam = nullptr;
     std::atomic<int> wantedLatency { 0 };
-    vox::VocalChain& active() noexcept { return usingRec ? recChain : chain; }
-    void handleAsyncUpdate() override { setLatencySamples (wantedLatency.load()); }
+    vox::VocalChain& active() noexcept { return usingRec.load() ? recChain : chain; }
+    vox::VocalChain& standbyChain() noexcept { return usingRec.load() ? chain : recChain; }
+    void handleAsyncUpdate() override;
+    // Switching Record mode: the other chain is cleaned on the message thread after it was last used (a reset takes
+    // milliseconds: too long for the audio thread), hears the vocal for its latency, then crossfades in (20 ms).
+    enum : int { standbyClean = 0, standbyDirty = 1, standbyCleaning = 2 };
+    std::atomic<int> standby { standbyClean };
+    int switchPos = -1;                  // samples into a switch (-1 = none); audio thread
+    void cleanStandby() noexcept;
+    template <typename Sample>
+    void switchChains (juce::AudioBuffer<Sample>& buffer, int nch, int n) noexcept;
     vox::ChainParams chainParams;
     VoxParams::Reader reader;
     vox::LoudnessMeter inMeter, outMeter;

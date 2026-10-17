@@ -23,9 +23,11 @@
        DAW sees them; they can be automated or undone), a snapshot is kept for Undo, and the report
        is saved with the plug-in state.
 
-    The capture buffer is allocated once, for the highest supported sample rate, so nothing ever
-    reallocates while the audio thread may be writing. Each run has a session number; a result from
-    an older session is thrown away.
+    The capture buffers are allocated on the message thread when listening starts, for the sample rate
+    in use (a Voxology that never listens holds none). They only grow, and only while the audio thread
+    is outside capture() (it flags each call), so nothing reallocates while it may be writing. Each run
+    has a session number; a result from an older session is thrown away. Closing the plug-in stops a
+    run that's still working (the jobs check a flag), so the DAW never waits on it.
 
     Auto Analyze (after an Auto-Edit, when switched on): the same buffers keep listening while the song plays and the
     window is open. Every kVoiceSeconds of voice a background check measures the part (vox::findNewNeeds against what
@@ -49,47 +51,9 @@ public:
     template <typename Sample>
     void capture (const juce::AudioBuffer<Sample>& buffer, int numInputChannels, const juce::AudioBuffer<Sample>* side) noexcept
     {
-        const int st = stateFlag.load (std::memory_order_acquire);
-        if (st != listening && (st != watching || offline.load (std::memory_order_relaxed)))
-            return;
-        const int nch = std::min (numInputChannels, buffer.getNumChannels()), n = buffer.getNumSamples();
-        if (nch <= 0 || n == 0)
-            return;
-        Sample peak = 0;
-        for (int c = 0; c < nch; ++c)
-            peak = std::max (peak, buffer.getMagnitude (c, 0, n));
-        if (peak < static_cast<Sample> (1.0e-5))   // -100 dBFS: transport stopped, not a gap
-            return;
-        if (peak > static_cast<Sample> (0.01))     // -40 dBFS: someone is singing
-        {
-            heardAudio.store (true, std::memory_order_relaxed);
-            voiced.fetch_add (n, std::memory_order_relaxed);
-        }
-        int w = written.load (std::memory_order_acquire);
-        const int cap = capacity.load (std::memory_order_acquire);
-        const int todo = std::min (n, cap - w);
-        if (todo <= 0)
-            return;
-        const Sample* l = buffer.getReadPointer (0);
-        const Sample* r = buffer.getReadPointer (std::min (1, nch - 1));
-        for (int i = 0; i < todo; ++i)
-        {
-            captureL[static_cast<size_t> (w + i)] = static_cast<float> (l[i]);
-            captureR[static_cast<size_t> (w + i)] = static_cast<float> (r[i]);
-        }
-        const int scn = side != nullptr ? std::min (side->getNumChannels(), 2) : 0;
-        if (scn > 0 && side->getNumSamples() >= todo)
-        {
-            sideSeen.store (true, std::memory_order_relaxed);
-            const Sample* a = side->getReadPointer (0);
-            const Sample* b = side->getReadPointer (scn - 1);
-            for (int i = 0; i < todo; ++i)
-                captureBeat[static_cast<size_t> (w + i)] = static_cast<float> (0.5 * (static_cast<double> (a[i]) + static_cast<double> (b[i])));
-        }
-        else
-            std::fill_n (captureBeat.begin() + w, todo, 0.0f);
-        stereo.store (nch > 1, std::memory_order_relaxed);
-        written.compare_exchange_strong (w, w + todo, std::memory_order_acq_rel);
+        inCapture.store (true);   // (then the state: the message thread stops listening, then waits for this to clear)
+        captureBlock (buffer, numInputChannels, side);
+        inCapture.store (false, std::memory_order_release);
     }
 
     bool start();
@@ -145,6 +109,53 @@ public:
     bool dismissNeed (const juce::String& key);
 
 private:
+    template <typename Sample>
+    void captureBlock (const juce::AudioBuffer<Sample>& buffer, int numInputChannels, const juce::AudioBuffer<Sample>* side) noexcept
+    {
+        const int st = stateFlag.load();   // (after inCapture: see ensureBuffers)
+        if (st != listening && (st != watching || offline.load (std::memory_order_relaxed)))
+            return;
+        const int nch = std::min (numInputChannels, buffer.getNumChannels()), n = buffer.getNumSamples();
+        if (nch <= 0 || n == 0)
+            return;
+        Sample peak = 0;
+        for (int c = 0; c < nch; ++c)
+            peak = std::max (peak, buffer.getMagnitude (c, 0, n));
+        if (peak < static_cast<Sample> (1.0e-5))   // -100 dBFS: transport stopped, not a gap
+            return;
+        if (peak > static_cast<Sample> (0.01))     // -40 dBFS: someone is singing
+        {
+            heardAudio.store (true, std::memory_order_relaxed);
+            voiced.fetch_add (n, std::memory_order_relaxed);
+        }
+        int w = written.load (std::memory_order_acquire);
+        const int cap = capacity.load (std::memory_order_acquire);
+        const int todo = std::min (n, cap - w);
+        if (todo <= 0)
+            return;
+        const Sample* l = buffer.getReadPointer (0);
+        const Sample* r = buffer.getReadPointer (std::min (1, nch - 1));
+        for (int i = 0; i < todo; ++i)
+        {
+            captureL[static_cast<size_t> (w + i)] = static_cast<float> (l[i]);
+            captureR[static_cast<size_t> (w + i)] = static_cast<float> (r[i]);
+        }
+        const int scn = side != nullptr ? std::min (side->getNumChannels(), 2) : 0;
+        if (scn > 0 && side->getNumSamples() >= todo)
+        {
+            sideSeen.store (true, std::memory_order_relaxed);
+            const Sample* a = side->getReadPointer (0);
+            const Sample* b = side->getReadPointer (scn - 1);
+            for (int i = 0; i < todo; ++i)
+                captureBeat[static_cast<size_t> (w + i)] = static_cast<float> (0.5 * (static_cast<double> (a[i]) + static_cast<double> (b[i])));
+        }
+        else
+            std::fill_n (captureBeat.begin() + w, todo, 0.0f);
+        stereo.store (nch > 1, std::memory_order_relaxed);
+        written.compare_exchange_strong (w, w + todo, std::memory_order_acq_rel);
+    }
+
+    bool ensureBuffers();
     void timerCallback() override;
     void launchAnalysis();
     void apply (const vox::AutoEditResult& result, const vox::AutoEditSettings& settings);
@@ -165,8 +176,9 @@ public:
     std::function<bool()> unmaskOnBeatSource;
 private:
 
-    std::vector<float> captureL, captureR, captureBeat;
-    std::atomic<int> capacity { 0 };
+    std::vector<float> captureL, captureR, captureBeat;   // `allocated` samples each (message thread: ensureBuffers)
+    std::atomic<int> allocated { 0 }, capacity { 0 };      // capacity: what this sample rate may fill (<= allocated)
+    std::atomic<bool> inCapture { false };                 // the audio thread is inside capture()
     std::atomic<double> sampleRate { 0.0 };
     std::atomic<int> written { 0 }, voiced { 0 };
     std::atomic<int> stateFlag { idle };
@@ -212,7 +224,9 @@ private:
     std::atomic<int> refVersion { 0 };
     std::atomic<int> refGeneration { 0 };   // which reference choice is the newest (a file still loading loses to a newer one)
 
-    juce::ThreadPool pool { 1 };              // last: destroyed (and joined) first
+    std::atomic<bool> closing { false };      // the plug-in is going: running jobs stop early
+    // Last: destroyed (and joined) first. Low priority: the DAW and its audio come first.
+    juce::ThreadPool pool { 1, 0, juce::Thread::Priority::low };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AutoEditController)
 };

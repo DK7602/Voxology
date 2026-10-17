@@ -212,3 +212,62 @@ TEST_CASE ("Rider evens loud and quiet lines and doesn't lift the breaths betwee
         CHECK (after < before + 1.5);
     }
 }
+
+TEST_CASE ("Compressor, Rider and the low cut glide back when switched off (no jump), then pass exactly", "[modules]")
+{
+    // They used to jump to unity in one sample: a step of the whole gain change (and the low cut's filtering).
+    const auto x = testsig::vocal (kSr, 3.0, -60.0, -14.0);
+    size_t at = static_cast<size_t> (1.5 * kSr);   // switched off while she sings (the loudest moment, on a block edge)
+    for (size_t i = at; i < static_cast<size_t> (2.5 * kSr); ++i) if (std::abs (x[i]) > std::abs (x[at])) at = i;
+    at -= at % 64;
+    auto check = [&x, at] (auto& on, auto& sw, const auto& params, const auto& offParams, size_t window = 48)
+    {
+        const auto ref = run (on, params, x, 64);
+        sw.prepare (kSr, 1);
+        sw.setParams (params);
+        std::vector<double> y (x.begin(), x.end());
+        for (size_t s = 0; s < y.size(); s += 64)
+        {
+            if (s == at) sw.setParams (offParams);
+            double* ptr = y.data() + s;
+            sw.process (&ptr, 1, static_cast<int> (std::min<size_t> (64, y.size() - s)));
+        }
+        double did = 0.0, err = 0.0;
+        for (size_t i = at; i < at + window; ++i)
+        {
+            did = std::max (did, std::abs (ref[i] - static_cast<double> (x[i])));
+            err = std::max (err, std::abs (y[i] - ref[i]));
+        }
+        CHECK (did > 1.0e-3);
+        CHECK (err < 0.15 * did);
+        for (size_t i = at + static_cast<size_t> (0.5 * kSr); i < x.size(); ++i) REQUIRE (y[i] == static_cast<double> (x[i]));
+    };
+    {
+        INFO ("Compressor");
+        CompParams p; p.peakThrDb = -20.0; p.thrDb = -30.0; p.ratio = 4.0; p.makeupDb = 8.0;
+        CompParams off = p; off.enabled = false;
+        VocalCompressor a, b;
+        check (a, b, p, off);
+    }
+    {
+        INFO ("Rider");
+        RiderParams p; p.rangeDb = 12.0; p.targetDb = -8.0;
+        RiderParams off = p; off.rangeDb = 0.0;
+        Rider a, b;
+        check (a, b, p, off);
+    }
+    {
+        INFO ("Cleanup low cut");
+        CleanupParams p; p.lowCutHz = 250.0;
+        CleanupParams off = p; off.enabled = false;
+        Cleanup a, b;
+        check (a, b, p, off);
+    }
+    {
+        INFO ("Cleanup gate, closed when switched off: it opens at its own speed (1 ms), as for a word");
+        CleanupParams p; p.gateThrDb = 0.0; p.gateRangeDb = 20.0;   // (closed all the time)
+        CleanupParams off = p; off.gateRangeDb = 0.0;
+        Cleanup a, b;
+        check (a, b, p, off, 4);
+    }
+}

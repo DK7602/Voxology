@@ -198,6 +198,7 @@ void HoneyPanel::refresh()
             break;
         case 1: status = "Listening to the clip, then an AI pitch check (a few seconds per minute of audio)..."; break;
         case 3: status = "Couldn't read the clip's audio."; break;
+        case 4: status = "This clip is too long for Honey Tune (not enough memory to hold it): split it into shorter clips."; break;
         default: status = model == nullptr ? howToOpen() : "Waiting for the clip's audio..."; break;
     }
     updateNoteControls();
