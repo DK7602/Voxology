@@ -1834,7 +1834,18 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   project values checked, how to open it per DAW (status line), auval aufx Hny1 Voxa.
 - Auto-Edit: a failed try keeps the last report (+ failed {summary, tip}), Key MANUAL kept, UNDO only what Auto-Edit /
   APPLY / a chain changed, stale checks dropped, clip watch: no false "clipped" on 16-bit, notes that change the level
-  say to run Auto-Edit again, Unmask keeps the beat full in a long break, Pitch tells rap by held notes.
+  say to run Auto-Edit again (live TOO HOT / CLIPPED RECORDING tips too), Unmask keeps the beat full in a long break
+  (slow vocal level, bands within 30 dB). Behaviour changes to listen for: Pitch goes by held notes (< 25 % held = off
+  in every style but Robot; Trap Lead gets a PITCH OFF FOR RAP card; the user's Gallas / Schaf rap read 11 - 14 %), a
+  reference moves the de-ess "s" target at most 3 dB (Gallas + "Female singer, warm" 93 -> 73 %), the spectrum reads
+  the same at any rate (FFT grows with the rate, partial bins, DC removed: 125 - 250 Hz moved up to 2.5 dB at 48 k), a
+  full-song check counts only 40 - 100 Hz (-15 dB), QUIET RECORDING is a calm card (clip gain up, AUTO-EDIT again),
+  silent phrase tails read as dry.
+- Plug-in: the 74 parameter pointers resolved once (attach), not by name each block. tools/linkcheck/hostcheck.cpp
+  (vox_hostcheck, local only, off by default): the real processor driven like a DAW (bypass, REC switch, MIDI in BEAT).
+  Audible: Delay / Reverb off fade in ~30 ms (no ring-out), the DAW's bypass glides 20 ms, a REC switch ~40 - 60 ms
+  crossfade (short smear), 60 s tail (hosts may process silent tracks longer). De-Esser, Dynamic EQ, Saturation still
+  jump when switched off (not in the audit).
 - Threads: chain name / unmask source under styleLock, Auto-Edit restore on the message thread, gestures for every
   change Voxology makes itself, AU track name via callAsync.
 - UI: dots / cells click the right module, knobs (wheel, arrow keys, one undo step per move), MY CHAINS name on open,

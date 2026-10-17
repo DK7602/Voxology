@@ -1327,9 +1327,10 @@ function inputTips() {
   const t = [];
   if (M.clipTotal > 0) t.push(tip("CLIPPED RECORDING", `The vocal arrives with flat-topped (clipped) peaks: ${M.clipTotal} so far. That's distortion baked in before Voxology, and it can crackle once the vocal is brightened and compressed.`, "warn",
     { need: "Yes if you hear crackle on loud words.", steps: ["Zoom in on the vocal's {daw:clip} in {daw}: flat tops mean it was recorded too hot. Re-record with the loudest words peaking around -10 dB.",
-      "No flat tops in the {daw:clip}? Then something before Voxology on this track clips it (a plug-in above Voxology, or a bounce made through a limiter)."] }));
+      "No flat tops in the {daw:clip}? Then something before Voxology on this track clips it (a plug-in above Voxology, or a bounce made through a limiter).",
+      "Then press AUTO-EDIT again: the gate, Rider and Compressor are set for the level it heard."] }));
   if (M.hotPeak > 0.05) t.push(tip("TOO HOT", `The vocal reaches +${fmtNum(M.hotPeak, 1)} dB coming in: over the top of the meter. {daw} doesn't clip inside the mix, but a limiter later (like one on the {daw:master} channel) has to squash it hard, and that crackles.`, "warn",
-    { need: "Yes. Leave room for the rest of the chain.", steps: ["Lower the vocal's clip gain (or the plug-in above Voxology) until the loudest words peak around -6 dB here. In {daw}: {daw:clipGain}.", "Check your {daw:master} limiter only shaves 1 - 3 dB."] }));
+    { need: "Yes. Leave room for the rest of the chain.", steps: ["Lower the vocal's clip gain (or the plug-in above Voxology) until the loudest words peak around -6 dB here. In {daw}: {daw:clipGain}.", "Check your {daw:master} limiter only shaves 1 - 3 dB.", "Then press AUTO-EDIT again: the gate, Rider and Compressor are set for the level it heard."] }));
   return t;
 }
 
