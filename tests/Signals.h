@@ -16,6 +16,28 @@ namespace testsig {
 
 using Clip = std::vector<std::vector<float>>;
 
+/** Random numbers that are the same with every compiler. (std::normal_distribution and uniform_real_distribution
+    aren't: MSVC and GCC draw different signals from the same seed, so a test tuned on Linux could fail only on
+    Windows, where it can't be reproduced.) */
+struct Rng
+{
+    explicit Rng (unsigned seed) : gen (seed) {}
+    double uniform() { return (static_cast<double> (gen() & 0xffffffffu) + 0.5) / 4294967296.0; }   // (0, 1)
+    double normal()   // Box-Muller
+    {
+        if (hasSpare) { hasSpare = false; return spare; }
+        const double r = std::sqrt (-2.0 * std::log (uniform())), a = 2.0 * std::numbers::pi * uniform();
+        spare = r * std::sin (a);
+        hasSpare = true;
+        return r * std::cos (a);
+    }
+    std::mt19937 gen;
+    double spare = 0.0;
+    bool hasSpare = false;
+};
+struct Normal { double operator() (Rng& r) const { return r.normal(); } };
+struct Uniform { double operator() (Rng& r) const { return r.uniform(); } };
+
 inline double rmsDb (const std::vector<float>& x, size_t from = 0, size_t to = 0)
 {
     if (to == 0 || to > x.size()) to = x.size();
@@ -39,8 +61,8 @@ inline std::vector<float> sine (double sr, double freq, double peakDb, double se
 inline std::vector<float> vocal (double sr, double seconds, double noiseDb = -62.0, double sibDb = -14.0, unsigned seed = 3,
                                  double f0 = 140.0, bool boomy = false)
 {
-    std::mt19937 rng (seed);
-    std::normal_distribution<double> white (0.0, 1.0);
+    Rng rng (seed);
+    Normal white;
     const size_t n = static_cast<size_t> (sr * seconds);
     std::vector<double> voice (n, 0.0), sib (n, 0.0);
 
@@ -113,12 +135,13 @@ inline std::vector<float> pink (double sr, double seconds, double rmsDb = -20.0,
     const size_t want = static_cast<size_t> (sr * seconds);
     size_t n = 1;
     while (n < want) n *= 2;
-    std::mt19937 rng (seed);
-    std::normal_distribution<double> g (0.0, 1.0);
+    Rng rng (seed);
+    Normal g;
     std::vector<std::complex<double>> spec (n);
     for (size_t k = 1; k < n / 2; ++k)
     {
-        spec[k] = std::complex<double> (g (rng), g (rng)) / std::sqrt (static_cast<double> (k));
+        const double re = g (rng), im = g (rng);   // (in this order on every compiler)
+        spec[k] = std::complex<double> (re, im) / std::sqrt (static_cast<double> (k));
         spec[n - k] = std::conj (spec[k]);
     }
     for (auto& c : spec) c = std::conj (c);   // inverse FFT = conj (fft (conj (X))) / n
@@ -173,8 +196,8 @@ inline std::vector<float> sung (double sr, double seconds, double f0 = 220.0)
     that moves around f0), a pause every 6 syllables. Clearly pitched, but nothing is held. */
 inline std::vector<float> rapped (double sr, double seconds, double f0 = 150.0, unsigned seed = 4)
 {
-    std::mt19937 rng (seed);
-    std::uniform_real_distribution<double> u (0.0, 1.0);
+    Rng rng (seed);
+    Uniform u;
     const size_t n = static_cast<size_t> (sr * seconds);
     std::vector<double> hz (n, f0), env (n, 0.0);
     size_t i = 0;

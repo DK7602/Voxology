@@ -385,8 +385,9 @@ TEST_CASE ("Auto-Edit: a reference's soft s can't de-ess a rap vocal into a lisp
     CHECK (deessWhy (r).find ("as close to the reference's") != std::string::npos);
     CHECK (deessWhy (r6).find ("where the reference") != std::string::npos);   // inside the 3 dB: its own level
 
-    // Rap, Balanced (-4 dB of its own): this vocal's "s" sits about there, so it's matched, not called sharp.
-    const auto rb = autoEdit ({ x }, kSr, { 1, 1, 0.0, warm });
+    // Rap, Balanced (-4 dB of its own): a vocal whose "s" sits just under that is matched, not called sharp.
+    const auto softer = testsig::vocal (kSr, 14.0, -95.0, -4.2, 5);
+    const auto rb = autoEdit ({ softer }, kSr, { 1, 1, 0.0, warm });
     const auto why = deessWhy (rb);
     INFO (why);
     REQUIRE (rb.params.deEsser.amount > 0.0);
