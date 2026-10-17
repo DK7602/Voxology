@@ -6,6 +6,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <string>
+#include <utility>
 
 using namespace vox;
 
@@ -39,11 +41,23 @@ ClipWatch::Counts watch (std::vector<double> x)
     }
     return total;
 }
+/** Stretches of 3+ samples at the clip level that end before the audio does (a flat top is judged as it ends). */
 int flatStretches (const std::vector<double>& x, double lvl)
 {
     int n = 0, run = 0;
-    for (double v : x) { if (std::abs (v) >= lvl) { if (++run == 3) ++n; } else run = 0; }
+    for (double v : x) { if (std::abs (v) >= lvl) ++run; else { if (run >= 3) ++n; run = 0; } }
     return n;
+}
+/** Peak-normalised to peakDb, then (optionally) hard-clipped at clipDb, then rounded to 16 bits like a 16-bit WAV. */
+std::vector<double> as16Bit (const std::vector<double>& x, double peakDb, double clipDb = 0.0)
+{
+    double peak = 0.0;
+    for (double v : x) peak = std::max (peak, std::abs (v));
+    const double g = std::pow (10.0, peakDb / 20.0) / peak, ceiling = std::pow (10.0, clipDb / 20.0);
+    std::vector<double> y (x.size());
+    for (size_t i = 0; i < x.size(); ++i)
+        y[i] = std::round (std::clamp (std::clamp (x[i] * g, -ceiling, ceiling), -1.0, 32767.0 / 32768.0) * 32768.0) / 32768.0;
+    return y;
 }
 }
 
@@ -76,6 +90,45 @@ TEST_CASE ("Clip watch: finds clipping at any level, never on clean audio; count
     const auto h = watch (hot);
     CHECK (h.overs > 1000);
     CHECK (h.runs == 0);
+}
+
+TEST_CASE ("Clip watch: a 16-bit recording's rounded peaks aren't clipping, at any level; real clipping in 16-bit is found", "[clipwatch]")
+{
+    // A smooth peak in 16-bit audio can sit on one value for 3 samples or more (more often the quieter it is): v0.51
+    // read 16-bit vocals as clipped, more at -25 dBFS than at -10. Tones, a sung vowel and a rap voice, 16-bit, from
+    // -12 to -30 dBFS: never clipped.
+    std::vector<std::pair<const char*, std::vector<double>>> clean;
+    for (double hz : { 80.0, 110.0, 200.0, 440.0 })
+    {
+        std::vector<double> t (static_cast<size_t> (2.0 * kSr));
+        for (size_t i = 0; i < t.size(); ++i) t[i] = std::sin (2.0 * std::numbers::pi * hz * static_cast<double> (i) / kSr + 0.1);
+        clean.emplace_back ("tone", t);
+    }
+    clean.emplace_back ("sung vowel", sungVowel (3.0));
+    const auto rap = testsig::vocal (kSr, 6.0, -70.0, -10.0);
+    clean.emplace_back ("rap voice", std::vector<double> (rap.begin(), rap.end()));
+    for (const auto& [what, x] : clean)
+        for (double peakDb : { -12.0, -18.0, -24.0, -30.0 })
+        {
+            INFO (what << " at " << peakDb << " dBFS");
+            CHECK (watch (as16Bit (x, peakDb)).runs == 0);
+        }
+
+    // Clipped, then stored in 16 bits: at full scale (the interface), and a quiet take clipped by something before it.
+    for (const auto& [what, x] : clean)
+    {
+        if (std::string (what) == "tone") continue;
+        for (double clipDb : { 0.0, -20.0 })
+        {
+            INFO (what << " clipped at " << clipDb << " dBFS");
+            const auto c = as16Bit (x, clipDb + 6.0, clipDb);
+            const int truth = flatStretches (c, std::pow (10.0, clipDb / 20.0) * 0.999);
+            REQUIRE (truth > 20);
+            const int found = watch (c).runs;
+            CHECK (found > truth / 2);
+            CHECK (found <= truth);
+        }
+    }
 }
 
 TEST_CASE ("Clip watch in the chain and Auto-Edit: no latency, audio untouched, clipping reported", "[clipwatch]")
