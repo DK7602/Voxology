@@ -130,6 +130,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #chain { left: 16px; top: 150px; width: 344px; height: 686px; --glass: rgba(255, 250, 240, 0.22); }
 #hive { position: relative; height: 600px; margin: 8px 0 0 10px; }
 .hex { position: absolute; width: 108px; height: 124px; cursor: pointer; transition: transform 0.12s, filter 0.12s; }
+/* Only the hexagons take clicks: the cell's box is a rectangle that overlaps its neighbours (rows are 79 px apart). */
+.hex { pointer-events: none; }
+.hex > .rim, .hex > .face { pointer-events: auto; }
 .hex { filter: drop-shadow(0 5px 6px rgba(60, 40, 6, 0.45)); }
 .hex .rim { position: absolute; inset: 0; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
   background: linear-gradient(200deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 35%), var(--gold-grad); }
