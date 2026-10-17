@@ -184,3 +184,85 @@ TEST_CASE ("Auto-Edit doesn't flatten a vocal that's already compressed (a secon
     CHECK (p2 > 2.2);
     CHECK (p2 > p1 - 0.6);
 }
+
+TEST_CASE ("Auto-Edit: a note that has you change the vocal's level says to run Auto-Edit again", "[autoedit]")
+{
+    // The gate, Rider and Compressor thresholds are levels: after the advised clip-gain cut (TOO HOT) the gate chopped
+    // words and the compressor stopped working. Every such note ends with "press AUTO-EDIT again".
+    auto hasNote = [] (const AutoEditResult& r, const char* title)
+    {
+        for (const auto& n : r.notes) if (n.rfind (title, 0) == 0) return n;
+        return std::string();
+    };
+    auto checkAgain = [] (const AutoEditResult& r)
+    {
+        for (const auto& n : r.notes)
+        {
+            INFO (n);
+            const bool changesLevel = n.find ("clip gain") != std::string::npos || n.find ("gain knob") != std::string::npos
+                                      || n.find ("interface gain") != std::string::npos || n.find ("{daw:toMono}") != std::string::npos;
+            if (changesLevel) CHECK (n.find ("press AUTO-EDIT again") != std::string::npos);
+        }
+    };
+
+    auto hot = testsig::vocal (kSr, 14.0, -70.0, -14.0, 5);
+    for (auto& v : hot) v *= 4.0f;   // peaks over full scale (a float mix doesn't clip)
+    const auto rh = autoEdit ({ hot }, kSr, { 0, 1, 0.0 });
+    REQUIRE (rh.ok);
+    CHECK (rh.analysis.peakDb > 0.0);
+    CHECK (hasNote (rh, "TOO HOT").find ("press AUTO-EDIT again") != std::string::npos);
+    checkAgain (rh);
+    checkNotes (rh);
+
+    // Quiet: Output keeps the level it came in at, so the note mustn't promise the level back.
+    auto quiet = testsig::vocal (kSr, 14.0, -95.0, -14.0, 5);
+    for (auto& v : quiet) v *= 0.05f;
+    const auto rq = autoEdit ({ quiet }, kSr, { 0, 1, 0.0 });
+    REQUIRE (rq.ok);
+    CHECK (rq.analysis.peakDb < -24.0);
+    CHECK (rq.outputLufs == Approx (rq.analysis.inputLufs).margin (1.0));
+    const auto qn = hasNote (rq, "QUIET RECORDING");
+    REQUIRE (! qn.empty());
+    CHECK (qn.find ("adds the level back") == std::string::npos);
+    CHECK (qn.find ("press AUTO-EDIT again") != std::string::npos);
+    checkAgain (rq);
+    checkNotes (rq);
+
+    // One-sided: folding to mono changes the level too.
+    const auto x = testsig::vocal (kSr, 14.0, -70.0, -14.0, 5);
+    const auto ro = autoEdit ({ x, std::vector<float> (x.size(), 0.0f) }, kSr, { 0, 1, 0.0 });
+    REQUIRE (ro.ok);
+    CHECK (hasNote (ro, "ONE-SIDED").find ("press AUTO-EDIT again") != std::string::npos);
+    checkAgain (ro);
+    checkNotes (ro);
+}
+
+TEST_CASE ("Auto-Edit: the too-little-voice tip names the real minimum; uneven stereo channels are fine", "[autoedit]")
+{
+    const auto r = autoEdit ({ testsig::vocal (kSr, 2.0) }, kSr, {});
+    REQUIRE_FALSE (r.ok);
+    CHECK (r.tip.find ("at least 3 seconds") != std::string::npos);
+
+    // A right channel shorter than the left (v0.51 read past its end).
+    const auto x = testsig::vocal (kSr, 6.0);
+    const std::vector<float> shorter (x.begin(), x.begin() + static_cast<std::ptrdiff_t> (x.size() / 2));
+    const auto a = analyseVocal ({ x, shorter }, kSr);
+    CHECK (a.stereo);
+    CHECK (std::isfinite (a.voiceRmsDb));
+}
+
+TEST_CASE ("Auto-Edit: digital silence after phrases reads as dry, not unknown", "[autoedit]")
+{
+    // Gaps of exact silence (a gated or edited vocal): the tail read -216 dB and counted as "unknown".
+    const auto x = testsig::vocal (kSr, 14.0, -400.0, -14.0, 5);
+    const auto a = analyseVocal ({ x }, kSr);
+    CHECK (a.tailDb == Approx (-80.0));
+    const auto r = autoEdit ({ x }, kSr, { 1, 1, 0.0 });
+    REQUIRE (r.ok);
+    for (const auto& reason : r.reasons)
+        if (reason.module == "cleanup" && reason.control == "Room")
+        {
+            INFO (reason.why);
+            CHECK (reason.why.find ("almost nothing rings on") != std::string::npos);
+        }
+}

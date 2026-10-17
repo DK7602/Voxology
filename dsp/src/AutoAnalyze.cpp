@@ -55,7 +55,8 @@ std::vector<AnalyzeNeed> findNewNeeds (const VocalAnalysis& was, const BeatAnaly
                      " where the waveform hit the top), which wasn't in the part Auto-Edit heard. No plug-in can fully undo clipping: it sounds like crackle or fizz on loud words."
                      "\nNEED: Yes, if you hear crackle on the loud words. If it's only a spot or two you can't hear, no."
                      "\nSTEP: Re-record this part with the mic input (preamp) gain 6 dB lower: aim for peaks around -10 dB on {daw}'s meter."
-                     "\nSTEP: Or, if it was a printed / bounced vocal, bounce it again with the level lower.",
+                     "\nSTEP: Or, if it was a printed / bounced vocal, bounce it again with the level lower."
+                     "\nSTEP: Then press AUTO-EDIT again: the gate, Rider and Compressor are set for the level it heard, so they need setting for the new one.",
              {});
 
     // Level: a new take, or the singer closer / farther from the mic.

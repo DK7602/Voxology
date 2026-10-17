@@ -92,7 +92,8 @@ struct VocalAnalysis
     double sibilantShare = 0.0;        // % of singing frames that are sibilant
     double rangeDb = 0.0;              // loud vs quiet phrases (P90 - P10 of 400 ms levels, dB)
     double microDynDb = 0.0;           // word-to-word punch: P95 - P50 of 50 ms levels while singing (dB; low = compressed)
-    double tailDb = -120.0;            // what rings on after a phrase ends (100 - 300 ms later vs the phrase's end, dB); -120 = unknown
+    double tailDb = -120.0;            // what rings on after a phrase ends (100 - 300 ms later vs the phrase's end, dB); -120 = unknown,
+                                       // -80 at the lowest (digital silence after a phrase: dry)
     double lowBassDb = -120.0;         // energy under 100 Hz vs the whole (dB): a beat's kick and 808 live there
     bool stereo = false, oneSided = false;
 };

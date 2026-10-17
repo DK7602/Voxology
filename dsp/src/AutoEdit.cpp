@@ -298,6 +298,10 @@ Signal renderMono (const Signal& x, double sr, const ChainParams& p)
 }
 
 /** Everything off (neutral), the starting point for each partial render. */
+/** The last step of every note that has you change the vocal's level: the gate, Rider and Compressor thresholds are
+    levels (dBFS), set for the level Auto-Edit heard (turned down 10 dB, the gate would cut words and the compressor stop). */
+constexpr const char* kAgainStep = "\nSTEP: Then press AUTO-EDIT again: the gate, Rider and Compressor are set for the level it heard, so they need setting for the new one.";
+
 constexpr double kNoiseTargetSnr = 48.0;   // Auto-Edit's noise reduction aims the noise this far under the voice (dB)
 constexpr double kRoomTailFrom = -34.0;    // ... and Room starts when more than this rings on after a phrase (dB)
 
@@ -487,7 +491,10 @@ double punchDb (const Frames& f, const std::vector<bool>& mask)
 }
 
 /** Space: at each phrase end (level falls from within 12 dB of the loud part to 20 dB under it and stays
-    there for 300 ms), what's left 100 - 300 ms later vs the last 200 ms of the phrase. -120 = unknown. */
+    there for 300 ms), what's left 100 - 300 ms later vs the last 200 ms of the phrase. -120 = unknown.
+    Floored at kDryTailDb: digital silence after a phrase (a gated or edited vocal) is as dry as it gets. */
+constexpr double kDryTailDb = -80.0;   // dry pro vocals read -37 dB or lower; the driest Cymatics dry stem -72 dB
+
 double spaceDb (const Frames& f)
 {
     std::vector<double> live;
@@ -506,7 +513,7 @@ double spaceDb (const Frames& f)
         if (! (f.rmsDb[i - 1] > loud - 12.0 && f.rmsDb[i] <= loud - 12.0)) continue;
         bool quiet = true;   // stays down for 300 ms (a real phrase end, not a gap between syllables)
         for (size_t j = i + 10; j < i + 30; ++j) quiet = quiet && f.rmsDb[j] < loud - 20.0;
-        if (quiet) tails.push_back (meanDb (i + 10, i + 30) - meanDb (i - 20, i));
+        if (quiet) tails.push_back (std::max (kDryTailDb, meanDb (i + 10, i + 30) - meanDb (i - 20, i)));
     }
     return tails.size() >= 2 ? percentile (tails, 50.0) : -120.0;
 }
@@ -631,7 +638,7 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
     if (audio.size() >= 2)
     {
         double el = 0.0, er = 0.0;
-        for (size_t i = 0; i < audio[0].size(); ++i) { el += audio[0][i] * audio[0][i]; er += audio[1][i] * audio[1][i]; }
+        for (size_t i = 0; i < std::min (audio[0].size(), audio[1].size()); ++i) { el += audio[0][i] * audio[0][i]; er += audio[1][i] * audio[1][i]; }
         a.stereo = true;
         a.oneSided = std::abs (energyDb (el + 1.0e-30) - energyDb (er + 1.0e-30)) > 30.0;
     }
@@ -1065,7 +1072,8 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         r.ok = false;
         r.summary = "Auto-Edit heard only " + num (a.voicedSeconds) + " s of vocal, too little to judge it.";
         r.tipTitle = "PLAY A SUNG PART";
-        r.tip = "Start playback where you're rapping or singing (a verse or hook), then press Auto-Edit. It needs about 12 seconds of voice.";
+        r.tip = "Start playback where you're rapping or singing (a verse or hook), then press Auto-Edit. It needs at least 3 seconds of voice; "
+                "about 12 seconds (it listens that long) works best.";
         return r;
     }
     ChainParams p = neutralChain();
@@ -1080,22 +1088,28 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                            " times. Those spots are distorted in the recording itself; no plug-in can fully undo that."
                            "\nNEED: Yes if you hear crackle on loud words. If it sounds fine to you, it's optional."
                            "\nSTEP: Next take, turn the gain knob on your audio interface down until your loudest words peak around -10 dB on {daw}'s meter."
-                           "\nSTEP: For this take, re-record the clipped lines if you can, or repair them with a declipper: {daw:declipper}.");
+                           "\nSTEP: For this take, re-record the clipped lines if you can, or repair them with a declipper: {daw:declipper}."
+                           + std::string (kAgainStep));
     if (a.peakDb > 0.0)
         r.notes.push_back ("TOO HOT: the vocal reaches +" + db (a.peakDb) + ", over the top of the meter, before Voxology. {daw} doesn't clip inside a mix, "
                            "but anything that limits later (like a limiter on the {daw:master} channel) has to squash it hard, which crackles."
                            "\nNEED: Yes if you hear crackle or the master limiter works hard."
                            "\nSTEP: Lower the vocal's clip gain (or the fader of whatever feeds it) until the loudest words peak around -6 dB. In {daw}: {daw:clipGain}."
+                           + std::string (kAgainStep) +
                            "\nSTEP: Check your master limiter only shaves 1 - 3 dB.");
     if (a.peakDb < -24.0)
-        r.notes.push_back ("QUIET RECORDING: your loudest words only reach " + db (a.peakDb) + ". It works, but the noise of your room and interface sits closer to your voice."
-                           "\nNEED: No. Auto-Edit adds the level back."
+        r.notes.push_back ("QUIET RECORDING: your loudest words only reach " + db (a.peakDb) + ". Voxology keeps your vocal at the level it came in "
+                           "(so your fader doesn't jump), so it stays this quiet in your mix, and the noise of your room and interface sits closer to your voice."
+                           "\nNEED: Yes if you can't get the vocal loud enough with its fader. Otherwise optional."
+                           "\nSTEP: For this take, turn the vocal's clip gain up (the volume of the audio itself, before any plug-in) until your loudest words peak around -10 dB."
+                           + std::string (kAgainStep) +
                            "\nSTEP: Next take, turn the interface gain up until your loudest words peak around -10 dB.");
     if (a.oneSided)
         r.notes.push_back ("ONE-SIDED TRACK: the vocal is only in one side of a stereo track, so it will sit off to one side."
                            "\nNEED: Yes."
-                           "\nSTEP: Next time, {daw:monoTrack}."
-                           "\nSTEP: For this take: {daw:toMono}.");
+                           "\nSTEP: For this take: {daw:toMono}."
+                           + std::string (kAgainStep) +
+                           "\nSTEP: Next time, {daw:monoTrack}.");
     const bool fewPitches = a.f0Median <= 0.0;
     if (fewPitches && a.rumbleDb > -10.0)
         r.notes.push_back ("NOT A SOLO VOCAL?: this sounds more like a beat or a full mix than a voice (strong bass, no clear pitch). Voxology is made for a single vocal track."

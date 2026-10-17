@@ -142,7 +142,7 @@ Every knob:
 - **Speed**: slow (0.1 - 0.5 Hz) is smooth; fast (2 - 5 Hz) wobbles. **Width**: 0 = the same both sides, 100 = left and right move opposite ways.
 - The level stays the same at any Amount (within 1 dB). No added delay, so it works in Record mode too. Auto-Edit never changes it.
 
-Each cell shows a short status under its name (for example "idle", "flat", "cut 80 Hz"). Cleanup's status reads "clipped in!" or "too hot in!" when the recording itself is distorted: fix that at the recording stage.
+Each cell shows a short status under its name (for example "idle", "flat", "cut 80 Hz"). Cleanup's status reads "clipped in!" or "too hot in!" when the recording itself is distorted: fix that at the recording stage. "Clipped" means flat-topped peaks cut off by a clipper; the rounded peaks of a quiet 16-bit recording don't count.
 
 ## Learn panel: explanations, warnings and the report
 
@@ -184,6 +184,7 @@ How to read a warning card:
 - **Red card** = worth your attention (for example CLIPPED RECORDING).
 - **Blue card** = calm: optional or just information. In red mode (logo clicked) these turn red too.
 - Every card answers **"Do I need to fix it?"** and then gives numbered steps. If the answer is "No" or "Optional", you can ignore it.
+- A card that has you change the vocal's level (TOO HOT, QUIET RECORDING, ONE-SIDED TRACK, CLIPPED RECORDING) ends with **press AUTO-EDIT again**: the gate, Rider and Compressor are set for the level Auto-Edit heard, so after a clip-gain change the gate would cut words and the compressor stop working. Voxology's Output keeps your vocal at the level it came in, so a quiet recording stays quiet: turn its clip gain up, then run Auto-Edit again.
 
 ## My Chains: your setup, on every song
 
@@ -344,7 +345,7 @@ finished mix into the master. In the same Cubase project they tell each other wh
 - The bottom bar shows **MIXOLOGY ✓** when a Mixology is in the project (hover it for what that means).
 - **Recorded too hot?** When Auto-Edit finds the vocal clipped or over the top of the meter in the recording itself,
   Voxology tells Mixology: its Auto Mix, Balance, Polish and Vocal Pocket then say "fix this first" above their changes
-  (lower the clip gain, then let Mixology hear it again), because their level moves depend on it.
+  (lower the clip gain, press AUTO-EDIT in Voxology again, then let Mixology hear it again), because their level moves depend on it.
 - **One DAW for all three**: the DAW in the bottom bar is shared the same way as the song style.
 - **One song style for all three**: pick the song's genre and style in **Mixology or Masterology** (the list of 75).
   Voxology knows it within a second, also after you reopen the project; there's no song picker in Voxology itself,
@@ -363,7 +364,7 @@ finished mix into the master. In the same Cubase project they tell each other wh
 | Chrome says the download is dangerous | Ctrl+J, then Keep. The plug-ins aren't code-signed yet |
 | Voxology or Honey Tune doesn't show in Cubase | Check the .vst3 files are in C:\Program Files\Common Files\VST3, then Studio > VST Plug-in Manager > Rescan. Voxology is in the Vocals folder |
 | Voxology shows plain sliders instead of the honeycomb | WebView2 is missing on Windows. Install Microsoft Edge WebView2 Runtime, then reopen |
-| Auto-Edit says TRY AGAIN | It didn't hear enough voice. Play a part with singing or rapping for at least 12 seconds |
+| Auto-Edit says TRY AGAIN | It heard less than 3 seconds of voice. Play a part with singing or rapping (about 12 seconds of voice works best) |
 | Crackle or harsh distortion | Look at Cleanup: "clipped in!" means the recording itself is clipped. Record again with the mic gain lower |
 | Pitch sounds off-key | Check the key on the Pitch page. Send the beat to the side-chain, or pick the key under MANUAL |
 | A sample-pack vocal or beat sounds off-key | Pack file names are often wrong about the key (in one tested pack, 24 of 54 were a semitone off). Leave Key on AUTO, or check the key by ear or with a key app |
