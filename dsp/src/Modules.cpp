@@ -19,6 +19,7 @@ void Cleanup::prepare (double sampleRate, int numChannels, int lookAheadAvailabl
     envRelease = onePole (0.030, sr);
     gainAttack = onePole (0.001, sr);
     gainRelease = onePole (0.120, sr);
+    cutFade = 1.0 / (0.020 * sr);
     reset();
 }
 
@@ -27,6 +28,7 @@ void Cleanup::reset() noexcept
     for (auto& c : hp) for (auto& f : c) f.reset();
     for (auto& c : listenHp) for (auto& f : c) f.reset();
     designedHz = -1.0;
+    cutMix = 0.0;
     std::fill (peakLine.begin(), peakLine.end(), 0.0);
     peakPos = 0;
     listened = false;
@@ -75,15 +77,27 @@ void Cleanup::listen (const double* const* in, int nch, int n) noexcept
 void Cleanup::process (double* const* ch, int nch, int n) noexcept
 {
     nch = std::min (nch, channels);
-    if (isNeutral (params))
+    // Switched off (or the low cut / the gate alone): the low cut fades out over 20 ms and a closed gate opens at its
+    // own speed (both used to jump at once: a click), then it is exact again.
+    const bool off = isNeutral (params);
+    if (off && cutMix == 0.0 && gain == 1.0)
     {
-        if (gain != 1.0 || designedHz > 0.0) reset();
+        if (designedHz > 0.0) reset();
         return;
     }
 
-    const bool lowCut = params.lowCutHz > kLowCutOffHz;
-    if (lowCut) updateFilter();
-    const bool gateOn = params.gateRangeDb >= 0.05;
+    const bool lowCut = ! off && params.lowCutHz > kLowCutOffHz;
+    if (lowCut)
+    {
+        updateFilter();
+        if (cutMix == 0.0)
+        {
+            // Coming on: start the filter fresh (it begins transparent, so it needs no fade in).
+            for (auto& c : hp) for (auto& f : c) f.reset();
+            cutMix = 1.0;
+        }
+    }
+    const bool gateOn = ! off && params.gateRangeDb >= 0.05;
     const double openLevel = fromDb (params.gateThrDb), closeLevel = fromDb (params.gateThrDb - kHysteresisDb);
     // Listening ahead: the gate also closes that much earlier, so hold it open that much longer.
     const bool ahead = listened;
@@ -92,32 +106,40 @@ void Cleanup::process (double* const* ch, int nch, int n) noexcept
 
     for (int i = 0; i < n; ++i)
     {
+        if (! lowCut && cutMix > 0.0) cutMix = std::max (0.0, cutMix - cutFade);
         double peak = 0.0;
         for (int c = 0; c < nch; ++c)
         {
             double x = ch[c][i];
-            if (lowCut)
-                x = hp[static_cast<size_t> (c)][1].process (hp[static_cast<size_t> (c)][0].process (x));
+            if (cutMix > 0.0)
+            {
+                const double y = hp[static_cast<size_t> (c)][1].process (hp[static_cast<size_t> (c)][0].process (x));
+                x = cutMix == 1.0 ? y : cutMix * y + (1.0 - cutMix) * x;
+            }
             ch[c][i] = x;
             peak = std::max (peak, std::abs (x));
         }
-        if (! gateOn)
+        if (! gateOn && gain == 1.0)
             continue;
 
-        if (ahead)
+        double target = 0.0;   // (gate off: open)
+        if (gateOn)
         {
-            // What the input had lookAheadAvailable - kLookAheadSeconds ago: kLookAheadSeconds ahead of this sample.
-            peakLine[static_cast<size_t> (peakPos)] = heard[static_cast<size_t> (i)];
-            if (++peakPos >= static_cast<int> (peakLine.size())) peakPos = 0;
-            peak = peakLine[static_cast<size_t> (peakPos)];
+            if (ahead)
+            {
+                // What the input had lookAheadAvailable - kLookAheadSeconds ago: kLookAheadSeconds ahead of this sample.
+                peakLine[static_cast<size_t> (peakPos)] = heard[static_cast<size_t> (i)];
+                if (++peakPos >= static_cast<int> (peakLine.size())) peakPos = 0;
+                peak = peakLine[static_cast<size_t> (peakPos)];
+            }
+            env = peak > env ? peak : env + (peak - env) * envRelease;
+            if (env > openLevel) { open = true; holdLeft = hold; }
+            else if (env < closeLevel && holdLeft <= 0) open = false;
+            if (holdLeft > 0) --holdLeft;
+            target = open ? 0.0 : -params.gateRangeDb;
         }
-        env = peak > env ? peak : env + (peak - env) * envRelease;
-        if (env > openLevel) { open = true; holdLeft = hold; }
-        else if (env < closeLevel && holdLeft <= 0) open = false;
-        if (holdLeft > 0) --holdLeft;
 
         // Fade in dB (like a fader), so the last few dB down don't take ages.
-        const double target = open ? 0.0 : -params.gateRangeDb;
         if (gainDb != target)
         {
             gainDb += (target - gainDb) * (target > gainDb ? gainAttack : gainRelease);
@@ -128,7 +150,6 @@ void Cleanup::process (double* const* ch, int nch, int n) noexcept
             ch[c][i] *= gain;
         minGainDb = std::min (minGainDb, toDb (gain));
     }
-    if (! gateOn) { gain = 1.0; gainDb = 0.0; }
 }
 
 // ================================================================================================
@@ -324,6 +345,7 @@ void Rider::prepare (double sampleRate, int numChannels)
     peakFall = onePole (2.0, sr);
     design::apply (bodyLp, design::butterworth (false, 800.0, sr));
     design::apply (airHp, design::butterworth (true, 1500.0, sr));
+    offGlide = onePole (0.020, sr);
     reset();
 }
 
@@ -342,7 +364,16 @@ void Rider::process (double* const* ch, int nch, int n) noexcept
     nch = std::min (nch, channels);
     if (isNeutral (params))
     {
-        if (gain != 1.0 || primed) reset();
+        if (gain == 1.0 && ! primed)
+            return;
+        // Switched off: the fader glides back to 0 dB first, then it stops (exact again). It used to jump there.
+        for (int i = 0; i < n; ++i)
+        {
+            gain += (1.0 - gain) * offGlide;
+            if (std::abs (gain - 1.0) < 1.0e-5) { reset(); return; }   // (the rest of the block untouched)
+            for (int c = 0; c < nch; ++c)
+                ch[c][i] *= gain;
+        }
         return;
     }
     // How long the line's level is averaged over (voiced time only), and how fast the fader follows it.
@@ -412,6 +443,7 @@ void VocalCompressor::reset() noexcept
     sustained = 0.0;
     makeup = fromDb (params.makeupDb);
     mixGlide = std::clamp (params.mix, 0.0, 100.0) / 100.0;
+    running = false;
 }
 
 double VocalCompressor::peakGrDb (double levelDb, double thrDb) noexcept
@@ -438,16 +470,19 @@ double VocalCompressor::levelGrDb (double levelDb, double thrDb, double ratio) n
 void VocalCompressor::process (double* const* ch, int nch, int n) noexcept
 {
     nch = std::min (nch, channels);
-    if (isNeutral (params))
+    // Switched off: the mix fades to the dry vocal (20 ms) first, then it stops (exact again). The gain used to jump
+    // back to unity at once (a step of the whole gain reduction and makeup).
+    const bool off = isNeutral (params);
+    if (off && ! running)
     {
-        if (gr1 != 0.0 || gr2 != 0.0 || ms2 != 0.0) reset();
         makeup = 1.0;
         return;
     }
+    running = true;
     const bool peakOn = params.peakThrDb <= -0.05;
     const bool levelOn = params.ratio >= 1.005;
     const double makeupTarget = fromDb (params.makeupDb);
-    const double mixTarget = std::clamp (params.mix, 0.0, 100.0) / 100.0;
+    const double mixTarget = off ? 0.0 : std::clamp (params.mix, 0.0, 100.0) / 100.0;
 
     for (int i = 0; i < n; ++i)
     {
@@ -480,6 +515,7 @@ void VocalCompressor::process (double* const* ch, int nch, int n) noexcept
 
         makeup += (makeupTarget - makeup) * glide;
         mixGlide += (mixTarget - mixGlide) * glide;
+        if (off && mixGlide < 1.0e-4) { reset(); makeup = 1.0; return; }   // (the rest of the block untouched)
         const double wet = fromDb (gr1 + gr2) * makeup;
         const double g = mixGlide * wet + (1.0 - mixGlide);
         for (int c = 0; c < nch; ++c)

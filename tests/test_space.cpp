@@ -92,3 +92,60 @@ TEST_CASE ("Doubler adds two copies, wider with Width", "[space][doubler]")
     CHECK (corr < 0.6);   // two different takes, left and right
     CHECK (10 * std::log10 (el / x.size()) < testsig::rmsDb (s));   // quieter than the lead
 }
+
+TEST_CASE ("Doubler, Delay and Reverb fade out when switched off (no click), then add nothing", "[space]")
+{
+    // Cut in one sample, a loud tail clicked. Now it's still nearly all there 1 ms after the switch, and gone
+    // (exactly) a moment later.
+    const auto s = testsig::vocal (kSr, 3.0, -80.0, -10.0);
+    const std::vector<double> x (s.begin(), s.end());
+    auto check = [&x] (auto& on, auto& sw, const auto& params, const auto& offParams)
+    {
+        const auto ref = wet (on, params, x);
+        // Switch at the loudest moment between 1.5 and 2.5 s (on a 16-sample block edge).
+        size_t at = static_cast<size_t> (1.5 * kSr);
+        for (size_t i = at; i < static_cast<size_t> (2.5 * kSr); ++i) if (std::abs (ref[0][i]) > std::abs (ref[0][at])) at = i;
+        at -= at % 16;
+        sw.prepare (kSr);
+        sw.setParams (params);
+        std::array<std::vector<double>, 2> y { std::vector<double> (x.size(), 0.0), std::vector<double> (x.size(), 0.0) };
+        for (size_t b = 0; b < x.size(); b += 16)
+        {
+            if (b == at) sw.setParams (offParams);
+            double* o[2] = { y[0].data() + b, y[1].data() + b };
+            sw.process (x.data() + b, o, 2, static_cast<int> (std::min<size_t> (16, x.size() - b)));
+        }
+        double tail = 0.0, err = 0.0;
+        for (size_t c = 0; c < 2; ++c)
+            for (size_t i = at; i < at + 48; ++i)
+            {
+                tail = std::max (tail, std::abs (ref[c][i]));
+                err = std::max (err, std::abs (y[c][i] - ref[c][i]));
+            }
+        CHECK (tail > 1.0e-3);
+        CHECK (err < 0.1 * tail);
+        for (size_t c = 0; c < 2; ++c)
+            for (size_t i = at + static_cast<size_t> (0.5 * kSr); i < x.size(); ++i) REQUIRE (y[c][i] == 0.0);
+    };
+    {
+        INFO ("Doubler");
+        DoublerParams p; p.amount = 100.0;
+        DoublerParams off = p; off.enabled = false;
+        Doubler a, b;
+        check (a, b, p, off);
+    }
+    {
+        INFO ("Delay");
+        DelayParams p; p.mix = 50.0; p.feedback = 60.0; p.duck = 0.0;
+        DelayParams off = p; off.mix = 0.0;
+        EchoDelay a, b;
+        check (a, b, p, off);
+    }
+    {
+        INFO ("Reverb");
+        ReverbParams p; p.mix = 50.0; p.decayS = 2.5; p.duck = 0.0;
+        ReverbParams off = p; off.enabled = false;
+        Reverb a, b;
+        check (a, b, p, off);
+    }
+}

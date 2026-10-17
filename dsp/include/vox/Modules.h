@@ -78,6 +78,7 @@ private:
     std::vector<double> peakLine;   // those peaks held back so they lead the audio by kLookAheadSeconds
     int peakPos = 0;
     int lookAhead = 0;
+    double cutMix = 0.0, cutFade = 0.0;   // the low cut's share (1 = on); switched off it fades out (20 ms)
     double env = 0.0, envRelease = 0.0, gain = 1.0, gainDb = 0.0, gainAttack = 0.0, gainRelease = 0.0;
     int holdLeft = 0;
     bool open = true;
@@ -215,6 +216,7 @@ private:
     double bodyMs = 0.0, airMs = 0.0, fastCoeff = 0.0;
     double line = 0.0;                            // the line's level (energy), voiced sound only
     double recentPeak = 0.0, peakFall = 0.0;      // the recent loud words (energy): fading word tails don't count
+    double offGlide = 0.0;                        // switched off: the gain glides back to 0 dB (20 ms)
     bool primed = false;
 };
 
@@ -264,6 +266,7 @@ private:
     double gr1 = 0.0, gr2 = 0.0, ms2 = 0.0, sustained = 0.0, pkEnv = 0.0, pkRel = 0.0;
     double a1 = 0.0, r1 = 0.0, a2 = 0.0, msC = 0.0, susC = 0.0, makeup = 1.0, mixGlide = 1.0, glide = 0.0;
     double minPeak = 0.0, minLevel = 0.0;
+    bool running = false;   // switched off, it keeps running until its mix has faded to the dry vocal
 };
 
 } // namespace vox

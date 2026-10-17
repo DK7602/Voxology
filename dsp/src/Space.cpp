@@ -40,12 +40,11 @@ void Doubler::reset() noexcept
 
 void Doubler::process (const double* mono, double* const* out, int nch, int n) noexcept
 {
-    if (isNeutral (params))
-    {
-        if (level != 0.0) reset();
+    // Switched off: the copies fade out first, then it stops (exact again). Cut in one sample, a loud double clicked.
+    const bool off = isNeutral (params);
+    if (off && level == 0.0)
         return;
-    }
-    const double target = 0.7 * std::clamp (params.amount, 0.0, 100.0) / 100.0;
+    const double target = off ? 0.0 : 0.7 * std::clamp (params.amount, 0.0, 100.0) / 100.0;
     const double w = std::clamp (params.width, 0.0, 100.0) / 100.0;
     const double near = 0.5 + 0.5 * w, far = 0.5 - 0.5 * w;
     constexpr double twoPi = 2.0 * std::numbers::pi;
@@ -66,6 +65,7 @@ void Doubler::process (const double* mono, double* const* out, int nch, int n) n
         const double l = lpL.process (hpL.process (v[0]));
         const double r = lpR.process (hpR.process (v[1]));
         level += (target - level) * glide;
+        if (off && level < 1.0e-4) { reset(); return; }   // (the rest of the block untouched)
         if (nch >= 2)
         {
             out[0][i] += level * (near * l + far * r);
@@ -112,11 +112,11 @@ double EchoDelay::delaySeconds (const DelayParams& p) noexcept
 
 void EchoDelay::process (const double* mono, double* const* out, int nch, int n) noexcept
 {
-    if (isNeutral (params))
-    {
-        if (! silent) reset();
+    // Switched off: the echoes fade out first (the wet glide), then it stops (exact again). Cut in one sample, a loud
+    // repeat clicked.
+    const bool off = isNeutral (params);
+    if (off && silent)
         return;
-    }
     silent = false;
     if (std::abs (params.toneHz - designedTone) > 0.5)
     {
@@ -127,7 +127,7 @@ void EchoDelay::process (const double* mono, double* const* out, int nch, int n)
     const double target = delaySeconds (params) * sr;
     if (curDelay < 0.0) curDelay = target;
     const double fb = std::clamp (params.feedback, 0.0, 95.0) / 100.0;
-    const double wetTarget = std::clamp (params.mix, 0.0, 100.0) / 100.0;
+    const double wetTarget = off ? 0.0 : std::clamp (params.mix, 0.0, 100.0) / 100.0;
 
     for (int i = 0; i < n; ++i)
     {
@@ -149,6 +149,7 @@ void EchoDelay::process (const double* mono, double* const* out, int nch, int n)
             lineR.push (0.0);
         }
         wet += (wetTarget * duckGain (duckEnv, params.duck) - wet) * glide;
+        if (off && wet < 1.0e-4) { reset(); return; }   // (the rest of the block untouched)
         const double wl = l, wr = params.pingPong ? r : l;
         if (nch >= 2)
         {
@@ -212,16 +213,16 @@ void Reverb::design() noexcept
 
 void Reverb::process (const double* mono, double* const* out, int nch, int n) noexcept
 {
-    if (isNeutral (params))
-    {
-        if (! silent) reset();
+    // Switched off: the tail fades out first (the wet glide), then it stops (exact again). Cut in one sample, a loud
+    // tail clicked.
+    const bool off = isNeutral (params);
+    if (off && silent)
         return;
-    }
     silent = false;
     if (params.decayS != designedDecay || params.toneHz != designedTone)
         design();
     const double preSamples = std::clamp (params.predelayMs, 0.0, 200.0) * 0.001 * sr;
-    const double wetTarget = std::clamp (params.mix, 0.0, 100.0) / 100.0;
+    const double wetTarget = off ? 0.0 : std::clamp (params.mix, 0.0, 100.0) / 100.0;
     constexpr double householder = 2.0 / kLines;
     constexpr std::array<double, kLines> inSign { 1, -1, 1, 1, -1, 1, -1, -1 };
     const double outScale = 0.6;
@@ -252,6 +253,7 @@ void Reverb::process (const double* mono, double* const* out, int nch, int n) no
         const double l = outScale * (o[0] - o[2] + o[4] - o[6] + 0.5 * (o[1] - o[5]));
         const double r = outScale * (o[1] - o[3] + o[5] - o[7] + 0.5 * (o[2] - o[6]));
         wet += (wetTarget * duckGain (duckEnv, params.duck) - wet) * glide;
+        if (off && wet < 1.0e-4) { reset(); return; }   // (the rest of the block untouched)
         if (nch >= 2)
         {
             out[0][i] += wet * l;
