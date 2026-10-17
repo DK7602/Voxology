@@ -1,31 +1,26 @@
-# Two real Voxology processors linked through Unmask (see linkcheck.cpp). Local check, not built by default.
+# Real Voxology processors in a console app. Local checks, not built by default.
 # The plug-in's own sources are compiled in (a plug-in target can't be linked into an app).
-juce_add_console_app(vox_linkcheck PRODUCT_NAME "vox_linkcheck" NEEDS_WEB_BROWSER TRUE)
-target_sources(vox_linkcheck PRIVATE
-    linkcheck.cpp
-    ${CMAKE_SOURCE_DIR}/plugin/PluginProcessor.cpp
-    ${CMAKE_SOURCE_DIR}/plugin/AutoEditController.cpp
-    ${CMAKE_SOURCE_DIR}/plugin/VoxWebEditor.cpp)
-target_include_directories(vox_linkcheck PRIVATE ${CMAKE_SOURCE_DIR}/plugin)
-target_compile_definitions(vox_linkcheck PRIVATE
-    JUCE_WEB_BROWSER=1 JUCE_USE_CURL=0 JUCE_USE_MP3AUDIOFORMAT=1
-    JucePlugin_Name="Voxology" JUCE_STANDALONE_APPLICATION=1)
-target_link_libraries(vox_linkcheck PRIVATE vox_dsp VoxologyUIData
-    juce::juce_audio_utils juce::juce_dsp juce::juce_gui_extra)
+function(vox_processor_check name source)
+    juce_add_console_app(${name} PRODUCT_NAME "${name}" NEEDS_WEB_BROWSER TRUE)
+    target_sources(${name} PRIVATE
+        ${source}
+        ${CMAKE_SOURCE_DIR}/plugin/PluginProcessor.cpp
+        ${CMAKE_SOURCE_DIR}/plugin/AutoEditController.cpp
+        ${CMAKE_SOURCE_DIR}/plugin/ChainLibrary.cpp
+        ${CMAKE_SOURCE_DIR}/plugin/VoxWebEditor.cpp)
+    target_include_directories(${name} PRIVATE ${CMAKE_SOURCE_DIR}/plugin)
+    target_compile_definitions(${name} PRIVATE
+        JUCE_WEB_BROWSER=1 JUCE_USE_CURL=0 JUCE_USE_MP3AUDIOFORMAT=1 JUCE_MODAL_LOOPS_PERMITTED=1
+        JucePlugin_Name="Voxology" JucePlugin_VersionString="${PROJECT_VERSION}"
+        JucePlugin_VersionCode=${VOX_VERSION_CODE} JUCE_STANDALONE_APPLICATION=1)
+    target_link_libraries(${name} PRIVATE vox_dsp VoxologyUIData
+        juce::juce_audio_utils juce::juce_dsp juce::juce_gui_extra)
+endfunction()
+math(EXPR VOX_VERSION_CODE "(${PROJECT_VERSION_MAJOR} << 16) + (${PROJECT_VERSION_MINOR} << 8) + ${PROJECT_VERSION_PATCH}" OUTPUT_FORMAT HEXADECIMAL)
 
-# The side-chain key check (see sidecheck.cpp).
-juce_add_console_app(vox_sidecheck PRODUCT_NAME "vox_sidecheck" NEEDS_WEB_BROWSER TRUE)
-target_sources(vox_sidecheck PRIVATE
-    sidecheck.cpp
-    ${CMAKE_SOURCE_DIR}/plugin/PluginProcessor.cpp
-    ${CMAKE_SOURCE_DIR}/plugin/AutoEditController.cpp
-    ${CMAKE_SOURCE_DIR}/plugin/VoxWebEditor.cpp)
-target_include_directories(vox_sidecheck PRIVATE ${CMAKE_SOURCE_DIR}/plugin)
-target_compile_definitions(vox_sidecheck PRIVATE
-    JUCE_WEB_BROWSER=1 JUCE_USE_CURL=0 JUCE_USE_MP3AUDIOFORMAT=1
-    JucePlugin_Name="Voxology" JUCE_STANDALONE_APPLICATION=1)
-target_link_libraries(vox_sidecheck PRIVATE vox_dsp VoxologyUIData
-    juce::juce_audio_utils juce::juce_dsp juce::juce_gui_extra)
+vox_processor_check(vox_linkcheck linkcheck.cpp)     # two processors linked through Unmask
+vox_processor_check(vox_sidecheck sidecheck.cpp)     # the side-chain key
+vox_processor_check(vox_hostcheck hostcheck.cpp)     # the DAW's bypass, NaN input, Record mode switch, MIDI in BEAT
 
 # The side-chain through the real VST3 wrapper (see vst3sidecheck.cpp).
 juce_add_console_app(vox_vst3sidecheck PRODUCT_NAME "vox_vst3sidecheck")
