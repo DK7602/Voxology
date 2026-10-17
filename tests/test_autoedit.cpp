@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
+#include <random>
 #include <set>
 #include <thread>
 
@@ -354,5 +355,70 @@ TEST_CASE ("Auto-Edit Pitch: rap stays untuned (pitched but nothing held), singi
         INFO (why << " (expected " << off << " cents)");
         CHECK (why.find ("You sing on average " + std::to_string (std::lround (off)) + " cents away") != std::string::npos);
         CHECK (why.find (scale == 2 ? "the nearest note of D minor" : "the nearest of the 12 notes") != std::string::npos);
+    }
+}
+
+TEST_CASE ("Auto-Edit: a reference's soft s can't de-ess a rap vocal into a lisp", "[autoedit][deess][reference]")
+{
+    // "Female singer, warm" has gentle s sounds (-10 dB vs the voice): on a rap vocal the De-Esser was pushed to the
+    // reference's -10 dB (Rap, Strong: 100 %, 12 dB of cut on the user's raps). The target now stays within 3 dB of the
+    // style's own, and an "s" that's fine for the style is only "brighter than the reference's", not sharp.
+    const auto* warm = findBuiltinReference ("Female singer, warm");
+    REQUIRE (warm != nullptr);
+    REQUIRE (warm->sibilanceDb < -9.0);
+    auto deessWhy = [] (const AutoEditResult& r)
+    {
+        for (const auto& x : r.reasons) if (x.module == "deess" && x.control == "Amount") return x.why;
+        return std::string();
+    };
+    const auto x = testsig::vocal (kSr, 14.0, -95.0, -3.0, 5);
+
+    // Rap, Strong: its own target -5 dB, so a reference takes it to -8 dB at the lowest: the warm one's -10 dB acts as -8.
+    ReferenceProfile at8 = *warm, at6 = *warm;
+    at8.sibilanceDb = -8.0;
+    at6.sibilanceDb = -6.0;
+    const auto r = autoEdit ({ x }, kSr, { 1, 2, 0.0, warm }), r8 = autoEdit ({ x }, kSr, { 1, 2, 0.0, &at8 }), r6 = autoEdit ({ x }, kSr, { 1, 2, 0.0, &at6 });
+    REQUIRE (r.ok);
+    INFO (deessWhy (r));
+    CHECK (r.params.deEsser.amount > 0.0);
+    CHECK (r.params.deEsser.amount == r8.params.deEsser.amount);
+    CHECK (deessWhy (r).find ("as close to the reference's") != std::string::npos);
+    CHECK (deessWhy (r6).find ("where the reference") != std::string::npos);   // inside the 3 dB: its own level
+
+    // Rap, Balanced (-4 dB of its own): this vocal's "s" sits about there, so it's matched, not called sharp.
+    const auto rb = autoEdit ({ x }, kSr, { 1, 1, 0.0, warm });
+    const auto why = deessWhy (rb);
+    INFO (why);
+    REQUIRE (rb.params.deEsser.amount > 0.0);
+    CHECK (why.find ("sharp") == std::string::npos);
+    CHECK (why.find ("brighter than the reference's") != std::string::npos);
+    CHECK (why.find ("120") == std::string::npos);   // "brings them to -120 dB" (too few s left to read) reads "under" the target
+    checkNotes (rb);
+}
+
+TEST_CASE ("Auto-Edit's spectrum reads the same at every sample rate", "[autoedit][eq]")
+{
+    // A fixed 4096-point FFT gave 47 Hz bins at 192 kHz (pink noise read +3.8 dB at 100 Hz), whole bins put a low band's
+    // edges up to a bin off (-2.4 dB at 160 Hz at 96 kHz), and the same vocal's low bands read up to 5 dB apart between rates.
+    const auto& bands = analysisBands();
+    std::vector<double> at48;
+    for (double sr : { 48000.0, 44100.0, 88200.0, 96000.0, 192000.0 })
+    {
+        INFO (sr << " Hz");
+        const auto p = analyseVocal ({ testsig::pink (sr, 8.0) }, sr);
+        REQUIRE (p.bandDb.size() == bands.size());
+        for (size_t k = 0; k < bands.size(); ++k)
+        {
+            INFO (bands[k] << " Hz band: " << p.bandDb[k] << " dB");
+            CHECK (std::abs (p.bandDb[k]) < 1.0);   // pink: flat
+        }
+        const auto v = analyseVocal ({ testsig::vocal (sr, 8.0, -62.0, -14.0, 3) }, sr);
+        if (at48.empty()) at48 = v.bandDb;
+        for (size_t k = 0; k < bands.size(); ++k)
+            if (bands[k] <= 10000.0 && at48[k] > -15.0)   // where the voice has something (not the leakage between its harmonics)
+            {
+                INFO (bands[k] << " Hz band: " << v.bandDb[k] << " dB, at 48 kHz " << at48[k] << " dB");
+                CHECK (v.bandDb[k] == Approx (at48[k]).margin (1.0));
+            }
     }
 }

@@ -191,19 +191,33 @@ std::vector<double> pitchTrack (const Signal& x, double sr, const std::vector<bo
 }
 
 // --- spectrum ----------------------------------------------------------------------------------
-constexpr size_t kFftN = 4096;
-constexpr double kFullSongLowDb = -14.0;   // tuned on MUSDB18-7 (vocals vs mixtures)
+constexpr double kFullSongLowDb = -15.0;   // 40 - 100 Hz vs the whole: see fullSong()
 
-std::vector<double> averageSpectrum (const Signal& x, const std::vector<bool>& mask, int hop, std::vector<bool>* only = nullptr)
+/** The average spectrum's FFT size: about 11 Hz per bin at any sample rate (4096 at 44.1 / 48 kHz, 8192 at 88.2 /
+    96 kHz, 16384 at 176.4 / 192 kHz). A fixed 4096 gave 47 Hz bins at 192 kHz, too coarse for the low bands: the same
+    vocal's 100 Hz band read 8 dB apart at 44.1 and 192 kHz. */
+size_t spectrumSize (double sr)
 {
-    std::vector<double> acc (kFftN / 2 + 1, 0.0);
+    size_t n = 4096;
+    while (sr / static_cast<double> (n) > 12.5) n *= 2;
+    return n;
+}
+
+std::vector<double> averageSpectrum (const Signal& x, double sr, const std::vector<bool>& mask, int hop, std::vector<bool>* only = nullptr)
+{
+    const size_t n = spectrumSize (sr);
+    std::vector<double> acc (n / 2 + 1, 0.0), frame (n);
+    // A DC offset (some interfaces add one) out first: through the window it leaks into the lowest bins, where it would
+    // read as rumble or a beat's low end. The whole take's offset, not each frame's (a frame's mean is partly the voice).
+    const double dc = x.empty() ? 0.0 : std::accumulate (x.begin(), x.end(), 0.0) / static_cast<double> (x.size());
     int count = 0;
-    for (size_t s = 0; s + kFftN <= x.size(); s += kFftN / 2)
+    for (size_t s = 0; s + n <= x.size(); s += n / 2)
     {
-        const size_t mid = (s + kFftN / 2) / static_cast<size_t> (hop);
+        const size_t mid = (s + n / 2) / static_cast<size_t> (hop);
         if (mid >= mask.size() || ! mask[mid]) continue;
         if (only && ! (*only)[mid]) continue;
-        const auto p = powerSpectrum (x.data() + s, kFftN);
+        for (size_t i = 0; i < n; ++i) frame[i] = x[s + i] - dc;
+        const auto p = powerSpectrum (frame.data(), n);
         for (size_t i = 0; i < acc.size(); ++i) acc[i] += p[i];
         ++count;
     }
@@ -211,16 +225,21 @@ std::vector<double> averageSpectrum (const Signal& x, const std::vector<bool>& m
     return acc;
 }
 
+/** Energy between lo and hi: each bin stands for its width around its centre and adds the part of it inside the band
+    (whole bins only made a narrow low band read up to 2 dB off, by where its edges fell). DC (bin 0) is left out. */
 double bandEnergy (const std::vector<double>& spec, double lo, double hi, double sr)
 {
-    const double binHz = sr / static_cast<double> (kFftN);
-    const auto a = static_cast<size_t> (std::max (1.0, std::ceil (lo / binHz)));
-    const auto b = std::min (spec.size() - 1, static_cast<size_t> (std::floor (hi / binHz)));
+    if (spec.size() < 2) return 0.0;
+    const double binHz = sr / static_cast<double> (2 * (spec.size() - 1));
+    const auto first = static_cast<size_t> (std::max (1.0, std::floor (lo / binHz + 0.5)));
+    const auto last = std::min (spec.size() - 1, static_cast<size_t> (std::max (0.0, std::floor (hi / binHz + 0.5))));
     double e = 0.0;
-    if (b < a)
-        e = spec[std::min (spec.size() - 1, static_cast<size_t> (std::lround (0.5 * (lo + hi) / binHz)))] * (hi - lo) / binHz;
-    else
-        for (size_t i = a; i <= b; ++i) e += spec[i];
+    for (size_t i = first; i <= last; ++i)
+    {
+        const double c = static_cast<double> (i) * binHz;
+        const double a = std::max (lo, c - 0.5 * binHz), b = std::min (hi, c + 0.5 * binHz);
+        if (b > a) e += spec[i] * (b - a) / binHz;
+    }
     return e;
 }
 
@@ -539,8 +558,12 @@ double spaceDb (const Frames& f)
     return tails.size() >= 2 ? percentile (tails, 50.0) : -120.0;
 }
 
-/** A beat under the vocal: lots of energy under 100 Hz (kick, 808, bass). On MUSDB18-7, isolated vocals
-    sit at -20 dB or lower (95 %), full mixes at -10.5 dB or higher (95 %). */
+/** A beat under the vocal: lots of energy at 40 - 100 Hz (kick, 808, bass). Rumble (AC, traffic, the mic stand) sits
+    mostly lower: counting everything under 100 Hz (tuned on MUSDB18-7 at -14 dB), the user's own acapellas read up to
+    -12.8 dB and were called full songs. At 40 - 100 Hz: the user's, Looperman's and Cymatics' acapellas -18.6 dB or
+    lower (but a pitched-down effect vocal, -5.5), their full mixes and a rap with its beat under it -12.2 dB or higher
+    (a mix with only an acoustic guitar under it reads -17: no beat). MUSDB18 vocals read -21 dB or lower (95 %) even
+    with all of their low end counted. */
 bool fullSong (const VocalAnalysis& a)
 {
     return a.lowBassDb > kFullSongLowDb;
@@ -588,6 +611,7 @@ const std::array<StyleSpec, kStyles> kSpecs {{
 }};
 
 constexpr std::array<double, kIntensities> kIntensityScale { 0.6, 0.85, 1.1 };
+constexpr double kRefSibRangeDb = 3.0;   // a reference's "s" level moves the De-Esser's target at most this far from the style's
 constexpr std::array<double, kIntensities> kSpaceScale { 0.75, 1.0, 1.25 };
 
 } // namespace
@@ -713,7 +737,7 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
         a.key = detectKey (a.pitchMidi);
     }
 
-    const auto spec = averageSpectrum (raw, mask, f.hop);
+    const auto spec = averageSpectrum (raw, sr, mask, f.hop);
     double total = 0.0;
     for (size_t i = 1; i < spec.size(); ++i) total += spec[i];
     a.rumbleDb = energyDb (bandEnergy (spec, 1.0, 60.0, sr)) - energyDb (total);
@@ -729,8 +753,9 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
     a.microDynDb = punchDb (f, mask);
     a.tailDb = spaceDb (f);
     {
-        double low = 0.0, all = 0.0;
-        for (size_t i = 1; i < spec.size(); ++i) { all += spec[i]; if (static_cast<double> (i) * sr / static_cast<double> (kFftN) < 100.0) low += spec[i]; }
+        double all = 0.0;
+        for (size_t i = 1; i < spec.size(); ++i) all += spec[i];
+        const double low = bandEnergy (spec, 40.0, 100.0, sr);
         a.lowBassDb = energyDb (low) - energyDb (all);
     }
     return a;
@@ -811,15 +836,16 @@ BeatAnalysis analyseBeat (const std::vector<float>& beatIn, const std::vector<st
     if (! std::isfinite (b.lufs)) b.lufs = -120.0;
 
     // Tone: both measured over the same moments (the vocal singing over the beat).
-    const auto beatSpec = averageSpectrum (beat, both, bf.hop), voiceSpec = averageSpectrum (voice, both, bf.hop);
+    const auto beatSpec = averageSpectrum (beat, sr, both, bf.hop), voiceSpec = averageSpectrum (voice, sr, both, bf.hop);
     b.bandDb = bandBalance (beatSpec, sr);
     const auto vb = bandBalance (voiceSpec, sr);
     b.overDb.resize (vb.size());
     for (size_t k = 0; k < vb.size(); ++k) b.overDb[k] = vb[k] - b.bandDb[k];
     const double mid = bandEnergy (beatSpec, 500.0, 2000.0, sr);
     b.brightDb = energyDb (bandEnergy (beatSpec, 5000.0, std::min (12000.0, 0.49 * sr), sr)) - energyDb (mid);
-    double low = 0.0, all = 0.0;
-    for (size_t i = 1; i < beatSpec.size(); ++i) { all += beatSpec[i]; if (static_cast<double> (i) * sr / static_cast<double> (kFftN) < 100.0) low += beatSpec[i]; }
+    double all = 0.0;
+    for (size_t i = 1; i < beatSpec.size(); ++i) all += beatSpec[i];
+    const double low = bandEnergy (beatSpec, 0.0, 100.0, sr);
     b.lowDb = energyDb (low) - energyDb (all);
 
     // How much it moves: its 50 ms levels while it plays.
@@ -1130,7 +1156,7 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
     if (a.peakDb < -24.0)
         r.notes.push_back ("QUIET RECORDING: your loudest words only reach " + db (a.peakDb) + ". Voxology keeps your vocal at the level it came in "
                            "(so your fader doesn't jump), so it stays this quiet in your mix, and the noise of your room and interface sits closer to your voice."
-                           "\nNEED: Yes if you can't get the vocal loud enough with its fader. Otherwise optional."
+                           "\nNEED: Optional. Yes if you can't get the vocal loud enough with its fader."
                            "\nSTEP: For this take, turn the vocal's clip gain up (the volume of the audio itself, before any plug-in) until your loudest words peak around -10 dB."
                            + std::string (kAgainStep) +
                            "\nSTEP: Next take, turn the interface gain up until your loudest words peak around -10 dB.");
@@ -1724,6 +1750,17 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
     // ---------------------------------------------------------------------------------------- 05 De-Esser
     Signal afterEq;
     double sibTargetDb = 0.0;   // where the "s" should sit vs the voice (checked again at the end of the chain)
+    double styleSibDb = 0.0;    // ... the style's own (over it, an "s" is sharp; under it but over a reference's, only brighter)
+    std::string sibWhere;       // ... and where that is, in words
+    auto sibTo = [&] (double level)   // where the De-Esser brings them (too few "s" left to read: under the target)
+    {
+        return level > -100.0 ? signedDb (level) : "under " + signedDb (sibTargetDb);
+    };
+    auto sibWord = [&] (double level)
+    {
+        return level > styleSibDb + 0.05 ? std::string ("sharp on headphones and earbuds")
+                                         : std::string ("brighter than the reference's (normal for a ") + kStyleNames[static_cast<size_t> (style)] + " vocal: this only matches it)";
+    };
     {
         ChainParams q = p;
         afterEq = renderMono (raw, sr, q);
@@ -1732,9 +1769,17 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
         const auto mask = activeMask (f, thr);
         const double voice = activeRmsDb (afterEq, mask, f.hop);
         const auto s = sibilance (afterEq, sr, mask, f.hop, voice);
-        const double target = ref != nullptr && ref->sibilanceDb > -100.0 ? std::clamp (ref->sibilanceDb, -10.0, -2.0)
-                                                                          : spec.sibTarget - (intensity == 2 ? 1.0 : intensity == 0 ? -1.0 : 0.0);
+        // A reference moves the target at most kRefSibRangeDb from the style's own: a soft-voiced singer's gentle "s"
+        // (Female singer, warm: -10 dB) on a rap vocal took the De-Esser to 100 % (12 dB) and the words to a lisp.
+        styleSibDb = spec.sibTarget - (intensity == 2 ? 1.0 : intensity == 0 ? -1.0 : 0.0);
+        const double target = ref != nullptr && ref->sibilanceDb > -100.0
+                                  ? std::clamp (ref->sibilanceDb, std::max (-10.0, styleSibDb - kRefSibRangeDb), std::min (-2.0, styleSibDb + kRefSibRangeDb))
+                                  : styleSibDb;
         sibTargetDb = target;
+        sibWhere = ref == nullptr || ref->sibilanceDb <= -100.0 || std::abs (target - ref->sibilanceDb) < 0.05
+                       ? "where " + aimed + " sits"
+                       : "as close to the reference's " + signedDb (ref->sibilanceDb) + " as Auto-Edit goes (it stays within " + num (kRefSibRangeDb, 0) + " dB of " +
+                             kStyleNames[static_cast<size_t> (style)] + "'s own " + signedDb (styleSibDb) + ", so the words don't turn lispy)";
         if (s.levelDb <= target || s.levelDb <= -100.0)
         {
             p.deEsser.amount = 0.0;
@@ -1771,9 +1816,9 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
             const double after = levelWith (d.amount);
             p.deEsser = d;
             reason ("deess", "Amount", pct (d.amount) + " at " + hz (d.freqHz),
-                    "Your loudest \"s\" and \"t\" sounds peak at " + signedDb (s.levelDb) + " vs your voice (around " + hz (s.hz) + "), which is sharp on headphones and earbuds"
+                    "Your loudest \"s\" and \"t\" sounds peak at " + signedDb (s.levelDb) + " vs your voice (around " + hz (s.hz) + "), " + sibWord (s.levelDb)
                     + (p.eq.gainDb[3] > 0.0 || p.eq.gainDb[4] > 0.0 ? ", and more so after the Presence / Air boost" : "") + ". " + pct (d.amount) +
-                    " brings them to " + signedDb (after) + ", where " + aimed + " sits, and only while they happen.");
+                    " brings them to " + sibTo (after) + ", " + sibWhere + ", and only while they happen.");
             if (atMax > target + 3.0)
                 r.notes.push_back ("VERY SHARP S's: even at full strength the de-esser leaves your \"s\" sounds " + num (atMax - target) + " dB brighter than ideal."
                                    "\nNEED: Optional. Listen on earbuds: if \"s\" still stings, fix it at the source."
@@ -2063,8 +2108,8 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
                 {
                     rs.value = pct (p.deEsser.amount) + " at " + hz (fHz);
                     rs.why = "After the compressor (it brings quieter sounds up, \"s\" included) your loudest \"s\" and \"t\" sounds peak at " + signedDb (now) +
-                             " vs your voice (around " + hz (sibHz) + "), sharp on headphones and earbuds. " + pct (p.deEsser.amount) + " brings them to " + signedDb (after) +
-                             ", where " + aimed + " sits, and only while they happen.";
+                             " vs your voice (around " + hz (sibHz) + "), " + sibWord (now) + ". " + pct (p.deEsser.amount) + " brings them to " + sibTo (after) +
+                             ", " + sibWhere + ", and only while they happen.";
                 }
         }
 
@@ -2103,7 +2148,7 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
                     if (rs.module == "deess" && rs.control == "Amount")
                     {
                         rs.value = pct (p.deEsser.amount) + " at " + hz (p.deEsser.freqHz);
-                        rs.why += " Checked on the finished chain, it took " + pct (p.deEsser.amount) + " to keep the \"s\" there (" + signedDb (end) + ").";
+                        rs.why += " Checked on the finished chain, it took " + pct (p.deEsser.amount) + " to keep the \"s\" there (" + sibTo (end) + ").";
                     }
             }
         }

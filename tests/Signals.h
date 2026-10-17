@@ -2,10 +2,12 @@
 
 // Test-signal generators shared by the unit tests.
 
+#include "vox/Fft.h"
 #include "vox/FilterDesign.h"
 
 #include <array>
 #include <cmath>
+#include <complex>
 #include <numbers>
 #include <random>
 #include <vector>
@@ -103,6 +105,30 @@ inline std::vector<float> vocal (double sr, double seconds, double noiseDb = -62
                                      + noiseScale * white (rng));
     }
     return out;
+}
+
+/** Pink noise (equal energy per octave, exactly: shaped in the frequency domain), RMS at rmsDb. */
+inline std::vector<float> pink (double sr, double seconds, double rmsDb = -20.0, unsigned seed = 7)
+{
+    const size_t want = static_cast<size_t> (sr * seconds);
+    size_t n = 1;
+    while (n < want) n *= 2;
+    std::mt19937 rng (seed);
+    std::normal_distribution<double> g (0.0, 1.0);
+    std::vector<std::complex<double>> spec (n);
+    for (size_t k = 1; k < n / 2; ++k)
+    {
+        spec[k] = std::complex<double> (g (rng), g (rng)) / std::sqrt (static_cast<double> (k));
+        spec[n - k] = std::conj (spec[k]);
+    }
+    for (auto& c : spec) c = std::conj (c);   // inverse FFT = conj (fft (conj (X))) / n
+    vox::fft (spec);
+    std::vector<float> x (want);
+    double e = 0.0;
+    for (size_t i = 0; i < want; ++i) e += spec[i].real() * spec[i].real();
+    const double k = std::pow (10.0, rmsDb / 20.0) / std::sqrt (e / static_cast<double> (want));
+    for (size_t i = 0; i < want; ++i) x[i] = static_cast<float> (k * spec[i].real());
+    return x;
 }
 
 /** A voice (harmonics with -6 dB/oct roll-off, three formants) that follows a pitch line: hz[i] per sample,

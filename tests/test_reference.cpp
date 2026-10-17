@@ -254,3 +254,38 @@ TEST_CASE ("Split references (UVR etc.): spotted by name; their low end and spac
     CHECK (note);
     CHECK (fromSplit.summary.find ("its space") == std::string::npos);
 }
+
+TEST_CASE ("Full song or acapella: rumble under the voice isn't a beat; a kick and 808 are", "[reference]")
+{
+    // Everything under 100 Hz counted as "beat": the user's own rumbly acapellas read as full songs ("split it with UVR").
+    // Now only 40 - 100 Hz counts, where kicks and 808s live; rumble (AC, traffic, the mic stand) sits lower.
+    std::mt19937 rng (5);
+    std::normal_distribution<double> g (0.0, 1.0);
+    auto rumbly = testsig::vocal (kSr, 14.0, -70.0, -14.0, 3);
+    {
+        Biquad l1, l2;
+        design::apply (l1, design::butterworth (false, 30.0, kSr));
+        design::apply (l2, design::butterworth (false, 30.0, kSr));
+        for (auto& v : rumbly) v += static_cast<float> (0.8 * l2.process (l1.process (g (rng))));
+    }
+    const auto acapella = analyseReference ({ rumbly }, kSr, "my acapella.wav");
+    const auto a = analyseVocal ({ rumbly }, kSr);
+    INFO ("rumble " << a.rumbleDb << " dB, 40 - 100 Hz " << a.lowBassDb << " dB");
+    CHECK (a.rumbleDb > -14.0);   // under 60 Hz alone it's over the old line (everything under 100 Hz, -14 dB)
+    CHECK (acapella.ok);
+    CHECK (acapella.warning.empty());
+
+    auto song = testsig::vocal (kSr, 14.0, -70.0, -14.0, 3);
+    double ph = 0.0;
+    for (size_t i = 0; i < song.size(); ++i)
+    {
+        const double t = static_cast<double> (i) / kSr, tk = std::fmod (t, 0.5), t8 = std::fmod (t, 2.0);
+        ph += 45.0 / kSr;   // an 808 on F1, one hit every 2 s, and a kick on every beat (120 BPM)
+        const double kick = tk < 0.2 ? 0.5 * std::exp (-tk * 25.0) * std::sin (2.0 * std::numbers::pi * (55.0 * tk + 70.0 * (1.0 - std::exp (-tk * 40.0)) / 40.0)) : 0.0;
+        song[i] += static_cast<float> (kick + 0.2 * std::exp (-t8 * 1.2) * std::sin (2.0 * std::numbers::pi * ph));
+    }
+    const auto full = analyseReference ({ song }, kSr, "song.wav");
+    INFO ("with a beat: 40 - 100 Hz " << analyseVocal ({ song }, kSr).lowBassDb << " dB");
+    CHECK (full.ok);
+    CHECK_FALSE (full.warning.empty());
+}

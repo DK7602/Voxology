@@ -245,7 +245,9 @@ The *Pitch* tag after each name (in italics in the menu) says how tuned that ref
 
 After picking a reference, press **AUTO-EDIT** again so it re-aims.
 
-Best files to add: the **acapella or vocal stem** of a song you love, dry or lightly processed. A full song (with the beat) only works roughly; the Learn panel warns "FULL SONG?". Most online acapellas are **wet** (reverb or echo baked in): Voxology notices, takes only their tone and "s" brightness, and leaves space and compression to your STYLE.
+A reference's "s" brightness moves the De-Esser's aim at most 3 dB from your STYLE's own, so a soft singer's gentle "s" (Female singer, warm) can't de-ess a rap vocal into a lisp. The report then says the "s" is "brighter than the reference's" (not "sharp") when it's fine for your style.
+
+Best files to add: the **acapella or vocal stem** of a song you love, dry or lightly processed. A full song (with the beat) only works roughly; the Learn panel warns "FULL SONG?". It listens for a kick and 808 (40 - 100 Hz), so rumble under your own acapella (AC, traffic, a desk) doesn't count as a beat. Most online acapellas are **wet** (reverb or echo baked in): Voxology notices, takes only their tone and "s" brightness, and leaves space and compression to your STYLE.
 
 **No acapella? Split the song yourself.** The free app UVR (Ultimate Vocal Remover) pulls the vocal out of a full song on your computer: pick a vocal model (for example MDX-Net "Voc_FT"), choose Vocals only, and load the vocal it makes with **+ Add a vocal file…**. Use it for your own reference only.
 
