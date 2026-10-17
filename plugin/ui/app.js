@@ -167,6 +167,42 @@ function scaledToNorm(state, v) {
 }
 function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 
+/** Steps from the wheel, the arrow keys or the Transpose buttons come in bursts. Each burst is one host gesture (one
+    undo step, one automation pass): it starts with the first step and ends 250 ms after the last one (touch(ms)
+    sets how long it waits; a held key keeps it open between repeats). end() closes it at once (before a drag). */
+const bursts = {};
+function burst(id) {
+  if (bursts[id]) return bursts[id];
+  const s = P[id];
+  let open = false, timer = 0;
+  const end = () => { clearTimeout(timer); timer = 0; if (open) { open = false; s.sliderDragEnded(); } };
+  return (bursts[id] = {
+    touch(ms = 250, start = true) {
+      if (!open && !start) return;
+      if (!open) { open = true; s.sliderDragStarted(); }
+      clearTimeout(timer);
+      timer = setTimeout(end, ms);
+    },
+    end,
+  });
+}
+
+/** The value one step up (dir 1) or down (-1): 1 % of the knob's travel (fine: 0.2 %). When the parameter's own
+    step size would round that back to where it was (a whole-number knob at the slow end of its travel: Low Cut,
+    Retune, Vibrato, Pre-delay, the EQ frequencies), it moves one parameter step instead, so every value is reachable.
+    null = it can't move that way (at the end). */
+function stepValue(id, dir, fine) {
+  const s = P[id], { start, end, interval, skew } = s.properties;
+  const lo = Math.min(start, end), hi = Math.max(start, end);
+  const snap = (v) => clamp(interval > 0 ? start + interval * Math.floor((v - start) / interval + 0.5) : v, lo, hi);
+  const same = (a, b) => Math.abs(a - b) <= Math.max(interval * 1e-3, (hi - lo) * 1e-7);
+  const before = s.getScaledValue();
+  const n = clamp(s.getNormalisedValue() + dir * (fine ? 0.002 : 0.01), 0, 1);
+  let v = snap(Math.pow(n, 1 / skew) * (end - start) + start);
+  if (same(v, before) && interval > 0) v = snap(before + dir * interval);
+  return same(v, before) ? null : v;
+}
+
 /** A typed value -> the control's own units, kept in range (null = nothing to set). Takes "−3", "-3 dB", "1.2k" /
     "1.2 kHz" (a Hz knob also reads "6" as 6 kHz when 6 Hz is below its range), "2.5:1", "120 ms" / "0.12 s", "50 %",
     and the words the knob shows ("off", "flat", "as sung"). A knob that only goes one way from 0 ignores the sign:
@@ -214,7 +250,7 @@ function typeIn(valEl, id, fmt, def, after, refocus) {
     const v = commit && input.value.trim() !== shown ? parseTyped(input.value, s, fmt, def) : null;
     input.remove();
     valEl.hidden = false;
-    if (v !== null) { s.sliderDragStarted(); s.setNormalisedValue(scaledToNorm(s, v)); s.sliderDragEnded(); after(); }
+    if (v !== null) { burst(id).end(); s.sliderDragStarted(); s.setNormalisedValue(scaledToNorm(s, v)); s.sliderDragEnded(); after(); }
     if (key && refocus) refocus.focus();
   };
   input.addEventListener("keydown", (e) => {
@@ -335,7 +371,12 @@ function notesCell() {
   });
   const tpv = cell.querySelector(".tp-v");
   const tpText = (v) => { const t = Math.round(v); return t === 0 ? "transpose 0" : `transpose ${t > 0 ? "+" : MINUS}${Math.abs(t)}`; };
-  const step = (d) => { setScaled("ptTranspose", clamp(Math.round(val("ptTranspose")) + d, -12, 12)); cell.update(); anyEdited(); };
+  const step = (d) => {   // (quick clicks in a row are one undo step)
+    const now = Math.round(val("ptTranspose")), v = clamp(now + d, -12, 12);
+    if (v === now) return;
+    burst("ptTranspose").touch();
+    setScaled("ptTranspose", v); cell.update(); anyEdited();
+  };
   cell.querySelector(".tp-dn").addEventListener("click", () => step(-1));
   cell.querySelector(".tp-up").addEventListener("click", () => step(1));
   tpv.title = "Double-click to type a value";
@@ -707,8 +748,17 @@ function knob(id, label, sub, fmt, def, bipolar = false) {
     valEl.textContent = fmt(s.getScaledValue());
   };
   const setNorm = (n) => { s.setNormalisedValue(clamp(n, 0, 1)); refresh(); anyEdited(); };
+  // Wheel and arrow keys: one step at a time, each burst one undo step in the host (see burst()).
+  const steps = burst(id);
+  const step = (dir, fine, wait) => {
+    const v = stepValue(id, dir, fine);
+    if (v === null) { steps.touch(wait, false); return; }
+    steps.touch(wait);
+    s.setNormalisedValue(scaledToNorm(s, v));
+    refresh(); anyEdited();
+  };
   let drag = null;
-  k.addEventListener("pointerdown", (e) => { k.setPointerCapture(e.pointerId); drag = { y: e.clientY, n: s.getNormalisedValue() }; s.sliderDragStarted(); e.preventDefault(); });
+  k.addEventListener("pointerdown", (e) => { steps.end(); k.setPointerCapture(e.pointerId); drag = { y: e.clientY, n: s.getNormalisedValue() }; s.sliderDragStarted(); e.preventDefault(); });
   k.addEventListener("pointermove", (e) => {
     if (!drag) return;
     const scale = stage.getBoundingClientRect().height / 900;
@@ -717,20 +767,34 @@ function knob(id, label, sub, fmt, def, bipolar = false) {
   const end = () => { if (drag) { drag = null; s.sliderDragEnded(); } };
   k.addEventListener("pointerup", end);
   k.addEventListener("pointercancel", end);
-  k.addEventListener("dblclick", () => { s.sliderDragStarted(); setNorm(scaledToNorm(s, def)); s.sliderDragEnded(); });
-  k.addEventListener("wheel", (e) => { e.preventDefault(); s.sliderDragStarted(); setNorm(s.getNormalisedValue() + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 0.002 : 0.01)); s.sliderDragEnded(); }, { passive: false });
+  k.addEventListener("dblclick", () => { steps.end(); s.sliderDragStarted(); setNorm(scaledToNorm(s, def)); s.sliderDragEnded(); });
+  // A mouse wheel notch (or a line / page event) is one step, and so is the first event after a pause; a trackpad
+  // swipe adds up its pixels (about 100 per step). Shift + wheel arrives sideways (deltaX): finer steps.
+  let wheelAcc = 0, wheelLast = -1e9;
+  k.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const d = e.deltaY || e.deltaX, now = performance.now(), fresh = now - wheelLast > 250;
+    wheelLast = now;
+    if (!d) return;
+    let n;
+    if (fresh || e.deltaMode !== 0) { n = d < 0 ? 1 : -1; wheelAcc = 0; }
+    else { wheelAcc -= d; n = Math.trunc(wheelAcc / 100); wheelAcc -= n * 100; }
+    if (!n) steps.touch(250, false);
+    for (let i = 0; i < Math.abs(n); i++) step(Math.sign(n), e.shiftKey, 250);
+  }, { passive: false });
   // Double-click the number (or Enter on the knob) to type an exact value.
   const type = () => typeIn(valEl, id, fmt, def, () => { refresh(); anyEdited(); }, k);
   valEl.title = "Double-click to type a value";
   valEl.addEventListener("dblclick", type);
   k.addEventListener("keydown", (e) => {
-    const step = e.shiftKey ? 0.002 : 0.01;
-    if (e.key === "ArrowUp" || e.key === "ArrowRight") setNorm(s.getNormalisedValue() + step);
-    else if (e.key === "ArrowDown" || e.key === "ArrowLeft") setNorm(s.getNormalisedValue() - step);
+    if (e.key === "ArrowUp" || e.key === "ArrowRight") step(1, e.shiftKey, 1000);   // (a held key repeats within 1 s)
+    else if (e.key === "ArrowDown" || e.key === "ArrowLeft") step(-1, e.shiftKey, 1000);
     else if (e.key === "Enter") type();
     else return;
     e.preventDefault();
   });
+  k.addEventListener("keyup", (e) => { if (e.key.startsWith("Arrow")) steps.touch(250, false); });
+  k.addEventListener("blur", steps.end);
   s.valueChangedEvent.addListener(refresh);
   s.propertiesChangedEvent.addListener(refresh);
   refresh();
@@ -1043,7 +1107,7 @@ const nodes = EQ_BANDS.map((b, i) => {
   n.textContent = String(i + 1);
   n.title = `${b.name}: drag to change, double-click to reset`;
   let drag = false;
-  n.addEventListener("pointerdown", (e) => { n.setPointerCapture(e.pointerId); drag = true; P["eqGain" + (i + 1)].sliderDragStarted(); P["eqFreq" + (i + 1)].sliderDragStarted(); showNode(i); e.preventDefault(); });
+  n.addEventListener("pointerdown", (e) => { burst("eqGain" + (i + 1)).end(); burst("eqFreq" + (i + 1)).end(); n.setPointerCapture(e.pointerId); drag = true; P["eqGain" + (i + 1)].sliderDragStarted(); P["eqFreq" + (i + 1)].sliderDragStarted(); showNode(i); e.preventDefault(); });
   n.addEventListener("pointermove", (e) => {
     if (!drag) return;
     const r = plot.getBoundingClientRect(), scale = r.width / PW;
@@ -1056,7 +1120,7 @@ const nodes = EQ_BANDS.map((b, i) => {
   const end = () => { if (drag) { drag = false; P["eqGain" + (i + 1)].sliderDragEnded(); P["eqFreq" + (i + 1)].sliderDragEnded(); $("eq-readout").textContent = ""; } };
   n.addEventListener("pointerup", end);
   n.addEventListener("pointercancel", end);
-  n.addEventListener("dblclick", () => { P["eqGain" + (i + 1)].sliderDragStarted(); setScaled("eqGain" + (i + 1), 0); P["eqGain" + (i + 1)].sliderDragEnded(); anyEdited(); });
+  n.addEventListener("dblclick", () => { burst("eqGain" + (i + 1)).end(); P["eqGain" + (i + 1)].sliderDragStarted(); setScaled("eqGain" + (i + 1), 0); P["eqGain" + (i + 1)].sliderDragEnded(); anyEdited(); });
   $("eq-nodes").appendChild(n);
   return n;
 });
@@ -1068,7 +1132,7 @@ const dynNodes = DYN_BANDS.map((b, i) => {
   n.title = `${b.name}: drag to set where and how much it may cut, double-click to turn the band off`;
   const ids = ["dqCut" + (i + 1), "dqFreq" + (i + 1)];
   let drag = false;
-  n.addEventListener("pointerdown", (e) => { n.setPointerCapture(e.pointerId); drag = true; ids.forEach((id) => P[id].sliderDragStarted()); showDynNode(i); e.preventDefault(); });
+  n.addEventListener("pointerdown", (e) => { n.setPointerCapture(e.pointerId); drag = true; ids.forEach((id) => { burst(id).end(); P[id].sliderDragStarted(); }); showDynNode(i); e.preventDefault(); });
   n.addEventListener("pointermove", (e) => {
     if (!drag) return;
     const r = plot.getBoundingClientRect(), scale = r.width / PW;
@@ -1081,7 +1145,7 @@ const dynNodes = DYN_BANDS.map((b, i) => {
   const end = () => { if (drag) { drag = false; ids.forEach((id) => P[id].sliderDragEnded()); $("eq-readout").textContent = ""; } };
   n.addEventListener("pointerup", end);
   n.addEventListener("pointercancel", end);
-  n.addEventListener("dblclick", () => { P[ids[0]].sliderDragStarted(); setScaled(ids[0], 0); P[ids[0]].sliderDragEnded(); anyEdited(); });
+  n.addEventListener("dblclick", () => { burst(ids[0]).end(); P[ids[0]].sliderDragStarted(); setScaled(ids[0], 0); P[ids[0]].sliderDragEnded(); anyEdited(); });
   $("eq-nodes").appendChild(n);
   return n;
 });
@@ -1587,6 +1651,7 @@ function fitLevelButton() {
   };
   b.addEventListener("click", () => {
     const s = P.outGain, applied = fitLevelUndo && fitLevelUndo.time === report.time;
+    burst("outGain").end();
     const to = applied ? fitLevelUndo.from : f.output;
     fitLevelUndo = applied ? null : { time: report.time, from: val("outGain") };
     s.sliderDragStarted(); s.setNormalisedValue(scaledToNorm(s, clamp(to, s.properties.start, s.properties.end))); s.sliderDragEnded();
