@@ -688,9 +688,8 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
         // pitchTrack hops 20 ms over singing frames (10 ms apart): share of them with a clear pitch.
         const double tries = std::max (1.0, static_cast<double> (voice.size()) / 2.0);
         a.pitchedShare = std::min (100.0, 100.0 * static_cast<double> (f0.size()) / tries);
-        std::vector<double> midi;
-        for (double hz : f0) midi.push_back (69.0 + 12.0 * std::log2 (hz / 440.0));
-        a.key = detectKey (midi);
+        for (double hz : f0) a.pitchMidi.push_back (69.0 + 12.0 * std::log2 (hz / 440.0));
+        a.key = detectKey (a.pitchMidi);
     }
 
     const auto spec = averageSpectrum (raw, mask, f.hop);
@@ -1135,13 +1134,27 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         std::string keyName = std::string (kNoteNames[static_cast<size_t> (kg.key)]) + (kg.minor ? " minor" : " major");
         if (kg.ambiguous)
             keyName += std::string (" or ") + kNoteNames[static_cast<size_t> (kg.altKey)] + (kg.altMinor ? " minor" : " major");
-        if (a.f0Median <= 0.0 || a.pitchedShare < 15.0)
+        // Rap is often clearly pitched (42 - 95 % of it on real raps), but it glides: held notes tell singing from rapping.
+        // Robot style keeps its effect on a rapped take (ad-libs and effect vocals are made for it).
+        const bool noPitch = a.f0Median <= 0.0 || a.pitchedShare < 15.0;
+        const bool rapped = a.heldShare < kRapHeldShare && style != 3;
+        if (noPitch || rapped)
         {
             pt.amount = 0.0;
             pt.mode = kPitchNatural;   // if you turn it up yourself
             keep (Module::pitch);
-            reason ("pitch", "Amount", "Off", "Auto-Edit heard almost no held notes (" + num (a.pitchedShare, 0) +
-                    " % of the vocal has a clear pitch), so this sounds like rapping, not singing. Tuning spoken words only adds artefacts, so Pitch stays off. Turn it up yourself for the robotic effect.");
+            if (noPitch)
+                reason ("pitch", "Amount", "Off", "Auto-Edit heard almost no clear pitch (" + num (a.pitchedShare, 0) +
+                        " % of the vocal), so there's nothing for Pitch to tune: it stays off.");
+            else
+                reason ("pitch", "Amount", "Off", "Auto-Edit heard almost no held notes (" + num (a.heldShare, 0) + " % of the pitched part is held notes; sung parts usually have " +
+                        num (kRapHeldShare + 10.0, 0) + " % or more), so this sounds like rapping, not singing. Tuning spoken words only adds artefacts, so Pitch stays off. Turn it up yourself for the robotic effect.");
+            if (rapped && ! noPitch && style == 0)
+                r.notes.push_back ("PITCH OFF FOR RAP: Trap Lead tunes hard, but this part is rapped (only " + num (a.heldShare, 0) +
+                                   " % held notes), so Auto-Edit left Pitch off: tuning rapped words gives a robotic warble."
+                                   "\nNEED: Optional. Only if you want that robotic trap sound on your rap."
+                                   "\nSTEP: Open 01 Pitch, set Mode to Robot (or Classic with Retune 0 - 10 ms) and Amount to 100 %."
+                                   "\nSTEP: Let Pitch hear your beat's key. In {daw}: {daw:sidechain}. Or set Key and Scale yourself, with Key on MANUAL.");
         }
         else
         {
@@ -1180,8 +1193,14 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                                              : "Classic glides the whole pitch line onto the note at the Retune speed: the familiar auto-tune sound. Natural keeps more of your own voice; Robot is harder.");
             reason ("pitch", "Retune", std::to_string (static_cast<int> (pt.speedMs)) + " ms, Humanize " + pct (pt.humanize),
                     std::string ("For ") + kStyleNames[static_cast<size_t> (style)] + ": " + t.feel + ". Lower = more robotic, higher = more natural.");
-            reason ("pitch", "Amount", pct (pt.amount), "You sing on average " + num (kg.offCents, 0) + " cents away from the nearest note" +
-                    (kg.offCents < 12.0 ? " (already close: the tune will be subtle)." : kg.offCents < 25.0 ? " (normal for a take: the tune tightens it)." : " (quite loose: the tune makes a big difference)."));
+            // How far off you sing, from the notes Pitch will actually pull to (all 12 when the key is unsure).
+            double offSum = 0.0;
+            for (double m : a.pitchMidi) offSum += std::abs (m - PitchCorrector::targetNote (m, pt.key, pt.scale, -1));
+            const double offCents = a.pitchMidi.empty() ? kg.offCents : 100.0 * offSum / static_cast<double> (a.pitchMidi.size());
+            const std::string toNote = pt.scale == 0 ? "the nearest of the 12 notes"
+                                                     : "the nearest note of " + (settings.beatKeyKnown ? settings.beatKeyName : keyName);
+            reason ("pitch", "Amount", pct (pt.amount), "You sing on average " + num (offCents, 0) + " cents away from " + toNote +
+                    (offCents < 12.0 ? " (already close: the tune will be subtle)." : offCents < 25.0 ? " (normal for a take: the tune tightens it)." : " (quite loose: the tune makes a big difference)."));
             if (! sure && ! settings.beatKeyKnown)
                 r.notes.push_back ("KEY UNSURE: from this part Auto-Edit can't be sure of the key (best guess " + keyName + "), so Pitch is set to Chromatic."
                                    "\nNEED: Optional. Chromatic works; the right key sounds tighter."

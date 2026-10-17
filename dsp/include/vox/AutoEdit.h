@@ -9,6 +9,11 @@
 
 namespace vox {
 
+/** Held notes (VocalAnalysis::heldShare) under this: the take is rapped, so Auto-Edit leaves Pitch off (except in
+    Robot style, where the effect is the point). Measured: the user's raps 9 - 19 %, 22 trap raps 0 - 26 %; sung
+    takes mostly 30 - 80 % (Cymatics, trap melodic 37 - 68 %). Rap reads 42 - 95 % pitched, so that can't tell them apart. */
+inline constexpr double kRapHeldShare = 25.0;
+
 /** Vocal styles Auto-Edit can aim for (what "finished" sounds like). */
 inline constexpr int kStyles = 8;
 inline constexpr std::array<const char*, kStyles> kStyleNames { "Trap Lead", "Rap", "Melodic", "Robot", "R&B", "Pop", "Folk", "Natural Singer" };
@@ -84,6 +89,7 @@ struct VocalAnalysis
     double pitchedShare = 0.0;         // % of singing frames with a clear pitch
     double heldShare = 0.0;            // % of pitched time in held notes (>= 160 ms within half a semitone): sung vs rapped
     KeyGuess key;                      // from the sung notes
+    std::vector<double> pitchMidi;     // the pitch readings (MIDI note numbers, fractional), 20 ms apart while singing
     double rumbleDb = -120.0;          // energy below 60 Hz vs the whole vocal (dB)
     std::vector<double> bandDb;        // third-octave balance vs the 500 Hz - 2 kHz average (dB)
     std::vector<double> bandHz;
