@@ -210,6 +210,7 @@ private:
     juce::String pendingRefName;
     std::atomic<bool> refLoading { false };
     std::atomic<int> refVersion { 0 };
+    std::atomic<int> refGeneration { 0 };   // which reference choice is the newest (a file still loading loses to a newer one)
 
     juce::ThreadPool pool { 1 };              // last: destroyed (and joined) first
 

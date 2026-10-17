@@ -191,6 +191,7 @@ void AutoEditController::setParam (const juce::String& id, float value)
 {
     if (auto* p = state.getParameter (id))
     {
+        if (std::abs (p->getValue() - p->convertTo0to1 (value)) < 1.0e-6f) return;   // unchanged: no gesture for the host
         p->beginChangeGesture();
         p->setValueNotifyingHost (p->convertTo0to1 (value));
         p->endChangeGesture();
@@ -210,13 +211,38 @@ void AutoEditController::apply (const vox::AutoEditResult& r, const vox::AutoEdi
     doc->setProperty ("time", juce::Time::getCurrentTime().toISO8601 (true));
     doc->setProperty ("reference", pendingRefName);
 
+    if (! r.ok)
+    {
+        // A try that heard too little keeps the Auto-Edit before (its settings are still on, UNDO still goes back to
+        // before it, Auto Analyze keeps comparing with it); the report says this try didn't work.
+        const auto before = juce::JSON::parse (getReportForSaving());
+        if (auto* old = before.getDynamicObject(); old != nullptr && static_cast<bool> (old->getProperty ("ok")))
+        {
+            auto* failed = new juce::DynamicObject();
+            failed->setProperty ("summary", str (r.summary));
+            failed->setProperty ("tipTitle", str (r.tipTitle));
+            failed->setProperty ("tip", str (r.tip));
+            failed->setProperty ("time", juce::Time::getCurrentTime().toISO8601 (true));
+            old->setProperty ("failed", juce::var (failed));
+            setReport (juce::JSON::toString (before, true));
+            delete doc;
+            return;
+        }
+    }
+
     if (r.ok)
     {
         takeUndoSnapshot (true);
 
         auto* values = new juce::DynamicObject();
         setParam ("bypass", 0.0f);
-        VoxParams::forEachValue (r.params, [&] (const juce::String& id, float v) { setParam (id, v); values->setProperty (id, v); });
+        // Key on MANUAL: the key you set stays (Auto-Edit's guess is only used on AUTO).
+        const bool keyByHand = juce::roundToInt (state.getRawParameterValue ("ptKeySrc")->load()) != 0;
+        VoxParams::forEachValue (r.params, [&] (const juce::String& id, float v) {
+            if (keyByHand && (id == "ptKey" || id == "ptScale")) return;
+            setParam (id, v);
+            values->setProperty (id, v);
+        });
 
         juce::Array<juce::var> notes, tips, reasons, kept;
         for (const auto& n : r.notes) notes.add (str (n));
@@ -354,6 +380,7 @@ void AutoEditController::setReport (const juce::String& json)
 void AutoEditController::setWatchOn (bool on)
 {
     watchOn.store (on);
+    if (! on && stateFlag.load() == checking) { ++session; stateFlag.store (idle); }   // its result would come in later
     if (! on)
         clearNeeds();
     ++watchVersion;
@@ -567,6 +594,8 @@ juce::String AutoEditController::getWatchJson() const
 void AutoEditController::onStateRestored (const juce::String& savedReport)
 {
     undoValid.store (false);
+    ++session;   // an Auto-Edit or check still running was for the state before: its result is thrown away
+    if (const int st = stateFlag.load(); st == analysing || st == checking) stateFlag.store (idle);
     setReport (savedReport);
 }
 
@@ -585,7 +614,8 @@ void AutoEditController::takeUndoSnapshot (bool byAutoEdit)
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
         {
             const auto id = rp->getParameterID();
-            if (! id.startsWith ("ae") && id != "listenA" && id != "levelMatch")
+            static const juce::StringArray session { "listenA", "levelMatch", "recMode", "mode", "umAmount", "umFocus", "ptKeySrc", "ptMidi" };
+            if (! id.startsWith ("ae") && ! session.contains (id))
                 undoSnapshot.emplace_back (rp, rp->getValue());
         }
 }
@@ -596,12 +626,14 @@ bool AutoEditController::undo()
         return false;
     for (auto& [p, v] : undoSnapshot)
     {
+        if (std::abs (p->getValue() - v) < 1.0e-6f) continue;   // unchanged: no gesture for the host
         p->beginChangeGesture();
         p->setValueNotifyingHost (v);
         p->endChangeGesture();
     }
     undoSnapshot.clear();
     undoValid.store (false);
+    if (stateFlag.load() == checking) { ++session; stateFlag.store (idle); }   // a check against what was just undone
     if (undoClearsReport) setReport ({});
     return true;
 }
@@ -666,7 +698,8 @@ void AutoEditController::loadReference (const juce::File& file)
         return;
     refLoading.store (true);
     ++refVersion;
-    pool.addJob ([this, file]
+    const int generation = ++refGeneration;
+    pool.addJob ([this, file, generation]
     {
         auto profile = std::make_shared<vox::ReferenceProfile>();
         profile->name = file.getFileNameWithoutExtension().toStdString();
@@ -697,7 +730,9 @@ void AutoEditController::loadReference (const juce::File& file)
             }
         }
         {
+            // Only if nothing was picked since (a built-in, "no reference", another file, a project restored).
             const juce::ScopedLock sl (refLock);
+            if (generation != refGeneration.load()) return;
             reference = std::move (profile);
         }
         refLoading.store (false);
@@ -710,6 +745,8 @@ void AutoEditController::clearReference()
     {
         const juce::ScopedLock sl (refLock);
         reference.reset();
+        ++refGeneration;
+        refLoading.store (false);
     }
     ++refVersion;
 }
@@ -755,6 +792,8 @@ void AutoEditController::restoreReference (const juce::String& saved)
     {
         const juce::ScopedLock sl (refLock);
         reference = std::move (r);
+        ++refGeneration;
+        refLoading.store (false);
     }
     ++refVersion;
 }
@@ -813,6 +852,8 @@ void AutoEditController::selectReference (bool builtin, const juce::String& name
     {
         const juce::ScopedLock sl (refLock);
         reference = std::move (r);
+        ++refGeneration;
+        refLoading.store (false);
     }
     ++refVersion;
 }
