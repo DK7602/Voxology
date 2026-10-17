@@ -6,11 +6,18 @@ each decision (plus a plan for every warning) in the Learn panel. **Auto Analyze
 that and offers new settings (APPLY / UNDO) when a part of the song needs something new.
 
 ## Chain
-01 Cleanup (low cut + gate) -> 02 Tone EQ (Body / Mud / Nasal / Presence / Air) -> 03 De-Esser ->
-04 Rider (auto level) -> 05 Compressor (peak catcher + opto-style leveler, makeup, mix) ->
-06 Saturation (Tape / Tube / Clip, 4x oversampled) -> 07 Doubler -> 08 Delay (tempo-synced, ducked,
-ping-pong) -> 09 Reverb (vocal plate, ducked) -> 10 Output.
-A / B (original vs Voxology, latency-aligned) with MATCH (level-matched comparison).
+01 Pitch (Natural / Classic / Robot) -> 02 Cleanup (noise, room, low cut, pops, clicks, breaths, gate) ->
+03 Tone EQ (5 bands) -> 04 Dynamic EQ (+ Smooth) -> 05 De-Esser -> 06 Rider (auto level) ->
+07 Compressor (peak catcher + leveler, makeup, mix) -> 08 Saturation (Tape / Tube / Clip, oversampled) ->
+09 Voices (double, unison, harmonies, MIDI chords) -> 10 Dimension (chorus / flanger / phaser) ->
+11 Delay (tempo-synced, ducked, ping-pong, throws) -> 12 Reverb (vocal plate, ducked, throws) -> 13 Output.
+A / B (original vs Voxology, latency-aligned) with MATCH (level-matched comparison). BEAT mode on the instrumental
+finds its key (shared with Honey Tune and every Voxology in the song) and makes room for the vocal (Unmask).
+
+**Honey Tune** (same download): an ARA note editor on the vocal clip (pitch, timing, length, formant per note).
+
+Full manual: `docs/MANUAL.md` (also inside both plug-ins, the ? button). Install by hand: `docs/INSTALL.txt`, or use
+the Sonicology installer (built in the Mixology repo).
 
 ## Build
 ```
@@ -32,7 +39,9 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
 - `dsp/include/suite/SuiteLink.h` the suite link: Voxology, Mixology and Masterology tell each other what they do (the
   same file in all three repos; Voxology publishes each vocal it sits on), and since v0.49 the song's style, shared by
   all three (`plugin/ui/mixstyles.js` is the same list in each; `dsp/include/vox/SongStyle.h` turns it into a
-  suggested vocal STYLE; since v0.49.2 it's picked in Mixology or Masterology, Voxology only follows it).
+  suggested vocal STYLE; since v0.49.2 it's picked in Mixology or Masterology, Voxology only follows it). Since
+  v0.52 (link layout 4) Mixology answers each vocal (MIXOLOGY in the bottom bar says whether it found this track),
+  and the beat's key reaches Honey Tune and every Voxology through it.
 - `tests/` Catch2 tests; `tools/report.cpp` prints Auto-Edit's report for a test vocal or a raw file.
 
 ## Third-party

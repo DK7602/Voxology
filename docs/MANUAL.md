@@ -9,11 +9,20 @@ Manual for version 0.51.0. It's built into both plug-ins (the ? button) and upda
 
 Voxology goes on your vocal track as an insert; Honey Tune is a separate note editor that sits on the vocal clip (ARA). Both come from the same download.
 
-1. Open the repo's **Actions** page on GitHub, click the latest green **Build & Test** run, and download the artifact **Voxology-Windows**.
-2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
-3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
-4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.51.0**).
+**Easiest: the Sonicology installer** (Voxology, Honey Tune, Mixology and Masterology in one go, Windows or Mac).
+Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the only way that isn't blocked by macOS.
+
+**By hand (Windows)**:
+
+1. Download **Voxology-Windows** (the Voxology download) and unzip it. In Chrome press **Ctrl+J** and click **Keep** if
+   it warns about the download (the plug-ins aren't code-signed yet).
+2. Copy **Voxology.vst3** and **Honey Tune.vst3** from its VST3 folder to `C:\Program Files\Common Files\VST3`.
+   Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
+3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
+   version does not show. Both are listed under Sonicology.
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.52.0**).
+
+Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
 Where each one goes in Cubase:
 
@@ -73,7 +82,8 @@ The honeycomb on the left is the chain, run top to bottom: click a cell to open 
 
 Every knob:
 
-- Drag up / down, or use the mouse wheel for small steps (hold **Shift** for finer).
+- Drag up / down, or use the mouse wheel for small steps (hold **Shift** for finer). Clicked or tabbed to, the
+  **arrow keys** step it too (**Shift** for finer).
 - **Double-click the knob**: back to its default.
 - **Double-click the number** under it: type an exact value, then press **Enter** (**Esc** cancels, clicking away keeps it). Units are optional: `-3`, `120` (Hz), `1.2k` (1.2 kHz), `4` (4:1), `250 ms`, `off`. A knob that only goes one way doesn't need the minus (Threshold `18` = −18 dB). Values past the end stop at the end. With a knob selected, **Enter** opens the box too. Transpose on the Pitch page works the same way.
 
@@ -189,7 +199,7 @@ How to read a warning card:
 
 Click **MY CHAINS** (under INTENSITY).
 
-- **Save**: get a sound you like (Auto-Edit, then your own tweaks), type a name in the box (for example "My Lead") and press **Enter** or **SAVE**. It's saved on your computer (Documents\Voxology\Chains), so it's there in every project. Saving with a name you already have replaces it. The button then shows the chain's name.
+- **Save**: get a sound you like (Auto-Edit, then your own tweaks), type a name in the box (for example "My Lead") and press **Enter** or **SAVE**. It's saved on your computer (Documents\Voxology\Chains), so it's there in every project. Saving with a name you already have replaces it. The button then shows the chain's name, also after you reopen the project (deleting that chain clears it).
 - **Load**: click a name. Every module is set the way you saved it. With **Keep this song's key when loading** ticked (the default), the song's Key, Scale, key source, MIDI mode and switched-off notes stay as they are.
 - Not part of a chain: REC, bypass, A / B, MATCH, Auto-Edit's Style and Intensity, and BEAT mode.
 - **✕** next to a name deletes it.
@@ -290,6 +300,14 @@ Honey Tune shows each sung note as a honeycomb cell on a piano roll, so you can 
 
 **Open it in Cubase**: select the vocal clip, then **Audio > Extensions > Honey Tune**. It listens to the clip first (a few seconds per minute of audio), including an AI pitch check that fixes octave slips and finds missed notes. The status line reports what it found. The **?** button at the top right opens this manual.
 
+**Other DAWs** (before a clip is open, Honey Tune's status line says how for yours):
+
+- **Studio One**: right-click the vocal event > **Edit with Honey Tune**.
+- **Logic Pro**: put it in the vocal track's first plug-in slot, then select the region.
+- **REAPER**: add it as a take FX on the vocal item (right-click the item > Take > Take FX chain).
+- **Cakewalk**: right-click the vocal clip > **Region FX > Honey Tune**.
+- **Ableton Live** doesn't run ARA plug-ins: use Voxology's Pitch there.
+
 **Window size**: drag the window's corner to resize it. It opens 1280 px wide with every control on one row. In a narrower window (down to 900 px) the KEEP sliders and the Undo / Snap / Reset buttons move to a second row, so nothing gets cut off.
 
 **Reading the notes**
@@ -341,7 +359,17 @@ finished mix into the master. In the same Cubase project they tell each other wh
 - Voxology tells Mixology the track it sits on and what it does there (its compressor, de-esser, reverb, delay...).
   Mixology then treats that track as a vocal and never adds a second compressor, reverb or delay on top of
   Voxology's. Mixology's Tracks page shows a gold **VOX** tag on the track (**BEAT** for Voxology in BEAT mode).
-- The bottom bar shows **MIXOLOGY ✓** when a Mixology is in the project (hover it for what that means).
+- The bottom bar says what Mixology knows about this track (hover it for the details):
+  - **MIXOLOGY ✓**: Mixology found this vocal and won't double Voxology's compressor, reverb or delay. Once Analyze Mix
+    has heard it, the hover also says how loud the vocal sits against the beat and what your style wants.
+  - **MIXOLOGY: ADD LINK**: Mixology can't hear this track. Put **Mixology Link** on it, after Voxology.
+  - **MIXOLOGY: RENAME TRACK**: another track has the same name. Rename one so Mixology can tell them apart.
+  - **MIXOLOGY: NO TRACK NAME**: your DAW doesn't tell plug-ins the track's name, so Mixology can't match it.
+  - **MIXOLOGY: NOT A VOCAL THERE**: on Mixology's Tracks page this track isn't a vocal. Change its role there if it is one.
+  - **MIXOLOGY** alone: Mixology is in the project but hasn't matched this track yet (give it a second).
+- **Who sets the vocal's level?** When Mixology moves this vocal's fader (its bridge is connected), FIT LEVEL and Auto
+  Analyze's "the beat is louder / quieter here" card say so: use Mixology's Balance or Auto Mix for the level then, so
+  the two don't both move it.
 - **Recorded too hot?** When Auto-Edit finds the vocal clipped or over the top of the meter in the recording itself,
   Voxology tells Mixology: its Auto Mix, Balance, Polish and Vocal Pocket then say "fix this first" above their changes
   (lower the clip gain, then let Mixology hear it again), because their level moves depend on it.
@@ -352,9 +380,12 @@ finished mix into the master. In the same Cubase project they tell each other wh
   and Afrobeats, R&B for R&B, Pop for Pop, Natural Singer for Rock, Folk for Folk. It does that only on a track
   where you haven't picked the STYLE yourself (or chose **Follow the song** in the STYLE list): a song with rap verses and a melodic hook keeps each track's vocal style.
   Projects from before the shared style keep their vocal style as it was.
-- Needs Mixology 0.8 (and Masterology 0.26) or newer; the shared song style needs Voxology 0.49, Mixology 0.12 and
-  Masterology 0.28; the shared DAW and the "recorded too hot" note need Voxology 0.50, Mixology 0.13 and Masterology
-  0.29 (update all three together: older and newer ones don't see each other).
+- **The beat's key** found by a Voxology in BEAT mode reaches Honey Tune and every Voxology in the project.
+- **Same DAW, same process.** The link only works inside one program. DAWs that can run each plug-in in its own process
+  keep them apart: in Bitwig set Settings > Plug-ins > Plug-in hosting to "By manufacturer" or "Together", in REAPER
+  don't run them as separate / dedicated processes, in FL Studio don't make them bridged.
+- Needs Voxology 0.52, Mixology 0.21 and Masterology 0.29.3 or newer, all three (the Sonicology installer puts in a
+  matching set). Older and newer ones don't see each other: update all three together.
 
 ## Troubleshooting
 
@@ -363,7 +394,7 @@ finished mix into the master. In the same Cubase project they tell each other wh
 | Chrome says the download is dangerous | Ctrl+J, then Keep. The plug-ins aren't code-signed yet |
 | Voxology or Honey Tune doesn't show in Cubase | Check the .vst3 files are in C:\Program Files\Common Files\VST3, then Studio > VST Plug-in Manager > Rescan. Voxology is in the Vocals folder |
 | Voxology shows plain sliders instead of the honeycomb | WebView2 is missing on Windows. Install Microsoft Edge WebView2 Runtime, then reopen |
-| Auto-Edit says TRY AGAIN | It didn't hear enough voice. Play a part with singing or rapping for at least 12 seconds |
+| Auto-Edit says TRY AGAIN | It didn't hear enough voice. Play a part with singing or rapping for at least 12 seconds. If an earlier Auto-Edit worked, its settings stay on and its report stays below the warning |
 | Crackle or harsh distortion | Look at Cleanup: "clipped in!" means the recording itself is clipped. Record again with the mic gain lower |
 | Pitch sounds off-key | Check the key on the Pitch page. Send the beat to the side-chain, or pick the key under MANUAL |
 | A sample-pack vocal or beat sounds off-key | Pack file names are often wrong about the key (in one tested pack, 24 of 54 were a semitone off). Leave Key on AUTO, or check the key by ear or with a key app |
