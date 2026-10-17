@@ -29,7 +29,7 @@ public:
     std::atomic<int> unmaskSource { -1 };
     int getLinkSlot() const noexcept { return linkSlot; }
     void setUnmaskSourceByName (const juce::String& name);   // "" = every vocal (message thread)
-    juce::String getUnmaskSourceName() const { return unmaskSourceName; }
+    juce::String getUnmaskSourceName() const { const juce::ScopedLock sl (styleLock); return unmaskSourceName; }
     bool isBeatMode() const noexcept { return modeParam != nullptr && modeParam->load() > 0.5f; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
@@ -105,7 +105,9 @@ public:
     std::atomic<double> hostBpm { 0.0 };
     AutoEditController autoEdit { parameters, [this] { return hostBpm.load(); } };
     ChainLibrary chains { parameters };   // My Chains + Quick Looks (message thread)
-    juce::String chainName;               // the chain last saved / loaded here (saved with the project; message thread)
+    /** The chain last saved / loaded here (saved with the project). Any thread: the host may save from another one. */
+    juce::String getChainName() const { const juce::ScopedLock sl (styleLock); return chainName; }
+    void setChainName (const juce::String& n) { const juce::ScopedLock sl (styleLock); chainName = n; }
 
     /** The suite link (Voxology, Mixology, Masterology): is a Mixology in this project, and what did it answer for
         this vocal (found it and treats it as a vocal, or why not; what it hears there). Message thread. */
@@ -174,7 +176,8 @@ private:
     static constexpr double kBeatKeySure = 0.5;   // confidence needed to start following a key (keep following down to 0.3)
     double preparedRate = 48000.0;
     int linkSlot = -1;
-    juce::String unmaskSourceName, pendingSourceName;   // message thread
+    juce::String unmaskSourceName, pendingSourceName;   // under styleLock (a project can load off the message thread)
+    juce::String chainName;                             // under styleLock
     void resolveUnmaskSource();
     void timerCallback() override;
     int timerTicks = 0;

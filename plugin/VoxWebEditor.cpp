@@ -117,18 +117,18 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
             complete (true);
         })
         .withNativeFunction ("listChains", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.chains.listJson()); })
-        .withNativeFunction ("getChainName", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.chainName); })
+        .withNativeFunction ("getChainName", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.getChainName()); })
         .withNativeFunction ("saveChain", [this] (const juce::Array<juce::var>& args, auto complete)
         {
             const bool ok = args.size() >= 1 && audioProcessor.chains.save (args[0].toString());
-            if (ok) audioProcessor.chainName = args[0].toString().trim().substring (0, 60);
+            if (ok) audioProcessor.setChainName (args[0].toString().trim().substring (0, 60));
             complete (ok);
         })
         .withNativeFunction ("loadChain", [this] (const juce::Array<juce::var>& args, auto complete)
         {
             // (kind: "yours", "look" or "fresh"; name; keep this song's key)
             const bool ok = args.size() >= 3 && audioProcessor.chains.load (args[0].toString(), args[1].toString(), static_cast<bool> (args[2]));
-            if (ok) audioProcessor.chainName = args[0].toString() == "yours" ? args[1].toString() : juce::String();
+            if (ok) audioProcessor.setChainName (args[0].toString() == "yours" ? args[1].toString() : juce::String());
             complete (ok);
         })
         .withNativeFunction ("deleteChain", [this] (const juce::Array<juce::var>& args, auto complete)
@@ -136,7 +136,7 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
             if (args.size() >= 1)
             {
                 audioProcessor.chains.remove (args[0].toString());
-                if (audioProcessor.chainName == args[0].toString()) audioProcessor.chainName = {};
+                if (audioProcessor.getChainName() == args[0].toString()) audioProcessor.setChainName ({});
             }
             complete (true);
         })
@@ -207,7 +207,11 @@ VoxWebEditor::~VoxWebEditor()
     for (const char* id : { "levelMatch", "listenA" })
         if (auto* prm = audioProcessor.parameters.getParameter (id))
             if (prm->getValue() > 0.5f)
+            {
+                prm->beginChangeGesture();
                 prm->setValueNotifyingHost (0.0f);
+                prm->endChangeGesture();
+            }
 }
 
 void VoxWebEditor::paint (juce::Graphics& g) { g.fillAll (juce::Colour (kBackground)); }

@@ -66,14 +66,18 @@ void VoxologyAudioProcessor::storeBeatMeters (const vox::BeatKey::Result& r) noe
 
 void VoxologyAudioProcessor::setUnmaskSourceByName (const juce::String& name)
 {
-    unmaskSourceName = name;
-    pendingSourceName = name;
+    {
+        const juce::ScopedLock sl (styleLock);
+        unmaskSourceName = name;
+        pendingSourceName = name;
+    }
     if (name.isEmpty()) unmaskSource.store (-1);
     resolveUnmaskSource();
 }
 
 void VoxologyAudioProcessor::resolveUnmaskSource()
 {
+    const juce::ScopedLock sl (styleLock);
     if (pendingSourceName.isEmpty()) return;
     for (const auto& s : vox::UnmaskLink::instance().sources())
         if (s.slot != linkSlot && juce::String (s.name) == pendingSourceName)
@@ -232,7 +236,12 @@ void VoxologyAudioProcessor::suggestVocalStyle()
     if (v < 0) return;
     auto* p = parameters.getParameter ("aeStyle");
     const float norm = p->convertTo0to1 (static_cast<float> (v));
-    if (std::abs (p->getValue() - norm) > 1e-4f) p->setValueNotifyingHost (norm);
+    if (std::abs (p->getValue() - norm) > 1e-4f)
+    {
+        p->beginChangeGesture();   // a host writing automation records it as a change, not a stray value
+        p->setValueNotifyingHost (norm);
+        p->endChangeGesture();
+    }
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout VoxologyAudioProcessor::createParameterLayout()
@@ -595,10 +604,10 @@ void VoxologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     {
         xml->setAttribute ("aeReport", autoEdit.getReportForSaving());
         xml->setAttribute ("aeReference", autoEdit.getReferenceForSaving());
-        xml->setAttribute ("umSource", unmaskSourceName);
+        xml->setAttribute ("umSource", getUnmaskSourceName());
         xml->setAttribute ("midiLearned", midiLearned.load());
         xml->setAttribute ("uiRed", uiRed.load() ? 1 : 0);
-        xml->setAttribute ("chainName", chainName);
+        xml->setAttribute ("chainName", getChainName());
         xml->setAttribute ("aeWatch", autoEdit.isWatchOn() ? 1 : 0);
         {
             // The song's style (shared with Mixology and Masterology) + when it was picked; and whether you picked
@@ -620,16 +629,15 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
         {
             const auto savedReport = xml->getStringAttribute ("aeReport");
             const auto savedReference = xml->getStringAttribute ("aeReference");
+            const bool watch = xml->getIntAttribute ("aeWatch", 0) != 0;
             xml->removeAttribute ("aeReport");
             xml->removeAttribute ("aeReference");
-            autoEdit.restoreReference (savedReference);
             setUnmaskSourceByName (xml->getStringAttribute ("umSource"));
             midiLearned.store (xml->getIntAttribute ("midiLearned", 0) & 0xFFF);
             xml->removeAttribute ("umSource");
             uiRed.store (xml->getIntAttribute ("uiRed", 0) != 0);
-            chainName = xml->getStringAttribute ("chainName");
+            setChainName (xml->getStringAttribute ("chainName"));
             xml->removeAttribute ("chainName");
-            autoEdit.setWatchOn (xml->getIntAttribute ("aeWatch", 0) != 0);
             xml->removeAttribute ("aeWatch");
             {
                 // The song's style. A project from before it existed keeps its vocal style as it was (you chose it).
@@ -652,7 +660,17 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
             xml->removeAttribute ("midiLearned");
             xml->removeAttribute ("uiRed");
             parameters.replaceState (juce::ValueTree::fromXml (*xml));
-            autoEdit.onStateRestored (savedReport);
+            // Auto-Edit's report, reference and Auto Analyze live on the message thread (its timer reads them):
+            // a host loading the project on another thread hands them over.
+            auto restoreAutoEdit = [this, savedReport, savedReference, watch] {
+                autoEdit.restoreReference (savedReference);
+                autoEdit.setWatchOn (watch);
+                autoEdit.onStateRestored (savedReport);
+            };
+            if (juce::MessageManager::existsAndIsCurrentThread()) restoreAutoEdit();
+            else juce::MessageManager::callAsync ([safe = juce::WeakReference<VoxologyAudioProcessor> (this), restoreAutoEdit] {
+                if (safe.get() != nullptr) restoreAutoEdit();
+            });
         }
 }
 
