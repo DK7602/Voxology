@@ -3,6 +3,8 @@
 // and tested without a DAW.
 //   ?hostile   names that try to break the page (markup, {daw} tokens, quotes, very long, emoji, right-to-left)
 //   ?chain=My%20Lead   the project's saved chain
+//   ?mixology=matched (the default) | beatTrack | noLink | noName | sharedName | notVocal | waiting | old (true, from an
+//     older plug-in) | none | cycle (each in turn, 3 s each); add &balances when Mixology rides this vocal's fader
 (function () {
   if (typeof window.__JUCE__ !== "undefined") return;
   const Q = new URLSearchParams(location.search);
@@ -147,6 +149,15 @@
   }
   setInterval(() => { if (ae.state === 1) { ae.progress = Math.min(1, ae.progress + 0.1 / 4); if (ae.progress >= 1) { ae.state = 2; setTimeout(aeFinish, 900); } } }, 100);
 
+  // What Mixology knows about this track (the bottom bar's MIXOLOGY, and the FIT LEVEL line).
+  const MIX_STATES = ["matched", "beatTrack", "noLink", "noName", "sharedName", "notVocal", "waiting", "old", "none"];
+  const mixology = () => {
+    let st = Q.get("mixology") || "matched";
+    if (st === "cycle") st = MIX_STATES[Math.floor(Date.now() / 3000) % MIX_STATES.length];
+    if (st === "old") return true;
+    if (st === "none") return null;
+    return { here: true, state: st, balances: Q.has("balances"), heard: st === "matched", vocalDb: -2.1, targetDb: -3.0 };
+  };
   // The song's style, shared with Mixology and Masterology (as if Mixology picked it).
   const daw = hostile ? { key: "<b>x</b>", picked: true, from: 9, detected: "{daw}" }
     : { key: location.hash === "#studioone" ? "studioone" : "cubase", picked: location.hash === "#studioone", from: 2, detected: "cubase" };
@@ -268,7 +279,7 @@
       peakGr: active("cpOn") && s("cpPeak") < 0 ? +(-5 * word * word).toFixed(1) : 0,
       levelGr: active("cpOn") && s("cpRatio") > 1.01 ? +(-4 * word).toFixed(1) : 0,
       satHarm: active("saOn") && s("saDrive") > 0 ? +(-42 + s("saDrive") * 3 + 2 * word).toFixed(1) : -100,
-      matchDb: -1.2, bpm: 140, sr: 48000, mixology: true, songStyle: song, daw,
+      matchDb: -1.2, bpm: 140, sr: 48000, mixology: mixology(), songStyle: song, daw,
       bkState: location.hash === "#beat" ? 5 : 1, bkSource: 2, scState: 2, bkOpen: -1, bkKey: 7, bkMode: 7, bkSet: 0, bkUnclear: 0, bkConf: 0.86, bkTune: -28, bkHeard: 24, keyUsed: 11, scaleUsed: 2, midiNotes: (1 << 11) | (1 << 2), notesUsed: 0b110010101101 & ~(1 << 6), recMode: 1, latencyMs: 6.1,
       pitchSung: sing ? +(57 + 0.25 * Math.sin(t * 3)).toFixed(2) : 0, pitchTarget: sing ? 57 : -1,
       pitchCorr: sing && sliders.ptAmount.value > 0 ? +(-0.25 * Math.sin(t * 3) * sliders.ptAmount.value / 100).toFixed(2) : 0,

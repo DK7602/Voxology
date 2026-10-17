@@ -1652,6 +1652,7 @@ function analyzeBlock() {
       todo.forEach((c) => ul.append(el("li", "", changeLine(c))));
       card.append(ul);
     }
+    if (n.key === "beatlevel") { const mix = mixologyBalanceLine(); if (mix) card.append(mix); }
     const row = el("div", "aa-row");
     if (todo.length) {
       const apply = el("button", "chip on", "APPLY");
@@ -1703,6 +1704,8 @@ function fitLevelButton() {
   });
   show();
   wrap.append(b, note);
+  const mix = mixologyBalanceLine();
+  if (mix) wrap.append(mix);
   return wrap;
 }
 
@@ -2085,6 +2088,54 @@ async function fetchReport(switchTab) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// MIXOLOGY in the bottom bar: what Mixology (the suite link) knows about this track. The plug-in sends
+// frame.mixology = { here, state, balances, heard, vocalDb, targetDb } (null / false: no Mixology; true, from an
+// older plug-in: Mixology is in the project, nothing known about this track). Every word of it is here.
+const MIXOLOGY_TEXT = {
+  matched: { bar: " · MIXOLOGY ✓", tip: "Mixology is in this project: it sees what Voxology does on this vocal and won't add a second compressor, reverb or delay." },
+  beatTrack: { bar: " · MIXOLOGY ✓", tip: "Mixology is in this project: it knows this track is the beat." },
+  noLink: { bar: " · MIXOLOGY: ADD LINK", tip: "Mixology is in this project but can't hear this track: put Mixology Link on it {daw:linkAfterVoxology}." },
+  noName: { bar: " · MIXOLOGY: NO TRACK NAME", tip: "{daw} doesn't tell plug-ins this track's name, so Mixology can't match it." },
+  sharedName: { bar: " · MIXOLOGY: RENAME TRACK", tip: "Another track has the same name: rename one so Mixology can tell them apart." },
+  notVocal: { bar: " · MIXOLOGY: NOT A VOCAL THERE", tip: "In Mixology this track's role isn't a vocal: change it on Mixology's Tracks page if it is one." },
+  waiting: { bar: " · MIXOLOGY", tip: "Mixology is in this project; it hasn't matched this track yet." },
+  here: { bar: " · MIXOLOGY", tip: "Mixology is in this project." },
+  // Added to "matched" when Mixology hears the vocal against the beat ({vocal}, {target}: "-2.1 dB").
+  heard: "Mixology hears this vocal {vocal} against the beat (your style wants {target}).",
+  // Under FIT LEVEL and Auto Analyze's THE BEAT IS LOUDER / QUIETER HERE card, when Mixology rides this vocal's fader.
+  balances: "Mixology sets this vocal's level with its fader: use Mixology's Balance (or Auto Mix) instead, so the two don't both move it.",
+};
+const MIXOLOGY_STATES = ["matched", "beatTrack", "noLink", "noName", "sharedName", "notVocal", "waiting"];
+/** Mixology's word on this track from the latest frame: null (no Mixology) or { bar, tip, balances }. */
+function mixologyNow() {
+  const x = M.mixology;
+  if (x === true) return { ...MIXOLOGY_TEXT.here, balances: false };
+  if (!x || typeof x !== "object" || !x.here) return null;
+  const state = MIXOLOGY_STATES.includes(x.state) ? x.state : "waiting";
+  let tip = D(MIXOLOGY_TEXT[state].tip);
+  if (state === "matched" && x.heard && Number.isFinite(x.vocalDb) && Number.isFinite(x.targetDb))
+    tip += " " + MIXOLOGY_TEXT.heard.replace("{vocal}", fmtSigned(x.vocalDb)).replace("{target}", fmtSigned(x.targetDb));
+  return { bar: MIXOLOGY_TEXT[state].bar, tip, balances: !!x.balances };
+}
+/** The line under a level move when Mixology rides this vocal's fader (null: no line). */
+const mixologyBalanceLine = () => { const x = mixologyNow(); return x && x.balances ? el("div", "l-why", MIXOLOGY_TEXT.balances) : null; };
+
+/** The bottom bar's status: its parts in order. If they don't fit next to the DAW pick, the tempo goes first,
+    then REC's milliseconds and MATCH's dB (whatever still doesn't fit ends in "…": styles.css). */
+let statusShown = "";
+function showStatus(parts) {
+  const st = $("status");
+  const key = parts.map((p) => p.text).join("") + "|" + DAW.detected;
+  if (key === statusShown) return;
+  statusShown = key;
+  const fits = (texts) => { st.textContent = texts.join(""); return st.scrollWidth <= st.clientWidth + 1; };
+  const noTempo = parts.filter((p) => p.id !== "bpm");
+  if (fits(parts.map((p) => p.text)) || fits(noTempo.map((p) => p.text))) return;
+  fits(noTempo.map((p) => p.short ?? p.text));
+}
+let balancesShown = false;
+
+// ---------------------------------------------------------------------------------------------
 // Meters
 function refreshAll() {
   cellsByModule.flat().forEach((c) => c.refresh && c.refresh());
@@ -2127,10 +2178,18 @@ window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
     else if (learnTab === "report") { const st = document.querySelector(".aa-status"); if (st) st.textContent = analyzeStatus(); }
   });
   frameStep("status", () => {
-    const match = (on("levelMatch") ? ` · MATCH ${fmtSigned(M.matchDb)}` : "") + (M.recMode ? ` · REC ${M.latencyMs.toFixed(1)} ms` : "");
+    const mix = mixologyNow();
+    const parts = [{ text: on("bypass") ? "BYPASSED · CLICK TO SWITCH ON" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY" }];
+    if (on("levelMatch")) parts.push({ text: ` · MATCH ${fmtSigned(M.matchDb)}`, short: " · MATCH" });
+    if (M.recMode) parts.push({ text: ` · REC ${M.latencyMs.toFixed(1)} ms`, short: " · REC" });
+    if (M.bpm > 0) parts.push({ id: "bpm", text: ` · ${M.bpm.toFixed(0)} BPM` });
+    if (mix) parts.push({ text: mix.bar });
     $("status").classList.toggle("bypassed", on("bypass"));
-    $("status").textContent = `${on("bypass") ? "BYPASSED · CLICK TO SWITCH ON" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY"}${match}${M.bpm > 0 ? ` · ${M.bpm.toFixed(0)} BPM` : ""}${M.mixology ? " · MIXOLOGY ✓" : ""}`;
-    $("status").title = on("bypass") ? "Voxology's own bypass is on (saved with the project, or automated). Click to switch Voxology back on." : M.mixology ? (beat ? "Mixology is in this project: it knows this track is the beat." : "Mixology is in this project: it sees what Voxology does on this vocal and won't add a second compressor, reverb or delay.") : "";
+    showStatus(parts);
+    $("status").title = on("bypass") ? "Voxology's own bypass is on (saved with the project, or automated). Click to switch Voxology back on." : mix ? mix.tip : "";
+    // Mixology started or stopped riding this vocal's fader: the Report's level advice changes with it.
+    const balances = !!(mix && mix.balances);
+    if (balances !== balancesShown) { balancesShown = balances; if (learnTab === "report") { const top = body.scrollTop; renderLearn(); body.scrollTop = top; } }
   });
   frameStep("draw", draw);
   frameStep("learn", () => { if (learnTab === "module") renderLearn(false); });

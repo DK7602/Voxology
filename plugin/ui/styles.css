@@ -262,7 +262,8 @@ html.kbd .knob:focus { filter: drop-shadow(0 0 6px var(--blue)); }
   letter-spacing: 0.04em; box-shadow: inset 0 0 0 1px rgba(201, 151, 58, 0.55); cursor: pointer; }
 .daw-pick select:hover { box-shadow: inset 0 0 0 1.5px var(--gold); }
 #footer > .mono, #footer #status { white-space: nowrap; }
-#footer #status { flex-shrink: 0; }
+/* The status keeps its width; only when it can't fit next to the DAW pick (app.js drops the tempo first) does it end in "…". */
+#footer #status { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #footer { --glass: rgba(255, 250, 240, 0.66); left: 16px; top: 848px; width: 1568px; height: 38px; display: flex; align-items: center; gap: 22px; padding: 0 18px; border-radius: 14px; }
 .meter { display: flex; align-items: center; gap: 8px; }
 .m-label { font-weight: 700; font-size: 12px; letter-spacing: 0.12em; color: var(--ink-soft); }
