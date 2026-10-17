@@ -148,11 +148,20 @@ private:
     std::atomic<int> midiLearned { 0 };   // Learn: the scale taught by MIDI (saved with the project)
 
     vox::VocalChain chain, recChain;    // recChain: Record mode (low latency), prepared alongside
-    bool usingRec = false;
+    std::atomic<bool> usingRec { false };
     std::atomic<float>* recParam = nullptr;
     std::atomic<int> wantedLatency { 0 };
-    vox::VocalChain& active() noexcept { return usingRec ? recChain : chain; }
-    void handleAsyncUpdate() override { setLatencySamples (wantedLatency.load()); }
+    vox::VocalChain& active() noexcept { return usingRec.load() ? recChain : chain; }
+    vox::VocalChain& standbyChain() noexcept { return usingRec.load() ? chain : recChain; }
+    void handleAsyncUpdate() override;
+    // Switching Record mode: the other chain is cleaned on the message thread after it was last used (a reset takes
+    // milliseconds: too long for the audio thread), hears the vocal for its latency, then crossfades in (20 ms).
+    enum : int { standbyClean = 0, standbyDirty = 1, standbyCleaning = 2 };
+    std::atomic<int> standby { standbyClean };
+    int switchPos = -1;                  // samples into a switch (-1 = none); audio thread
+    void cleanStandby() noexcept;
+    template <typename Sample>
+    void switchChains (juce::AudioBuffer<Sample>& buffer, int nch, int n) noexcept;
     vox::ChainParams chainParams;
     VoxParams::Reader reader;
     vox::LoudnessMeter inMeter, outMeter;
