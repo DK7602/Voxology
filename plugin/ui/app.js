@@ -1924,7 +1924,7 @@ const chSave = Juce.getNativeFunction("saveChain");
 const chLoad = Juce.getNativeFunction("loadChain");
 const chDelete = Juce.getNativeFunction("deleteChain");
 const chGetName = Juce.getNativeFunction("getChainName");
-let chainMenu = null, lastChain = "";
+let chainMenu = null, lastChain = "", chainChanged = false;   // lastChain: the chain this project uses ("" = none)
 const keepKeyPref = () => { try { return localStorage.getItem("voxKeepKey") !== "0"; } catch { return true; } };
 function closeChainMenu() { if (chainMenu) { chainMenu.remove(); chainMenu = null; } }
 async function openChainMenu() {
@@ -1949,11 +1949,12 @@ async function openChainMenu() {
     m.append(row);
   };
   const loaded = async (kind, name) => {
-    if (await chLoad(kind, name, keepKeyPref())) { lastChain = kind === "yours" ? name : ""; renderChainChip(); refreshAll(); }
+    if (await chLoad(kind, name, keepKeyPref())) { lastChain = kind === "yours" ? name : ""; chainChanged = true; renderChainChip(); refreshAll(); }
   };
   m.append(el("div", "ref-head", "MY CHAINS · your whole setup, in every project"));
   if (!lib.yours.length) m.append(el("div", "ref-hint", "Get a sound you like (Auto-Edit, then your tweaks), then save it here to use on your next song."));
-  for (const c of lib.yours) item(c.name, "Load it: every module as you saved it" + (keepKeyPref() ? " (this song's key stays)" : ""), () => loaded("yours", c.name), () => chDelete(c.name));
+  for (const c of lib.yours) item(c.name, "Load it: every module as you saved it" + (keepKeyPref() ? " (this song's key stays)" : ""), () => loaded("yours", c.name),
+    async () => { await chDelete(c.name); if (lastChain === c.name) { lastChain = ""; chainChanged = true; renderChainChip(); } });
   // Save: a name box right in the menu.
   const saveRow = el("div", "ref-item chain-save");
   const input = el("input", "chain-name");
@@ -1964,7 +1965,7 @@ async function openChainMenu() {
   const doSave = async () => {
     const name = input.value.trim();
     if (!name) { input.focus(); return; }
-    if (await chSave(name)) { lastChain = name; renderChainChip(); closeChainMenu(); }   // (the chip shows its name: saved)
+    if (await chSave(name)) { lastChain = name; chainChanged = true; renderChainChip(); closeChainMenu(); }   // (the chip shows its name: saved)
   };
   saveBtn.addEventListener("click", doSave);
   input.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") doSave(); if (e.key === "Escape") closeChainMenu(); });
@@ -1986,7 +1987,13 @@ async function openChainMenu() {
   document.body.append(m);
   chainMenu = m;
 }
-function renderChainChip() { $("chains").textContent = lastChain ? `☰ ${lastChain}` : "MY CHAINS"; }
+function renderChainChip() {
+  const c = $("chains");
+  c.textContent = lastChain ? `☰ ${lastChain}` : "MY CHAINS";
+  c.classList.toggle("named", !!lastChain);
+}
+// The chain this project uses (saved with it): the chip shows its name from the start.
+chGetName().then((n) => { if (!chainChanged) { lastChain = typeof n === "string" ? n : ""; renderChainChip(); } }).catch(() => {});
 document.addEventListener("mousedown", (e) => { if (chainMenu && !chainMenu.contains(e.target) && e.target !== $("chains")) closeChainMenu(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeChainMenu(); });
 $("chains").addEventListener("click", async () => { if (chainMenu) closeChainMenu(); else await openChainMenu(); });
