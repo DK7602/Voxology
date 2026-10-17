@@ -26,7 +26,8 @@
     The capture buffers are allocated on the message thread when listening starts, for the sample rate
     in use (a Voxology that never listens holds none). They only grow, and only while the audio thread
     is outside capture() (it flags each call), so nothing reallocates while it may be writing. Each run
-    has a session number; a result from an older session is thrown away.
+    has a session number; a result from an older session is thrown away. Closing the plug-in stops a
+    run that's still working (the jobs check a flag), so the DAW never waits on it.
 
     Auto Analyze (after an Auto-Edit, when switched on): the same buffers keep listening while the song plays and the
     window is open. Every kVoiceSeconds of voice a background check measures the part (vox::findNewNeeds against what
@@ -222,7 +223,9 @@ private:
     std::atomic<bool> refLoading { false };
     std::atomic<int> refVersion { 0 };
 
-    juce::ThreadPool pool { 1 };              // last: destroyed (and joined) first
+    std::atomic<bool> closing { false };      // the plug-in is going: running jobs stop early
+    // Last: destroyed (and joined) first. Low priority: the DAW and its audio come first.
+    juce::ThreadPool pool { 1, 0, juce::Thread::Priority::low };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AutoEditController)
 };

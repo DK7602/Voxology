@@ -11,6 +11,9 @@ AutoEditController::AutoEditController (juce::AudioProcessorValueTreeState& s, s
 
 AutoEditController::~AutoEditController()
 {
+    // A running Auto-Edit (about 12 s of work at 48 kHz, more at higher rates) stops at its next step, so closing the
+    // project doesn't wait on it.
+    closing.store (true);
     stopTimer();
     pool.removeAllJobs (true, 60000);
 }
@@ -199,6 +202,7 @@ void AutoEditController::launchAnalysis()
             auto s = settings;
             s.reference = ref != nullptr && ref->ok ? ref.get() : nullptr;
             s.beat = beat.get();
+            s.cancel = &closing;
             result = std::make_unique<vox::AutoEditResult> (vox::autoEdit (audio, sr, s));
         }
         catch (...)
@@ -441,11 +445,12 @@ void AutoEditController::launchCheck()
                     found.push_back (std::move (n));
             // ... and only when something needs a new setting, the full Auto-Edit on this part (seconds).
             const bool needSettings = std::any_of (found.begin(), found.end(), [] (const vox::AnalyzeNeed& n) { return ! n.retune.empty() || n.fitLevel; });
-            if (needSettings)
+            if (needSettings && ! closing.load())
             {
                 auto s = settings;
                 s.reference = ref != nullptr && ref->ok ? ref.get() : nullptr;
                 s.beat = beat.get();
+                s.cancel = &closing;
                 result = std::make_unique<vox::AutoEditResult> (vox::autoEdit (audio, sr, s));
             }
         }
@@ -717,8 +722,8 @@ void AutoEditController::loadReference (const juce::File& file)
             reader->read (&buf, 0, n, start, true, nch > 1);
             std::vector<std::vector<float>> audio (static_cast<size_t> (nch));
             for (int c = 0; c < nch; ++c) audio[static_cast<size_t> (c)].assign (buf.getReadPointer (c), buf.getReadPointer (c) + n);
-            *profile = vox::analyseReference (audio, sr, profile->name);
-            if (profile->ok)
+            *profile = vox::analyseReference (audio, sr, profile->name, &closing);
+            if (profile->ok && ! closing.load())
             {
                 // Keep its measurements in your reference library, so it's there in every project.
                 const auto folder = userReferenceFolder();

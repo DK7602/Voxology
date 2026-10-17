@@ -18,6 +18,24 @@ namespace {
 
 using Signal = std::vector<double>;
 
+/** Stopping early (the plug-in closing, its project with it): the flag of the autoEdit() / analyseReference() running on
+    this thread, checked between the long steps (each full render, compressor run and pitch frame). Never set: no effect. */
+thread_local const std::atomic<bool>* cancelFlag = nullptr;
+struct Cancelled {};
+void checkCancel()
+{
+    if (cancelFlag != nullptr && cancelFlag->load (std::memory_order_relaxed))
+        throw Cancelled {};
+}
+struct CancelScope
+{
+    explicit CancelScope (const std::atomic<bool>* flag) : previous (cancelFlag) { cancelFlag = flag; }
+    ~CancelScope() { cancelFlag = previous; }
+    CancelScope (const CancelScope&) = delete;
+    CancelScope& operator= (const CancelScope&) = delete;
+    const std::atomic<bool>* previous;
+};
+
 double percentile (std::vector<double> v, double p)
 {
     if (v.empty()) return -120.0;
@@ -142,6 +160,7 @@ std::vector<double> pitchTrack (const Signal& x, double sr, const std::vector<bo
     std::vector<double> r (maxLag + 1);
     for (size_t s = 0; s + win + maxLag < d.size(); s += step)
     {
+        checkCancel();
         const size_t frame = (s * static_cast<size_t> (dec)) / static_cast<size_t> (hop);
         if (frame >= mask.size() || ! mask[frame]) continue;
         double e0 = 0.0;
@@ -293,7 +312,8 @@ Signal renderMono (const Signal& x, double sr, const ChainParams& p)
 {
     std::vector<std::vector<float>> in (1, std::vector<float> (x.size()));
     for (size_t i = 0; i < x.size(); ++i) in[0][i] = static_cast<float> (x[i]);
-    const auto out = VocalChain::render (in, sr, p);
+    const auto out = VocalChain::render (in, sr, p, cancelFlag);
+    checkCancel();
     return Signal (out[0].begin(), out[0].end());
 }
 
@@ -315,6 +335,7 @@ ChainParams neutralChain()
 struct CompRun { std::vector<double> peakGr, levelGr; Signal out; };
 CompRun runComp (const Signal& x, double sr, const CompParams& p, int hop)
 {
+    checkCancel();
     VocalCompressor c;
     c.prepare (sr, 1);
     c.setParams (p);
@@ -719,12 +740,23 @@ bool looksSplit (const std::string& fileName)
     return s == "vocals" || s == "vocal";   // (Demucs names its output just "vocals")
 }
 
-ReferenceProfile analyseReference (const std::vector<std::vector<float>>& audio, double sr, const std::string& name)
+ReferenceProfile analyseReference (const std::vector<std::vector<float>>& audio, double sr, const std::string& name,
+                                   const std::atomic<bool>* cancel)
 {
     ReferenceProfile r;
     r.name = name;
     r.split = looksSplit (name);
-    const auto a = analyseVocal (audio, sr);
+    VocalAnalysis a;
+    try
+    {
+        const CancelScope scope (cancel);
+        a = analyseVocal (audio, sr);
+    }
+    catch (const Cancelled&)
+    {
+        r.problem = "Stopped before the reference was measured.";
+        return r;
+    }
     r.voicedSeconds = a.voicedSeconds;
     r.bandDb = a.bandDb;
     r.sibilanceDb = a.sibilanceDb;
@@ -1034,9 +1066,8 @@ void vocalFit (AutoEditResult& r, const std::vector<float>& beatAudio, const Sig
               "From 250 Hz to 6.3 kHz, where words live, your finished vocal stands out from this beat about as much as in pro mixes.");
 }
 
-} // namespace
-
-AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr, const AutoEditSettings& settings)
+/** Auto-Edit's work (autoEdit() below runs it, and stops it early when asked). */
+AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, double sr, const AutoEditSettings& settings)
 {
     AutoEditResult r;
     const int style = std::clamp (settings.style, 0, kStyles - 1);
@@ -2184,6 +2215,23 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
     r.params = p;
     r.ok = true;
     return r;
+}
+
+} // namespace
+
+AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr, const AutoEditSettings& settings)
+{
+    try
+    {
+        const CancelScope scope (settings.cancel);
+        return listenAndDecide (audio, sr, settings);
+    }
+    catch (const Cancelled&)
+    {
+        AutoEditResult r;
+        r.summary = "Auto-Edit was stopped before it finished.";
+        return r;
+    }
 }
 
 } // namespace vox

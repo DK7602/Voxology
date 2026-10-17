@@ -72,7 +72,7 @@ private:
 } // namespace
 
 // ------------------------------------------------------------------------------------------------
-void aiCheck (Track& t, const std::vector<float>& mono, double sr)
+void aiCheck (Track& t, const std::vector<float>& mono, double sr, const std::atomic<bool>* cancel)
 {
     const size_t n = t.midi.size();
     if (n == 0 || mono.empty()) return;
@@ -101,6 +101,7 @@ void aiCheck (Track& t, const std::vector<float>& mono, double sr)
             crepe::Tiny net;
             for (size_t j = w; j < todo.size(); j += threads)
             {
+                if (cancel != nullptr && cancel->load (std::memory_order_relaxed)) return;
                 const auto c = static_cast<size_t> (times[todo[j]] * crepe::kRate);
                 est[todo[j]] = net.run (x.data() + c - 512);
             }
@@ -160,7 +161,7 @@ void aiCheck (Track& t, const std::vector<float>& mono, double sr)
     }
 }
 
-Track analyse (const std::vector<float>& mono, double sr, bool ai)
+Track analyse (const std::vector<float>& mono, double sr, bool ai, const std::atomic<bool>* cancel)
 {
     Track t;
     t.sampleRate = sr;
@@ -170,6 +171,7 @@ Track analyse (const std::vector<float>& mono, double sr, bool ai)
     double lastTime = -1.0e18;
     for (size_t s = 0; s < mono.size(); s += buf.size())
     {
+        if (s % 8192 == 0 && cancel != nullptr && cancel->load (std::memory_order_relaxed)) return t;
         const size_t n = std::min (buf.size(), mono.size() - s);
         for (size_t i = 0; i < n; ++i) buf[i] = mono[s + i];
         double* p = buf.data();
@@ -221,7 +223,7 @@ Track analyse (const std::vector<float>& mono, double sr, bool ai)
         for (size_t j = i - 2; j <= i + 2; ++j) if (fixed[j] > 0.0) w.push_back (fixed[j]);
         if (w.size() >= 3) t.midi[i] = median (w);
     }
-    if (ai) aiCheck (t, mono, sr);
+    if (ai) aiCheck (t, mono, sr, cancel);
     return t;
 }
 
@@ -378,7 +380,7 @@ std::vector<double> planFormant (const Track& t, const std::vector<Note>& notes)
 /** Runs the shifter over input [from, to) (plus its latency) and hands each output sample to put(index, value). */
 template <typename Put>
 void runShifter (const std::vector<float>& mono, double sr, const Track& t, const std::vector<double>& shift,
-                 const std::vector<double>& formant, size_t from, size_t to, Put&& put)
+                 const std::vector<double>& formant, size_t from, size_t to, const std::atomic<bool>* cancel, Put&& put)
 {
     Plan plan (t, shift, static_cast<double> (from), &formant);
     PitchCorrector pc;
@@ -392,6 +394,7 @@ void runShifter (const std::vector<float>& mono, double sr, const Track& t, cons
     const size_t end = std::min (mono.size(), to);
     for (size_t s = from; s < end + lat; s += buf.size())
     {
+        if (cancel != nullptr && cancel->load (std::memory_order_relaxed)) return;
         const size_t len = std::min (buf.size(), end + lat - s);
         for (size_t i = 0; i < len; ++i) buf[i] = s + i < mono.size() ? mono[s + i] : 0.0;
         double* ptr = buf.data();
@@ -545,18 +548,19 @@ std::vector<float> warp (const std::vector<float>& x, double sr, const Track& t,
     return y;
 }
 
-std::vector<float> render (const std::vector<float>& mono, double sr, const Track& t, const std::vector<Note>& notes, double transitionMs)
+std::vector<float> render (const std::vector<float>& mono, double sr, const Track& t, const std::vector<Note>& notes, double transitionMs,
+                           const std::atomic<bool>* cancel)
 {
     std::vector<float> out (mono.size(), 0.0f);
     auto put = [&out] (size_t o, double v) { out[o] = static_cast<float> (v); };
     const auto map = timeMap (notes, static_cast<double> (mono.size()), sr);
     if (map.identity)
     {
-        runShifter (mono, sr, t, planShift (t, notes, transitionMs), planFormant (t, notes), 0, mono.size(), put);
+        runShifter (mono, sr, t, planShift (t, notes, transitionMs), planFormant (t, notes), 0, mono.size(), cancel, put);
         return out;
     }
     const auto r = retime (mono, sr, t, notes, map, 0, mono.size());
-    runShifter (r.audio, sr, r.track, planShift (r.track, r.notes, transitionMs), planFormant (r.track, r.notes), 0, mono.size(), put);
+    runShifter (r.audio, sr, r.track, planShift (r.track, r.notes, transitionMs), planFormant (r.track, r.notes), 0, mono.size(), cancel, put);
     return out;
 }
 
@@ -600,7 +604,7 @@ bool changedRegion (const std::vector<Note>& before, const std::vector<Note>& af
 }
 
 void renderPart (const std::vector<float>& mono, double sr, const Track& t, const std::vector<Note>& notes,
-                 std::vector<float>& previous, double from, double to, double transitionMs)
+                 std::vector<float>& previous, double from, double to, double transitionMs, const std::atomic<bool>* cancel)
 {
     if (previous.size() != mono.size() || to <= from) return;
     // Start 0.3 s early (the shifter settles), crossfade 10 ms into the old render at both joins.
@@ -613,7 +617,7 @@ void renderPart (const std::vector<float>& mono, double sr, const Track& t, cons
     const auto& src = map.identity ? mono : r.audio;
     const auto& trk = map.identity ? t : r.track;
     const auto& nts = map.identity ? notes : r.notes;
-    runShifter (src, sr, trk, planShift (trk, nts, transitionMs), planFormant (trk, nts), a, b, [&] (size_t o, double v)
+    runShifter (src, sr, trk, planShift (trk, nts, transitionMs), planFormant (trk, nts), a, b, cancel, [&] (size_t o, double v)
     {
         const double x = static_cast<double> (o);
         const double w = from <= 0.0 && x < from + 1.0 ? 1.0 : std::clamp (std::min ((x - (from - xf)) / xf, ((to + xf) - x) / xf), 0.0, 1.0);

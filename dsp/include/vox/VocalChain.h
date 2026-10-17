@@ -14,6 +14,7 @@
 #include "Voices.h"
 
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <vector>
 
@@ -114,8 +115,10 @@ public:
     ChainMeters takeMeters() noexcept;
     double getSampleRate() const noexcept { return sr; }
 
-    /** Renders a whole clip offline (latency removed), for Auto-Edit and the tests. */
-    static std::vector<std::vector<float>> render (const std::vector<std::vector<float>>& in, double sampleRate, const ChainParams& p);
+    /** Renders a whole clip offline (latency removed), for Auto-Edit and the tests. Stops early (the rest silent)
+        once `cancel` is set (another thread: the plug-in closing). */
+    static std::vector<std::vector<float>> render (const std::vector<std::vector<float>>& in, double sampleRate, const ChainParams& p,
+                                                   const std::atomic<bool>* cancel = nullptr);
 
 private:
     void processChunk (int nch, int len) noexcept;

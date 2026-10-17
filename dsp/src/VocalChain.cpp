@@ -235,7 +235,8 @@ void VocalChain::processChunk (int nch, int len) noexcept
     }
 }
 
-std::vector<std::vector<float>> VocalChain::render (const std::vector<std::vector<float>>& in, double sampleRate, const ChainParams& p)
+std::vector<std::vector<float>> VocalChain::render (const std::vector<std::vector<float>>& in, double sampleRate, const ChainParams& p,
+                                                    const std::atomic<bool>* cancel)
 {
     if (in.empty()) return {};
     const int nch = std::min (static_cast<int> (in.size()), kMaxChannels);
@@ -253,6 +254,8 @@ std::vector<std::vector<float>> VocalChain::render (const std::vector<std::vecto
     const int total = n + lat;
     for (int start = 0; start < total; start += kChunk)
     {
+        if (cancel != nullptr && cancel->load (std::memory_order_relaxed))
+            break;
         const int len = std::min (kChunk, total - start);
         for (int c = 0; c < nch; ++c)
             for (int i = 0; i < len; ++i)
