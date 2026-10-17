@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.50.3. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.51.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -13,7 +13,7 @@ Voxology goes on your vocal track as an insert; Honey Tune is a separate note ed
 2. In Chrome, press **Ctrl+J** and click **Keep** if Chrome warns about the download.
 3. Unzip it. Copy **Voxology.vst3** (and **HoneyTune.vst3** if it is in the zip) to `C:\Program Files\Common Files\VST3`. Replace the old ones if Windows asks.
 4. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new version does not show.
-5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.50.3**).
+5. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.51.0**).
 
 Where each one goes in Cubase:
 
@@ -92,6 +92,13 @@ Every knob:
 | 11 | Delay | Echoes locked to the song's tempo | Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong, Throw (an echo on each line's last word) |
 | 12 | Reverb | A vocal plate: a space for the voice | Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps), Throw (a wash after each line) |
 | 13 | Output | Final level into your mix | Output gain |
+
+**Pitch: which mode for which sound.**
+
+- **Robot**: the hard robot / T-Pain effect. Every moment sits on the note, whatever Retune says. Use it to pull a line you sang off-key onto the notes on purpose.
+- **Classic**: at Retune 0 - 10 ms the hard melodic-trap tune (notes snap, slides become steps); slower, a softer tune that only fixes drift.
+- **Natural**: each note lands at the Retune speed while your vibrato (and the start of a scoop) stays, so it's never quite flat: for the flat robot sound pick Robot. At Retune 5 ms and faster it changes notes as fast as you sing (within about 25 ms); from 20 ms up it waits a little longer to be sure, so a wide vibrato never flips to the next note.
+- Pitch reads your pitch over two or three cycles of your voice and stamps each reading with the exact moment it describes (v0.51). Every real voice is a little uneven from cycle to cycle; reading one cycle at a time followed that unevenness, and a hard tune came out wobbly. Measured on a raw vocal at Retune 0 against Cubase Pitch Correct and Waves Tune Real-Time at their fastest: Robot now lands on the notes as reliably as Waves (about 7 % of the time more than 30 cents off a note, mostly the slides between notes) with about 3 - 4 cents of wobble left inside held notes (it was about 6).
 
 **Noise and Room (Cleanup)** work before anything else in the chain, so Pitch and the gate already hear the cleaner vocal.
 
@@ -370,5 +377,7 @@ finished mix into the master. In the same Cubase project they tell each other wh
 | MIDI chords is on in Voices but nothing sings | The voices sing only while a MIDI note is held. Set a MIDI track's output to Voxology and play or draw notes (see Stack, MIDI chords and Crew) |
 | Auto Analyze says "Run Auto-Edit first" | It compares every part with what Auto-Edit heard. Run Auto-Edit once, then it starts listening |
 | Auto Analyze never adds a card | Good news: every part so far fits your settings ("this part fits your settings"). It also needs the window open and the song playing |
+| A hard tune sounds wobbly, not robotic | Use **Robot** mode (or Classic with Retune at 0). Natural keeps your vibrato on purpose, and a Retune of 10 - 20 ms leaves a lot of your own wobble in |
+| The tuned vocal is late against the beat in an export | Voxology delays the vocal about 55 ms (REC: about 6 ms) and tells your DAW, which plays the track that much earlier to make up for it. If it still comes out late, your DAW didn't make up for it: in Cubase switch **Constrain Delay Compensation** off (toolbar), and don't switch REC on or off just before exporting |
 | B always sounds better than A | Turn on MATCH so both play at the same loudness |
 | Mixology doesn't show the VOX tag on your vocal | Update Voxology (0.47+) and Mixology (0.8+). The tag follows the track's name: if two tracks share a name, rename one |

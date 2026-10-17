@@ -71,8 +71,9 @@ inline constexpr double kMaxFormant = 6.0;
 /** Pitch correction ("auto-tune") for a single voice.
 
     Detection: YIN (cumulative mean normalised difference) on a 12 kHz copy every ~2.7 ms, the
-    period refined at full rate by normalised cross-correlation, with a voicing decision (YIN
-    aperiodicity + level), so breaths and "s" sounds are never pitched.
+    period refined at full rate by normalised cross-correlation over two or three periods (each reading
+    stamped with the moment it describes), with a voicing decision (YIN aperiodicity + level), so
+    breaths and "s" sounds are never pitched.
     Decision: the nearest note of the key / scale, with hysteresis so a note doesn't flicker at the
     boundary. The correction (in semitones) glides to its target with the Retune Speed time constant,
     so slow speeds keep vibrato and only fix drift; Humanize slows it further on sustained notes.
@@ -185,6 +186,7 @@ private:
     double centreA = 0.0, centreB = 0.0;  // Natural: the note's centre (two one-poles over the sung pitch)
     Biquad vibBp;                      // Natural: the vibrato band of the sung pitch
     std::array<double, 3> rawP {};     // newest period readings (median of three)
+    std::array<double, 3> rawT {};     // ... and the input time each one describes
     double lastP = 0.0;                // previous period reading (octave guard)
     double clarityS = 1.0;             // smoothed note clarity (how much of the correction to apply)
     int voicedRun = 0;                 // + consecutive voiced readings, - consecutive unvoiced

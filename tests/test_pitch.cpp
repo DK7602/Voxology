@@ -4,6 +4,7 @@
 
 #include <complex>
 #include <numeric>
+#include <random>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -83,6 +84,29 @@ std::vector<double> voiceCurve (F hz, double seconds)
         ph += hz (static_cast<double> (i) / kSr) / kSr;
         double s = 0.0;
         for (int h = 1; h * hz (static_cast<double> (i) / kSr) < 8000.0; ++h) s += std::sin (2 * std::numbers::pi * h * ph) / h;
+        x[i] = 0.1 * formant.process (s);
+    }
+    return x;
+}
+
+/** voiceCurve with a real voice's roughness: every glottal cycle has its own small period error (jitter, as a
+    fraction: 0.005 = 0.5 %, typical of a healthy voice). */
+template <typename F>
+std::vector<double> roughVoice (F hz, double seconds, double jitter)
+{
+    const size_t n = static_cast<size_t> (kSr * seconds);
+    std::vector<double> x (n);
+    std::mt19937 rng (5);
+    std::normal_distribution<double> g (0.0, 1.0);
+    double ph = 0.0, cycle = 1.0;
+    Biquad formant; design::apply (formant, design::bell (700.0, 9.0, 2.0, kSr));
+    for (size_t i = 0; i < n; ++i)
+    {
+        const double f = hz (static_cast<double> (i) / kSr) * cycle, before = ph;
+        ph += f / kSr;
+        if (std::floor (ph) != std::floor (before)) cycle = 1.0 + jitter * g (rng);
+        double s = 0.0;
+        for (int h = 1; h * f < 8000.0; ++h) s += std::sin (2 * std::numbers::pi * h * ph) / h;
         x[i] = 0.1 * formant.process (s);
     }
     return x;
@@ -523,4 +547,103 @@ TEST_CASE ("Pitch: Natural doesn't restart a long note with a wide vibrato (no w
     CHECK (worst < 0.05);          // no jumps (was ~0.25 semitone when the note restarted)
     CHECK (hi < 0.0);              // always pulling a sharp note down
     CHECK (lo > -0.8);
+}
+
+TEST_CASE ("Pitch: readings describe the moment they're stamped with (no lag on a moving voice)", "[pitch]")
+{
+    // An octave glide in 1 s (1200 cents / s): a reading stamped 3 ms late is 3.6 cents off. The grains use the
+    // reading for their own moment, so a late stamp puts every correction off on vibrato and slides: wobble.
+    // (It was 3.3 cents late: the median of three readings was stamped with the newest one's time.)
+    const double fa = 180.0, fb = 360.0;
+    const auto x = voiceCurve ([&] (double t) { return fa * std::pow (fb / fa, t); }, 1.0);
+    PitchParams p; p.mode = kPitchClassic; p.amount = 100.0; p.speedMs = 0.0;
+    PitchCorrector pc; pc.setParams (p); pc.prepare (kSr, 1);
+    std::vector<double> buf (64);
+    double sum = 0.0, last = -1.0, worst = 0.0;
+    int n = 0;
+    for (size_t s = 0; s + 64 <= x.size(); s += 64)
+    {
+        std::copy (x.begin() + static_cast<long> (s), x.begin() + static_cast<long> (s + 64), buf.begin());
+        double* ptr = buf.data();
+        pc.process (&ptr, 1, 64);
+        const auto r = pc.reading();
+        if (! r.voiced || r.time == last) continue;
+        last = r.time;
+        const double t = r.time / kSr;
+        if (t < 0.2 || t > 0.8) continue;
+        const double err = (r.sungMidi - (69.0 + 12.0 * std::log2 (fa * std::pow (fb / fa, t) / 440.0))) * 100.0;
+        sum += err; worst = std::max (worst, std::abs (err)); ++n;
+    }
+    INFO ("mean reading error " << sum / n << " cents (negative = late), worst " << worst << " over " << n << " readings");
+    REQUIRE (n > 100);
+    CHECK (std::abs (sum / n) < 1.0);
+    CHECK (worst < 4.0);
+}
+
+TEST_CASE ("Pitch: a hard tune is flat on a rough voice (each cycle a little off)", "[pitch]")
+{
+    // G3 40 cents sharp with a slow wander and 0.5 % jitter (every glottal cycle its own small period error, as in
+    // any real voice). Robot at Retune 0 must sound one flat pitch. A pitch read over a single period followed each
+    // cycle's error, and the grains turned that into an 18-cent wobble (the "not smooth" next to other tuners).
+    const double g3 = 196.0 * std::pow (2.0, 40.0 / 1200.0);
+    const auto x = roughVoice ([g3] (double t) { return g3 * std::pow (2.0, (8.0 * std::sin (2 * std::numbers::pi * 2.3 * t) + 5.0 * std::sin (2 * std::numbers::pi * 6.1 * t)) / 1200.0); }, 3.0, 0.005);
+    PitchParams p; p.mode = kPitchRobot; p.amount = 100.0; p.speedMs = 0.0;
+    int lat = 0;
+    auto xp = x; xp.resize (x.size() + 4096, 0.0);
+    const auto y = run (p, xp, 256, &lat);
+    double s1 = 0.0, s2 = 0.0;
+    int n = 0;
+    for (double t = 0.5; t < 2.5; t += 0.02)
+    {
+        const double c = cents (measureHz (y, static_cast<size_t> (t * kSr) + static_cast<size_t> (lat), 960), 196.0);
+        s1 += c; s2 += c * c; ++n;
+    }
+    const double mean = s1 / n, wobble = std::sqrt (std::max (0.0, s2 / n - mean * mean));
+    INFO ("output " << mean << " cents from G3, wobble " << wobble << " cents (std over 20 ms windows)");
+    CHECK (std::abs (mean) < 2.0);
+    CHECK (wobble < 3.0);
+}
+
+TEST_CASE ("Pitch: Natural at a fast Retune keeps up with a fast melody", "[pitch]")
+{
+    // Ten 120 ms notes a semitone apart, 25 cents sharp, 15 ms slides between them. Natural used to wait 45 ms to be
+    // sure of a new note and then 0.15 s before the next one, whatever the Retune: at 0 ms the start of each note
+    // was snapped onto the old note, and some notes never landed at all. Now each one is taken within ~25 ms.
+    const std::vector<int> notes { 55, 56, 57, 56, 55, 57, 58, 57, 55, 56 };
+    const double len = 0.12, glide = 0.015;
+    auto hz = [&] (double t)
+    {
+        const int k = std::min (static_cast<int> (notes.size()) - 1, static_cast<int> (t / len));
+        const double u = t - k * len;
+        double m = notes[static_cast<size_t> (k)] + 0.25;
+        if (k > 0 && u < glide) m = notes[static_cast<size_t> (k - 1)] + 0.25 + (notes[static_cast<size_t> (k)] - notes[static_cast<size_t> (k - 1)]) * (u / glide);
+        return 440.0 * std::pow (2.0, (m - 69.0) / 12.0);
+    };
+    const auto x = voiceCurve (hz, len * static_cast<double> (notes.size()) + 0.1);
+    for (double speed : { 0.0, 5.0 })
+    {
+        PitchParams p; p.mode = kPitchNatural; p.amount = 100.0; p.speedMs = speed;
+        PitchCorrector pc; pc.setParams (p); pc.prepare (kSr, 1);
+        std::vector<double> buf (64), landed (notes.size(), -1.0);
+        double last = -1.0;
+        for (size_t s = 0; s + 64 <= x.size(); s += 64)
+        {
+            std::copy (x.begin() + static_cast<long> (s), x.begin() + static_cast<long> (s + 64), buf.begin());
+            double* ptr = buf.data();
+            pc.process (&ptr, 1, 64);
+            const auto r = pc.reading();
+            if (! r.voiced || r.time == last) continue;
+            last = r.time;
+            const double t = r.time / kSr;
+            const int k = static_cast<int> (t / len);
+            if (k < 1 || k >= static_cast<int> (notes.size())) continue;
+            if (landed[static_cast<size_t> (k)] < 0.0 && r.targetMidi == notes[static_cast<size_t> (k)]) landed[static_cast<size_t> (k)] = t - k * len;
+        }
+        for (size_t k = 1; k < notes.size(); ++k)
+        {
+            INFO ("Retune " << speed << " ms, note " << k << " (MIDI " << notes[k] << ") taken after " << landed[k] * 1000.0 << " ms (-1000 = never)");
+            CHECK (landed[k] >= 0.0);
+            CHECK (landed[k] < 0.035);
+        }
+    }
 }

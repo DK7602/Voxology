@@ -1785,3 +1785,29 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   builds Voxology for macOS (VST3 + AU).
 - daws.js synced with Mixology 0.18.0 (faders in FL Studio and Ableton Live; the same file in all three).
 - v0.50.3's own CI was cancelled; the next run (aa09d6d) caught the manual's "for example VOXOLOGY v0.50.2" line: fixed.
+
+## v0.51.0 Pitch: a steadier hard tune (2026-10-17)
+- User test: the same section tuned at Amount 100 / Retune 0 in Voxology, Cubase Pitch Correct and Waves Tune Real-Time
+  ("pitch correct and waves are way smoother"), as full mixes, then acapellas, then the raw vocal (sung off-key on purpose
+  for the robot effect). Files only in the session scratchpad (the user's audio; not in the repo).
+- Measured (harmonic tracker + Voxology's own YIN tracker, outputs aligned to the raw): wobble inside held notes raw 15 c,
+  Voxology export 14 c, Cubase 4.5 - 7, Waves 2 - 5; time > 30 c off a note 20 % vs 7 - 11 %. Running the engine on the raw
+  showed the export matches Classic, D major notes (= Cubase / Waves' notes), Retune ~10 - 20 ms (median 3.9 c from it),
+  not 0 (asked the user to check the knob). Also: the Voxology vocal was ~55 - 57 ms late in both exports (= its full
+  latency at 44.1 kHz: Cubase didn't compensate; told the user to check Constrain Delay Compensation / REC toggles; cause
+  not found).
+- Root cause of the remaining gap at a true Retune 0: the live detector, not the shifter (the same PSOLA driven by an
+  independent pitch line reached 2.7 c, Waves 2.2). Fixes in PitchCorrector::analyse: (1) the NCC refine reads 2 - 3
+  periods (up to 20 ms; one period followed each glottal cycle's jitter), stamped at the middle of what it read;
+  (2) the median of three is stamped at the middle reading's time (rawT; it was stamped "now": ~3 ms late on moving
+  pitch); (3) Natural's new-note wait / cooling / onset averaging scale with Retune: <= 5 ms: 10 ms / 40 ms / 80 ms,
+  >= 20 ms: the old 45 ms / 0.15 s / 0.25 s (wide-vibrato test at 25 ms still passes).
+- Results at Retune 0: detector error vs reference median 3.3 -> 1.2 c (p90 18.5 -> 6.4), time offset -4.5 -> -1.0 ms;
+  user's raw, Robot: wobble 6.0 -> 3.4 c, off-note 10.2 -> 7.0 % (Waves 7.0 %). hardtune audit (wrong-note time, Robot):
+  Gallas 17.4 -> 8.8 %, Schaf 24.0 -> 12.2 %, Don 9.0 -> 5.4 %; Natural blips >= 40 ms 58 / 62 / 108 -> 13 / 7 / 33.
+  live_pitch_audit at 25 - 60 ms: same or better everywhere (shifter err 1.5 -> 1.0 c, fewer jumps / flips). CPU +0.2 -
+  0.5 % of a core. New tests: readings' time stamps on a glide, a hard tune flat on a rough (0.5 % jitter) voice (was
+  18 c of wobble, now ~1.6), Natural at 0 / 5 ms takes each 120 ms note within 35 ms. Learn: "WANT THE ROBOT SOUND?" tip
+  (Natural, Amount >= 90, Retune <= 10 ms). REC tooltip / Learn now say ~6 ms instead of ~55 (was "33").
+- Tools used (scratchpad, not kept): hardtune_audit (vs an ideal hard tune), deterr (live readings vs a reference line),
+  an oracle Guide driving the shifter with an external pitch line. Next: the user's A/B of the same section again.

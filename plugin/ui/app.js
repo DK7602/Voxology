@@ -1239,7 +1239,7 @@ const LEARN = {
       "Humanize: lets long held notes keep their life while short notes still snap in.",
       "Notes: lit notes are the ones Pitch may pull you to. Click one to switch it off (it's never used), click again to bring it back.",
       "MIDI: in {daw}, {daw:midiToVoxology}. Notes = while you hold notes, your voice goes to those notes (play or draw the melody for the hard robot effect); nothing held = the key as usual. Learn = play the beat's notes or chords once and they become the scale (kept with the project).",
-      "REC (header): Record mode for tracking. You hear yourself tuned with about 6 ms delay instead of 33. Slightly rougher; Voices and Formant are off until you switch it off.",
+      "REC (header): Record mode for tracking. You hear yourself tuned with about 6 ms delay instead of about 55. Slightly rougher; Voices and Formant are off until you switch it off.",
       "Transpose: moves the whole voice up or down in semitones (your tone stays the same). Small moves sound natural; an octave sounds like an effect.",
       "Amount: 100 % lands right on the note; lower keeps some of your own pitch.",
       "Already using Auto-Tune or Melodyne? Turn this off: one tuner is enough."],
@@ -1261,6 +1261,8 @@ const LEARN = {
         { need: "Optional. It works; the right key sounds tighter.", steps: ["Set Key and Scale to your beat's key (Auto-Edit suggests one in its report)."] }));
       if (val("ptAmount") >= 0.05 && M.pitchTarget >= 0 && Math.abs(M.pitchCorr) > 0.9) t.push(tip("BIG JUMP", `It's moving your voice ${Math.abs(M.pitchCorr * 100).toFixed(0)} cents right now. Big moves can sound warbly on held notes.`, "calm",
         { need: "Only if it sounds off. Big moves usually mean the Key / Scale doesn't match the beat.", steps: ["Check the Key / Scale match your beat.", "Or raise Retune to 40 ms or more for a softer pull (not in Robot mode)."] }));
+      if (val("ptAmount") >= 90 && choice("ptMode") === 0 && val("ptSpeed") <= 10) t.push(tip("WANT THE ROBOT SOUND?", "Natural with a fast Retune lands each note quickly, but it keeps your vibrato and the start of each scoop on purpose, so held notes never sit dead flat.", "calm",
+        { need: "Only if you want the hard, flat robot effect.", steps: ["Set Mode to Robot (or Classic with Retune at 0 ms)."] }));
       if (val("ptAmount") >= 0.05 && choice("ptMode") === 2 && M.scaleUsed === 0) t.push(tip("ROBOT + CHROMATIC", "Robot snaps to the nearest of all 12 notes, so in-between notes can land on notes outside your beat's key.", "warn",
         { need: "Yes for the classic effect: it needs the key.", steps: ["Put Voxology on your beat in BEAT mode (Key: Beat), or set Key and Scale to your beat's key."] }));
       return t;

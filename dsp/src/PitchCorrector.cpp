@@ -87,6 +87,7 @@ void PitchCorrector::reset() noexcept
     period = 0.0; levelMs = 0.0;
     note = -1; corr = 0.0; sustain = 0.0; vibBp.reset(); centreA = centreB = 0.0; noteAge = 0.0; jumpRun = 0; onsetSum = 0.0; onsetN = 0; sinceFresh = 0.0; sinceRestart = 1.0; voicedRun = 0; lastP = 0.0; noteEnergy = 0.0; clarityS = 1.0;
     rawP = { 0.0, 0.0, 0.0 };
+    rawT = { 0.0, 0.0, 0.0 };
     last = {};
     synthPos = anaPos = 0.0;
     drift = 0.0;
@@ -196,7 +197,10 @@ void PitchCorrector::analyse() noexcept
         const double pEst = tauD * dec;
         const int lo = std::max (8, static_cast<int> (std::floor (pEst)) - dec - 1);
         const int hi = static_cast<int> (std::ceil (pEst)) + dec + 1;
-        const int len = static_cast<int> (std::ceil (pEst));
+        // Over two or three periods (up to 20 ms): one period alone follows every cycle's own small error (any
+        // real voice has it), and a hard tune turned that into wobble. The reading is stamped at the middle of
+        // what it measured, so the longer window doesn't make it late.
+        const int len = std::min (static_cast<int> (std::ceil (std::max (2.0 * pEst, std::min (3.0 * pEst, 0.02 * sr)))), mask / 4);
         double bestR = -2.0; int bestL = static_cast<int> (std::lround (pEst));
         std::array<double, 64> rs {};
         const int span = std::min (hi - lo + 1, 64);
@@ -245,10 +249,17 @@ void PitchCorrector::analyse() noexcept
         lastP = p;
 
         // Median of the last three readings: a one-reading octave glitch (gritty voices do that)
-        // never reaches the grains.
+        // never reaches the grains. A median of three describes the middle reading's moment, one hop
+        // back: it's stamped there (stamping it "now" put every correction ~3 ms late on a moving voice).
+        const double stampNow = static_cast<double> (now - 1) - 0.5 * (len + p);
         rawP[2] = rawP[1]; rawP[1] = rawP[0]; rawP[0] = p;
+        rawT[2] = rawT[1]; rawT[1] = rawT[0]; rawT[0] = stampNow;
+        double stamp = stampNow;
         if (rawP[1] > 0.0 && rawP[2] > 0.0)
+        {
             p = std::max (std::min (rawP[0], rawP[1]), std::min (std::max (rawP[0], rawP[1]), rawP[2]));
+            stamp = rawT[1];
+        }
         period = p;
 
         // In the beat's tuning (tuneCents: a beat tuned 30 cents flat moves every note 30 cents down).
@@ -266,13 +277,19 @@ void PitchCorrector::analyse() noexcept
         // back) starts a new centre, and then there's no other restart for 0.15 s unless it's a big jump.
         // (A wobble's peaks used to restart a note again and again, the centre landing on each peak: the
         // note flip-flopped between two notes, the vibrato went flat, the correction jumped - a warp.)
+        // How long it waits follows the Retune speed: from 20 ms up the times above (R&B / pop tunes keep a wide
+        // vibrato whole); at a hard-tune speed (5 ms and faster) a fast melody comes first - waiting 45 ms (and
+        // 0.15 s before the next change) with a 0 ms retune snapped the start of each new note onto the old one: a
+        // wrong-note blip on every step. There: 10 ms, then 40 ms (a very wide vibrato can then flip notes, as on
+        // any hard tune); in between, in between.
+        const double sure = std::clamp ((params.speedMs - 5.0) / 15.0, 0.0, 1.0);
         bool fresh = startOfNote;
         if (! fresh)
         {
             const double off = std::abs (midi - centreB);
             jumpRun = off > 0.8 ? jumpRun + 1 : 0;
-            const bool cooling = sinceRestart < 0.15 && off < 2.0;
-            fresh = ! cooling && jumpRun >= 2 && (off >= 1.5 || jumpRun * hopSec >= 0.045)
+            const bool cooling = sinceRestart < 0.04 + 0.11 * sure && off < 2.0;
+            fresh = ! cooling && jumpRun >= 2 && (off >= 1.5 || jumpRun * hopSec >= 0.010 + 0.035 * sure)
                     && targetNote (midi, params.key, params.scale, note, params.extraNotes, params.onlyNotes, params.removedNotes) != note;
             if (fresh) sinceRestart = 0.0;
         }
@@ -283,7 +300,7 @@ void PitchCorrector::analyse() noexcept
         centreA += (midi - centreA) * ca;
         centreB += (centreA - centreB) * ca;
         onsetSum += midi; ++onsetN;
-        if (sinceFresh < 0.25) centreA = centreB = onsetSum / onsetN;
+        if (sinceFresh < 0.08 + 0.17 * sure) centreA = centreB = onsetSum / onsetN;
         note = targetNote (mode == kPitchNatural ? centreB : midi, params.key, params.scale, note, params.extraNotes, params.onlyNotes, params.removedNotes);
         sustain = note == prevNote ? sustain + hopSec : 0.0;
         noteAge = note == prevNote && ! fresh ? noteAge + hopSec : 0.0;
@@ -334,7 +351,7 @@ void PitchCorrector::analyse() noexcept
         if (! harmonyVoice) last.targetMidi = note + std::clamp (params.transpose, -12, 12);   // what comes out
         last.period = period;
         last.clarity = clarityS;
-        last.time = static_cast<double> (now - 1) - 0.5 * (len + p);
+        last.time = stamp;
         if (guide == nullptr)
             pushFrame (last.time, period, applied, params.formant);
     }
@@ -342,6 +359,7 @@ void PitchCorrector::analyse() noexcept
     {
         period = 0.0;
         rawP = { 0.0, 0.0, 0.0 };
+        rawT = { 0.0, 0.0, 0.0 };
         if (sustain > 0.1) lastP = 0.0;   // a real gap: the next note may be any octave
         corr += (0.0 - corr) * (1.0 - std::exp (-hopSec / 0.03));
         sustain += hopSec;
