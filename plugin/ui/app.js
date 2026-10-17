@@ -11,6 +11,9 @@ const DAW = { key: "cubase", picked: false, detected: "cubase", from: 0 };
 const $ = (id) => document.getElementById(id);
 const MINUS = "−";
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/** A button that's picked (one of a set, or switched on): the .sel look, and aria-pressed for screen readers. */
+const pickBtn = (b, yes) => { b.classList.toggle("sel", yes); b.setAttribute("aria-pressed", yes ? "true" : "false"); };
+const setAttr = (e, name, value) => { if (e.getAttribute(name) !== value) e.setAttribute(name, value); };
 const fmtNum = (v, d = 1) => (v < 0 && Math.abs(v) >= 0.5 * Math.pow(10, -d) ? MINUS : "") + Math.abs(v).toFixed(d);
 const fmtDb = (v, d = 1) => `${fmtNum(v, d)} dB`;
 const fmtSigned = (v, d = 1) => `${v >= 0.05 ? "+" : ""}${fmtNum(v, d)} dB`;
@@ -32,6 +35,11 @@ const stage = $("stage");
 function fit() { stage.style.transform = `scale(${Math.min(window.innerWidth / 1600, window.innerHeight / 900)})`; }
 window.addEventListener("resize", fit);
 fit();
+
+// Keyboard focus glows after Tab, never after a click. :focus-visible does that, but macOS WebKit before Safari 15.4
+// doesn't have it: html.kbd (Tab pressed, no click since) gives the same glow there (styles.css).
+window.addEventListener("keydown", (e) => { if (e.key === "Tab") document.documentElement.classList.add("kbd"); }, true);
+window.addEventListener("pointerdown", () => document.documentElement.classList.remove("kbd"), true);
 
 // ---------------------------------------------------------------------------------------------
 // Easter egg: click the logo and every blue turns red (click again: blue). CSS does the colours and the
@@ -167,6 +175,42 @@ function scaledToNorm(state, v) {
 }
 function setScaled(id, v) { P[id].setNormalisedValue(scaledToNorm(P[id], v)); }
 
+/** Steps from the wheel, the arrow keys or the Transpose buttons come in bursts. Each burst is one host gesture (one
+    undo step, one automation pass): it starts with the first step and ends 250 ms after the last one (touch(ms)
+    sets how long it waits; a held key keeps it open between repeats). end() closes it at once (before a drag). */
+const bursts = {};
+function burst(id) {
+  if (bursts[id]) return bursts[id];
+  const s = P[id];
+  let open = false, timer = 0;
+  const end = () => { clearTimeout(timer); timer = 0; if (open) { open = false; s.sliderDragEnded(); } };
+  return (bursts[id] = {
+    touch(ms = 250, start = true) {
+      if (!open && !start) return;
+      if (!open) { open = true; s.sliderDragStarted(); }
+      clearTimeout(timer);
+      timer = setTimeout(end, ms);
+    },
+    end,
+  });
+}
+
+/** The value one step up (dir 1) or down (-1): 1 % of the knob's travel (fine: 0.2 %). When the parameter's own
+    step size would round that back to where it was (a whole-number knob at the slow end of its travel: Low Cut,
+    Retune, Vibrato, Pre-delay, the EQ frequencies), it moves one parameter step instead, so every value is reachable.
+    null = it can't move that way (at the end). */
+function stepValue(id, dir, fine) {
+  const s = P[id], { start, end, interval, skew } = s.properties;
+  const lo = Math.min(start, end), hi = Math.max(start, end);
+  const snap = (v) => clamp(interval > 0 ? start + interval * Math.floor((v - start) / interval + 0.5) : v, lo, hi);
+  const same = (a, b) => Math.abs(a - b) <= Math.max(interval * 1e-3, (hi - lo) * 1e-7);
+  const before = s.getScaledValue();
+  const n = clamp(s.getNormalisedValue() + dir * (fine ? 0.002 : 0.01), 0, 1);
+  let v = snap(Math.pow(n, 1 / skew) * (end - start) + start);
+  if (same(v, before) && interval > 0) v = snap(before + dir * interval);
+  return same(v, before) ? null : v;
+}
+
 /** A typed value -> the control's own units, kept in range (null = nothing to set). Takes "−3", "-3 dB", "1.2k" /
     "1.2 kHz" (a Hz knob also reads "6" as 6 kHz when 6 Hz is below its range), "2.5:1", "120 ms" / "0.12 s", "50 %",
     and the words the knob shows ("off", "flat", "as sung"). A knob that only goes one way from 0 ignores the sign:
@@ -214,7 +258,7 @@ function typeIn(valEl, id, fmt, def, after, refocus) {
     const v = commit && input.value.trim() !== shown ? parseTyped(input.value, s, fmt, def) : null;
     input.remove();
     valEl.hidden = false;
-    if (v !== null) { s.sliderDragStarted(); s.setNormalisedValue(scaledToNorm(s, v)); s.sliderDragEnded(); after(); }
+    if (v !== null) { burst(id).end(); s.sliderDragStarted(); s.setNormalisedValue(scaledToNorm(s, v)); s.sliderDragEnded(); after(); }
     if (key && refocus) refocus.focus();
   };
   input.addEventListener("keydown", (e) => {
@@ -292,7 +336,7 @@ function keyCell() {
   keys.forEach((b) => b.addEventListener("click", () => { if (choice("ptKeySrc") === 0 && M.bkState === 1) P.ptKeySrc.setChoiceIndex(1); }, true));
   cell.update = () => {
     const src = choice("ptKeySrc");
-    btns.forEach((b, i) => b.classList.toggle("sel", i === src));
+    btns.forEach((b, i) => pickBtn(b, i === src));
     const following = M.bkState === 1;
     cell.classList.toggle("following", following);
     keys.forEach((b, i) => b.classList.toggle("beat", following && i === M.keyUsed));
@@ -335,7 +379,12 @@ function notesCell() {
   });
   const tpv = cell.querySelector(".tp-v");
   const tpText = (v) => { const t = Math.round(v); return t === 0 ? "transpose 0" : `transpose ${t > 0 ? "+" : MINUS}${Math.abs(t)}`; };
-  const step = (d) => { setScaled("ptTranspose", clamp(Math.round(val("ptTranspose")) + d, -12, 12)); cell.update(); anyEdited(); };
+  const step = (d) => {   // (quick clicks in a row are one undo step)
+    const now = Math.round(val("ptTranspose")), v = clamp(now + d, -12, 12);
+    if (v === now) return;
+    burst("ptTranspose").touch();
+    setScaled("ptTranspose", v); cell.update(); anyEdited();
+  };
   cell.querySelector(".tp-dn").addEventListener("click", () => step(-1));
   cell.querySelector(".tp-up").addEventListener("click", () => step(1));
   tpv.title = "Double-click to type a value";
@@ -345,10 +394,11 @@ function notesCell() {
     notes.forEach((b, k) => {
       const off = on(PT_RM[k]);
       b.classList.toggle("off", off);
+      setAttr(b, "aria-pressed", String(!off));
       b.classList.toggle("in", !off && ((M.notesUsed >> k) & 1) === 1);
       b.classList.toggle("midi", midi > 0 && ((M.midiNotes >> k) & 1) === 1);
     });
-    midiBtns.forEach((b, i) => b.classList.toggle("sel", i === midi));
+    midiBtns.forEach((b, i) => pickBtn(b, i === midi));
     tpv.textContent = tpText(val("ptTranspose"));
   };
   liveMeters.push(cell);
@@ -397,8 +447,8 @@ function stackCell(onChange) {
   box.append(midi);
   const refresh = () => {
     const m = on("hvMidi");
-    btns.forEach((b, i) => b.classList.toggle("sel", !m && i === choice("hvStack")));
-    midi.classList.toggle("sel", m);
+    btns.forEach((b, i) => pickBtn(b, !m && i === choice("hvStack")));
+    pickBtn(midi, m);
   };
   for (const id of ["hvStack", "hvMidi"]) { P[id].valueChangedEvent.addListener(() => { refresh(); onChange(); }); P[id].propertiesChangedEvent.addListener(refresh); }
   refresh();
@@ -705,10 +755,24 @@ function knob(id, label, sub, fmt, def, bipolar = false) {
     arc.setAttribute("d", Math.abs(a - from) < 0.5 ? "" : arcFor(face, Math.min(from, a), Math.max(from, a)));
     ptr.setAttribute("transform", `rotate(${a} ${fc.cx} ${fc.cy})`);
     valEl.textContent = fmt(s.getScaledValue());
+    const { start, end } = s.properties;   // screen readers: the value, its range and how it reads
+    k.setAttribute("aria-valuenow", String(+s.getScaledValue().toFixed(4)));
+    k.setAttribute("aria-valuemin", String(Math.min(start, end)));
+    k.setAttribute("aria-valuemax", String(Math.max(start, end)));
+    k.setAttribute("aria-valuetext", valEl.textContent);
   };
   const setNorm = (n) => { s.setNormalisedValue(clamp(n, 0, 1)); refresh(); anyEdited(); };
+  // Wheel and arrow keys: one step at a time, each burst one undo step in the host (see burst()).
+  const steps = burst(id);
+  const step = (dir, fine, wait) => {
+    const v = stepValue(id, dir, fine);
+    if (v === null) { steps.touch(wait, false); return; }
+    steps.touch(wait);
+    s.setNormalisedValue(scaledToNorm(s, v));
+    refresh(); anyEdited();
+  };
   let drag = null;
-  k.addEventListener("pointerdown", (e) => { k.setPointerCapture(e.pointerId); drag = { y: e.clientY, n: s.getNormalisedValue() }; s.sliderDragStarted(); e.preventDefault(); });
+  k.addEventListener("pointerdown", (e) => { steps.end(); k.setPointerCapture(e.pointerId); drag = { y: e.clientY, n: s.getNormalisedValue() }; s.sliderDragStarted(); e.preventDefault(); });
   k.addEventListener("pointermove", (e) => {
     if (!drag) return;
     const scale = stage.getBoundingClientRect().height / 900;
@@ -717,20 +781,34 @@ function knob(id, label, sub, fmt, def, bipolar = false) {
   const end = () => { if (drag) { drag = null; s.sliderDragEnded(); } };
   k.addEventListener("pointerup", end);
   k.addEventListener("pointercancel", end);
-  k.addEventListener("dblclick", () => { s.sliderDragStarted(); setNorm(scaledToNorm(s, def)); s.sliderDragEnded(); });
-  k.addEventListener("wheel", (e) => { e.preventDefault(); s.sliderDragStarted(); setNorm(s.getNormalisedValue() + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 0.002 : 0.01)); s.sliderDragEnded(); }, { passive: false });
+  k.addEventListener("dblclick", () => { steps.end(); s.sliderDragStarted(); setNorm(scaledToNorm(s, def)); s.sliderDragEnded(); });
+  // A mouse wheel notch (or a line / page event) is one step, and so is the first event after a pause; a trackpad
+  // swipe adds up its pixels (about 100 per step). Shift + wheel arrives sideways (deltaX): finer steps.
+  let wheelAcc = 0, wheelLast = -1e9;
+  k.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const d = e.deltaY || e.deltaX, now = performance.now(), fresh = now - wheelLast > 250;
+    wheelLast = now;
+    if (!d) return;
+    let n;
+    if (fresh || e.deltaMode !== 0) { n = d < 0 ? 1 : -1; wheelAcc = 0; }
+    else { wheelAcc -= d; n = Math.trunc(wheelAcc / 100); wheelAcc -= n * 100; }
+    if (!n) steps.touch(250, false);
+    for (let i = 0; i < Math.abs(n); i++) step(Math.sign(n), e.shiftKey, 250);
+  }, { passive: false });
   // Double-click the number (or Enter on the knob) to type an exact value.
   const type = () => typeIn(valEl, id, fmt, def, () => { refresh(); anyEdited(); }, k);
   valEl.title = "Double-click to type a value";
   valEl.addEventListener("dblclick", type);
   k.addEventListener("keydown", (e) => {
-    const step = e.shiftKey ? 0.002 : 0.01;
-    if (e.key === "ArrowUp" || e.key === "ArrowRight") setNorm(s.getNormalisedValue() + step);
-    else if (e.key === "ArrowDown" || e.key === "ArrowLeft") setNorm(s.getNormalisedValue() - step);
+    if (e.key === "ArrowUp" || e.key === "ArrowRight") step(1, e.shiftKey, 1000);   // (a held key repeats within 1 s)
+    else if (e.key === "ArrowDown" || e.key === "ArrowLeft") step(-1, e.shiftKey, 1000);
     else if (e.key === "Enter") type();
     else return;
     e.preventDefault();
   });
+  k.addEventListener("keyup", (e) => { if (e.key.startsWith("Arrow")) steps.touch(250, false); });
+  k.addEventListener("blur", steps.end);
   s.valueChangedEvent.addListener(refresh);
   s.propertiesChangedEvent.addListener(refresh);
   refresh();
@@ -754,7 +832,7 @@ function seg(id, label, sub, labels, vertical = false, order = null) {
     box.appendChild(b);
     return b;
   });
-  const refresh = () => btns.forEach((b, k) => b.classList.toggle("sel", shown[k] === s.getChoiceIndex()));
+  const refresh = () => btns.forEach((b, k) => { if (shown[k] >= 0) pickBtn(b, shown[k] === s.getChoiceIndex()); });
   s.valueChangedEvent.addListener(refresh);
   s.propertiesChangedEvent.addListener(refresh);
   refresh();
@@ -777,7 +855,7 @@ function toggle(id, label, sub, onText, offText) {
   cell.className = "cell";
   cell.innerHTML = `<span class="cell-label">${label}</span><span class="cell-sub">${sub}</span><button type="button" class="chip"></button>`;
   const b = cell.querySelector("button");
-  const refresh = () => { b.textContent = s.getValue() ? onText : offText; b.classList.toggle("on", !!s.getValue()); };
+  const refresh = () => { b.textContent = s.getValue() ? onText : offText; b.classList.toggle("on", !!s.getValue()); b.setAttribute("aria-pressed", String(!!s.getValue())); };
   b.addEventListener("click", () => { s.setValue(!s.getValue()); refresh(); anyEdited(); });
   s.valueChangedEvent.addListener(refresh);
   refresh();
@@ -852,25 +930,37 @@ const cellsByModule = MODULES.map((m) => m.cells());
 // ---------------------------------------------------------------------------------------------
 // BEAT mode: Unmask (its own page; the vocal chain's hive is hidden)
 const UM_BANDS = [{ hz: 200, n: "200" }, { hz: 400, n: "400" }, { hz: 800, n: "800" }, { hz: 1600, n: "1.6k" }, { hz: 3150, n: "3.2k" }, { hz: 6300, n: "6.3k" }];
-let umSources = { sources: [], selected: "" };
+let umSources = { sources: [], selected: "" }, umPicked = 0;   // umPicked: counts your picks (an older answer is ignored)
 function sourceCell() {
   const cell = document.createElement("div");
   cell.className = "cell src";
   cell.innerHTML = `<span class="cell-label">Make room for</span><span class="cell-sub">which vocal</span><div class="src-list"></div>`;
   const box = cell.querySelector(".src-list");
   const make = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; e.textContent = text; return e; };
+  // Asked for every second: the buttons are rebuilt only when the list of vocals changes (so a click or the
+  // keyboard focus isn't lost); the one in use is marked in place.
+  let shown = null, btns = [];
   cell.refresh = () => {
     const list = umSources.sources || [];
-    box.replaceChildren();
-    if (!list.length) { box.append(make("div", "none", "No vocal found yet. Put Voxology on your vocal (VOCAL mode) and press play.")); return; }
-    const mk = (label, name) => {
-      const b = make("button", (umSources.selected || "") === name ? "sel" : "", label);
-      b.type = "button";
-      b.addEventListener("click", async () => { await umSetSource(name); umSources.selected = name; cell.refresh(); });
-      box.append(b);
-    };
-    mk(list.length > 1 ? `All vocals (${list.length})` : "All vocals", "");
-    list.forEach((x) => mk(x.name, x.name));
+    const key = JSON.stringify(list.map((x) => x.name));
+    if (key !== shown) {
+      shown = key;
+      btns = [];
+      box.replaceChildren();
+      if (!list.length) box.append(make("div", "none", "No vocal found yet. Put Voxology on your vocal (VOCAL mode) and press play."));
+      else {
+        const mk = (label, name) => {
+          const b = make("button", "", label);
+          b.type = "button";
+          b.addEventListener("click", () => { umPicked++; umSources.selected = name; cell.refresh(); umSetSource(name); });
+          box.append(b);
+          btns.push([b, name]);
+        };
+        mk(list.length > 1 ? `All vocals (${list.length})` : "All vocals", "");
+        list.forEach((x) => mk(x.name, x.name));
+      }
+    }
+    for (const [b, name] of btns) pickBtn(b, (umSources.selected || "") === name);
   };
   cell.refresh();
   return cell;
@@ -890,15 +980,19 @@ let lastLinkSeen = performance.now();   // the "no vocal" warning waits 2 s (the
 const cur = () => (beat ? UNMASK : MODULES[selected]);
 
 async function fetchSources() {
-  try { umSources = JSON.parse((await umGetSources()) || "{}"); } catch { umSources = { sources: [], selected: "" }; }
-  if (!umSources.sources) umSources.sources = [];
+  const picked = umPicked;
+  let got;
+  try { got = JSON.parse((await umGetSources()) || "{}"); } catch { got = { sources: [], selected: "" }; }
+  if (picked !== umPicked) return;   // asked before your last pick: it would show the old choice for a second
+  umSources = got && typeof got === "object" ? got : {};
+  if (!Array.isArray(umSources.sources)) umSources.sources = [];
   unmaskCells.forEach((c) => c.classList.contains("src") && c.refresh());
 }
 setInterval(() => { if (beat) fetchSources(); }, 1000);
 
 function applyMode() {
   const b = choice("mode") === 1;
-  document.querySelectorAll("#mode button").forEach((x) => x.classList.toggle("sel", Number(x.dataset.m) === (b ? 1 : 0)));
+  document.querySelectorAll("#mode button").forEach((x) => pickBtn(x, Number(x.dataset.m) === (b ? 1 : 0)));
   if (b === beat && cellsEl.dataset.page) return;
   beat = b;
   document.body.classList.toggle("beat", beat);
@@ -933,8 +1027,13 @@ const hexes = MODULES.map((m, i) => {
   h.style.left = `${col * 96 + (row % 2) * 48 + 36}px`;
   h.style.top = `${row * 79 + 2}px`;
   h.innerHTML = `<div class="rim"></div><div class="face"><span class="num">${String(i + 1).padStart(2, "0")}</span>
-    <span class="name">${m.name}</span><span class="stat"></span>${m.onId ? '<button type="button" class="dot" aria-label="On / off"></button>' : ""}</div>`;
+    <span class="name">${m.name}</span><span class="stat"></span>${m.onId ? `<button type="button" class="dot" aria-label="${m.name} on / off"></button>` : ""}</div>`;
+  // A cell is a button: Tab to it, Enter or Space opens it (the dot inside is its own button).
+  h.tabIndex = 0;
+  h.setAttribute("role", "button");
+  h.setAttribute("aria-label", `${String(i + 1).padStart(2, "0")} ${m.name}`);
   h.addEventListener("click", () => select(i));
+  h.addEventListener("keydown", (e) => { if (e.target === h && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); select(i); } });
   const dot = h.querySelector(".dot");
   if (dot) dot.addEventListener("click", (e) => { e.stopPropagation(); P[m.onId].setValue(!on(m.onId)); refreshHive(); renderModuleHead(); anyEdited(); });
   hive.appendChild(h);
@@ -944,11 +1043,16 @@ function refreshHive() {
   MODULES.forEach((m, i) => {
     const h = hexes[i];
     const isOn = !m.onId || on(m.onId);
-    const [text, active] = m.stat();
     h.classList.toggle("off", !isOn);
-    h.classList.toggle("idle", !active);
     h.classList.toggle("sel", i === selected);
-    h.querySelector(".stat").textContent = isOn ? text : "off";
+    setAttr(h, "aria-current", i === selected ? "true" : "false");
+    const dot = h.querySelector(".dot");
+    if (dot) setAttr(dot, "aria-pressed", String(isOn));
+    try {   // (one module's odd reading doesn't stop the rest of the honeycomb)
+      const [text, active] = m.stat();
+      h.classList.toggle("idle", !active);
+      h.querySelector(".stat").textContent = isOn ? text : "off";
+    } catch { /* keeps its last status */ }
   });
 }
 
@@ -962,7 +1066,7 @@ function renderModuleHead() {
   $("mod-what").textContent = m.what;
   const pw = $("mod-power");
   pw.hidden = !m.onId;
-  if (m.onId) { pw.textContent = on(m.onId) ? "ON" : "OFF"; pw.classList.toggle("on", on(m.onId)); }
+  if (m.onId) { pw.textContent = on(m.onId) ? "ON" : "OFF"; pw.classList.toggle("on", on(m.onId)); pw.setAttribute("aria-pressed", String(on(m.onId))); pw.setAttribute("aria-label", `${m.name} on / off`); }
   $("mod-kept").hidden = beat || !(report && report.ok && keptFor(selected));
 }
 $("mod-power").addEventListener("click", () => {
@@ -1043,7 +1147,7 @@ const nodes = EQ_BANDS.map((b, i) => {
   n.textContent = String(i + 1);
   n.title = `${b.name}: drag to change, double-click to reset`;
   let drag = false;
-  n.addEventListener("pointerdown", (e) => { n.setPointerCapture(e.pointerId); drag = true; P["eqGain" + (i + 1)].sliderDragStarted(); P["eqFreq" + (i + 1)].sliderDragStarted(); showNode(i); e.preventDefault(); });
+  n.addEventListener("pointerdown", (e) => { burst("eqGain" + (i + 1)).end(); burst("eqFreq" + (i + 1)).end(); n.setPointerCapture(e.pointerId); drag = true; P["eqGain" + (i + 1)].sliderDragStarted(); P["eqFreq" + (i + 1)].sliderDragStarted(); showNode(i); e.preventDefault(); });
   n.addEventListener("pointermove", (e) => {
     if (!drag) return;
     const r = plot.getBoundingClientRect(), scale = r.width / PW;
@@ -1056,7 +1160,7 @@ const nodes = EQ_BANDS.map((b, i) => {
   const end = () => { if (drag) { drag = false; P["eqGain" + (i + 1)].sliderDragEnded(); P["eqFreq" + (i + 1)].sliderDragEnded(); $("eq-readout").textContent = ""; } };
   n.addEventListener("pointerup", end);
   n.addEventListener("pointercancel", end);
-  n.addEventListener("dblclick", () => { P["eqGain" + (i + 1)].sliderDragStarted(); setScaled("eqGain" + (i + 1), 0); P["eqGain" + (i + 1)].sliderDragEnded(); anyEdited(); });
+  n.addEventListener("dblclick", () => { burst("eqGain" + (i + 1)).end(); P["eqGain" + (i + 1)].sliderDragStarted(); setScaled("eqGain" + (i + 1), 0); P["eqGain" + (i + 1)].sliderDragEnded(); anyEdited(); });
   $("eq-nodes").appendChild(n);
   return n;
 });
@@ -1068,7 +1172,7 @@ const dynNodes = DYN_BANDS.map((b, i) => {
   n.title = `${b.name}: drag to set where and how much it may cut, double-click to turn the band off`;
   const ids = ["dqCut" + (i + 1), "dqFreq" + (i + 1)];
   let drag = false;
-  n.addEventListener("pointerdown", (e) => { n.setPointerCapture(e.pointerId); drag = true; ids.forEach((id) => P[id].sliderDragStarted()); showDynNode(i); e.preventDefault(); });
+  n.addEventListener("pointerdown", (e) => { n.setPointerCapture(e.pointerId); drag = true; ids.forEach((id) => { burst(id).end(); P[id].sliderDragStarted(); }); showDynNode(i); e.preventDefault(); });
   n.addEventListener("pointermove", (e) => {
     if (!drag) return;
     const r = plot.getBoundingClientRect(), scale = r.width / PW;
@@ -1081,7 +1185,7 @@ const dynNodes = DYN_BANDS.map((b, i) => {
   const end = () => { if (drag) { drag = false; ids.forEach((id) => P[id].sliderDragEnded()); $("eq-readout").textContent = ""; } };
   n.addEventListener("pointerup", end);
   n.addEventListener("pointercancel", end);
-  n.addEventListener("dblclick", () => { P[ids[0]].sliderDragStarted(); setScaled(ids[0], 0); P[ids[0]].sliderDragEnded(); anyEdited(); });
+  n.addEventListener("dblclick", () => { burst(ids[0]).end(); P[ids[0]].sliderDragStarted(); setScaled(ids[0], 0); P[ids[0]].sliderDragEnded(); anyEdited(); });
   $("eq-nodes").appendChild(n);
   return n;
 });
@@ -1190,12 +1294,13 @@ const body = $("learn-body");
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const head = (t) => el("span", "l-h", t);
 const para = (t, cls = "l-p") => el("p", cls, typeof t === "string" ? fillDaw(t, DAW.key) : t);
+/** A report line (Auto-Edit's reasons, Vocal Fit): the engine's text, in your DAW's words. */
 function item(name, value, why) {
   const d = el("div", "l-item");
   const top = el("div", "l-top");
-  top.append(el("span", "", name), el("span", "l-val", value));
+  top.append(el("span", "", D(name)), el("span", "l-val", D(value)));
   d.append(top);
-  if (why) d.append(el("div", "l-why", why));
+  if (why) d.append(el("div", "l-why", D(why)));
   return d;
 }
 /** A tip with a plan: kind "warn" (do something), "calm" (fine as it is) or "" (info). */
@@ -1232,14 +1337,14 @@ const LEARN = {
   pitch: {
     does: "Pitch correction (auto-tune). It hears the note you sing, picks the nearest note of your key, and pulls you onto it. Your voice's tone stays the same (no chipmunk sound); breaths and s sounds are never touched. Three modes: Natural (your voice, just in tune), Classic (the familiar auto-tune glide) and Robot (the hard, stepped trap effect). It's first in the chain, so everything after it hears the tuned voice.",
     how: ["Mode: Natural for a human-sounding lead (notes land on pitch; your vibrato and the start of a scoop stay). Robot for the T-Pain / melodic-trap effect: instant, flat, stepped notes whatever Retune says. Classic is in between and follows Retune.",
-      "Key, Auto (the default): Pitch follows the key it hears. Surest: let Voxology hear your beat, either by sending the beat to this Voxology's side-chain (in {daw}: {daw:sidechain}) track), or with a second Voxology on the beat in BEAT mode. It hears the beat's notes, home key and tuning. With no beat, it learns the key from the notes you sing (about 20 - 40 s of held notes; rap may never be sure). Your Scale choice picks the flavour within those notes (Minor = the minor home, Minor Penta = the 5 safest notes); Chromatic uses the key's own mode. Key / Scale are the fallback.",
+      "Key, Auto (the default): Pitch follows the key it hears. Surest: let Voxology hear your beat, either by sending the beat to this Voxology's side-chain (in {daw}: {daw:sidechain}), or with a second Voxology on the beat in BEAT mode. It hears the beat's notes, home key and tuning. With no beat, it learns the key from the notes you sing (about 20 - 40 s of held notes; rap may never be sure). Your Scale choice picks the flavour within those notes (Minor = the minor home, Minor Penta = the 5 safest notes); Chromatic uses the key's own mode. Key / Scale are the fallback.",
       "Key, Manual: set Key / Scale to your beat's key (often in the beat's name, e.g. \"A min\"). Chromatic allows all 12 notes when you're not sure.",
       "Retune: how fast a note is pulled in. Natural: 10 - 40 ms (your vibrato stays at any speed). Classic: 0 - 10 ms is hard and robotic, 30 - 80 ms tuned but natural, 100+ ms only fixes drift.",
       "Vibrato (Natural): 0 keeps it as you sang it; turn it down to calm a wobbly note (all the way = flat), up to make it deeper.",
       "Humanize: lets long held notes keep their life while short notes still snap in.",
       "Notes: lit notes are the ones Pitch may pull you to. Click one to switch it off (it's never used), click again to bring it back.",
       "MIDI: in {daw}, {daw:midiToVoxology}. Notes = while you hold notes, your voice goes to those notes (play or draw the melody for the hard robot effect); nothing held = the key as usual. Learn = play the beat's notes or chords once and they become the scale (kept with the project).",
-      "REC (header): Record mode for tracking. You hear yourself tuned with about 6 ms delay instead of about 55. Slightly rougher; Voices and Formant are off until you switch it off.",
+      "REC (header): Record mode for tracking. You hear yourself tuned with about 6 ms delay instead of about 55. Slightly rougher; Voices, Formant, Noise, Room, Clicks and Smooth are off until you switch it off.",
       "Transpose: moves the whole voice up or down in semitones (your tone stays the same). Small moves sound natural; an octave sounds like an effect.",
       "Amount: 100 % lands right on the note; lower keeps some of your own pitch.",
       "Already using Auto-Tune or Melodyne? Turn this off: one tuner is enough."],
@@ -1251,7 +1356,7 @@ const LEARN = {
         { need: "Only if you want the MIDI scale.", steps: ["In {daw}: {daw:midiToVoxology}.", "Play the beat's notes or chords once: they light up blue in Notes."] }));
       if (choice("ptKeySrc") === 0 && M.scState === 1 && M.bkSource !== 2 && M.inShort > -70) t.push(tip("SIDE-CHAIN SILENT",
         "Voxology's side-chain is switched on, but no sound is coming into it, so the key can't come from your beat" + (M.bkSource === 3 ? " (it's guessing from your voice instead)." : "."), "warn",
-        { need: "Yes, if you want the beat's key.", steps: ["In Voxology's window, click the small arrow next to the side-chain button (top bar) and choose Add Side-Chain Source, then pick your beat track. (Or: on the beat track, add a Send whose destination is this vocal's Voxology side-chain.)", "Make sure that send is switched on (lit) and its level is up, around 0 dB, and the beat track isn't muted.", "Press play: within a few seconds the Key status should read \"beat: \u2026\". If it still says \"beat: no sound\", send me a screenshot of the beat track's Sends."] }));
+        { need: "Yes, if you want the beat's key.", steps: ["In {daw}: {daw:sidechain}.", "Check the beat track isn't muted, and if the beat goes there by a send, that the send is on, at about 0 dB.", "Press play: within a few seconds the Key status should read \"beat: \u2026\"."] }));
       if (val("ptAmount") >= 0.05 && choice("ptKeySrc") === 0 && M.bkSource !== 1 && M.bkSource !== 2 && M.scState !== 1) t.push(tip("NO BEAT HEARD",
         `Key is on Auto, but Voxology can't hear your beat, so it learns the key from your singing${M.bkState === 1 ? ` (now: ${beatKeyName()})` : ": that takes about 20 - 40 s of held notes, and rap may never be sure"}. ${M.bkState === 1 ? "" : "Until then Pitch uses the Key / Scale below. "}The beat is the surest way.`, "calm",
         { need: "Optional, but it's the surest way to always be in the beat's key.", steps: ["Send the beat to this Voxology's side-chain. In {daw}: {daw:sidechain}.", "Press play: after about 6 s the beat's key shows up here. (Or: put a second Voxology on the beat track and click BEAT.)"] }));
@@ -1385,7 +1490,7 @@ const LEARN = {
       "Use harmonies on hooks and ad-libs rather than whole verses: automate the module's ON button in {daw} ({daw:automate})."],
     live: () => {
       const t = [];
-      if ([choice("hv1"), choice("hv2")].some((i) => i > 0 && i !== 8) && choice("ptScale") === 0) t.push(tip("CHROMATIC KEY", "The Pitch module's scale is Chromatic, so the harmonies use plain intervals (a major 3rd), which can clash with a minor beat.", "warn",
+      if ([choice("hv1"), choice("hv2")].some((i) => i > 0 && i !== 8) && M.scaleUsed === 0) t.push(tip("CHROMATIC KEY", "The scale in use is Chromatic, so the harmonies use plain intervals (a major 3rd), which can clash with a minor beat.", "warn",
         { need: "Yes, if the harmonies sound sour.", steps: ["Open 01 PITCH and set Key and Scale to your beat's key.", "Run Auto-Edit on a sung part: it suggests a key in its report."] }));
       if (on("hvMidi") && M.heldNotes === 0) t.push(tip("PLAY A CHORD", "MIDI is on, so the voices sing only the notes held on a MIDI track, and none are held right now.", "calm",
         { need: "Only if you want MIDI chords.", steps: ["In {daw}: {daw:midiToVoxology}.", "Play or draw chords on it under the vocal part.", "Or click MIDI chords again (under Stack) to use Voice 1, Voice 2 and Stack."] }));
@@ -1432,7 +1537,7 @@ const LEARN = {
 
 function notesAsTips() {
   for (const raw of report.notes || []) {
-    const lines = D(raw).split("\n");
+    const lines = D(String(raw || "")).split("\n");
     const first = lines[0], cut = first.indexOf(":");
     const title = cut > 0 && cut < 32 ? first.slice(0, cut) : "HEADS UP";
     const text = cut > 0 && cut < 32 ? first.slice(cut + 1).trim() : first;
@@ -1456,12 +1561,19 @@ function referenceBlock() {
     body.append(tip("CAN'T USE THIS ONE", refInfo.problem || "This file can't be used as a reference.", "warn", { need: "Yes, to use Reference Match.", steps: ["Choose another one with the REFERENCE pill.", "Or pick \"No reference (use the style)\" at the bottom of its list."] }));
     return;
   }
-  body.append(para(`Auto-Edit will match "${refInfo.name}" (${Number(refInfo.seconds || 0).toFixed(0)} s of voice heard): its tone, s brightness, punch and space. Pitch, clean-up and saturation still follow the STYLE.`));
+  body.append(el("p", "l-p", `Auto-Edit will match "${refInfo.name}" (${Number(refInfo.seconds || 0).toFixed(0)} s of voice heard): its tone, s brightness, punch and space. Pitch, clean-up and saturation still follow the STYLE.`));
   if (refInfo.warning) body.append(tip("FULL SONG?", refInfo.warning, "warn",
     { need: "Yes, for a close match. It still works, roughly.", steps: ["Find the song's acapella or vocal stem and load that instead."] }));
 }
 
 function renderReport() {
+  // The last Auto-Edit didn't work, but the one before did: its report (and its settings) stay; say so on top.
+  if (report && report.ok && report.failed && typeof report.failed === "object") {
+    const f = report.failed;
+    const card = tip(f.tipTitle || "TRY AGAIN", [f.summary, f.tip].filter((x) => typeof x === "string" && x).join(" "), "warn");
+    card.append(el("div", "", "The report below is from the Auto-Edit before (its settings are still on)."));
+    body.append(card);
+  }
   referenceBlock();
   if (report || refInfo.state !== "none") body.append(el("div", "l-sep"));
   if (!report) {
@@ -1477,7 +1589,7 @@ function renderReport() {
     body.append(tip(report.tipTitle || "TRY AGAIN", report.tip || "Play a part where you're singing, then press Auto-Edit.", "warn"));
     return;
   }
-  body.append(head("AUTO-EDIT REPORT"), para(`${report.style} · ${report.intensity}${report.reference ? ` · matched to "${report.reference}"` : ""}`, "l-meta"), para(report.summary));
+  body.append(head("AUTO-EDIT REPORT"), el("p", "l-meta", `${report.style} · ${report.intensity}${report.reference ? ` · matched to "${report.reference}"` : ""}`), para(report.summary));
   analyzeBlock();
   notesAsTips();
   if (report.fit && report.fit.length) {
@@ -1507,7 +1619,7 @@ function analyzeStatus() {
   if (!analyze || !analyze.on) return "Off. Switch it on and Voxology keeps listening while the song plays: every 12 seconds of voice it checks the part against what Auto-Edit heard, and tells you here when a part needs something new (louder or quieter, more noise, sharper s sounds, another tone, clipping, the beat). It never changes anything until you press APPLY.";
   const st = M.aaState || analyze.state;
   if (st === 2) {
-    const last = analyze.time ? ` · last check ${new Date(analyze.time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${analyze.fine && !analyze.needs.length ? ": this part fits your settings" : ""}` : "";
+    const last = analyze.time ? ` · last check ${new Date(analyze.time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${analyze.fine && !(analyze.needs || []).length ? ": this part fits your settings" : ""}` : "";
     return `${M.aeHearing ? "Listening" : "Press play · listening"} ${Math.round((M.aaProgress || 0) * 100)} %${last}.`;
   }
   return AA_STATUS[st] || "";
@@ -1527,16 +1639,19 @@ function analyzeBlock() {
   const h = head("AUTO ANALYZE");
   const sw = el("button", `chip aa-switch${analyze && analyze.on ? " on" : ""}`, analyze && analyze.on ? "ON" : "OFF");
   sw.type = "button";
+  sw.setAttribute("aria-pressed", String(!!(analyze && analyze.on)));
+  sw.setAttribute("aria-label", "Auto Analyze on / off");
   sw.addEventListener("click", async () => { await aaSet(!(analyze && analyze.on)); await fetchAnalyze(); });
   h.append(sw);
   body.append(h, para(analyzeStatus(), "l-p aa-status"));
   if (!analyze || !analyze.on) return;
   for (const n of analyze.needs || []) {
-    const lines = D(n.note).split("\n"), first = lines[0], cut = first.indexOf(":");
+    const lines = D(String(n.note || "")).split("\n"), first = lines[0], cut = first.indexOf(":");
     const need = (lines.find((l) => l.startsWith("NEED:")) || "").slice(5).trim();
     const steps = lines.filter((l) => l.startsWith("STEP:")).map((l) => l.slice(5).trim());
-    const text = first.slice(cut + 1).trim();
-    const card = tip(first.slice(0, cut), text.charAt(0).toUpperCase() + text.slice(1), /^(No|Optional)/i.test(need) ? "calm" : "warn", { need, steps });
+    const titled = cut > 0 && cut < 32;   // "TITLE: text" (as the report's notes)
+    const text = titled ? first.slice(cut + 1).trim() : first;
+    const card = tip(titled ? first.slice(0, cut) : "HEADS UP", text.charAt(0).toUpperCase() + text.slice(1), /^(No|Optional)/i.test(need) ? "calm" : "warn", { need, steps });
     const todo = (n.changes || []).filter(stillToDo);
     if (todo.length) {
       card.append(el("div", "t-need", "APPLY sets (now \u2192 new):"));
@@ -1544,6 +1659,7 @@ function analyzeBlock() {
       todo.forEach((c) => ul.append(el("li", "", changeLine(c))));
       card.append(ul);
     }
+    if (n.key === "beatlevel") { const mix = mixologyBalanceLine(); if (mix) card.append(mix); }
     const row = el("div", "aa-row");
     if (todo.length) {
       const apply = el("button", "chip on", "APPLY");
@@ -1587,6 +1703,7 @@ function fitLevelButton() {
   };
   b.addEventListener("click", () => {
     const s = P.outGain, applied = fitLevelUndo && fitLevelUndo.time === report.time;
+    burst("outGain").end();
     const to = applied ? fitLevelUndo.from : f.output;
     fitLevelUndo = applied ? null : { time: report.time, from: val("outGain") };
     s.sliderDragStarted(); s.setNormalisedValue(scaledToNorm(s, clamp(to, s.properties.start, s.properties.end))); s.sliderDragEnded();
@@ -1594,6 +1711,8 @@ function fitLevelButton() {
   });
   show();
   wrap.append(b, note);
+  const mix = mixologyBalanceLine();
+  if (mix) wrap.append(mix);
   return wrap;
 }
 
@@ -1641,7 +1760,7 @@ function renderLearn(force = true) {
   learnKey = key;
   const scroll = body.scrollTop;
   body.replaceChildren();
-  document.querySelectorAll("#learn-tabs button").forEach((b) => b.classList.toggle("sel", b.dataset.tab === learnTab));
+  document.querySelectorAll("#learn-tabs button").forEach((b) => { b.classList.toggle("sel", b.dataset.tab === learnTab); b.setAttribute("aria-selected", String(b.dataset.tab === learnTab)); });
   if (learnTab === "report") renderReport(); else renderModuleLearn();
   if (!force) body.scrollTop = scroll;
 }
@@ -1663,6 +1782,13 @@ function setVocalStyle(i) {
 }
 const STYLE_ABOUT = ["Upfront, bright and controlled: the hard trap lead", "Dry, punchy and clear: every word upfront", "Melodic trap: tuned, smooth, a wetter space",
   "The hard-tuned robot effect", "Smooth, warm and airy", "Polished and bright", "Natural and warm, light on effects", "Your voice as sung, cleaned up and balanced"];
+/** A pop-up list under its pill, never past the bottom of the window (it scrolls instead: small windows). */
+function placeMenu(m, anchor) {
+  const r = anchor.getBoundingClientRect(), top = Math.round(r.bottom + 4);
+  m.style.left = `${Math.round(r.left)}px`;
+  m.style.top = `${top}px`;
+  m.style.maxHeight = `${Math.max(80, Math.min(600, window.innerHeight - top - 8))}px`;
+}
 let styleMenu = null;
 function closeStyleMenu() { if (styleMenu) { styleMenu.remove(); styleMenu = null; } }
 function openStyleMenu() {
@@ -1691,9 +1817,7 @@ function openStyleMenu() {
     row.append(b);
     m.append(row);
   });
-  const r = $("style-pill").getBoundingClientRect();
-  m.style.left = `${Math.round(r.left)}px`;
-  m.style.top = `${Math.round(r.bottom + 4)}px`;
+  placeMenu(m, $("style-pill"));
   document.body.append(m);
   styleMenu = m;
 }
@@ -1734,8 +1858,10 @@ $("daw-select").addEventListener("change", (e) => {
   renderLearn(true);
 });
 function dawFromFrame(d) {
-  if (!d || (d.key === DAW.key && !!d.picked === DAW.picked && d.detected === DAW.detected)) return;
-  Object.assign(DAW, { key: d.key || "other", picked: !!d.picked, detected: d.detected || "other", from: d.from || 0 });
+  if (!d || typeof d !== "object") return;
+  const key = dawOf(d.key).key, detected = dawOf(d.detected).key;   // (a DAW this file doesn't know = "other")
+  if (key === DAW.key && !!d.picked === DAW.picked && detected === DAW.detected) return;
+  Object.assign(DAW, { key, picked: !!d.picked, detected, from: d.from || 0 });
   fillDawSelect();
   learnKey = "";
   renderLearn(true);   // every tip again, in this DAW's words
@@ -1758,15 +1884,17 @@ const intensityBtns = INTENSITIES.map((t, i) => {
   $("intensity").append(b);
   return b;
 });
-function refreshIntensity() { intensityBtns.forEach((b, i) => b.classList.toggle("sel", i === choice("aeIntensity"))); }
+function refreshIntensity() { intensityBtns.forEach((b, i) => pickBtn(b, i === choice("aeIntensity"))); }
 P.aeIntensity.valueChangedEvent.addListener(refreshIntensity);
 P.aeIntensity.propertiesChangedEvent.addListener(refreshIntensity);
 
 const abBtns = document.querySelectorAll("#ab button");
 function refreshAB() {
-  abBtns.forEach((b) => b.classList.toggle("sel", (b.dataset.ab === "a") === on("listenA")));
+  abBtns.forEach((b) => pickBtn(b, (b.dataset.ab === "a") === on("listenA")));
   $("match").classList.toggle("on", on("levelMatch"));
+  $("match").setAttribute("aria-pressed", String(on("levelMatch")));
   $("rec").classList.toggle("on", on("recMode"));
+  $("rec").setAttribute("aria-pressed", String(on("recMode")));
   document.body.classList.toggle("rec", on("recMode"));
 }
 abBtns.forEach((b) => b.addEventListener("click", () => { P.listenA.setValue(b.dataset.ab === "a"); refreshAB(); }));
@@ -1794,16 +1922,23 @@ async function fetchReference() {
   b.querySelector("b").textContent = refInfo.state === "loading" ? "Reading…" : refInfo.state === "none" ? "None"
     : `${refInfo.state === "ok" ? (refInfo.split ? "\u2702" : "\u266A") : "\u26A0"} ${refInfo.name || "reference"}`;
   b.title = refInfo.state === "none" ? "Reference Match: pick a built-in pro vocal or add an acapella you love, and Auto-Edit aims at its sound"
-    : refInfo.problem || refInfo.warning || `Auto-Edit will match "${refInfo.name}". Click to choose another.`;
+    : D(refInfo.problem || refInfo.warning || "") || `Auto-Edit will match "${refInfo.name}". Click to choose another.`;
   if (learnTab === "report") renderLearn();
 }
 // The reference menu: built-in pro references, the vocals you've loaded (saved for every project), add a file, none.
-let refMenu = null;
-function closeRefMenu() { if (refMenu) { refMenu.remove(); refMenu = null; } }
-async function openRefMenu() {
-  closeRefMenu();
+// The list comes from the plug-in (a moment later): refAsk says which request may still open it, so a second click,
+// a close or Esc while it's on its way never leaves two menus or one that opens after you closed it.
+let refMenu = null, refAsk = 0;
+function closeRefMenu() { refAsk++; if (refMenu) { refMenu.remove(); refMenu = null; } }
+/** refresh: rebuild the open menu in place (after ✂ or ✕), keeping where it's scrolled to; not if it was closed. */
+async function openRefMenu(refresh = false) {
+  const old = refresh ? refMenu : null;
+  if (refresh && !old) return;
+  if (!refresh) closeRefMenu();
+  const ask = ++refAsk;
   let lib = { builtin: [], yours: [], folder: "", current: "" };
   try { lib = Object.assign(lib, JSON.parse((await refList()) || "{}")); } catch { /* keep the empty library */ }
+  if (ask !== refAsk) return;
   const m = el("div", "ref-menu");
   const item = (label, title, onPick, current, onDelete, pitch, split) => {
     const row = el("div", "ref-item" + (current ? " current" : ""));
@@ -1819,14 +1954,14 @@ async function openRefMenu() {
       sc.type = "button";
       sc.title = split.on ? `"${label}" is marked as split from a full song: Auto-Edit uses its tone from 250 Hz up, its s and its punch, not its low end or space. Click if it's a real acapella.`
         : `Split from a full song (UVR, Demucs ...)? Click to mark it: Auto-Edit then leaves out its low end and space, which splitting gets wrong.`;
-      sc.addEventListener("click", async (e) => { e.stopPropagation(); await refSetSplit(label, !split.on); openRefMenu(); fetchReference(); });
+      sc.addEventListener("click", async (e) => { e.stopPropagation(); await refSetSplit(label, !split.on); if (refMenu === m) openRefMenu(true); fetchReference(); });
       row.append(sc);
     }
     if (onDelete) {
       const x = el("button", "ref-del", "\u2715");
       x.type = "button";
       x.title = `Remove "${label}" from your references`;
-      x.addEventListener("click", async (e) => { e.stopPropagation(); await onDelete(); openRefMenu(); });
+      x.addEventListener("click", async (e) => { e.stopPropagation(); await onDelete(); if (refMenu === m) openRefMenu(true); });
       row.append(x);
     }
     m.append(row);
@@ -1843,13 +1978,11 @@ async function openRefMenu() {
   m.append(el("div", "ref-sep"));
   item("+ Add a vocal file\u2026", "An acapella you like (WAV, AIFF, FLAC, MP3 or OGG). It's measured once and saved under YOURS" + (lib.folder ? ` (${lib.folder})` : "") + ".", () => refChoose(), false, null);
   if (lib.current) item("No reference (use the style)", "", () => refClear(), false, null);
-  const r = $("ref").getBoundingClientRect();
-  m.style.left = `${Math.round(r.left)}px`;
-  m.style.top = `${Math.round(r.bottom + 4)}px`;
-  document.body.append(m);
+  placeMenu(m, $("ref"));
+  if (old) { const top = old.scrollTop; old.replaceWith(m); m.scrollTop = top; } else document.body.append(m);
   refMenu = m;
 }
-document.addEventListener("mousedown", (e) => { if (refMenu && !refMenu.contains(e.target) && !$("ref").contains(e.target)) closeRefMenu(); });
+document.addEventListener("mousedown", (e) => { if (!(refMenu && refMenu.contains(e.target)) && !$("ref").contains(e.target)) closeRefMenu(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeRefMenu(); });
 $("ref").addEventListener("click", async () => { if (refMenu) closeRefMenu(); else await openRefMenu(); });
 
@@ -1859,13 +1992,18 @@ const chSave = Juce.getNativeFunction("saveChain");
 const chLoad = Juce.getNativeFunction("loadChain");
 const chDelete = Juce.getNativeFunction("deleteChain");
 const chGetName = Juce.getNativeFunction("getChainName");
-let chainMenu = null, lastChain = "";
+let chainMenu = null, lastChain = "", chainChanged = false;   // lastChain: the chain this project uses ("" = none)
 const keepKeyPref = () => { try { return localStorage.getItem("voxKeepKey") !== "0"; } catch { return true; } };
-function closeChainMenu() { if (chainMenu) { chainMenu.remove(); chainMenu = null; } }
-async function openChainMenu() {
-  closeChainMenu();
+let chainAsk = 0;   // (as refAsk)
+function closeChainMenu() { chainAsk++; if (chainMenu) { chainMenu.remove(); chainMenu = null; } }
+async function openChainMenu(refresh = false) {
+  const old = refresh ? chainMenu : null;
+  if (refresh && !old) return;
+  if (!refresh) closeChainMenu();
+  const ask = ++chainAsk;
   let lib = { yours: [], looks: [], folder: "" };
   try { lib = Object.assign(lib, JSON.parse((await chList()) || "{}")); } catch { /* keep the empty library */ }
+  if (ask !== chainAsk) return;
   const m = el("div", "ref-menu chain-menu");
   const item = (label, title, onPick, onDelete) => {
     const row = el("div", "ref-item" + (label === lastChain ? " current" : ""));
@@ -1878,28 +2016,29 @@ async function openChainMenu() {
       const x = el("button", "ref-del", "✕");
       x.type = "button";
       x.title = `Delete "${label}"`;
-      x.addEventListener("click", async (e) => { e.stopPropagation(); await onDelete(); openChainMenu(); });
+      x.addEventListener("click", async (e) => { e.stopPropagation(); await onDelete(); if (chainMenu === m) openChainMenu(true); });
       row.append(x);
     }
     m.append(row);
   };
   const loaded = async (kind, name) => {
-    if (await chLoad(kind, name, keepKeyPref())) { lastChain = kind === "yours" ? name : ""; renderChainChip(); refreshAll(); }
+    if (await chLoad(kind, name, keepKeyPref())) { lastChain = kind === "yours" ? name : ""; chainChanged = true; renderChainChip(); refreshAll(); }
   };
   m.append(el("div", "ref-head", "MY CHAINS · your whole setup, in every project"));
   if (!lib.yours.length) m.append(el("div", "ref-hint", "Get a sound you like (Auto-Edit, then your tweaks), then save it here to use on your next song."));
-  for (const c of lib.yours) item(c.name, "Load it: every module as you saved it" + (keepKeyPref() ? " (this song's key stays)" : ""), () => loaded("yours", c.name), () => chDelete(c.name));
+  for (const c of lib.yours) item(c.name, "Load it: every module as you saved it" + (keepKeyPref() ? " (this song's key stays)" : ""), () => loaded("yours", c.name),
+    async () => { await chDelete(c.name); if (lastChain === c.name) { lastChain = ""; chainChanged = true; renderChainChip(); } });
   // Save: a name box right in the menu.
   const saveRow = el("div", "ref-item chain-save");
   const input = el("input", "chain-name");
   input.type = "text"; input.maxLength = 60; input.placeholder = "Name, then Enter (e.g. My Lead)";
-  input.value = lastChain;
+  input.value = old ? old.querySelector(".chain-name").value : lastChain;   // (a name you were typing stays)
   const saveBtn = el("button", "ref-chip", "SAVE");
   saveBtn.type = "button";
   const doSave = async () => {
     const name = input.value.trim();
     if (!name) { input.focus(); return; }
-    if (await chSave(name)) { lastChain = name; renderChainChip(); closeChainMenu(); }   // (the chip shows its name: saved)
+    if (await chSave(name)) { lastChain = name; chainChanged = true; renderChainChip(); closeChainMenu(); }   // (the chip shows its name: saved)
   };
   saveBtn.addEventListener("click", doSave);
   input.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") doSave(); if (e.key === "Escape") closeChainMenu(); });
@@ -1915,14 +2054,18 @@ async function openChainMenu() {
   for (const l of lib.looks) item(l.name, l.about, () => loaded("look", l.name), null);
   m.append(el("div", "ref-sep"));
   item("Start fresh (every module neutral)", "Every module back to its neutral start" + (keepKeyPref() ? " (this song's key stays)" : "") + ". UNDO brings your setup back.", () => loaded("fresh", ""), null);
-  const r = $("chains").getBoundingClientRect();
-  m.style.left = `${Math.round(r.left)}px`;
-  m.style.top = `${Math.round(r.bottom + 4)}px`;
-  document.body.append(m);
+  placeMenu(m, $("chains"));
+  if (old) { const top = old.scrollTop; old.replaceWith(m); m.scrollTop = top; } else document.body.append(m);
   chainMenu = m;
 }
-function renderChainChip() { $("chains").textContent = lastChain ? `☰ ${lastChain}` : "MY CHAINS"; }
-document.addEventListener("mousedown", (e) => { if (chainMenu && !chainMenu.contains(e.target) && e.target !== $("chains")) closeChainMenu(); });
+function renderChainChip() {
+  const c = $("chains");
+  c.textContent = lastChain ? `☰ ${lastChain}` : "MY CHAINS";
+  c.classList.toggle("named", !!lastChain);
+}
+// The chain this project uses (saved with it): the chip shows its name from the start.
+chGetName().then((n) => { if (!chainChanged) { lastChain = typeof n === "string" ? n : ""; renderChainChip(); } }).catch(() => {});
+document.addEventListener("mousedown", (e) => { if (!(chainMenu && chainMenu.contains(e.target)) && e.target !== $("chains")) closeChainMenu(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeChainMenu(); });
 $("chains").addEventListener("click", async () => { if (chainMenu) closeChainMenu(); else await openChainMenu(); });
 
@@ -1952,6 +2095,54 @@ async function fetchReport(switchTab) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// MIXOLOGY in the bottom bar: what Mixology (the suite link) knows about this track. The plug-in sends
+// frame.mixology = { here, state, balances, heard, vocalDb, targetDb } (null / false: no Mixology; true, from an
+// older plug-in: Mixology is in the project, nothing known about this track). Every word of it is here.
+const MIXOLOGY_TEXT = {
+  matched: { bar: " · MIXOLOGY ✓", tip: "Mixology is in this project: it sees what Voxology does on this vocal and won't add a second compressor, reverb or delay." },
+  beatTrack: { bar: " · MIXOLOGY ✓", tip: "Mixology is in this project: it knows this track is the beat." },
+  noLink: { bar: " · MIXOLOGY: ADD LINK", tip: "Mixology is in this project but can't hear this track: put Mixology Link on it {daw:linkAfterVoxology}." },
+  noName: { bar: " · MIXOLOGY: NO TRACK NAME", tip: "{daw} doesn't tell plug-ins this track's name, so Mixology can't match it." },
+  sharedName: { bar: " · MIXOLOGY: RENAME TRACK", tip: "Another track has the same name: rename one so Mixology can tell them apart." },
+  notVocal: { bar: " · MIXOLOGY: NOT A VOCAL THERE", tip: "In Mixology this track's role isn't a vocal: change it on Mixology's Tracks page if it is one." },
+  waiting: { bar: " · MIXOLOGY", tip: "Mixology is in this project; it hasn't matched this track yet." },
+  here: { bar: " · MIXOLOGY", tip: "Mixology is in this project." },
+  // Added to "matched" when Mixology hears the vocal against the beat ({vocal}, {target}: "-2.1 dB").
+  heard: "Mixology hears this vocal {vocal} against the beat (your style wants {target}).",
+  // Under FIT LEVEL and Auto Analyze's THE BEAT IS LOUDER / QUIETER HERE card, when Mixology rides this vocal's fader.
+  balances: "Mixology sets this vocal's level with its fader: use Mixology's Balance (or Auto Mix) instead, so the two don't both move it.",
+};
+const MIXOLOGY_STATES = ["matched", "beatTrack", "noLink", "noName", "sharedName", "notVocal", "waiting"];
+/** Mixology's word on this track from the latest frame: null (no Mixology) or { bar, tip, balances }. */
+function mixologyNow() {
+  const x = M.mixology;
+  if (x === true) return { ...MIXOLOGY_TEXT.here, balances: false };
+  if (!x || typeof x !== "object" || !x.here) return null;
+  const state = MIXOLOGY_STATES.includes(x.state) ? x.state : "waiting";
+  let tip = D(MIXOLOGY_TEXT[state].tip);
+  if (state === "matched" && x.heard && Number.isFinite(x.vocalDb) && Number.isFinite(x.targetDb))
+    tip += " " + MIXOLOGY_TEXT.heard.replace("{vocal}", fmtSigned(x.vocalDb)).replace("{target}", fmtSigned(x.targetDb));
+  return { bar: MIXOLOGY_TEXT[state].bar, tip, balances: !!x.balances };
+}
+/** The line under a level move when Mixology rides this vocal's fader (null: no line). */
+const mixologyBalanceLine = () => { const x = mixologyNow(); return x && x.balances ? el("div", "l-why", MIXOLOGY_TEXT.balances) : null; };
+
+/** The bottom bar's status: its parts in order. If they don't fit next to the DAW pick, the tempo goes first,
+    then REC's milliseconds and MATCH's dB (whatever still doesn't fit ends in "…": styles.css). */
+let statusShown = "";
+function showStatus(parts) {
+  const st = $("status");
+  const key = parts.map((p) => p.text).join("") + "|" + DAW.detected;
+  if (key === statusShown) return;
+  statusShown = key;
+  const fits = (texts) => { st.textContent = texts.join(""); return st.scrollWidth <= st.clientWidth + 1; };
+  const noTempo = parts.filter((p) => p.id !== "bpm");
+  if (fits(parts.map((p) => p.text)) || fits(noTempo.map((p) => p.text))) return;
+  fits(noTempo.map((p) => p.short ?? p.text));
+}
+let balancesShown = false;
+
+// ---------------------------------------------------------------------------------------------
 // Meters
 function refreshAll() {
   cellsByModule.flat().forEach((c) => c.refresh && c.refresh());
@@ -1964,31 +2155,51 @@ function meterBar(elBar, elText, short, peak) {
   elText.textContent = `${short <= -99 ? "−inf" : fmtNum(short)} LUFS · ${peak <= -99 ? "−inf" : fmtNum(peak)}`;
 }
 
+// Each step of a frame runs on its own: one odd field (an older or newer plug-in) never stops the rest of the window.
+const frameErrors = new Set();
+function frameStep(name, f) {
+  try { f(); } catch (e) { if (!frameErrors.has(name)) { frameErrors.add(name); console.error(`voxMeters (${name}):`, e); } }
+}
 window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
-  Object.assign(M, typeof frame === "string" ? JSON.parse(frame) : frame);
-  songFromFrame(M.songStyle);   // the song's style: this project's, or one just picked in Mixology or Masterology
-  dawFromFrame(M.daw);          // the DAW: found from the host, or picked in any of the three
-  meterBar($("in-bar"), $("in-text"), M.inShort, M.inPeak);
-  meterBar($("out-bar"), $("out-text"), M.outShort, M.outPeak);
-  liveMeters.forEach((c) => c.update());
-  refreshAutoEdit();
-  refreshHive();
+  let f;
+  try { f = typeof frame === "string" ? JSON.parse(frame) : frame; } catch (e) { frameStep("frame", () => { throw e; }); return; }
+  if (!f || typeof f !== "object") return;
+  Object.assign(M, f);
+  frameStep("song", () => songFromFrame(M.songStyle));   // the song's style: this project's, or one just picked in Mixology or Masterology
+  frameStep("daw", () => dawFromFrame(M.daw));           // the DAW: found from the host, or picked in any of the three
+  frameStep("in", () => meterBar($("in-bar"), $("in-text"), M.inShort, M.inPeak));
+  frameStep("out", () => meterBar($("out-bar"), $("out-text"), M.outShort, M.outPeak));
+  liveMeters.forEach((c) => frameStep("cells", () => c.update()));
+  frameStep("autoEdit", refreshAutoEdit);
+  frameStep("hive", refreshHive);
   if (M.umLink > 0 || !beat) lastLinkSeen = performance.now();
-  if (beat) {
+  if (beat) frameStep("beat", () => {
     $("beat-stat").textContent = M.umLink > 0 ? `hearing ${M.umLink > 1 ? M.umLink + " vocals" : "your vocal"}` : "no vocal yet";
     $("beat-text").textContent = M.umLink > 0 ? "Your vocal is linked. While you sing, the beat steps back where your voice is (orange on the spectrum)."
       : "Put Voxology on your vocal track too (VOCAL mode) and press play. They find each other: nothing to route.";
-  }
-  if (M.refVersion !== refVersionSeen) { refVersionSeen = M.refVersion; fetchReference(); }
-  if (M.aeReport !== reportVersion) { const first = reportVersion === -1; reportVersion = M.aeReport; fetchReport(!first); }
-  if (M.aaVersion !== analyzeSeen) { analyzeSeen = M.aaVersion; fetchAnalyze(); }
-  else if (learnTab === "report") { const st = document.querySelector(".aa-status"); if (st) st.textContent = analyzeStatus(); }
-  const match = (on("levelMatch") ? ` · MATCH ${fmtSigned(M.matchDb)}` : "") + (M.recMode ? ` · REC ${M.latencyMs.toFixed(1)} ms` : "");
-  $("status").classList.toggle("bypassed", on("bypass"));
-  $("status").textContent = `${on("bypass") ? "BYPASSED · CLICK TO SWITCH ON" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY"}${match}${M.bpm > 0 ? ` · ${M.bpm.toFixed(0)} BPM` : ""}${M.mixology ? " · MIXOLOGY ✓" : ""}`;
-  $("status").title = on("bypass") ? "Voxology's own bypass is on (saved with the project, or automated). Click to switch Voxology back on." : M.mixology ? (beat ? "Mixology is in this project: it knows this track is the beat." : "Mixology is in this project: it sees what Voxology does on this vocal and won't add a second compressor, reverb or delay.") : "";
-  draw();
-  if (learnTab === "module") renderLearn(false);
+  });
+  frameStep("reference", () => { if (M.refVersion !== refVersionSeen) { refVersionSeen = M.refVersion; fetchReference(); } });
+  frameStep("report", () => { if (M.aeReport !== reportVersion) { const first = reportVersion === -1; reportVersion = M.aeReport; fetchReport(!first); } });
+  frameStep("analyze", () => {
+    if (M.aaVersion !== analyzeSeen) { analyzeSeen = M.aaVersion; fetchAnalyze(); }
+    else if (learnTab === "report") { const st = document.querySelector(".aa-status"); if (st) st.textContent = analyzeStatus(); }
+  });
+  frameStep("status", () => {
+    const mix = mixologyNow();
+    const parts = [{ text: on("bypass") ? "BYPASSED · CLICK TO SWITCH ON" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY" }];
+    if (on("levelMatch")) parts.push({ text: ` · MATCH ${fmtSigned(M.matchDb)}`, short: " · MATCH" });
+    if (M.recMode) parts.push({ text: ` · REC ${M.latencyMs.toFixed(1)} ms`, short: " · REC" });
+    if (M.bpm > 0) parts.push({ id: "bpm", text: ` · ${M.bpm.toFixed(0)} BPM` });
+    if (mix) parts.push({ text: mix.bar });
+    $("status").classList.toggle("bypassed", on("bypass"));
+    showStatus(parts);
+    $("status").title = on("bypass") ? "Voxology's own bypass is on (saved with the project, or automated). Click to switch Voxology back on." : mix ? mix.tip : "";
+    // Mixology started or stopped riding this vocal's fader: the Report's level advice changes with it.
+    const balances = !!(mix && mix.balances);
+    if (balances !== balancesShown) { balancesShown = balances; if (learnTab === "report") { const top = body.scrollTop; renderLearn(); body.scrollTop = top; } }
+  });
+  frameStep("draw", draw);
+  frameStep("learn", () => { if (learnTab === "module") renderLearn(false); });
 });
 
 // Refresh everything once the parameter values have arrived.

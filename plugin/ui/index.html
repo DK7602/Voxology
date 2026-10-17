@@ -42,7 +42,7 @@
       </div>
     </div>
     <button type="button" id="match" class="chip" title="MATCH: A and B play at the same loudness, so you compare tone, not volume">MATCH</button>
-    <button type="button" id="rec" class="chip" title="RECORD MODE: about 6 ms instead of about 55, so you can hear yourself tuned while you record. A little rougher; Voices and Formant are off. Switch it off to mix."><i class="rec-dot"></i>REC</button>
+    <button type="button" id="rec" class="chip" title="RECORD MODE: about 6 ms instead of about 55, so you can hear yourself tuned while you record. A little rougher; Voices, Formant, Noise, Room, Clicks and Smooth are off. Switch it off to mix."><i class="rec-dot"></i>REC</button>
     <img class="title" src="assets/title.webp" alt="Voxology">
   </header>
 
@@ -91,9 +91,9 @@
       <span class="caps">LEARN</span>
       <button type="button" id="manual-btn" class="manual-btn" title="Open the manual: how to use Voxology and Honey Tune">?</button>
       <span class="grow"></span>
-      <div class="seg tabs" id="learn-tabs">
-        <button type="button" data-tab="module" class="sel">THIS MODULE</button>
-        <button type="button" data-tab="report">AUTO-EDIT REPORT</button>
+      <div class="seg tabs" id="learn-tabs" role="tablist" aria-label="Learn">
+        <button type="button" data-tab="module" class="sel" role="tab" aria-selected="true">THIS MODULE</button>
+        <button type="button" data-tab="report" role="tab" aria-selected="false">AUTO-EDIT REPORT</button>
       </div>
     </div>
     <div id="learn-body"></div>
