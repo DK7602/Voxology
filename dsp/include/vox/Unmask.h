@@ -126,7 +126,8 @@ private:
 // ------------------------------------------------------------------------------------------------
 /** The beat side's dips. Six bell cuts at the Unmask bands, each up to Amount x 6 dB x the band's
     weight, scaled by how present the vocal is in that band right now (relative to its own recent
-    peak there) and whether the beat has anything there at all. 15 ms in, 100 ms out. */
+    peak there, and only within kSingingRangeDb of the level it sings at there) and whether the beat
+    has anything there at all. 15 ms in, 100 ms out. */
 struct UnmaskParams
 {
     double amount = 0.0;       // 0..100 %; 0 = off
@@ -139,6 +140,10 @@ public:
     static constexpr double kMaxDipDb = 6.0;
     static constexpr double kPresenceWindowDb = 24.0;   // a band counts from 24 dB under its recent peak ...
     static constexpr double kPresenceRampDb = 18.0;     // ... fully present 6 dB under it
+    static constexpr double kSingingRangeDb = 30.0;     // ... and only within 30 dB of how loud the vocal sings there (its
+                                                        // level over the last minute or so; less counts 6 dB further down):
+                                                        // in a long break the recent peak falls to the vocal track's noise
+    static constexpr double kSingingFallDbPerS = 0.5;
     static constexpr double kBeatFloorDb = -70.0;
 
     void prepare (double sampleRate, int numChannels);
@@ -159,9 +164,9 @@ private:
     double sr = 48000.0;
     int channels = 2;
     BandAnalyser beat;
-    std::array<double, kUnmaskBands> vocalPeak {}, dip {}, designed {}, maxDip {};
+    std::array<double, kUnmaskBands> vocalPeak {}, vocalLevel {}, dip {}, designed {}, maxDip {};
     std::array<std::array<Biquad, kMaxChannels>, kUnmaskBands> bell {};
-    double atk = 0.0, rel = 0.0, peakFall = 0.0;
+    double atk = 0.0, rel = 0.0, peakFall = 0.0, levelFall = 0.0;
     int countdown = 0;
     bool running = false;
 };

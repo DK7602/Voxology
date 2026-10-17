@@ -4,6 +4,7 @@
 
 #include "vox/FilterDesign.h"
 
+#include <array>
 #include <cmath>
 #include <numbers>
 #include <random>
@@ -102,6 +103,68 @@ inline std::vector<float> vocal (double sr, double seconds, double noiseDb = -62
                                      + noiseScale * white (rng));
     }
     return out;
+}
+
+/** A voice (harmonics with -6 dB/oct roll-off, three formants) that follows a pitch line: hz[i] per sample,
+    loudness env[i] (0 = silent). Peaks around -10 dBFS. Mono. */
+inline std::vector<float> voiced (double sr, const std::vector<double>& hz, const std::vector<double>& env)
+{
+    std::vector<double> v (hz.size(), 0.0);
+    double phase = 0.0;
+    for (size_t i = 0; i < hz.size(); ++i)
+    {
+        phase += hz[i] / sr;
+        double s = 0.0;
+        for (int h = 1; h * hz[i] < 0.45 * sr && h < 60; ++h) s += std::sin (2.0 * std::numbers::pi * h * phase) / h;
+        v[i] = s;
+    }
+    vox::Biquad f1, f2, f3;
+    vox::design::apply (f1, vox::design::bell (600.0, 10.0, 2.0, sr));
+    vox::design::apply (f2, vox::design::bell (1400.0, 8.0, 2.5, sr));
+    vox::design::apply (f3, vox::design::bell (2700.0, 6.0, 3.0, sr));
+    std::vector<float> out (v.size());
+    for (size_t i = 0; i < v.size(); ++i) out[i] = static_cast<float> (0.05 * env[i] * f3.process (f2.process (f1.process (v[i]))));
+    return out;
+}
+
+/** Sung: a melody of held notes (MIDI, around f0), 0.55 s each with a 5.5 Hz vibrato (+-0.2 semitone), 0.1 s apart. */
+inline std::vector<float> sung (double sr, double seconds, double f0 = 220.0)
+{
+    static constexpr std::array<int, 8> melody { 0, 3, 7, 5, 3, 2, 0, -2 };   // a minor-key tune, in semitones from f0
+    const size_t n = static_cast<size_t> (sr * seconds);
+    std::vector<double> hz (n), env (n);
+    for (size_t i = 0; i < n; ++i)
+    {
+        const double t = static_cast<double> (i) / sr, inNote = std::fmod (t, 0.65);
+        const int note = melody[static_cast<size_t> (t / 0.65) % melody.size()];
+        hz[i] = f0 * std::pow (2.0, (note + 0.2 * std::sin (2.0 * std::numbers::pi * 5.5 * t)) / 12.0);
+        env[i] = inNote < 0.55 ? std::sqrt (std::sin (std::numbers::pi * inNote / 0.55)) : 0.0;
+    }
+    return voiced (sr, hz, env);
+}
+
+/** Rapped: short syllables (0.12 - 0.2 s) whose pitch glides like speech (each falls 2 - 4 semitones from a start
+    that moves around f0), a pause every 6 syllables. Clearly pitched, but nothing is held. */
+inline std::vector<float> rapped (double sr, double seconds, double f0 = 150.0, unsigned seed = 4)
+{
+    std::mt19937 rng (seed);
+    std::uniform_real_distribution<double> u (0.0, 1.0);
+    const size_t n = static_cast<size_t> (sr * seconds);
+    std::vector<double> hz (n, f0), env (n, 0.0);
+    size_t i = 0;
+    for (int syl = 0; i < n; ++syl)
+    {
+        const auto len = static_cast<size_t> ((0.12 + 0.08 * u (rng)) * sr), gap = static_cast<size_t> ((syl % 6 == 5 ? 0.35 : 0.05) * sr);
+        const double start = 3.0 * (2.0 * u (rng) - 1.0), fall = 2.0 + 2.0 * u (rng);
+        for (size_t k = 0; k < len && i < n; ++k, ++i)
+        {
+            const double x = static_cast<double> (k) / static_cast<double> (len);
+            hz[i] = f0 * std::pow (2.0, (start + 1.0 - fall * x) / 12.0);
+            env[i] = std::sqrt (std::sin (std::numbers::pi * x));
+        }
+        for (size_t k = 0; k < gap && i < n; ++k, ++i) hz[i] = hz[i > 0 ? i - 1 : 0];
+    }
+    return voiced (sr, hz, env);
 }
 
 } // namespace testsig

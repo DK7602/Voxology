@@ -10,6 +10,11 @@
 
 namespace vox {
 
+/** Held notes (VocalAnalysis::heldShare) under this: the take is rapped, so Auto-Edit leaves Pitch off (except in
+    Robot style, where the effect is the point). Measured: the user's raps 9 - 19 %, 22 trap raps 0 - 26 %; sung
+    takes mostly 30 - 80 % (Cymatics, trap melodic 37 - 68 %). Rap reads 42 - 95 % pitched, so that can't tell them apart. */
+inline constexpr double kRapHeldShare = 25.0;
+
 /** Vocal styles Auto-Edit can aim for (what "finished" sounds like). */
 inline constexpr int kStyles = 8;
 inline constexpr std::array<const char*, kStyles> kStyleNames { "Trap Lead", "Rap", "Melodic", "Robot", "R&B", "Pop", "Folk", "Natural Singer" };
@@ -86,6 +91,7 @@ struct VocalAnalysis
     double pitchedShare = 0.0;         // % of singing frames with a clear pitch
     double heldShare = 0.0;            // % of pitched time in held notes (>= 160 ms within half a semitone): sung vs rapped
     KeyGuess key;                      // from the sung notes
+    std::vector<double> pitchMidi;     // the pitch readings (MIDI note numbers, fractional), 20 ms apart while singing
     double rumbleDb = -120.0;          // energy below 60 Hz vs the whole vocal (dB)
     std::vector<double> bandDb;        // third-octave balance vs the 500 Hz - 2 kHz average (dB)
     std::vector<double> bandHz;
@@ -94,7 +100,8 @@ struct VocalAnalysis
     double sibilantShare = 0.0;        // % of singing frames that are sibilant
     double rangeDb = 0.0;              // loud vs quiet phrases (P90 - P10 of 400 ms levels, dB)
     double microDynDb = 0.0;           // word-to-word punch: P95 - P50 of 50 ms levels while singing (dB; low = compressed)
-    double tailDb = -120.0;            // what rings on after a phrase ends (100 - 300 ms later vs the phrase's end, dB); -120 = unknown
+    double tailDb = -120.0;            // what rings on after a phrase ends (100 - 300 ms later vs the phrase's end, dB); -120 = unknown,
+                                       // -80 at the lowest (digital silence after a phrase: dry)
     double lowBassDb = -120.0;         // energy under 100 Hz vs the whole (dB): a beat's kick and 808 live there
     bool stereo = false, oneSided = false;
 };

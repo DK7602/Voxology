@@ -214,3 +214,145 @@ TEST_CASE ("Auto-Edit stops early when the plug-in closes (the cancel flag)", "[
     const auto ref = analyseReference ({ x }, kSr, "Ref", &stop);
     CHECK (! ref.ok);
 }
+
+TEST_CASE ("Auto-Edit: a note that has you change the vocal's level says to run Auto-Edit again", "[autoedit]")
+{
+    // The gate, Rider and Compressor thresholds are levels: after the advised clip-gain cut (TOO HOT) the gate chopped
+    // words and the compressor stopped working. Every such note ends with "press AUTO-EDIT again".
+    auto hasNote = [] (const AutoEditResult& r, const char* title)
+    {
+        for (const auto& n : r.notes) if (n.rfind (title, 0) == 0) return n;
+        return std::string();
+    };
+    auto checkAgain = [] (const AutoEditResult& r)
+    {
+        for (const auto& n : r.notes)
+        {
+            INFO (n);
+            const bool changesLevel = n.find ("clip gain") != std::string::npos || n.find ("gain knob") != std::string::npos
+                                      || n.find ("interface gain") != std::string::npos || n.find ("{daw:toMono}") != std::string::npos;
+            if (changesLevel) CHECK (n.find ("press AUTO-EDIT again") != std::string::npos);
+        }
+    };
+
+    auto hot = testsig::vocal (kSr, 14.0, -70.0, -14.0, 5);
+    for (auto& v : hot) v *= 4.0f;   // peaks over full scale (a float mix doesn't clip)
+    const auto rh = autoEdit ({ hot }, kSr, { 0, 1, 0.0 });
+    REQUIRE (rh.ok);
+    CHECK (rh.analysis.peakDb > 0.0);
+    CHECK (hasNote (rh, "TOO HOT").find ("press AUTO-EDIT again") != std::string::npos);
+    checkAgain (rh);
+    checkNotes (rh);
+
+    // Quiet: Output keeps the level it came in at, so the note mustn't promise the level back.
+    auto quiet = testsig::vocal (kSr, 14.0, -95.0, -14.0, 5);
+    for (auto& v : quiet) v *= 0.05f;
+    const auto rq = autoEdit ({ quiet }, kSr, { 0, 1, 0.0 });
+    REQUIRE (rq.ok);
+    CHECK (rq.analysis.peakDb < -24.0);
+    CHECK (rq.outputLufs == Approx (rq.analysis.inputLufs).margin (1.0));
+    const auto qn = hasNote (rq, "QUIET RECORDING");
+    REQUIRE (! qn.empty());
+    CHECK (qn.find ("adds the level back") == std::string::npos);
+    CHECK (qn.find ("press AUTO-EDIT again") != std::string::npos);
+    checkAgain (rq);
+    checkNotes (rq);
+
+    // One-sided: folding to mono changes the level too.
+    const auto x = testsig::vocal (kSr, 14.0, -70.0, -14.0, 5);
+    const auto ro = autoEdit ({ x, std::vector<float> (x.size(), 0.0f) }, kSr, { 0, 1, 0.0 });
+    REQUIRE (ro.ok);
+    CHECK (hasNote (ro, "ONE-SIDED").find ("press AUTO-EDIT again") != std::string::npos);
+    checkAgain (ro);
+    checkNotes (ro);
+}
+
+TEST_CASE ("Auto-Edit: the too-little-voice tip names the real minimum; uneven stereo channels are fine", "[autoedit]")
+{
+    const auto r = autoEdit ({ testsig::vocal (kSr, 2.0) }, kSr, {});
+    REQUIRE_FALSE (r.ok);
+    CHECK (r.tip.find ("at least 3 seconds") != std::string::npos);
+
+    // A right channel shorter than the left (v0.51 read past its end).
+    const auto x = testsig::vocal (kSr, 6.0);
+    const std::vector<float> shorter (x.begin(), x.begin() + static_cast<std::ptrdiff_t> (x.size() / 2));
+    const auto a = analyseVocal ({ x, shorter }, kSr);
+    CHECK (a.stereo);
+    CHECK (std::isfinite (a.voiceRmsDb));
+}
+
+TEST_CASE ("Auto-Edit: digital silence after phrases reads as dry, not unknown", "[autoedit]")
+{
+    // Gaps of exact silence (a gated or edited vocal): the tail read -216 dB and counted as "unknown".
+    const auto x = testsig::vocal (kSr, 14.0, -400.0, -14.0, 5);
+    const auto a = analyseVocal ({ x }, kSr);
+    CHECK (a.tailDb == Approx (-80.0));
+    const auto r = autoEdit ({ x }, kSr, { 1, 1, 0.0 });
+    REQUIRE (r.ok);
+    for (const auto& reason : r.reasons)
+        if (reason.module == "cleanup" && reason.control == "Room")
+        {
+            INFO (reason.why);
+            CHECK (reason.why.find ("almost nothing rings on") != std::string::npos);
+        }
+}
+
+TEST_CASE ("Auto-Edit Pitch: rap stays untuned (pitched but nothing held), singing gets tuned, Robot keeps its effect", "[autoedit][pitch]")
+{
+    // Real rap reads 42 - 95 % pitched but only 9 - 28 % held notes: v0.51 tuned it by the pitched share (Rap style:
+    // Natural 70 %, Trap Lead: Classic 10 ms / 100 %).
+    auto pitchWhy = [] (const AutoEditResult& r, const char* control)
+    {
+        for (const auto& x : r.reasons) if (x.module == "pitch" && x.control == control) return x.why;
+        return std::string();
+    };
+    auto note = [] (const AutoEditResult& r, const char* title)
+    {
+        for (const auto& n : r.notes) if (n.rfind (title, 0) == 0) return true;
+        return false;
+    };
+    const auto rap = testsig::rapped (kSr, 14.0);
+    const auto a = analyseVocal ({ rap }, kSr);
+    INFO ("rap: pitched " << a.pitchedShare << " %, held " << a.heldShare << " %");
+    REQUIRE (a.pitchedShare > 50.0);
+    REQUIRE (a.heldShare < kRapHeldShare);
+    for (int style : { 0, 1, 2 })
+    {
+        const auto r = autoEdit ({ rap }, kSr, { style, 1, 0.0 });
+        REQUIRE (r.ok);
+        INFO (kStyleNames[static_cast<size_t> (style)]);
+        CHECK (r.params.pitch.amount == 0.0);
+        CHECK (pitchWhy (r, "Amount").find ("held notes") != std::string::npos);
+        CHECK (note (r, "PITCH OFF FOR RAP") == (style == 0));   // Trap Lead: how to get the robotic sound anyway
+        checkNotes (r);
+    }
+    CHECK (autoEdit ({ rap }, kSr, { 3, 1, 0.0 }).params.pitch.amount == 100.0);   // Robot: the effect is the point
+
+    const auto sung = testsig::sung (kSr, 14.0, 150.0);   // D3 + 37 cents, held notes
+    const auto s = analyseVocal ({ sung }, kSr);
+    REQUIRE (s.heldShare > 50.0);
+    const auto trap = autoEdit ({ sung }, kSr, { 0, 1, 0.0 });
+    CHECK (trap.params.pitch.amount == 100.0);
+    CHECK (trap.params.pitch.mode == kPitchClassic);
+    CHECK_FALSE (note (trap, "PITCH OFF FOR RAP"));
+    CHECK (autoEdit ({ sung }, kSr, { 1, 1, 0.0 }).params.pitch.amount > 0.0);
+
+    // "You sing N cents away" is measured from the notes Pitch will use: the beat's scale, or all 12 (Chromatic).
+    for (int scale : { 2, 0 })
+    {
+        AutoEditSettings st { 4, 1, 0.0 };
+        st.beatKeyKnown = true;
+        st.beatKeyNote = 2;
+        st.beatScale = scale;
+        st.beatKeyName = scale == 2 ? "D minor" : "D chromatic";
+        const auto r = autoEdit ({ sung }, kSr, st);
+        REQUIRE (r.params.pitch.scale == scale);
+        double off = 0.0;
+        for (double m : r.analysis.pitchMidi) off += std::abs (m - PitchCorrector::targetNote (m, 2, scale, -1));
+        off = 100.0 * off / static_cast<double> (r.analysis.pitchMidi.size());
+        const auto why = pitchWhy (r, "Amount");
+        INFO (why << " (expected " << off << " cents)");
+        CHECK (why.find ("You sing on average " + std::to_string (std::lround (off)) + " cents away") != std::string::npos);
+        CHECK (why.find (scale == 2 ? "the nearest note of D minor" : "the nearest of the 12 notes") != std::string::npos);
+    }
+}

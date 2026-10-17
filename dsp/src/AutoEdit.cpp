@@ -318,6 +318,10 @@ Signal renderMono (const Signal& x, double sr, const ChainParams& p)
 }
 
 /** Everything off (neutral), the starting point for each partial render. */
+/** The last step of every note that has you change the vocal's level: the gate, Rider and Compressor thresholds are
+    levels (dBFS), set for the level Auto-Edit heard (turned down 10 dB, the gate would cut words and the compressor stop). */
+constexpr const char* kAgainStep = "\nSTEP: Then press AUTO-EDIT again: the gate, Rider and Compressor are set for the level it heard, so they need setting for the new one.";
+
 constexpr double kNoiseTargetSnr = 48.0;   // Auto-Edit's noise reduction aims the noise this far under the voice (dB)
 constexpr double kRoomTailFrom = -34.0;    // ... and Room starts when more than this rings on after a phrase (dB)
 
@@ -508,7 +512,10 @@ double punchDb (const Frames& f, const std::vector<bool>& mask)
 }
 
 /** Space: at each phrase end (level falls from within 12 dB of the loud part to 20 dB under it and stays
-    there for 300 ms), what's left 100 - 300 ms later vs the last 200 ms of the phrase. -120 = unknown. */
+    there for 300 ms), what's left 100 - 300 ms later vs the last 200 ms of the phrase. -120 = unknown.
+    Floored at kDryTailDb: digital silence after a phrase (a gated or edited vocal) is as dry as it gets. */
+constexpr double kDryTailDb = -80.0;   // dry pro vocals read -37 dB or lower; the driest Cymatics dry stem -72 dB
+
 double spaceDb (const Frames& f)
 {
     std::vector<double> live;
@@ -527,7 +534,7 @@ double spaceDb (const Frames& f)
         if (! (f.rmsDb[i - 1] > loud - 12.0 && f.rmsDb[i] <= loud - 12.0)) continue;
         bool quiet = true;   // stays down for 300 ms (a real phrase end, not a gap between syllables)
         for (size_t j = i + 10; j < i + 30; ++j) quiet = quiet && f.rmsDb[j] < loud - 20.0;
-        if (quiet) tails.push_back (meanDb (i + 10, i + 30) - meanDb (i - 20, i));
+        if (quiet) tails.push_back (std::max (kDryTailDb, meanDb (i + 10, i + 30) - meanDb (i - 20, i)));
     }
     return tails.size() >= 2 ? percentile (tails, 50.0) : -120.0;
 }
@@ -652,7 +659,7 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
     if (audio.size() >= 2)
     {
         double el = 0.0, er = 0.0;
-        for (size_t i = 0; i < audio[0].size(); ++i) { el += audio[0][i] * audio[0][i]; er += audio[1][i] * audio[1][i]; }
+        for (size_t i = 0; i < std::min (audio[0].size(), audio[1].size()); ++i) { el += audio[0][i] * audio[0][i]; er += audio[1][i] * audio[1][i]; }
         a.stereo = true;
         a.oneSided = std::abs (energyDb (el + 1.0e-30) - energyDb (er + 1.0e-30)) > 30.0;
     }
@@ -702,9 +709,8 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
         // pitchTrack hops 20 ms over singing frames (10 ms apart): share of them with a clear pitch.
         const double tries = std::max (1.0, static_cast<double> (voice.size()) / 2.0);
         a.pitchedShare = std::min (100.0, 100.0 * static_cast<double> (f0.size()) / tries);
-        std::vector<double> midi;
-        for (double hz : f0) midi.push_back (69.0 + 12.0 * std::log2 (hz / 440.0));
-        a.key = detectKey (midi);
+        for (double hz : f0) a.pitchMidi.push_back (69.0 + 12.0 * std::log2 (hz / 440.0));
+        a.key = detectKey (a.pitchMidi);
     }
 
     const auto spec = averageSpectrum (raw, mask, f.hop);
@@ -1096,7 +1102,8 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
         r.ok = false;
         r.summary = "Auto-Edit heard only " + num (a.voicedSeconds) + " s of vocal, too little to judge it.";
         r.tipTitle = "PLAY A SUNG PART";
-        r.tip = "Start playback where you're rapping or singing (a verse or hook), then press Auto-Edit. It needs about 12 seconds of voice.";
+        r.tip = "Start playback where you're rapping or singing (a verse or hook), then press Auto-Edit. It needs at least 3 seconds of voice; "
+                "about 12 seconds (it listens that long) works best.";
         return r;
     }
     ChainParams p = neutralChain();
@@ -1111,22 +1118,28 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
                            " times. Those spots are distorted in the recording itself; no plug-in can fully undo that."
                            "\nNEED: Yes if you hear crackle on loud words. If it sounds fine to you, it's optional."
                            "\nSTEP: Next take, turn the gain knob on your audio interface down until your loudest words peak around -10 dB on {daw}'s meter."
-                           "\nSTEP: For this take, re-record the clipped lines if you can, or repair them with a declipper: {daw:declipper}.");
+                           "\nSTEP: For this take, re-record the clipped lines if you can, or repair them with a declipper: {daw:declipper}."
+                           + std::string (kAgainStep));
     if (a.peakDb > 0.0)
         r.notes.push_back ("TOO HOT: the vocal reaches +" + db (a.peakDb) + ", over the top of the meter, before Voxology. {daw} doesn't clip inside a mix, "
                            "but anything that limits later (like a limiter on the {daw:master} channel) has to squash it hard, which crackles."
                            "\nNEED: Yes if you hear crackle or the master limiter works hard."
                            "\nSTEP: Lower the vocal's clip gain (or the fader of whatever feeds it) until the loudest words peak around -6 dB. In {daw}: {daw:clipGain}."
+                           + std::string (kAgainStep) +
                            "\nSTEP: Check your master limiter only shaves 1 - 3 dB.");
     if (a.peakDb < -24.0)
-        r.notes.push_back ("QUIET RECORDING: your loudest words only reach " + db (a.peakDb) + ". It works, but the noise of your room and interface sits closer to your voice."
-                           "\nNEED: No. Auto-Edit adds the level back."
+        r.notes.push_back ("QUIET RECORDING: your loudest words only reach " + db (a.peakDb) + ". Voxology keeps your vocal at the level it came in "
+                           "(so your fader doesn't jump), so it stays this quiet in your mix, and the noise of your room and interface sits closer to your voice."
+                           "\nNEED: Yes if you can't get the vocal loud enough with its fader. Otherwise optional."
+                           "\nSTEP: For this take, turn the vocal's clip gain up (the volume of the audio itself, before any plug-in) until your loudest words peak around -10 dB."
+                           + std::string (kAgainStep) +
                            "\nSTEP: Next take, turn the interface gain up until your loudest words peak around -10 dB.");
     if (a.oneSided)
         r.notes.push_back ("ONE-SIDED TRACK: the vocal is only in one side of a stereo track, so it will sit off to one side."
                            "\nNEED: Yes."
-                           "\nSTEP: Next time, {daw:monoTrack}."
-                           "\nSTEP: For this take: {daw:toMono}.");
+                           "\nSTEP: For this take: {daw:toMono}."
+                           + std::string (kAgainStep) +
+                           "\nSTEP: Next time, {daw:monoTrack}.");
     const bool fewPitches = a.f0Median <= 0.0;
     if (fewPitches && a.rumbleDb > -10.0)
         r.notes.push_back ("NOT A SOLO VOCAL?: this sounds more like a beat or a full mix than a voice (strong bass, no clear pitch). Voxology is made for a single vocal track."
@@ -1152,13 +1165,27 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
         std::string keyName = std::string (kNoteNames[static_cast<size_t> (kg.key)]) + (kg.minor ? " minor" : " major");
         if (kg.ambiguous)
             keyName += std::string (" or ") + kNoteNames[static_cast<size_t> (kg.altKey)] + (kg.altMinor ? " minor" : " major");
-        if (a.f0Median <= 0.0 || a.pitchedShare < 15.0)
+        // Rap is often clearly pitched (42 - 95 % of it on real raps), but it glides: held notes tell singing from rapping.
+        // Robot style keeps its effect on a rapped take (ad-libs and effect vocals are made for it).
+        const bool noPitch = a.f0Median <= 0.0 || a.pitchedShare < 15.0;
+        const bool rapped = a.heldShare < kRapHeldShare && style != 3;
+        if (noPitch || rapped)
         {
             pt.amount = 0.0;
             pt.mode = kPitchNatural;   // if you turn it up yourself
             keep (Module::pitch);
-            reason ("pitch", "Amount", "Off", "Auto-Edit heard almost no held notes (" + num (a.pitchedShare, 0) +
-                    " % of the vocal has a clear pitch), so this sounds like rapping, not singing. Tuning spoken words only adds artefacts, so Pitch stays off. Turn it up yourself for the robotic effect.");
+            if (noPitch)
+                reason ("pitch", "Amount", "Off", "Auto-Edit heard almost no clear pitch (" + num (a.pitchedShare, 0) +
+                        " % of the vocal), so there's nothing for Pitch to tune: it stays off.");
+            else
+                reason ("pitch", "Amount", "Off", "Auto-Edit heard almost no held notes (" + num (a.heldShare, 0) + " % of the pitched part is held notes; sung parts usually have " +
+                        num (kRapHeldShare + 10.0, 0) + " % or more), so this sounds like rapping, not singing. Tuning spoken words only adds artefacts, so Pitch stays off. Turn it up yourself for the robotic effect.");
+            if (rapped && ! noPitch && style == 0)
+                r.notes.push_back ("PITCH OFF FOR RAP: Trap Lead tunes hard, but this part is rapped (only " + num (a.heldShare, 0) +
+                                   " % held notes), so Auto-Edit left Pitch off: tuning rapped words gives a robotic warble."
+                                   "\nNEED: Optional. Only if you want that robotic trap sound on your rap."
+                                   "\nSTEP: Open 01 Pitch, set Mode to Robot (or Classic with Retune 0 - 10 ms) and Amount to 100 %."
+                                   "\nSTEP: Let Pitch hear your beat's key. In {daw}: {daw:sidechain}. Or set Key and Scale yourself, with Key on MANUAL.");
         }
         else
         {
@@ -1197,8 +1224,14 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
                                              : "Classic glides the whole pitch line onto the note at the Retune speed: the familiar auto-tune sound. Natural keeps more of your own voice; Robot is harder.");
             reason ("pitch", "Retune", std::to_string (static_cast<int> (pt.speedMs)) + " ms, Humanize " + pct (pt.humanize),
                     std::string ("For ") + kStyleNames[static_cast<size_t> (style)] + ": " + t.feel + ". Lower = more robotic, higher = more natural.");
-            reason ("pitch", "Amount", pct (pt.amount), "You sing on average " + num (kg.offCents, 0) + " cents away from the nearest note" +
-                    (kg.offCents < 12.0 ? " (already close: the tune will be subtle)." : kg.offCents < 25.0 ? " (normal for a take: the tune tightens it)." : " (quite loose: the tune makes a big difference)."));
+            // How far off you sing, from the notes Pitch will actually pull to (all 12 when the key is unsure).
+            double offSum = 0.0;
+            for (double m : a.pitchMidi) offSum += std::abs (m - PitchCorrector::targetNote (m, pt.key, pt.scale, -1));
+            const double offCents = a.pitchMidi.empty() ? kg.offCents : 100.0 * offSum / static_cast<double> (a.pitchMidi.size());
+            const std::string toNote = pt.scale == 0 ? "the nearest of the 12 notes"
+                                                     : "the nearest note of " + (settings.beatKeyKnown ? settings.beatKeyName : keyName);
+            reason ("pitch", "Amount", pct (pt.amount), "You sing on average " + num (offCents, 0) + " cents away from " + toNote +
+                    (offCents < 12.0 ? " (already close: the tune will be subtle)." : offCents < 25.0 ? " (normal for a take: the tune tightens it)." : " (quite loose: the tune makes a big difference)."));
             if (! sure && ! settings.beatKeyKnown)
                 r.notes.push_back ("KEY UNSURE: from this part Auto-Edit can't be sure of the key (best guess " + keyName + "), so Pitch is set to Chromatic."
                                    "\nNEED: Optional. Chromatic works; the right key sounds tighter."

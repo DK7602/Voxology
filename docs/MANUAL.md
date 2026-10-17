@@ -109,6 +109,7 @@ Every knob:
 - **Classic**: at Retune 0 - 10 ms the hard melodic-trap tune (notes snap, slides become steps); slower, a softer tune that only fixes drift.
 - **Natural**: each note lands at the Retune speed while your vibrato (and the start of a scoop) stays, so it's never quite flat: for the flat robot sound pick Robot. At Retune 5 ms and faster it changes notes as fast as you sing (within about 25 ms); from 20 ms up it waits a little longer to be sure, so a wide vibrato never flips to the next note.
 - Pitch reads your pitch over two or three cycles of your voice and stamps each reading with the exact moment it describes (v0.51). Every real voice is a little uneven from cycle to cycle; reading one cycle at a time followed that unevenness, and a hard tune came out wobbly. Measured on a raw vocal at Retune 0 against Cubase Pitch Correct and Waves Tune Real-Time at their fastest: Robot now lands on the notes as reliably as Waves (about 7 % of the time more than 30 cents off a note, mostly the slides between notes) with about 3 - 4 cents of wobble left inside held notes (it was about 6).
+- **Auto-Edit and rap**: Auto-Edit tunes only a take with held notes. Rap is often clearly pitched, but it glides: on real raps under 25 % of the pitched part is held notes, on sung parts usually 35 % or more. Under 25 % Pitch stays off in every style except Robot (there the effect is the point). In Trap Lead a card says how to get the robotic trap sound anyway: Mode Robot (or Classic at Retune 0 - 10 ms) and Amount 100 %. The report's "you sing N cents away" is measured from the notes Pitch will pull to: your key's scale, or all 12 notes on Chromatic.
 
 **Noise and Room (Cleanup)** work before anything else in the chain, so Pitch and the gate already hear the cleaner vocal.
 
@@ -152,7 +153,7 @@ Every knob:
 - **Speed**: slow (0.1 - 0.5 Hz) is smooth; fast (2 - 5 Hz) wobbles. **Width**: 0 = the same both sides, 100 = left and right move opposite ways.
 - The level stays the same at any Amount (within 1 dB). No added delay, so it works in Record mode too. Auto-Edit never changes it.
 
-Each cell shows a short status under its name (for example "idle", "flat", "cut 80 Hz"). Cleanup's status reads "clipped in!" or "too hot in!" when the recording itself is distorted: fix that at the recording stage.
+Each cell shows a short status under its name (for example "idle", "flat", "cut 80 Hz"). Cleanup's status reads "clipped in!" or "too hot in!" when the recording itself is distorted: fix that at the recording stage. "Clipped" means flat-topped peaks cut off by a clipper; the rounded peaks of a quiet 16-bit recording don't count.
 
 ## Learn panel: explanations, warnings and the report
 
@@ -194,6 +195,7 @@ How to read a warning card:
 - **Red card** = worth your attention (for example CLIPPED RECORDING).
 - **Blue card** = calm: optional or just information. In red mode (logo clicked) these turn red too.
 - Every card answers **"Do I need to fix it?"** and then gives numbered steps. If the answer is "No" or "Optional", you can ignore it.
+- A card that has you change the vocal's level (TOO HOT, QUIET RECORDING, ONE-SIDED TRACK, CLIPPED RECORDING) ends with **press AUTO-EDIT again**: the gate, Rider and Compressor are set for the level Auto-Edit heard, so after a clip-gain change the gate would cut words and the compressor stop working. Voxology's Output keeps your vocal at the level it came in, so a quiet recording stays quiet: turn its clip gain up, then run Auto-Edit again.
 
 ## My Chains: your setup, on every song
 
@@ -239,7 +241,7 @@ A reference makes Auto-Edit aim at the tone of a real finished vocal instead of 
 | Mixed | Sung hooks, wet | *Natural* | 11 finished hooks, male and female, effects baked in (Cymatics) |
 | Mixed | All voices, pro average | *Natural* | all 143 MUSDB18 vocals |
 
-The *Pitch* tag after each name (in italics in the menu) says how tuned that reference sounds, as one of Voxology's Pitch modes, so you can pick one that fits your mix. *Natural* = notes centred on pitch with the voice's own movement kept; *Off* = rapped, no audible tuning; *Classic* = the hard auto-tune sound: notes snapped close to pitch with little movement left inside them. Measured on the vocals themselves; the MoisesDB groups are labelled by kind. No built-in sounds like Classic or Robot (even the trap ones are tuned tightly but naturally): for that sound, set Pitch's Mode (or pick the Trap Lead or Robot style). The tag is a guide only: Pitch still follows your STYLE.
+The *Pitch* tag after each name (in italics in the menu) says how tuned that reference sounds, as one of Voxology's Pitch modes, so you can pick one that fits your mix. *Natural* = notes centred on pitch with the voice's own movement kept; *Off* = rapped, no audible tuning; *Classic* = the hard auto-tune sound: notes snapped close to pitch with little movement left inside them. Measured on the vocals themselves; the MoisesDB groups are labelled by kind. No built-in sounds like Classic or Robot (even the trap ones are tuned tightly but naturally): for that sound, set Pitch's Mode (or pick the Robot style; Trap Lead tunes hard too, but leaves a rapped take untuned). The tag is a guide only: Pitch still follows your STYLE.
 
 After picking a reference, press **AUTO-EDIT** again so it re-aims.
 
@@ -372,7 +374,7 @@ finished mix into the master. In the same Cubase project they tell each other wh
   the two don't both move it.
 - **Recorded too hot?** When Auto-Edit finds the vocal clipped or over the top of the meter in the recording itself,
   Voxology tells Mixology: its Auto Mix, Balance, Polish and Vocal Pocket then say "fix this first" above their changes
-  (lower the clip gain, then let Mixology hear it again), because their level moves depend on it.
+  (lower the clip gain, press AUTO-EDIT in Voxology again, then let Mixology hear it again), because their level moves depend on it.
 - **One DAW for all three**: the DAW in the bottom bar is shared the same way as the song style.
 - **One song style for all three**: pick the song's genre and style in **Mixology or Masterology** (the list of 75).
   Voxology knows it within a second, also after you reopen the project; there's no song picker in Voxology itself,
@@ -394,7 +396,7 @@ finished mix into the master. In the same Cubase project they tell each other wh
 | Chrome says the download is dangerous | Ctrl+J, then Keep. The plug-ins aren't code-signed yet |
 | Voxology or Honey Tune doesn't show in Cubase | Check the .vst3 files are in C:\Program Files\Common Files\VST3, then Studio > VST Plug-in Manager > Rescan. Voxology is in the Vocals folder |
 | Voxology shows plain sliders instead of the honeycomb | WebView2 is missing on Windows. Install Microsoft Edge WebView2 Runtime, then reopen |
-| Auto-Edit says TRY AGAIN | It didn't hear enough voice. Play a part with singing or rapping for at least 12 seconds. If an earlier Auto-Edit worked, its settings stay on and its report stays below the warning |
+| Auto-Edit says TRY AGAIN | It heard less than 3 seconds of voice. Play a part with singing or rapping (about 12 seconds of voice works best). If an earlier Auto-Edit worked, its settings stay on and its report stays below the warning |
 | Crackle or harsh distortion | Look at Cleanup: "clipped in!" means the recording itself is clipped. Record again with the mic gain lower |
 | Pitch sounds off-key | Check the key on the Pitch page. Send the beat to the side-chain, or pick the key under MANUAL |
 | A sample-pack vocal or beat sounds off-key | Pack file names are often wrong about the key (in one tested pack, 24 of 54 were a semitone off). Leave Key on AUTO, or check the key by ear or with a key app |
