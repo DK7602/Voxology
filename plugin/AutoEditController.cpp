@@ -6,10 +6,6 @@
 AutoEditController::AutoEditController (juce::AudioProcessorValueTreeState& s, std::function<double()> getBpm)
     : state (s), bpmSource (std::move (getBpm))
 {
-    const auto maxSamples = static_cast<size_t> (kMaxSampleRate * kMaxSeconds);
-    captureL.assign (maxSamples, 0.0f);
-    captureR.assign (maxSamples, 0.0f);
-    captureBeat.assign (maxSamples, 0.0f);
     startTimerHz (15);   // Auto-Edit's progress, and Auto Analyze
 }
 
@@ -24,7 +20,7 @@ void AutoEditController::prepare (double newSampleRate)
     if (newSampleRate <= 0.0)
         return;
     const double old = sampleRate.exchange (newSampleRate);
-    capacity.store (static_cast<int> (std::min (newSampleRate * kMaxSeconds, static_cast<double> (captureL.size()))));
+    capacity.store (static_cast<int> (std::min (newSampleRate * kMaxSeconds, static_cast<double> (allocated.load()))));
     if (std::abs (old - newSampleRate) > 0.5 && (stateFlag.load() == listening || stateFlag.load() == watching))
     {
         written.store (0);   // different sample rate: start the listening over
@@ -32,9 +28,43 @@ void AutoEditController::prepare (double newSampleRate)
     }
 }
 
+bool AutoEditController::ensureBuffers()
+{
+    // Room for kMaxSeconds at the sample rate in use (it was 69 MB for 192 kHz in every Voxology, BEAT ones too).
+    const double sr = std::min (sampleRate.load(), kMaxSampleRate);
+    if (sr <= 0.0)
+        return false;
+    const auto want = static_cast<size_t> (std::ceil (sr * kMaxSeconds));
+    if (captureL.size() < want)
+    {
+        // Stop listening, then wait until the audio thread is out of capture() (it flags each call before it reads the
+        // state, so it can't start writing again until listening restarts).
+        if (const int st = stateFlag.load(); st == listening || st == watching)
+            stateFlag.store (idle);
+        while (inCapture.load())
+            juce::Thread::yield();
+        try
+        {
+            captureL.assign (want, 0.0f);
+            captureR.assign (want, 0.0f);
+            captureBeat.assign (want, 0.0f);
+        }
+        catch (const std::bad_alloc&)
+        {
+            captureL = {}; captureR = {}; captureBeat = {};
+            allocated.store (0);
+            capacity.store (0);
+            return false;
+        }
+        allocated.store (static_cast<int> (want));
+    }
+    capacity.store (static_cast<int> (std::min (sampleRate.load() * kMaxSeconds, static_cast<double> (allocated.load()))));
+    return capacity.load() > 0;
+}
+
 bool AutoEditController::start()
 {
-    if (stateFlag.load() == analysing || capacity.load() == 0)
+    if (stateFlag.load() == analysing || ! ensureBuffers())
         return false;
     ++session;
     written.store (0);
@@ -73,7 +103,7 @@ void AutoEditController::timerCallback()
 
     // Auto Analyze listens while it's on, there's an Auto-Edit to compare with and the window is open.
     const bool canWatch = watchOn.load() && baselineOk && editorOpen.load();
-    if (st == idle && canWatch)
+    if (st == idle && canWatch && ensureBuffers())
     {
         ++session;
         written.store (0);
