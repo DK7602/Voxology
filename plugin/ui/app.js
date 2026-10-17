@@ -1567,6 +1567,13 @@ function referenceBlock() {
 }
 
 function renderReport() {
+  // The last Auto-Edit didn't work, but the one before did: its report (and its settings) stay; say so on top.
+  if (report && report.ok && report.failed && typeof report.failed === "object") {
+    const f = report.failed;
+    const card = tip(f.tipTitle || "TRY AGAIN", [f.summary, f.tip].filter((x) => typeof x === "string" && x).join(" "), "warn");
+    card.append(el("div", "", "The report below is from the Auto-Edit before (its settings are still on)."));
+    body.append(card);
+  }
   referenceBlock();
   if (report || refInfo.state !== "none") body.append(el("div", "l-sep"));
   if (!report) {

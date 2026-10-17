@@ -5,6 +5,7 @@
 //   ?chain=My%20Lead   the project's saved chain
 //   ?mixology=matched (the default) | beatTrack | noLink | noName | sharedName | notVocal | waiting | old (true, from an
 //     older plug-in) | none | cycle (each in turn, 3 s each); add &balances when Mixology rides this vocal's fader
+//   ?failed   the next Auto-Edit fails and the report before it stays (opens with that report)
 (function () {
   if (typeof window.__JUCE__ !== "undefined") return;
   const Q = new URLSearchParams(location.search);
@@ -82,7 +83,11 @@
     aa.progress = Math.min(1, aa.progress + 0.1 / 6);
     if (aa.progress >= 1) { aa.progress = 0; aa.checks++; aa.time = new Date().toISOString(); if (aa.checks === 1) aa.needs = aaNeeds(); aa.version++; }
   }, 100);
+  // ?failed: an Auto-Edit that heard too little keeps the report (and settings) from the one before.
+  const failedInfo = () => ({ summary: "Auto-Edit heard only 1.8 s of vocal, too little to judge it.", tipTitle: "PLAY A SUNG PART",
+    tip: "Start playback where you're rapping or singing (a verse or hook), then press Auto-Edit. It needs about 12 seconds of voice.", time: new Date().toISOString() });
   function aeFinish() {
+    if (Q.has("failed") && ae.report) { ae.report = JSON.stringify({ ...JSON.parse(ae.report), failed: failedInfo() }); ae.version++; ae.state = 0; return; }
     ae.snapshot = { sliders: JSON.parse(JSON.stringify(sliders)), toggles: { ...toggles }, combos: JSON.parse(JSON.stringify(combos)) };
     const v = { ptAmount: 100, ptSpeed: 10, ptHumanize: 20, clLowCut: 95, clGateThr: -40, clGateRange: 12, clPops: 80, clBreath: 8, clNoise: 12, clRoom: 25, clClicks: 50, eqGain1: 1.3, eqGain2: -1.1, eqFreq2: 630, eqGain4: 1.4, eqGain5: -3, dqCut1: 3, dqFreq1: 125, dqCut2: 4.5, dqFreq2: 400, dqCut4: 3.5, dqFreq4: 3150, dsAmount: 63, dsFreq: 5400,
       rdTarget: -24, rdRange: 2, cpPeak: -14, cpThr: -27, cpRatio: 4, cpMakeup: 7, saDrive: 3, saMix: 50, dbAmount: 30, dbWidth: 80,
@@ -147,6 +152,7 @@
     });
     ae.undo = true; ae.version++; ae.state = 0;
   }
+  if (Q.has("failed")) { aeFinish(); aeFinish(); }   // (a good Auto-Edit, then one that failed)
   setInterval(() => { if (ae.state === 1) { ae.progress = Math.min(1, ae.progress + 0.1 / 4); if (ae.progress >= 1) { ae.state = 2; setTimeout(aeFinish, 900); } } }, 100);
 
   // What Mixology knows about this track (the bottom bar's MIXOLOGY, and the FIT LEVEL line).
