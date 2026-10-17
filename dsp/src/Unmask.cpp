@@ -235,6 +235,7 @@ void Unmask::prepare (double sampleRate, int numChannels)
     atk = onePole (0.015, sr);
     rel = onePole (0.100, sr);
     peakFall = 6.0 / sr;   // dB per sample: 6 dB/s
+    levelFall = kSingingFallDbPerS / sr;
     reset();
 }
 
@@ -242,6 +243,7 @@ void Unmask::reset() noexcept
 {
     beat.reset();
     vocalPeak.fill (kUnmaskSilentDb);
+    vocalLevel.fill (kUnmaskSilentDb);
     dip.fill (0.0);
     designed.fill (0.0);
     for (auto& band : bell) for (auto& f : band) f = Biquad {};
@@ -275,7 +277,8 @@ void Unmask::process (double* const* ch, int nch, int n, const float* vocalDb) n
     }
     running = true;
 
-    // Targets for this stretch: how present the vocal is in each band (vs its own recent peak there).
+    // Targets for this stretch: how present the vocal is in each band (vs its own recent peak there), counted only
+    // while it's near the level the vocal sings at there (so the noise left on its track in a long break isn't singing).
     std::array<double, kUnmaskBands> target {};
     const double amount = std::clamp (params.amount, 0.0, 100.0) / 100.0;
     const auto beatDb = beat.levelsDb();
@@ -284,7 +287,9 @@ void Unmask::process (double* const* ch, int nch, int n, const float* vocalDb) n
         double v = kUnmaskSilentDb;
         if (vocalDb != nullptr) v = vocalDb[b];
         vocalPeak[b] = std::max (v, vocalPeak[b] - peakFall * n);
-        const double presence = v <= -90.0 ? 0.0 : std::clamp ((v - (vocalPeak[b] - kPresenceWindowDb)) / kPresenceRampDb, 0.0, 1.0);
+        vocalLevel[b] = std::max (v, vocalLevel[b] - levelFall * n);
+        const double singing = std::clamp ((v - (vocalLevel[b] - kSingingRangeDb - 6.0)) / 6.0, 0.0, 1.0);
+        const double presence = v <= -90.0 ? 0.0 : singing * std::clamp ((v - (vocalPeak[b] - kPresenceWindowDb)) / kPresenceRampDb, 0.0, 1.0);
         const double beatThere = std::clamp ((beatDb[b] - kBeatFloorDb) / 15.0, 0.0, 1.0);
         target[b] = amount * kMaxDipDb * kUnmaskWeight[b] * presence * beatThere;
     }

@@ -4,6 +4,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <random>
 
 using namespace vox;
@@ -180,4 +181,38 @@ TEST_CASE ("Unmask through the link, with the vocal published a block late (host
     CHECK (bandDb (lo, a0, a1, 1600.0) - bandDb (l, a0, a1, 1600.0) > 2.0);
     CHECK (bandDb (lo, g0, g1, 1600.0) - bandDb (l, g0, g1, 1600.0) < 0.5);
     link.release (slot);
+}
+
+TEST_CASE ("Unmask: the beat stays full in a long break (the noise left on the vocal track isn't singing)", "[unmask]")
+{
+    // The vocal sings for 2 s (-20 dB per band), then only its track's noise is left (-70 dB) for 20 s. The recent peak
+    // falls 6 dB/s, so v0.51 took that noise for singing after about 5 s and dipped the beat in the break.
+    // A quiet line (25 dB down) after the loud one still gets its room.
+    for (const double after : { -70.0, -45.0 })
+    {
+        Unmask u;
+        u.prepare (kSr, 2);
+        u.setParams ({ 100.0, true });
+        const auto b1 = beat (1.0);
+        std::array<float, kUnmaskBands> v {};
+        double singing = 0.0, later = 0.0;
+        for (int sec = 0; sec < 22; ++sec)
+        {
+            v.fill (static_cast<float> (sec < 2 ? -20.0 : after));
+            auto b = b1;   // the same second of beat each time (the dips work in place)
+            for (size_t s = 0; s + kHop <= b[0].size(); s += kHop)
+            {
+                std::array<double*, 2> p { b[0].data() + s, b[1].data() + s };
+                u.process (p.data(), 2, kHop, v.data());
+            }
+            const auto d = u.takeDipDb();   // deepest dip per band this second (dB, <= 0)
+            const double deepest = -*std::min_element (d.begin(), d.end());
+            if (sec == 1) singing = deepest;
+            if (sec >= 3) later = std::max (later, deepest);
+        }
+        INFO ("after the line: " << after << " dB; deepest dip while singing " << singing << " dB, after it " << later << " dB");
+        CHECK (singing > 3.0);
+        if (after < -60.0) CHECK (later < 0.05);
+        else CHECK (later > 3.0);
+    }
 }
