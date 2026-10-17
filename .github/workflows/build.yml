@@ -109,8 +109,12 @@ jobs:
           cp -R build/plugin/Voxology_artefacts/Release/AU/Voxology.component ~/Library/Audio/Plug-Ins/Components/
           cp -R "build/honeytune/HoneyTune_artefacts/Release/AU/Honey Tune.component" ~/Library/Audio/Plug-Ins/Components/
           killall -9 AudioComponentRegistrar || true
-          auval -v aumf Vox1 Voxa   # a music effect (it takes MIDI notes for Pitch)
-          auval -v aufx Hny1 Voxa
+          # Voxology is a music effect (aumf: it takes MIDI notes for Pitch). Apple's own success line is required:
+          # an exit code of 0 alone isn't trusted.
+          for id in "aumf Vox1 Voxa" "aufx Hny1 Voxa"; do
+            auval -v $id | tee auval.log
+            grep -q "AU VALIDATION SUCCEEDED" auval.log
+          done
 
       # Steinberg's own VST3 validator, built from the VST3 SDK (cached by SDK commit).
       - name: Find VST3 SDK version (Windows)
