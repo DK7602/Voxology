@@ -1125,7 +1125,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
     if (a.peakDb < -24.0)
         r.notes.push_back ("QUIET RECORDING: your loudest words only reach " + db (a.peakDb) + ". Voxology keeps your vocal at the level it came in "
                            "(so your fader doesn't jump), so it stays this quiet in your mix, and the noise of your room and interface sits closer to your voice."
-                           "\nNEED: Yes if you can't get the vocal loud enough with its fader. Otherwise optional."
+                           "\nNEED: Optional. Yes if you can't get the vocal loud enough with its fader."
                            "\nSTEP: For this take, turn the vocal's clip gain up (the volume of the audio itself, before any plug-in) until your loudest words peak around -10 dB."
                            + std::string (kAgainStep) +
                            "\nSTEP: Next take, turn the interface gain up until your loudest words peak around -10 dB.");
