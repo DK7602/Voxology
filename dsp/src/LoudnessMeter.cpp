@@ -55,6 +55,13 @@ void LoudnessMeter::finishHop() noexcept
         hopSum[static_cast<size_t> (c)] = 0.0;
     }
     hopPos = 0;
+    if (! std::isfinite (energy))
+    {
+        // Samples too big to square (the input is cleaned of NaN / inf): drop this hop and start the filters over.
+        energy = 0.0;
+        for (auto& w : weighting) w.reset();
+        for (auto& t : truePeak) t.reset();
+    }
 
     hopEnergies[static_cast<size_t> (hopIndex)] = energy;
     hopIndex = (hopIndex + 1) % kShortTermHops;
@@ -151,15 +158,16 @@ int LoudnessMeter::GatedHistogram::binFor (double lufs) noexcept
 {
     if (! (lufs > kMinLufs))
         return 0;
-    const auto b = static_cast<int> ((lufs - kMinLufs) / kBinLu);
-    return std::min (b, kBins - 1);
+    if (! (lufs < kMaxLufs))
+        return kBins - 1;   // (and +inf: turned into an int it was INT_MIN, an index far outside the bins)
+    return std::min (static_cast<int> ((lufs - kMinLufs) / kBinLu), kBins - 1);
 }
 
 void LoudnessMeter::GatedHistogram::add (double energy) noexcept
 {
     const double lufs = energyToLufs (energy);
-    if (! (lufs > kMinLufs))
-        return;   // absolute gate
+    if (! (lufs > kMinLufs) || ! std::isfinite (energy))
+        return;   // absolute gate (and nothing that would make the totals NaN / inf)
 
     const auto b = static_cast<size_t> (binFor (lufs));
     ++counts[b];

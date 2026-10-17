@@ -1,6 +1,8 @@
 #include "Signals.h"
+#include "vox/LoudnessMeter.h"
 #include "vox/VocalChain.h"
 
+#include <limits>
 #include <numbers>
 #include <random>
 
@@ -166,4 +168,45 @@ TEST_CASE ("Bypass switched on while playing (the DAW's own too): the delayed in
     for (size_t i = kLat + 1; i < on; ++i) music = std::max (music, std::abs (l[i] - l[i - 1]));
     for (size_t i = kLat + 1; i < x.size(); ++i) music = std::max (music, std::abs (static_cast<double> (x[i - kLat]) - x[i - kLat - 1]));
     CHECK (step < 1.5 * music);
+}
+
+TEST_CASE ("One NaN / inf input sample doesn't poison the output", "[chain]")
+{
+    // Before: Pitch, Tone EQ, the Compressor or Delay / Reverb kept playing NaN until the next prepare.
+    const auto x = testsig::vocal (kSr, 3.0);
+    for (const double bad : { std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity() })
+    {
+        INFO ("bad sample " << bad);
+        VocalChain c;
+        c.setParams (busy());
+        c.prepare (kSr, 2);
+        std::vector<double> l (x.begin(), x.end()), r = l;
+        l[48100] = r[48100] = bad;
+        for (size_t s = 0; s < x.size(); s += 512)
+        {
+            std::array<double*, 2> ptr { l.data() + s, r.data() + s };
+            c.process (ptr.data(), 2, static_cast<int> (std::min<size_t> (512, x.size() - s)));
+        }
+        for (size_t i = 0; i < x.size(); ++i) REQUIRE ((std::isfinite (l[i]) && std::isfinite (r[i])));
+        double e = 0.0;
+        for (size_t i = x.size() - 48000; i < x.size(); ++i) e += l[i] * l[i];
+        CHECK (10.0 * std::log10 (e / 48000.0 + 1.0e-30) > -40.0);   // still the vocal, not silence
+        CHECK (std::isfinite (c.takeMeters().pitch.correction));
+    }
+}
+
+TEST_CASE ("Loudness meter: a NaN / inf sample is ignored (no stuck reading, no bin outside the histogram)", "[chain]")
+{
+    // An inf on the last sample of a 100 ms hop made the hop's energy inf: its histogram bin was INT_MIN.
+    for (const float bad : { std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN() })
+    {
+        LoudnessMeter m;
+        m.prepare (kSr, 1);
+        auto x = testsig::sine (kSr, 1000.0, -20.0, 5.0);
+        x[4799] = bad;
+        const float* p[1] = { x.data() };
+        m.process (p, 1, static_cast<int> (x.size()));
+        CHECK (std::isfinite (m.shortTermLufs()));
+        CHECK (m.integratedLufs() == Approx (-23.0).margin (0.5));   // a -20 dBFS 1 kHz sine reads about -23 LUFS
+    }
 }

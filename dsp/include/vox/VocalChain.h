@@ -14,6 +14,7 @@
 #include "Voices.h"
 
 #include <array>
+#include <cmath>
 #include <vector>
 
 namespace vox {
@@ -96,9 +97,13 @@ public:
         for (int start = 0; start < numSamples; start += kChunk)
         {
             const int len = std::min (kChunk, numSamples - start);
+            // A bad sample (NaN / inf) comes in as silence: in a filter or a delay line it would stay forever.
             for (int c = 0; c < nch; ++c)
                 for (int i = 0; i < len; ++i)
-                    work[static_cast<size_t> (c)][static_cast<size_t> (i)] = static_cast<double> (channels[c][start + i]);
+                {
+                    const auto x = static_cast<double> (channels[c][start + i]);
+                    work[static_cast<size_t> (c)][static_cast<size_t> (i)] = std::isfinite (x) ? x : 0.0;
+                }
             processChunk (nch, len);
             for (int c = 0; c < nch; ++c)
                 for (int i = 0; i < len; ++i)

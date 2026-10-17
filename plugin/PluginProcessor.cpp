@@ -266,6 +266,15 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     const int nch = juce::jmin (buffer.getNumChannels(), numOut, vox::kMaxChannels);
     const bool beatMode = isBeatMode();
 
+    // A bad sample from the host (NaN / inf) comes in as silence: in a filter, a meter or a key detector it would stay
+    // until the next prepare.
+    for (int c = 0; c < buffer.getNumChannels(); ++c)
+    {
+        auto* x = buffer.getWritePointer (c);
+        for (int i = 0; i < n; ++i)
+            if (! std::isfinite (x[i])) x[i] = Sample (0);
+    }
+
     // The side-chain (VOCAL: the beat, for its key and Vocal Fit). Read it first: its channels share the buffer with
     // the outputs, which the lines below write.
     const bool sideOn = ! beatMode && sideChainOn();

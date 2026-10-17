@@ -61,7 +61,8 @@ public:
         {
             for (int c = 0; c < nch; ++c)
             {
-                const double x = static_cast<double> (channels[c][i]);
+                double x = static_cast<double> (channels[c][i]);
+                if (! std::isfinite (x)) x = 0.0;   // a NaN / inf would stay in the filters (and the readings) for good
                 const double k = weighting[static_cast<size_t> (c)].process (x);
                 hopSum[static_cast<size_t> (c)] += k * k;
 

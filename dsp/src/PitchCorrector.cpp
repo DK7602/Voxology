@@ -609,7 +609,8 @@ void PitchCorrector::process (double* const* ch, int nch, int n) noexcept
         double m = 0.0;
         for (int c = 0; c < channels; ++c)
         {
-            const double v = ch[std::min (c, nch - 1)][i];
+            const double x = ch[std::min (c, nch - 1)][i];
+            const double v = std::isfinite (x) ? x : 0.0;   // a NaN / inf would stay in the level, the pitch and the rings
             in[static_cast<size_t> (c)][static_cast<size_t> (now & mask)] = v;
             auto& xo = xover[static_cast<size_t> (c)];
             loBand[static_cast<size_t> (c)][static_cast<size_t> (now & mask)] = xo[1].process (xo[0].process (v));
