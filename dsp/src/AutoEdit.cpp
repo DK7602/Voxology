@@ -172,19 +172,33 @@ std::vector<double> pitchTrack (const Signal& x, double sr, const std::vector<bo
 }
 
 // --- spectrum ----------------------------------------------------------------------------------
-constexpr size_t kFftN = 4096;
 constexpr double kFullSongLowDb = -14.0;   // tuned on MUSDB18-7 (vocals vs mixtures)
 
-std::vector<double> averageSpectrum (const Signal& x, const std::vector<bool>& mask, int hop, std::vector<bool>* only = nullptr)
+/** The average spectrum's FFT size: about 11 Hz per bin at any sample rate (4096 at 44.1 / 48 kHz, 8192 at 88.2 /
+    96 kHz, 16384 at 176.4 / 192 kHz). A fixed 4096 gave 47 Hz bins at 192 kHz, too coarse for the low bands: the same
+    vocal's 100 Hz band read 8 dB apart at 44.1 and 192 kHz. */
+size_t spectrumSize (double sr)
 {
-    std::vector<double> acc (kFftN / 2 + 1, 0.0);
+    size_t n = 4096;
+    while (sr / static_cast<double> (n) > 12.5) n *= 2;
+    return n;
+}
+
+std::vector<double> averageSpectrum (const Signal& x, double sr, const std::vector<bool>& mask, int hop, std::vector<bool>* only = nullptr)
+{
+    const size_t n = spectrumSize (sr);
+    std::vector<double> acc (n / 2 + 1, 0.0), frame (n);
+    // A DC offset (some interfaces add one) out first: through the window it leaks into the lowest bins, where it would
+    // read as rumble or a beat's low end. The whole take's offset, not each frame's (a frame's mean is partly the voice).
+    const double dc = x.empty() ? 0.0 : std::accumulate (x.begin(), x.end(), 0.0) / static_cast<double> (x.size());
     int count = 0;
-    for (size_t s = 0; s + kFftN <= x.size(); s += kFftN / 2)
+    for (size_t s = 0; s + n <= x.size(); s += n / 2)
     {
-        const size_t mid = (s + kFftN / 2) / static_cast<size_t> (hop);
+        const size_t mid = (s + n / 2) / static_cast<size_t> (hop);
         if (mid >= mask.size() || ! mask[mid]) continue;
         if (only && ! (*only)[mid]) continue;
-        const auto p = powerSpectrum (x.data() + s, kFftN);
+        for (size_t i = 0; i < n; ++i) frame[i] = x[s + i] - dc;
+        const auto p = powerSpectrum (frame.data(), n);
         for (size_t i = 0; i < acc.size(); ++i) acc[i] += p[i];
         ++count;
     }
@@ -192,16 +206,21 @@ std::vector<double> averageSpectrum (const Signal& x, const std::vector<bool>& m
     return acc;
 }
 
+/** Energy between lo and hi: each bin stands for its width around its centre and adds the part of it inside the band
+    (whole bins only made a narrow low band read up to 2 dB off, by where its edges fell). DC (bin 0) is left out. */
 double bandEnergy (const std::vector<double>& spec, double lo, double hi, double sr)
 {
-    const double binHz = sr / static_cast<double> (kFftN);
-    const auto a = static_cast<size_t> (std::max (1.0, std::ceil (lo / binHz)));
-    const auto b = std::min (spec.size() - 1, static_cast<size_t> (std::floor (hi / binHz)));
+    if (spec.size() < 2) return 0.0;
+    const double binHz = sr / static_cast<double> (2 * (spec.size() - 1));
+    const auto first = static_cast<size_t> (std::max (1.0, std::floor (lo / binHz + 0.5)));
+    const auto last = std::min (spec.size() - 1, static_cast<size_t> (std::max (0.0, std::floor (hi / binHz + 0.5))));
     double e = 0.0;
-    if (b < a)
-        e = spec[std::min (spec.size() - 1, static_cast<size_t> (std::lround (0.5 * (lo + hi) / binHz)))] * (hi - lo) / binHz;
-    else
-        for (size_t i = a; i <= b; ++i) e += spec[i];
+    for (size_t i = first; i <= last; ++i)
+    {
+        const double c = static_cast<double> (i) * binHz;
+        const double a = std::max (lo, c - 0.5 * binHz), b = std::min (hi, c + 0.5 * binHz);
+        if (b > a) e += spec[i] * (b - a) / binHz;
+    }
     return e;
 }
 
@@ -693,7 +712,7 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
         a.key = detectKey (a.pitchMidi);
     }
 
-    const auto spec = averageSpectrum (raw, mask, f.hop);
+    const auto spec = averageSpectrum (raw, sr, mask, f.hop);
     double total = 0.0;
     for (size_t i = 1; i < spec.size(); ++i) total += spec[i];
     a.rumbleDb = energyDb (bandEnergy (spec, 1.0, 60.0, sr)) - energyDb (total);
@@ -709,8 +728,9 @@ VocalAnalysis analyseVocal (const std::vector<std::vector<float>>& audio, double
     a.microDynDb = punchDb (f, mask);
     a.tailDb = spaceDb (f);
     {
-        double low = 0.0, all = 0.0;
-        for (size_t i = 1; i < spec.size(); ++i) { all += spec[i]; if (static_cast<double> (i) * sr / static_cast<double> (kFftN) < 100.0) low += spec[i]; }
+        double all = 0.0;
+        for (size_t i = 1; i < spec.size(); ++i) all += spec[i];
+        const double low = bandEnergy (spec, 0.0, 100.0, sr);
         a.lowBassDb = energyDb (low) - energyDb (all);
     }
     return a;
@@ -780,15 +800,16 @@ BeatAnalysis analyseBeat (const std::vector<float>& beatIn, const std::vector<st
     if (! std::isfinite (b.lufs)) b.lufs = -120.0;
 
     // Tone: both measured over the same moments (the vocal singing over the beat).
-    const auto beatSpec = averageSpectrum (beat, both, bf.hop), voiceSpec = averageSpectrum (voice, both, bf.hop);
+    const auto beatSpec = averageSpectrum (beat, sr, both, bf.hop), voiceSpec = averageSpectrum (voice, sr, both, bf.hop);
     b.bandDb = bandBalance (beatSpec, sr);
     const auto vb = bandBalance (voiceSpec, sr);
     b.overDb.resize (vb.size());
     for (size_t k = 0; k < vb.size(); ++k) b.overDb[k] = vb[k] - b.bandDb[k];
     const double mid = bandEnergy (beatSpec, 500.0, 2000.0, sr);
     b.brightDb = energyDb (bandEnergy (beatSpec, 5000.0, std::min (12000.0, 0.49 * sr), sr)) - energyDb (mid);
-    double low = 0.0, all = 0.0;
-    for (size_t i = 1; i < beatSpec.size(); ++i) { all += beatSpec[i]; if (static_cast<double> (i) * sr / static_cast<double> (kFftN) < 100.0) low += beatSpec[i]; }
+    double all = 0.0;
+    for (size_t i = 1; i < beatSpec.size(); ++i) all += beatSpec[i];
+    const double low = bandEnergy (beatSpec, 0.0, 100.0, sr);
     b.lowDb = energyDb (low) - energyDb (all);
 
     // How much it moves: its 50 ms levels while it plays.

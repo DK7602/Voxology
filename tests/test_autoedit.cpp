@@ -365,3 +365,30 @@ TEST_CASE ("Auto-Edit: a reference's soft s can't de-ess a rap vocal into a lisp
     CHECK (why.find ("120") == std::string::npos);   // "brings them to -120 dB" (too few s left to read) reads "under" the target
     checkNotes (rb);
 }
+
+TEST_CASE ("Auto-Edit's spectrum reads the same at every sample rate", "[autoedit][eq]")
+{
+    // A fixed 4096-point FFT gave 47 Hz bins at 192 kHz (pink noise read +3.8 dB at 100 Hz), whole bins put a low band's
+    // edges up to a bin off (-2.4 dB at 160 Hz at 96 kHz), and the same vocal's low bands read up to 5 dB apart between rates.
+    const auto& bands = analysisBands();
+    std::vector<double> at48;
+    for (double sr : { 48000.0, 44100.0, 88200.0, 96000.0, 192000.0 })
+    {
+        INFO (sr << " Hz");
+        const auto p = analyseVocal ({ testsig::pink (sr, 8.0) }, sr);
+        REQUIRE (p.bandDb.size() == bands.size());
+        for (size_t k = 0; k < bands.size(); ++k)
+        {
+            INFO (bands[k] << " Hz band: " << p.bandDb[k] << " dB");
+            CHECK (std::abs (p.bandDb[k]) < 1.0);   // pink: flat
+        }
+        const auto v = analyseVocal ({ testsig::vocal (sr, 8.0, -62.0, -14.0, 3) }, sr);
+        if (at48.empty()) at48 = v.bandDb;
+        for (size_t k = 0; k < bands.size(); ++k)
+            if (bands[k] <= 10000.0 && at48[k] > -15.0)   // where the voice has something (not the leakage between its harmonics)
+            {
+                INFO (bands[k] << " Hz band: " << v.bandDb[k] << " dB, at 48 kHz " << at48[k] << " dB");
+                CHECK (v.bandDb[k] == Approx (at48[k]).margin (1.0));
+            }
+    }
+}
