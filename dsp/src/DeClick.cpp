@@ -20,7 +20,7 @@ void DeClick::prepare (double sampleRate, int numChannels, int lookAheadAvailabl
     design::apply (fullHp, design::butterworth (true, 80.0, sr));
     blockLen = std::max (4, static_cast<int> (std::lround (kBlockSeconds * sr)));
     contextBlocks = std::max (4, static_cast<int> (std::lround (kContextSeconds / kBlockSeconds)));
-    maxBlocks = std::max (1L, static_cast<long> (std::lround (kMaxClickSeconds / kBlockSeconds)));
+    maxBlocks = std::max<int64_t> (1, std::llround (kMaxClickSeconds / kBlockSeconds));
     // The ring holds a block's context on both sides, plus room to look back past a whole click.
     peaks.assign (static_cast<size_t> (2 * contextBlocks + maxBlocks + 4), 0.0);
     fullPeaks.assign (peaks.size(), 0.0);
@@ -53,11 +53,18 @@ void DeClick::reset() noexcept
     deepest = 0.0;
 }
 
-void DeClick::markClick (long start, long end, double cutDb) noexcept
+void DeClick::startClockAt (int64_t sample) noexcept
 {
-    const long pad = static_cast<long> (std::ceil (kPadSeconds * sr));
-    const auto size = static_cast<long> (cutLine.size());
-    for (long t = start - pad; t <= end + pad; ++t)
+    reset();
+    blocks = std::max<int64_t> (0, sample) / blockLen;
+    now = blocks * blockLen;
+}
+
+void DeClick::markClick (int64_t start, int64_t end, double cutDb) noexcept
+{
+    const auto pad = static_cast<int64_t> (std::ceil (kPadSeconds * sr));
+    const auto size = static_cast<int64_t> (cutLine.size());
+    for (int64_t t = start - pad; t <= end + pad; ++t)
     {
         auto& slot = cutLine[static_cast<size_t> (((t % size) + size) % size)];
         slot = std::min (slot, cutDb);
@@ -69,14 +76,14 @@ void DeClick::markClick (long start, long end, double cutDb) noexcept
 void DeClick::judgeBlock() noexcept
 {
     // The block contextBlocks old against the typical peaks (85th percentile) of the contextBlocks on both sides of it.
-    const auto size = static_cast<long> (peaks.size());
-    const long centre = blocks - 1 - contextBlocks;
+    const auto size = static_cast<int64_t> (peaks.size());
+    const int64_t centre = blocks - 1 - contextBlocks;
     if (centre < contextBlocks) return;
-    auto at = [size] (const std::vector<double>& ring, long b) { return ring[static_cast<size_t> (((b % size) + size) % size)]; };
-    auto typicalOf = [&] (const std::vector<double>& ring, long from, long to)   // blocks from..to (inclusive)
+    auto at = [size] (const std::vector<double>& ring, int64_t b) { return ring[static_cast<size_t> (((b % size) + size) % size)]; };
+    auto typicalOf = [&] (const std::vector<double>& ring, int64_t from, int64_t to)   // blocks from..to (inclusive)
     {
         const auto count = static_cast<size_t> (to - from + 1);
-        for (size_t j = 0; j < count; ++j) sortBuf[j] = at (ring, from + static_cast<long> (j));
+        for (size_t j = 0; j < count; ++j) sortBuf[j] = at (ring, from + static_cast<int64_t> (j));
         const auto k = static_cast<std::ptrdiff_t> (kPercentile * static_cast<double> (count - 1));
         std::nth_element (sortBuf.begin(), sortBuf.begin() + k, sortBuf.begin() + static_cast<std::ptrdiff_t> (count));
         return std::max (sortBuf[static_cast<size_t> (k)], floorAmp * 0.1);
@@ -126,8 +133,8 @@ void DeClick::process (double* const* ch, int nch, int n, const double* sc) noex
     // More Amount: more sensitive (a peak 18 dB over the typical peaks around it at 0 %, 14 dB at 100 %) and deeper.
     ratio = fromDb (18.0 - 4.0 * amount);
     maxCut = kMaxCutDb * amount;
-    const auto size = static_cast<long> (cutLine.size());
-    const auto ringSize = static_cast<long> (peaks.size());
+    const auto size = static_cast<int64_t> (cutLine.size());
+    const auto ringSize = static_cast<int64_t> (peaks.size());
 
     for (int i = 0; i < n; ++i)
     {

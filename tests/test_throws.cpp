@@ -41,11 +41,12 @@ std::vector<double> lines (double seconds)
 
 struct Run { std::array<std::vector<double>, 2> out; int throws = 0; };
 
-Run run (const std::vector<double>& x, ThrowParams p)
+Run run (const std::vector<double>& x, ThrowParams p, int64_t clock = 0)
 {
     Throws t;
     t.setParams (p);
     t.prepare (kSr);
+    if (clock > 0) t.startClockAt (clock);
     Run r;
     for (auto& o : r.out) o.assign (x.size(), 0.0);
     for (size_t s = 0; s < x.size(); s += 256)
@@ -119,6 +120,20 @@ TEST_CASE ("Throws: Wash (reverb) after the line; switching off rings out, then 
         t.process (x.data() + s, o.data(), 2, n);
     }
     for (size_t i = static_cast<size_t> (9.5 * kSr); i < x.size(); ++i) REQUIRE (o0[i] == 0.0);
+}
+
+TEST_CASE ("Throws: the same after hours of playing (64-bit clock past 2^31 samples, 12 h at 48 kHz)", "[throws]")
+{
+    // A 32-bit sample count (a long on Windows) went negative here and wrote outside the history ring.
+    const auto x = lines (8.0);
+    ThrowParams p;
+    p.echo = 60.0;
+    p.wash = 40.0;
+    const auto fresh = run (x, p);
+    const auto late = run (x, p, (int64_t { 1 } << 31) - static_cast<int64_t> (3.0 * kSr));
+    CHECK (late.throws == fresh.throws);
+    for (size_t c = 0; c < 2; ++c)
+        for (size_t i = 0; i < x.size(); ++i) REQUIRE (late.out[c][i] == fresh.out[c][i]);
 }
 
 TEST_CASE ("Throws in the chain: off = untouched; Delay / Reverb off switch their throws off", "[throws]")

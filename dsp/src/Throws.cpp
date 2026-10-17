@@ -55,9 +55,17 @@ void Throws::reset() noexcept
     running = false;
 }
 
+void Throws::startClockAt (int64_t sample) noexcept
+{
+    reset();
+    blocks = std::max<int64_t> (0, sample) / blockLen;
+    now = blocks * blockLen;
+    lineStart = lastLoud = blocks;
+}
+
 void Throws::block (double levelDb) noexcept
 {
-    const auto size = static_cast<long> (levels.size());
+    const auto size = static_cast<int64_t> (levels.size());
     levels[static_cast<size_t> (blocks % size)] = levelDb;
     const int hold = static_cast<int> (std::lround (kHoldSeconds / 0.010));
     if (! inLine)
@@ -82,15 +90,15 @@ void Throws::block (double levelDb) noexcept
                 {
                     // The last word: back from the end to the last dip (10 dB under what follows it), at most
                     // kMaxWordSeconds (and not past what the level ring still holds).
-                    const long limit = std::max ({ lineStart, lastLoud - static_cast<long> (kMaxWordSeconds / 0.010), blocks - size + 2 });
-                    long start = limit;
+                    const int64_t limit = std::max ({ lineStart, lastLoud - static_cast<int64_t> (kMaxWordSeconds / 0.010), blocks - size + 2 });
+                    int64_t start = limit;
                     double after = -120.0;
-                    for (long b = lastLoud; b > limit; --b)
+                    for (int64_t b = lastLoud; b > limit; --b)
                     {
                         after = std::max (after, levels[static_cast<size_t> (b % size)]);
                         if (levels[static_cast<size_t> ((b - 1) % size)] < after - 10.0) { start = b; break; }
                     }
-                    throwWord (start * blockLen, (lastLoud + 1) * blockLen + static_cast<long> (0.060 * sr));
+                    throwWord (start * blockLen, (lastLoud + 1) * blockLen + static_cast<int64_t> (0.060 * sr));
                 }
                 inLine = false;
             }
@@ -104,22 +112,22 @@ void Throws::block (double levelDb) noexcept
     ++blocks;
 }
 
-void Throws::throwWord (long from, long to) noexcept
+void Throws::throwWord (int64_t from, int64_t to) noexcept
 {
-    const auto histSize = static_cast<long> (hist.size()), size = static_cast<long> (lineL.size());
+    const auto histSize = static_cast<int64_t> (hist.size()), size = static_cast<int64_t> (lineL.size());
     from = std::max (from, now - histSize + 1);
     to = std::min (to, now);
     if (to - from < blockLen) return;
-    const auto d = std::max (1L, static_cast<long> (std::lround (delay)));
+    const auto d = std::max<int64_t> (1, std::llround (delay));
     const double fadeIn = 0.010 * sr, fadeOut = 0.030 * sr;
     hp.reset();
-    for (long s = from; s < to; ++s)
+    for (int64_t s = from; s < to; ++s)
     {
         const double fade = std::min ({ 1.0, static_cast<double> (s - from) / fadeIn, static_cast<double> (to - s) / fadeOut });
         const double x = hp.process (hist[static_cast<size_t> (s % histSize)]) * fade;
         // Its echo was due d after it was sung; if that's gone by, the next repeat (at its level).
-        const long age = now - s, k = age / d + 1;
-        const long back = age - (k - 1) * d;          // 0 .. d - 1: the slot written `back` samples ago is read in d - back
+        const int64_t age = now - s, k = age / d + 1;
+        const int64_t back = age - (k - 1) * d;          // 0 .. d - 1: the slot written `back` samples ago is read in d - back
         lineL[static_cast<size_t> (((pos - back) % size + size) % size)] += x * std::pow (kFeedback, static_cast<double> (k - 1));
     }
     ++throws;
@@ -135,10 +143,10 @@ void Throws::process (const double* mono, double* const* out, int nch, int n) no
     dp.division = params.division;
     dp.bpm = params.bpm;
     delay = std::clamp (EchoDelay::delaySeconds (dp) * sr, 1.0, static_cast<double> (lineL.size()) - 4.0);
-    const auto d = static_cast<long> (std::lround (delay));
+    const auto d = static_cast<int64_t> (std::llround (delay));
     const double echoTarget = off ? 0.0 : std::clamp (params.echo, 0.0, 100.0) / 100.0;
     const double washTarget = off ? 0.0 : std::clamp (params.wash, 0.0, 100.0) / 100.0;
-    const auto histSize = static_cast<long> (hist.size()), size = static_cast<long> (lineL.size());
+    const auto histSize = static_cast<int64_t> (hist.size()), size = static_cast<int64_t> (lineL.size());
     const double duckDown = fromDb (-8.0);
 
     for (int start = 0; start < n; start += kChunk)
@@ -176,7 +184,7 @@ void Throws::process (const double* mono, double* const* out, int nch, int n) no
     }
     // Switched off: the echo fades (50 ms), the wash's tail rings out, then it stops (and is exact again).
     offFor = off ? offFor + n : 0;
-    if (off && offFor > static_cast<long> ((kWashSeconds + 1.0) * sr))
+    if (off && offFor > static_cast<int64_t> ((kWashSeconds + 1.0) * sr))
         reset();
 }
 
