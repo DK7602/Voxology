@@ -2,6 +2,7 @@
 
 #include "vox/HoneyTune.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <memory>
@@ -40,6 +41,31 @@ struct NoteEdit
     bool timed() const { return std::abs (shift) > 1.0e-6 || std::abs (length - 1.0) > 1.0e-6; }
     bool isDefault() const { return ! moved && drift < 0.0 && vibrato < 0.0 && ! timed() && std::abs (formant) < 1.0e-6; }
 };
+
+/** Values from outside (a project's archive: damaged, or from a newer / older version) made safe: inside the ranges
+    the editor offers, never NaN or inf (a NaN target or a huge shift broke the render's time map). */
+inline double finiteOr (double v, double fallback) { return std::isfinite (v) ? v : fallback; }
+inline Settings sanitised (Settings s)
+{
+    s.key = std::clamp (s.key, 0, kAutoKey);
+    s.scale = std::clamp (s.scale, 0, vox::kScales - 1);
+    s.snap = std::clamp (finiteOr (s.snap, 1.0), 0.0, 1.0);
+    s.drift = std::clamp (finiteOr (s.drift, 1.0), 0.0, 1.0);
+    s.vibrato = std::clamp (finiteOr (s.vibrato, 1.0), 0.0, 1.0);
+    return s;
+}
+inline NoteEdit sanitised (NoteEdit e)
+{
+    if (! std::isfinite (e.target)) e.moved = false;
+    e.target = std::clamp (finiteOr (e.target, 0.0), 0.0, 127.0);
+    auto keep = [] (double v) { return std::isfinite (v) && v >= 0.0 ? std::min (v, 1.0) : -1.0; };   // < 0: the settings'
+    e.drift = keep (e.drift);
+    e.vibrato = keep (e.vibrato);
+    e.shift = std::clamp (finiteOr (e.shift, 0.0), -3600.0, 3600.0);
+    e.length = std::clamp (finiteOr (e.length, 1.0), 0.1, 1000.0);
+    e.formant = std::clamp (finiteOr (e.formant, 0.0), -vox::kMaxFormant, vox::kMaxFormant);
+    return e;
+}
 
 /** The song's key from outside the clip: the host's project (its key signature / scale track), else what a
     Voxology on the beat hears (shared through vox::keyshare). */
@@ -128,7 +154,8 @@ inline std::vector<vox::honey::Note> applyEdits (std::vector<vox::honey::Note> n
         n.formant = e.formant;
         if (e.timed())
         {
-            n.outStart = n.start + e.shift * sampleRate;
+            // Not before the clip's start (a negative start means "where it was sung": the note jumped back).
+            n.outStart = std::max (0.0, n.start + e.shift * sampleRate);
             n.outEnd = n.outStart + (n.end - n.start) * std::max (0.1, e.length);
         }
         n.edited = true;

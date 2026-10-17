@@ -472,15 +472,15 @@ protected:
         const bool v3 = first == kArchiveV3;
         const bool v2 = first == kArchiveV2 || v3;
         Settings s;
-        s.key = static_cast<int> (v2 ? input.readInt64() : first);
-        s.scale = static_cast<int> (input.readInt64());
+        const auto key = v2 ? input.readInt64() : first, scale = input.readInt64();
+        s.key = static_cast<int> (jlimit<int64> (0, honeyui::kAutoKey, key));
+        s.scale = static_cast<int> (jlimit<int64> (0, vox::kScales - 1, scale));
         s.snap = input.readDouble();
         s.drift = input.readDouble();
         s.vibrato = input.readDouble();
         if (input.failed())
             return false;
-        s.key = jlimit (0, honeyui::kAutoKey, s.key);
-        s.scale = jlimit (0, vox::kScales - 1, s.scale);
+        s = honeyui::sanitised (s);   // (a damaged or hand-made archive: NaN, huge values)
         if (filter == nullptr || filter->shouldRestoreDocumentData())
             setSettings (s);
         if (! v2)
@@ -506,7 +506,9 @@ protected:
                     se.edit.length = input.readDouble();
                     se.edit.formant = input.readDouble();
                 }
-                saved.push_back (se);
+                se.edit = honeyui::sanitised (se.edit);
+                if (std::isfinite (se.start) && se.start >= 0.0)
+                    saved.push_back (se);
             }
             HoneyAudioSource* target = nullptr;
             if (filter != nullptr)

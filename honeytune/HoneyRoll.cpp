@@ -199,8 +199,9 @@ std::pair<double, double> HoneyRoll::span (int index) const
     double a = n.soundStart() / sr, b = n.soundEnd() / sr;
     if (dragging && index == selected)
     {
-        if (dragMode == Drag::time) { a += dragSeconds; b += dragSeconds; }
-        if (dragMode == Drag::leftEdge) a = std::min (a + dragSeconds, b - 0.03);
+        // Never before the clip's start (there it would mean "not moved": the note jumped back where it was sung).
+        if (dragMode == Drag::time) { const double d = std::max (dragSeconds, -a); a += d; b += d; }
+        if (dragMode == Drag::leftEdge) a = std::max (0.0, std::min (a + dragSeconds, b - 0.03));
         if (dragMode == Drag::rightEdge) b = std::max (b + dragSeconds, a + 0.03);
     }
     return { a, b };
