@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.51.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.52.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -412,5 +412,6 @@ finished mix into the master. In the same Cubase project they tell each other wh
 | Auto Analyze never adds a card | Good news: every part so far fits your settings ("this part fits your settings"). It also needs the window open and the song playing |
 | A hard tune sounds wobbly, not robotic | Use **Robot** mode (or Classic with Retune at 0). Natural keeps your vibrato on purpose, and a Retune of 10 - 20 ms leaves a lot of your own wobble in |
 | The tuned vocal is late against the beat in an export | Voxology delays the vocal about 55 ms (REC: about 6 ms) and tells your DAW, which plays the track that much earlier to make up for it. If it still comes out late, your DAW didn't make up for it: in Cubase switch **Constrain Delay Compensation** off (toolbar), and don't switch REC on or off just before exporting |
+| With the DAW's power button, the bypassed vocal sat early (and a mono vocal only on the left) | Fixed in 0.52: the bypassed vocal now stays in time, on both sides. Before, it played about 55 ms early, so a bypassed export didn't line up with one through Voxology |
 | B always sounds better than A | Turn on MATCH so both play at the same loudness |
 | Mixology doesn't show the VOX tag on your vocal | Update Voxology (0.47+) and Mixology (0.8+). The tag follows the track's name: if two tracks share a name, rename one |

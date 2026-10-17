@@ -1,6 +1,7 @@
-# Voxology: resume here (updated 2026-10-05, v0.3.0 Dynamic EQ)
+# Voxology: resume here (updated 2026-10-17, v0.52.0; the newest sections are at the bottom)
 
-Read this first in a new chat. Code: github.com/DK7602/voxology, branch `claude/voxology`.
+Read this first in a new chat. Code: github.com/DK7602/voxology, branch `claude/upbeat-faraday-iyzicv` (the current one;
+`claude/voxology` was the first).
 Sister project: Polisher (github.com/DK7602/polisher, mastering) - same user, same template.
 CI: every push builds Windows (VST3 + Standalone), runs the engine tests, pluginval strictness 10 and
 Steinberg's VST3 validator. Mac on request: Actions -> Build & Test -> Run workflow ("Also build macOS").
@@ -1812,3 +1813,32 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Tools used (scratchpad, not kept): hardtune_audit (vs an ideal hard tune), deterr (live readings vs a reference line),
   an oracle Guide driving the shifter with an external pitch line. Next: the user's A/B of the same section again.
 - v0.51.0 CI green: run 39001452817 (commit e15bd4d), ~29 min.
+
+## v0.52.0 The full audit + suite link 4 (2026-10-17, from Mixology's "Mixology audit" thread)
+- User: "run a full audit on Mixology ... After Mixology we'll do the same with Voxology and Masterology." Five parallel
+  reviews (audio thread, Auto-Edit engine, UI, plug-in / threads, suite + docs), then fixes by area (helpers on
+  branches audit-audio, audit-engine, audit-ui, merged here). Released with Mixology 0.21.0 and Masterology 0.29.3.
+- Suite link layout 4 (SuiteLink.h / .cpp, same files in all three, Mixology is the master copy): Mixology answers
+  each vocal (VocalAck: matched / noLink / noName / sharedName / notVocal / beatTrack, balancesLevel, heard + vocalDb /
+  targetDb), tied to that slot claim (generation) and track-name hash. Voxology: mixologyNow() -> frame.mixology ->
+  footer MIXOLOGY ✓ / ADD LINK / RENAME TRACK / NO TRACK NAME / NOT A VOCAL THERE (+ FIT LEVEL line when Mixology moves
+  the fader). The beat key (KeyShare) goes through the link's KeySlot (was setenv: not thread-safe on macOS).
+  Reverb / delay count for Mixology from 5 %; "recorded too hot" clears after 20 s of clean voice; processing flag off
+  while the DAW bypasses Voxology.
+- Audio: the DAW's bypass (processBlockBypassed) = Voxology's own bypass (delayed dry, both sides, 20 ms glide;
+  JUCE's default played ~58 ms early: the user's "55 ms late" A/B), NaN / inf no longer silences until the next play,
+  64-bit sample clocks (Throws, de-click), no click switching modules off, tail 60 s, REC switches without a reset on
+  the audio thread, MIDI notes released in BEAT mode, Auto-Edit buffers only while listening, closing a project
+  cancels a running Auto-Edit.
+- Honey Tune: no silent blocks when a render lands, exports wait for it, long takes don't crash ("too long" status),
+  project values checked, how to open it per DAW (status line), auval aufx Hny1 Voxa.
+- Auto-Edit: a failed try keeps the last report (+ failed {summary, tip}), Key MANUAL kept, UNDO only what Auto-Edit /
+  APPLY / a chain changed, stale checks dropped, clip watch: no false "clipped" on 16-bit, notes that change the level
+  say to run Auto-Edit again, Unmask keeps the beat full in a long break, Pitch tells rap by held notes.
+- Threads: chain name / unmask source under styleLock, Auto-Edit restore on the message thread, gestures for every
+  change Voxology makes itself, AU track name via callAsync.
+- UI: dots / cells click the right module, knobs (wheel, arrow keys, one undo step per move), MY CHAINS name on open,
+  DAW words everywhere, menus fit small windows, older macOS fallbacks, no false CHROMATIC KEY, REC tooltip, keyboard /
+  screen readers, failed Auto-Edit banner, mock.js covers every native function.
+- Build: build.yml packages Voxology-Windows (VST3 + docs/INSTALL.txt) and runs auval (aumf Vox1 Voxa, aufx Hny1 Voxa)
+  on the Mac job. README rewritten (13 modules). Manual: install, MIXOLOGY states, minimum versions, Honey Tune per DAW.
