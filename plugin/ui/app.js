@@ -33,6 +33,11 @@ function fit() { stage.style.transform = `scale(${Math.min(window.innerWidth / 1
 window.addEventListener("resize", fit);
 fit();
 
+// Keyboard focus glows after Tab, never after a click. :focus-visible does that, but macOS WebKit before Safari 15.4
+// doesn't have it: html.kbd (Tab pressed, no click since) gives the same glow there (styles.css).
+window.addEventListener("keydown", (e) => { if (e.key === "Tab") document.documentElement.classList.add("kbd"); }, true);
+window.addEventListener("pointerdown", () => document.documentElement.classList.remove("kbd"), true);
+
 // ---------------------------------------------------------------------------------------------
 // Easter egg: click the logo and every blue turns red (click again: blue). CSS does the colours and the
 // art behind them (html.red); this swaps the <img> art for its *_red.webp twin and the spectrum colours.
