@@ -567,6 +567,7 @@ const std::array<StyleSpec, kStyles> kSpecs {{
 }};
 
 constexpr std::array<double, kIntensities> kIntensityScale { 0.6, 0.85, 1.1 };
+constexpr double kRefSibRangeDb = 3.0;   // a reference's "s" level moves the De-Esser's target at most this far from the style's
 constexpr std::array<double, kIntensities> kSpaceScale { 0.75, 1.0, 1.25 };
 
 } // namespace
@@ -1693,6 +1694,17 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
     // ---------------------------------------------------------------------------------------- 05 De-Esser
     Signal afterEq;
     double sibTargetDb = 0.0;   // where the "s" should sit vs the voice (checked again at the end of the chain)
+    double styleSibDb = 0.0;    // ... the style's own (over it, an "s" is sharp; under it but over a reference's, only brighter)
+    std::string sibWhere;       // ... and where that is, in words
+    auto sibTo = [&] (double level)   // where the De-Esser brings them (too few "s" left to read: under the target)
+    {
+        return level > -100.0 ? signedDb (level) : "under " + signedDb (sibTargetDb);
+    };
+    auto sibWord = [&] (double level)
+    {
+        return level > styleSibDb + 0.05 ? std::string ("sharp on headphones and earbuds")
+                                         : std::string ("brighter than the reference's (normal for a ") + kStyleNames[static_cast<size_t> (style)] + " vocal: this only matches it)";
+    };
     {
         ChainParams q = p;
         afterEq = renderMono (raw, sr, q);
@@ -1701,9 +1713,17 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
         const auto mask = activeMask (f, thr);
         const double voice = activeRmsDb (afterEq, mask, f.hop);
         const auto s = sibilance (afterEq, sr, mask, f.hop, voice);
-        const double target = ref != nullptr && ref->sibilanceDb > -100.0 ? std::clamp (ref->sibilanceDb, -10.0, -2.0)
-                                                                          : spec.sibTarget - (intensity == 2 ? 1.0 : intensity == 0 ? -1.0 : 0.0);
+        // A reference moves the target at most kRefSibRangeDb from the style's own: a soft-voiced singer's gentle "s"
+        // (Female singer, warm: -10 dB) on a rap vocal took the De-Esser to 100 % (12 dB) and the words to a lisp.
+        styleSibDb = spec.sibTarget - (intensity == 2 ? 1.0 : intensity == 0 ? -1.0 : 0.0);
+        const double target = ref != nullptr && ref->sibilanceDb > -100.0
+                                  ? std::clamp (ref->sibilanceDb, std::max (-10.0, styleSibDb - kRefSibRangeDb), std::min (-2.0, styleSibDb + kRefSibRangeDb))
+                                  : styleSibDb;
         sibTargetDb = target;
+        sibWhere = ref == nullptr || ref->sibilanceDb <= -100.0 || std::abs (target - ref->sibilanceDb) < 0.05
+                       ? "where " + aimed + " sits"
+                       : "as close to the reference's " + signedDb (ref->sibilanceDb) + " as Auto-Edit goes (it stays within " + num (kRefSibRangeDb, 0) + " dB of " +
+                             kStyleNames[static_cast<size_t> (style)] + "'s own " + signedDb (styleSibDb) + ", so the words don't turn lispy)";
         if (s.levelDb <= target || s.levelDb <= -100.0)
         {
             p.deEsser.amount = 0.0;
@@ -1740,9 +1760,9 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
             const double after = levelWith (d.amount);
             p.deEsser = d;
             reason ("deess", "Amount", pct (d.amount) + " at " + hz (d.freqHz),
-                    "Your loudest \"s\" and \"t\" sounds peak at " + signedDb (s.levelDb) + " vs your voice (around " + hz (s.hz) + "), which is sharp on headphones and earbuds"
+                    "Your loudest \"s\" and \"t\" sounds peak at " + signedDb (s.levelDb) + " vs your voice (around " + hz (s.hz) + "), " + sibWord (s.levelDb)
                     + (p.eq.gainDb[3] > 0.0 || p.eq.gainDb[4] > 0.0 ? ", and more so after the Presence / Air boost" : "") + ". " + pct (d.amount) +
-                    " brings them to " + signedDb (after) + ", where " + aimed + " sits, and only while they happen.");
+                    " brings them to " + sibTo (after) + ", " + sibWhere + ", and only while they happen.");
             if (atMax > target + 3.0)
                 r.notes.push_back ("VERY SHARP S's: even at full strength the de-esser leaves your \"s\" sounds " + num (atMax - target) + " dB brighter than ideal."
                                    "\nNEED: Optional. Listen on earbuds: if \"s\" still stings, fix it at the source."
@@ -2032,8 +2052,8 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                 {
                     rs.value = pct (p.deEsser.amount) + " at " + hz (fHz);
                     rs.why = "After the compressor (it brings quieter sounds up, \"s\" included) your loudest \"s\" and \"t\" sounds peak at " + signedDb (now) +
-                             " vs your voice (around " + hz (sibHz) + "), sharp on headphones and earbuds. " + pct (p.deEsser.amount) + " brings them to " + signedDb (after) +
-                             ", where " + aimed + " sits, and only while they happen.";
+                             " vs your voice (around " + hz (sibHz) + "), " + sibWord (now) + ". " + pct (p.deEsser.amount) + " brings them to " + sibTo (after) +
+                             ", " + sibWhere + ", and only while they happen.";
                 }
         }
 
@@ -2072,7 +2092,7 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
                     if (rs.module == "deess" && rs.control == "Amount")
                     {
                         rs.value = pct (p.deEsser.amount) + " at " + hz (p.deEsser.freqHz);
-                        rs.why += " Checked on the finished chain, it took " + pct (p.deEsser.amount) + " to keep the \"s\" there (" + signedDb (end) + ").";
+                        rs.why += " Checked on the finished chain, it took " + pct (p.deEsser.amount) + " to keep the \"s\" there (" + sibTo (end) + ").";
                     }
             }
         }

@@ -5,6 +5,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <random>
 #include <set>
 
 using namespace vox;
@@ -325,4 +326,42 @@ TEST_CASE ("Auto-Edit Pitch: rap stays untuned (pitched but nothing held), singi
         CHECK (why.find ("You sing on average " + std::to_string (std::lround (off)) + " cents away") != std::string::npos);
         CHECK (why.find (scale == 2 ? "the nearest note of D minor" : "the nearest of the 12 notes") != std::string::npos);
     }
+}
+
+TEST_CASE ("Auto-Edit: a reference's soft s can't de-ess a rap vocal into a lisp", "[autoedit][deess][reference]")
+{
+    // "Female singer, warm" has gentle s sounds (-10 dB vs the voice): on a rap vocal the De-Esser was pushed to the
+    // reference's -10 dB (Rap, Strong: 100 %, 12 dB of cut on the user's raps). The target now stays within 3 dB of the
+    // style's own, and an "s" that's fine for the style is only "brighter than the reference's", not sharp.
+    const auto* warm = findBuiltinReference ("Female singer, warm");
+    REQUIRE (warm != nullptr);
+    REQUIRE (warm->sibilanceDb < -9.0);
+    auto deessWhy = [] (const AutoEditResult& r)
+    {
+        for (const auto& x : r.reasons) if (x.module == "deess" && x.control == "Amount") return x.why;
+        return std::string();
+    };
+    const auto x = testsig::vocal (kSr, 14.0, -95.0, -3.0, 5);
+
+    // Rap, Strong: its own target -5 dB, so a reference takes it to -8 dB at the lowest: the warm one's -10 dB acts as -8.
+    ReferenceProfile at8 = *warm, at6 = *warm;
+    at8.sibilanceDb = -8.0;
+    at6.sibilanceDb = -6.0;
+    const auto r = autoEdit ({ x }, kSr, { 1, 2, 0.0, warm }), r8 = autoEdit ({ x }, kSr, { 1, 2, 0.0, &at8 }), r6 = autoEdit ({ x }, kSr, { 1, 2, 0.0, &at6 });
+    REQUIRE (r.ok);
+    INFO (deessWhy (r));
+    CHECK (r.params.deEsser.amount > 0.0);
+    CHECK (r.params.deEsser.amount == r8.params.deEsser.amount);
+    CHECK (deessWhy (r).find ("as close to the reference's") != std::string::npos);
+    CHECK (deessWhy (r6).find ("where the reference") != std::string::npos);   // inside the 3 dB: its own level
+
+    // Rap, Balanced (-4 dB of its own): this vocal's "s" sits about there, so it's matched, not called sharp.
+    const auto rb = autoEdit ({ x }, kSr, { 1, 1, 0.0, warm });
+    const auto why = deessWhy (rb);
+    INFO (why);
+    REQUIRE (rb.params.deEsser.amount > 0.0);
+    CHECK (why.find ("sharp") == std::string::npos);
+    CHECK (why.find ("brighter than the reference's") != std::string::npos);
+    CHECK (why.find ("120") == std::string::npos);   // "brings them to -120 dB" (too few s left to read) reads "under" the target
+    checkNotes (rb);
 }
