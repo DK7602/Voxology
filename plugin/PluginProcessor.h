@@ -107,8 +107,15 @@ public:
     ChainLibrary chains { parameters };   // My Chains + Quick Looks (message thread)
     juce::String chainName;               // the chain last saved / loaded here (saved with the project; message thread)
 
-    /** The suite link (Voxology, Mixology, Masterology): a Mixology is in this project and sees this vocal. */
-    std::atomic<bool> mixologyHere { false };
+    /** The suite link (Voxology, Mixology, Masterology): is a Mixology in this project, and what did it answer for
+        this vocal (found it and treats it as a vocal, or why not; what it hears there). Message thread. */
+    struct MixologyView
+    {
+        bool here = false;       // a Mixology hand-off is alive in this project
+        bool answered = false;   // ... and it answered for this track
+        suite::VocalAck ack;
+    };
+    MixologyView mixologyNow() const { const juce::ScopedLock sl (styleLock); return mixology; }
 
     // The song's style (Mixology's list of 75, the same in Mixology and Masterology), shared through the suite link.
     // It suggests the vocal STYLE (aeStyle) on a track where you haven't picked one yourself. Message thread.
@@ -177,6 +184,13 @@ private:
     void publishSuite();
     int suiteSlot = -1;
     std::uint64_t suiteId = 0;
+    MixologyView mixology;   // under styleLock
+    // The last Auto-Edit's "recorded too hot / clipped" stops going to Mixology once the vocal has come in clean for a
+    // while (fixed at the source): seconds of voice with no overs or clipped stretches since that report.
+    double cleanVoiceSeconds = 0.0;
+    int seenClipRuns = 0, seenOvers = 0;
+    float seenRecordedPeak = -1000.0f;
+    int seenRecordedSpots = -1;
     mutable juce::CriticalSection styleLock;
     suite::SongStyle songStyle { suite::StyleInfo::From::voxology };   // under styleLock
     std::atomic<std::uint32_t> styleVersion { 0 };
@@ -190,5 +204,6 @@ private:
     int hopCount = 0;
     vox::Unmask unmask;
 
+    JUCE_DECLARE_WEAK_REFERENCEABLE (VoxologyAudioProcessor)
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VoxologyAudioProcessor)
 };

@@ -336,7 +336,35 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("satHarm", roundTo (ratio > 1.0e-10 ? static_cast<float> (10.0 * std::log10 (ratio)) : -100.0f, 0.1f));
     frame->setProperty ("matchDb", roundTo (m.matchDb.load(), 0.1f));
     frame->setProperty ("bpm", roundTo (m.bpm.load(), 0.1f));
-    frame->setProperty ("mixology", audioProcessor.mixologyHere.load());   // the suite link: Mixology sees this vocal
+    {
+        // The suite link: a Mixology in this project, and what it answered for this vocal (the footer's MIXOLOGY).
+        const auto mx = audioProcessor.mixologyNow();
+        if (! mx.here) frame->setProperty ("mixology", juce::var());
+        else
+        {
+            using S = suite::VocalAck::State;
+            const char* state = "waiting";
+            if (mx.answered)
+                switch (mx.ack.state)
+                {
+                    case S::matched: state = "matched"; break;
+                    case S::noLink: state = "noLink"; break;
+                    case S::noName: state = "noName"; break;
+                    case S::sharedName: state = "sharedName"; break;
+                    case S::notVocal: state = "notVocal"; break;
+                    case S::beatTrack: state = "beatTrack"; break;
+                    case S::none: break;
+                }
+            auto* o = new juce::DynamicObject();
+            o->setProperty ("here", true);
+            o->setProperty ("state", state);
+            o->setProperty ("balances", mx.answered && (mx.ack.bits & suite::VocalAck::balancesLevel) != 0);
+            o->setProperty ("heard", mx.answered && (mx.ack.bits & suite::VocalAck::heard) != 0);
+            o->setProperty ("vocalDb", std::round (mx.ack.vocalDb * 10.0f) / 10.0f);
+            o->setProperty ("targetDb", std::round (mx.ack.targetDb * 10.0f) / 10.0f);
+            frame->setProperty ("mixology", juce::var (o));
+        }
+    }
     {
         // The song's style, shared with Mixology and Masterology ("" = none chosen yet).
         const auto st = audioProcessor.songStyleNow();

@@ -5,10 +5,11 @@
 
 /** The beat's key, shared from Voxology (on the beat) to Honey Tune (on a vocal clip) inside one running host.
 
-    They are separate plug-in files, so they share no memory; the host process's environment is the one
-    thing both can see (and only inside that process: another program or a closed Cubase never sees it).
-    Voxology writes "VOXOLOGY_BEAT_KEY" about once a second while a beat key is known; Honey Tune ignores
-    it once it's a few seconds old (that Voxology was removed, or left BEAT mode). Message thread only. */
+    They are separate plug-in files: they meet in the suite link's shared memory (suite/SuiteLink.h, the beat key),
+    only inside that process (another program or a closed DAW never sees it). Voxology writes it about once a second
+    while a beat key is known; Honey Tune ignores it once it's a few seconds old (that Voxology was removed, or left
+    BEAT mode). Message thread only. (It used to go through the process's environment, which isn't thread-safe on
+    macOS / Linux while the host reads its own variables.) */
 namespace vox::keyshare {
 
 struct BeatKeyShare

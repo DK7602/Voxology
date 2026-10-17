@@ -103,6 +103,14 @@ void VoxologyAudioProcessor::timerCallback()
 
 void VoxologyAudioProcessor::updateTrackProperties (const TrackProperties& properties)
 {
+    // The AU wrapper can call this from a property listener off the message thread: the name goes over there.
+    if (! juce::MessageManager::existsAndIsCurrentThread())
+    {
+        juce::MessageManager::callAsync ([safe = juce::WeakReference<VoxologyAudioProcessor> (this), properties] {
+            if (auto* p = safe.get()) p->updateTrackProperties (properties);
+        });
+        return;
+    }
     if (properties.name.has_value() && properties.name->isNotEmpty())
     {
         vox::UnmaskLink::instance().setName (linkSlot, properties.name->toStdString());
@@ -116,7 +124,7 @@ void VoxologyAudioProcessor::publishSuite()
     auto& link = suite::Link::process();
     const auto now = suite::nowMs();
     suite::MixInfo mix;
-    mixologyHere.store (link.readMix (mix, now));
+    const bool mixologyHere = link.readMix (mix, now);
     // The song's style: the newest choice in Voxology, Mixology or Masterology wins.
     bool adopted = false;
     {
@@ -146,8 +154,8 @@ void VoxologyAudioProcessor::publishSuite()
         auto any = [] (const auto& gains) { return std::any_of (gains.begin(), gains.end(), [] (double g) { return std::abs (g) >= 0.5; }); };
         if (! vox::VocalCompressor::isNeutral (p.comp) || ! vox::Rider::isNeutral (p.rider)) v.flags |= F::compressor;
         if (! vox::DeEsser::isNeutral (p.deEsser)) v.flags |= F::deEsser;
-        if (p.reverb.enabled && (p.reverb.mix >= 0.05 || p.throws.wash >= 0.05)) v.flags |= F::reverb;
-        if (p.delay.enabled && (p.delay.mix >= 0.05 || p.throws.echo >= 0.05)) v.flags |= F::delay;
+        if (p.reverb.enabled && (p.reverb.mix >= 5.0 || p.throws.wash >= 5.0)) v.flags |= F::reverb;   // (percent)
+        if (p.delay.enabled && (p.delay.mix >= 5.0 || p.throws.echo >= 5.0)) v.flags |= F::delay;
         if (! vox::Doubler::isNeutral (p.doubler) || (p.doubler.enabled && ! vox::HarmonyVoices::isNeutral (p.voices))) v.flags |= F::doubler;
         if (! vox::PitchCorrector::isNeutral (p.pitch)) v.flags |= F::pitch;
         if (p.eq.enabled && any (p.eq.gainDb)) v.flags |= F::eq;
@@ -157,16 +165,39 @@ void VoxologyAudioProcessor::publishSuite()
         v.style = static_cast<F::Style> (static_cast<std::uint32_t> (juce::jlimit (0, static_cast<int> (F::kStyles) - 1, style)) + 1u);
         v.reverbMix = p.reverb.enabled ? static_cast<float> (p.reverb.mix / 100.0) : 0.0f;
         v.delayMix = p.delay.enabled ? static_cast<float> (p.delay.mix / 100.0) : 0.0f;
-        // What the last Auto-Edit heard in the recording itself: Mixology's tools say fix it first.
+        // What the last Auto-Edit heard in the recording itself: Mixology's tools say fix it first. Once the vocal
+        // has come in for 20 s with no overs and no clipped stretch since that report, it was fixed at the source
+        // (clip gain lowered): no longer told.
         v.recordedPeakDb = autoEdit.recordedPeakDb();
         v.clippedSpots = static_cast<std::uint32_t> (std::max (0, autoEdit.recordedClippedSpots()));
-        if (v.recordedPeakDb > 0.0f) v.flags |= F::recordedHot;      // the same rules as Auto-Edit's TOO HOT and
-        if (v.clippedSpots >= 3) v.flags |= F::recordedClipped;      // CLIPPED RECORDING notes
+        const int runs = meters.clipRuns.load(), overs = meters.overs.load();
+        if (v.recordedPeakDb != seenRecordedPeak || static_cast<int> (v.clippedSpots) != seenRecordedSpots
+            || runs != seenClipRuns || overs != seenOvers)
+        {
+            seenRecordedPeak = v.recordedPeakDb;
+            seenRecordedSpots = static_cast<int> (v.clippedSpots);
+            seenClipRuns = runs;
+            seenOvers = overs;
+            cleanVoiceSeconds = 0.0;
+        }
+        else if (meters.inShort.load() > -45.0f)
+            cleanVoiceSeconds += 0.25;   // four times a second, while the vocal comes in
+        const bool fixedSince = cleanVoiceSeconds >= 20.0;
+        if (! fixedSince && v.recordedPeakDb > 0.0f) v.flags |= F::recordedHot;      // the same rules as Auto-Edit's
+        if (! fixedSince && v.clippedSpots >= 3) v.flags |= F::recordedClipped;      // TOO HOT and CLIPPED RECORDING notes
     }
     // How much the compressor takes off lately (its loudest moments fall away over a few seconds).
     suiteCompDb = std::max (meters.suiteGr.exchange (0.0f), suiteCompDb * 0.9f);
     v.compressionDb = (v.flags & F::compressor) != 0 ? suiteCompDb : 0.0f;
     if (! link.publishVocal (suiteSlot, suiteId, v, now)) suiteSlot = -1;   // taken over while this one was silent: claim again
+
+    // Mixology's answer for this vocal: the footer says "MIXOLOGY ✓" only when it found the track.
+    MixologyView view;
+    view.here = mixologyHere;
+    if (suiteSlot >= 0)
+        view.answered = link.vocalAck (suiteSlot, suiteId, v.trackName.empty() ? 0u : suite::nameHash (v.trackName), view.ack, now);
+    const juce::ScopedLock sl (styleLock);
+    mixology = view;
 }
 
 void VoxologyAudioProcessor::pickStyle (const std::string& key, const std::string& name)

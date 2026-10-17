@@ -1,52 +1,12 @@
 #include "vox/KeyShare.h"
 
+#include "suite/SuiteLink.h"
+
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 
-#if defined (_WIN32)
- #ifndef WIN32_LEAN_AND_MEAN
-  #define WIN32_LEAN_AND_MEAN
- #endif
- #ifndef NOMINMAX
-  #define NOMINMAX
- #endif
- #include <windows.h>
-#else
- #include <cstdlib>
-#endif
-
 namespace vox::keyshare {
-
-namespace {
-constexpr const char* kName = "VOXOLOGY_BEAT_KEY";
-
-// The process's own environment block: with a static C runtime every plug-in has its own copy of
-// getenv / putenv's table, so Windows goes through the Win32 calls (one per process).
-void setVar (const std::string& value)
-{
-#if defined (_WIN32)
-    SetEnvironmentVariableA (kName, value.c_str());
-#else
-    setenv (kName, value.c_str(), 1);
-#endif
-}
-
-bool getVar (std::string& value)
-{
-#if defined (_WIN32)
-    char buf[128] {};
-    const DWORD n = GetEnvironmentVariableA (kName, buf, sizeof buf);
-    if (n == 0 || n >= sizeof buf) return false;
-    value.assign (buf, n);
-    return true;
-#else
-    const char* v = std::getenv (kName);
-    if (v == nullptr) return false;
-    value = v;
-    return true;
-#endif
-}
-} // namespace
 
 std::int64_t nowMs() noexcept
 {
@@ -73,14 +33,19 @@ bool decode (const std::string& text, BeatKeyShare& k)
 
 void publish (int key, int scale, double confidence, std::int64_t ms)
 {
-    setVar (encode ({ key, scale, confidence, ms < 0 ? nowMs() : ms }));
+    const auto when = ms < 0 ? nowMs() : ms;
+    suite::Link::process().publishBeatKey (key, scale, static_cast<float> (confidence), static_cast<std::uint64_t> (std::max<std::int64_t> (1, when)));
 }
 
 bool read (BeatKeyShare& k)
 {
-    std::string text;
     BeatKeyShare got;
-    if (! getVar (text) || ! decode (text, got)) return false;
+    float sure = 0.0f;
+    std::uint64_t when = 0;
+    if (! suite::Link::process().readBeatKey (got.key, got.scale, sure, when)) return false;
+    if (got.key < 0 || got.key > 11 || got.scale < 1 || got.scale > 9) return false;
+    got.confidence = sure;
+    got.ms = static_cast<std::int64_t> (when);
     const auto age = nowMs() - got.ms;
     if (age < 0 || age > kMaxAgeMs) return false;
     k = got;
