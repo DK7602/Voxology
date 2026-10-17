@@ -1827,8 +1827,10 @@ $("daw-select").addEventListener("change", (e) => {
   renderLearn(true);
 });
 function dawFromFrame(d) {
-  if (!d || (d.key === DAW.key && !!d.picked === DAW.picked && d.detected === DAW.detected)) return;
-  Object.assign(DAW, { key: d.key || "other", picked: !!d.picked, detected: d.detected || "other", from: d.from || 0 });
+  if (!d || typeof d !== "object") return;
+  const key = dawOf(d.key).key, detected = dawOf(d.detected).key;   // (a DAW this file doesn't know = "other")
+  if (key === DAW.key && !!d.picked === DAW.picked && detected === DAW.detected) return;
+  Object.assign(DAW, { key, picked: !!d.picked, detected, from: d.from || 0 });
   fillDawSelect();
   learnKey = "";
   renderLearn(true);   // every tip again, in this DAW's words

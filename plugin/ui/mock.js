@@ -1,8 +1,14 @@
 // Browser preview only. Inside the plug-in, JUCE provides window.__JUCE__ before this runs and this
 // file does nothing. Opened in a normal browser it simulates the plug-in, so the UI can be designed
 // and tested without a DAW.
+//   ?hostile   names that try to break the page (markup, {daw} tokens, quotes, very long, emoji, right-to-left)
+//   ?chain=My%20Lead   the project's saved chain
 (function () {
   if (typeof window.__JUCE__ !== "undefined") return;
+  const Q = new URLSearchParams(location.search);
+  const hostile = Q.has("hostile");
+  const H = ['<img src=x onerror="window.__xss=1">', '{daw:sidechain} & "quotes" \\ {daw}', "A very long name " + "that goes on and on ".repeat(10) + "(Acapella)",
+    "\u{1F3A4} Vocal \u00C9mile (Acapella)", "\u05E9\u05D9\u05E8 \u202Eright to left"];
 
   const lin = (start, end, value, interval = 0.1) => ({ start, end, skew: 1, interval, value });
   const centre = (start, end, c, value, interval = 1) => ({ start, end, skew: Math.log(0.5) / Math.log((c - start) / (end - start)), interval, value });
@@ -51,14 +57,15 @@
 
   const send = (id, obj) => setTimeout(() => window.__JUCE__.backend && window.__JUCE__.backend.emitByBackend(id, JSON.stringify(obj)), 0);
   const setSlider = (k, v) => { sliders[k].value = v; send("__juce__slider" + k, { eventType: "valueChanged", value: v }); };
-  const chains = { yours: ["My Lead", "Hook Stack"], name: "" };
+  const chains = { yours: hostile ? H.slice() : ["My Lead", "Hook Stack"], name: hostile ? H[1] : Q.get("chain") || "" };
   const setToggle = (k, v) => { toggles[k] = v; send("__juce__toggle" + k, { eventType: "valueChanged", value: v }); };
   const setCombo = (k, i) => { const c = combos[k]; c.value = i / (c.choices.length - 1); send("__juce__comboBox" + k, { eventType: "valueChanged", value: c.value }); };
 
   // Simulated Auto-Edit (listening runs 3x faster than the real 12 s). Values from the engine's own
   // report on the synthetic test vocal (tools/report.cpp).
   const um = { selected: "" };
-  const ref = { json: JSON.stringify({ state: "none" }), version: 0, yours: ["My Favorite Hook (Acapella)", "Big Song_(Vocals)_UVR-MDX-NET-Voc_FT"], split: { "Big Song_(Vocals)_UVR-MDX-NET-Voc_FT": true } };
+  const ref = { json: JSON.stringify(hostile ? { state: "ok", name: H[0], seconds: 30, problem: "", warning: "<b>not bold</b>: this one is hard to read in {daw}" } : { state: "none" }), version: 0,
+    yours: hostile ? H.slice() : ["My Favorite Hook (Acapella)", "Big Song_(Vocals)_UVR-MDX-NET-Voc_FT"], split: { "Big Song_(Vocals)_UVR-MDX-NET-Voc_FT": true, [H[2]]: true } };
   const ae = { state: 0, progress: 0, undo: false, version: 0, report: "", snapshot: null };
   // Auto Analyze (mock): after Auto-Edit and switched on, a check every ~6 s; the first one finds two new needs.
   const aa = { on: false, progress: 0, version: 0, checks: 0, time: "", needs: [] };
@@ -141,11 +148,13 @@
   setInterval(() => { if (ae.state === 1) { ae.progress = Math.min(1, ae.progress + 0.1 / 4); if (ae.progress >= 1) { ae.state = 2; setTimeout(aeFinish, 900); } } }, 100);
 
   // The song's style, shared with Mixology and Masterology (as if Mixology picked it).
-  const daw = { key: location.hash === "#studioone" ? "studioone" : "cubase", picked: location.hash === "#studioone", from: 2, detected: "cubase" };
-  const song = { key: "hiphop.gfunk", name: "Hip Hop - G-Funk", from: 2, version: 1, vocalMine: false, suggest: 1 };
+  const daw = hostile ? { key: "<b>x</b>", picked: true, from: 9, detected: "{daw}" }
+    : { key: location.hash === "#studioone" ? "studioone" : "cubase", picked: location.hash === "#studioone", from: 2, detected: "cubase" };
+  const song = hostile ? { key: "<script>", name: H[0], from: 2, version: 1, vocalMine: false, suggest: 99 } : { key: "hiphop.gfunk", name: "Hip Hop - G-Funk", from: 2, version: 1, vocalMine: false, suggest: 1 };
   window.__JUCE__ = {
     initialisationData: {
-      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "getAutoAnalyze", "setAutoAnalyze", "applyAutoAnalyze", "dismissAutoAnalyze", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed", "pickStyle", "setVocalStyleMine", "pickDaw"],
+      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "getAutoAnalyze", "setAutoAnalyze", "applyAutoAnalyze", "dismissAutoAnalyze", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed", "pickStyle", "setVocalStyleMine", "pickDaw",
+        "setReferenceSplit", "listChains", "getChainName", "saveChain", "loadChain", "deleteChain"],
       __juce__registeredGlobalEventIds: [], __juce__sliders: Object.keys(sliders), __juce__toggles: Object.keys(toggles), __juce__comboBoxes: Object.keys(combos),
     },
     postMessage(message) {
@@ -197,7 +206,7 @@
         if (payload.name === "selectReference") { const n = payload.params[1]; ref.json = JSON.stringify({ state: "ok", name: n, seconds: 60, problem: "", warning: "", split: !!ref.split[n] }); ref.version++; }
         if (payload.name === "setReferenceSplit") { ref.split[payload.params[0]] = !!payload.params[1]; const j = JSON.parse(ref.json); if (j.name === payload.params[0]) { j.split = !!payload.params[1]; ref.json = JSON.stringify(j); } ref.version++; }
         if (payload.name === "deleteReference") { ref.yours = ref.yours.filter((n) => n !== payload.params[0]); ref.version++; }
-        if (payload.name === "getUnmaskSources") result = JSON.stringify({ sources: [{ name: "Lead Vocal" }, { name: "Ad-libs" }], selected: um.selected });
+        if (payload.name === "getUnmaskSources") result = JSON.stringify({ sources: (hostile ? H : ["Lead Vocal", "Ad-libs"]).map((name) => ({ name })), selected: um.selected });
         if (payload.name === "setUnmaskSource") um.selected = (payload.params && payload.params[0]) || "";
         if (payload.name === "listChains") result = JSON.stringify({ yours: chains.yours.map((n) => ({ name: n })), folder: "C:\\Users\\you\\Documents\\Voxology\\Chains",
           looks: [["Hard Robot", "Pitch: Robot, instant."], ["Smooth Tune", "Pitch: Natural and gentle."], ["Stacked Hook", "Voices: Unison both sides, Stack 6."], ["Harmony 3rd + 5th", "Voices: a 3rd up and a 5th down."],
@@ -260,7 +269,7 @@
       levelGr: active("cpOn") && s("cpRatio") > 1.01 ? +(-4 * word).toFixed(1) : 0,
       satHarm: active("saOn") && s("saDrive") > 0 ? +(-42 + s("saDrive") * 3 + 2 * word).toFixed(1) : -100,
       matchDb: -1.2, bpm: 140, sr: 48000, mixology: true, songStyle: song, daw,
-      bkState: location.hash === "#beat" ? 5 : 1, bkKey: 7, bkMode: 7, bkSet: 0, bkUnclear: 0, bkConf: 0.86, bkTune: -28, bkHeard: 24, keyUsed: 11, scaleUsed: 2, midiNotes: (1 << 11) | (1 << 2), notesUsed: 0b110010101101 & ~(1 << 6), recMode: 1, latencyMs: 6.1,
+      bkState: location.hash === "#beat" ? 5 : 1, bkSource: 2, scState: 2, bkOpen: -1, bkKey: 7, bkMode: 7, bkSet: 0, bkUnclear: 0, bkConf: 0.86, bkTune: -28, bkHeard: 24, keyUsed: 11, scaleUsed: 2, midiNotes: (1 << 11) | (1 << 2), notesUsed: 0b110010101101 & ~(1 << 6), recMode: 1, latencyMs: 6.1,
       pitchSung: sing ? +(57 + 0.25 * Math.sin(t * 3)).toFixed(2) : 0, pitchTarget: sing ? 57 : -1,
       pitchCorr: sing && sliders.ptAmount.value > 0 ? +(-0.25 * Math.sin(t * 3) * sliders.ptAmount.value / 100).toFixed(2) : 0,
       aeState: ae.state, aeProgress: +ae.progress.toFixed(2), aeHearing: true, aeUndo: ae.undo, aeReport: ae.version, refVersion: ref.version,
