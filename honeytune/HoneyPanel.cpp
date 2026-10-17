@@ -1,4 +1,5 @@
 #include "HoneyPanel.h"
+#include "suite/SuiteLink.h"
 #include "HoneyAssets.h"
 
 #include "HoneyTheme.h"
@@ -197,11 +198,23 @@ void HoneyPanel::refresh()
             break;
         case 1: status = "Listening to the clip, then an AI pitch check (a few seconds per minute of audio)..."; break;
         case 3: status = "Couldn't read the clip's audio."; break;
-        default: status = model == nullptr ? "Honey Tune works on a clip: in Cubase select the vocal event, then Audio > Extensions > Honey Tune."
-                                          : "Waiting for the clip's audio..."; break;
+        default: status = model == nullptr ? howToOpen() : "Waiting for the clip's audio..."; break;
     }
     updateNoteControls();
     repaint();
+}
+
+juce::String HoneyPanel::howToOpen()
+{
+    // Honey Tune is an ARA plug-in: it works on a clip, opened the way the DAW opens ARA editors (like Melodyne).
+    const auto daw = suite::dawFromHostPath (juce::File::getSpecialLocation (juce::File::hostApplicationPath).getFullPathName().toStdString());
+    if (daw == "cubase") return "Honey Tune works on a clip: in Cubase select the vocal event, then Audio > Extensions > Honey Tune.";
+    if (daw == "studioone") return "Honey Tune works on a clip: in Studio One right-click the vocal event and choose Edit with Honey Tune.";
+    if (daw == "logic") return "Honey Tune works on a clip: in Logic Pro put it in the vocal track's first plug-in slot, then select the region.";
+    if (daw == "reaper") return "Honey Tune works on a clip: in REAPER add it as a take FX on the vocal item (right-click the item > Take > Take FX chain).";
+    if (daw == "cakewalk") return "Honey Tune works on a clip: in Cakewalk right-click the vocal clip > Region FX > Honey Tune.";
+    if (daw == "ableton") return "Ableton Live doesn't run ARA plug-ins, so Honey Tune can't see your clips here: use Voxology's Pitch instead.";
+    return "Honey Tune works on a clip: if your DAW runs ARA plug-ins (like Melodyne), open it on the vocal clip that way; if not, use Voxology's Pitch instead.";
 }
 
 void HoneyPanel::setPlayhead (double seconds)

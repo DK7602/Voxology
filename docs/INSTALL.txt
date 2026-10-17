@@ -1,0 +1,16 @@
+VOXOLOGY + HONEY TUNE - install by hand (the Sonicology installer does all of this for you, with Mixology and
+Masterology)
+
+1. Windows: copy  VST3\Voxology.vst3  and  VST3\Honey Tune.vst3  to  C:\Program Files\Common Files\VST3\
+   (Chrome may call the zip "dangerous" because it isn't code-signed yet: choose Keep.)
+   Mac: easiest is the Sonicology installer (a downloaded zip is blocked by macOS). By hand: copy the two .vst3 to
+   /Library/Audio/Plug-Ins/VST3/ and the two .component (AU, for Logic) to /Library/Audio/Plug-Ins/Components/, then
+   clear the download block in Terminal on each copy, e.g.
+     xattr -dr com.apple.quarantine "/Library/Audio/Plug-Ins/VST3/Voxology.vst3"
+   (otherwise the DAW calls them damaged).
+2. Rescan the plug-ins in your DAW. They are listed under Sonicology.
+3. Voxology goes first on each vocal track. Honey Tune is for editing notes by hand on a vocal clip, in DAWs that run
+   ARA plug-ins (Cubase Artist / Pro, Studio One, Logic Pro, REAPER, Cakewalk); the manual says how to open it.
+
+Already installed? Copy both plug-ins again (close the DAW first).
+The full manual is MANUAL.md (also inside Voxology: the round ? next to LEARN).

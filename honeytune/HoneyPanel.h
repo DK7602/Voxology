@@ -40,6 +40,7 @@ public:
     HoneyRoll roll;
 
 private:
+    static juce::String howToOpen();   // where this DAW opens ARA plug-ins on a clip (the status before a clip)
     void applySettings();
     void updateNoteControls();
     void applyNoteEdit();
