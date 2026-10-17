@@ -175,7 +175,7 @@ struct Timeline
 struct Snapshot
 {
     Timeline timeline;
-    int status = 0;            // 0 waiting, 1 listening, 2 ready, 3 couldn't read
+    int status = 0;            // 0 waiting, 1 listening, 2 ready, 3 couldn't read, 4 too long (not enough memory)
     std::string name;
     std::shared_ptr<const vox::honey::Track> track;
     std::vector<NoteView> notes;

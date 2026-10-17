@@ -292,6 +292,7 @@ void HoneyRoll::paint (Graphics& g)
     {
         const String msg = snap.status == 1 ? "Listening to the clip..."
                          : snap.status == 3 ? "Couldn't read the clip's audio."
+                         : snap.status == 4 ? "This clip is too long for Honey Tune: split it into shorter clips."
                          : snap.status == 2 ? "No sung notes found in this clip."
                                             : "Waiting for the clip's audio...";
         const auto box = grid.withSizeKeepingCentre (320.0f, 44.0f);
