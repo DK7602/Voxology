@@ -1811,3 +1811,4 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   (Natural, Amount >= 90, Retune <= 10 ms). REC tooltip / Learn now say ~6 ms instead of ~55 (was "33").
 - Tools used (scratchpad, not kept): hardtune_audit (vs an ideal hard tune), deterr (live readings vs a reference line),
   an oracle Guide driving the shifter with an external pitch line. Next: the user's A/B of the same section again.
+- v0.51.0 CI green: run 39001452817 (commit e15bd4d), ~29 min.
