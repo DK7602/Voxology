@@ -153,6 +153,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .hex.idle .stat { color: var(--dim); }
 .hex:hover { transform: scale(1.04); }
 .hex.sel { filter: drop-shadow(0 0 12px rgba(255, 226, 140, 1)) drop-shadow(0 0 4px rgba(var(--blue-rgb), 0.9)); z-index: 2; }
+/* A cell reached with Tab (they're buttons): a blue glow round the hexagon; a click shows none (html.kbd: see .knob). */
+.hex:focus { outline: none; }
+.hex:focus-visible { filter: drop-shadow(0 0 6px var(--blue)) drop-shadow(0 0 3px var(--blue)); }
+html.kbd .hex:focus { filter: drop-shadow(0 0 6px var(--blue)) drop-shadow(0 0 3px var(--blue)); }
 .hex.sel .face { top: 7px; right: 7px; bottom: 7px; left: 7px; inset: 7px; }
 .chain-foot { position: absolute; bottom: 12px; color: var(--ink-soft); text-shadow: 0 0 4px #fff; left: 0; right: 0; text-align: center; font-size: 12px; }
 

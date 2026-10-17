@@ -11,6 +11,9 @@ const DAW = { key: "cubase", picked: false, detected: "cubase", from: 0 };
 const $ = (id) => document.getElementById(id);
 const MINUS = "−";
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/** A button that's picked (one of a set, or switched on): the .sel look, and aria-pressed for screen readers. */
+const pickBtn = (b, yes) => { b.classList.toggle("sel", yes); b.setAttribute("aria-pressed", yes ? "true" : "false"); };
+const setAttr = (e, name, value) => { if (e.getAttribute(name) !== value) e.setAttribute(name, value); };
 const fmtNum = (v, d = 1) => (v < 0 && Math.abs(v) >= 0.5 * Math.pow(10, -d) ? MINUS : "") + Math.abs(v).toFixed(d);
 const fmtDb = (v, d = 1) => `${fmtNum(v, d)} dB`;
 const fmtSigned = (v, d = 1) => `${v >= 0.05 ? "+" : ""}${fmtNum(v, d)} dB`;
@@ -333,7 +336,7 @@ function keyCell() {
   keys.forEach((b) => b.addEventListener("click", () => { if (choice("ptKeySrc") === 0 && M.bkState === 1) P.ptKeySrc.setChoiceIndex(1); }, true));
   cell.update = () => {
     const src = choice("ptKeySrc");
-    btns.forEach((b, i) => b.classList.toggle("sel", i === src));
+    btns.forEach((b, i) => pickBtn(b, i === src));
     const following = M.bkState === 1;
     cell.classList.toggle("following", following);
     keys.forEach((b, i) => b.classList.toggle("beat", following && i === M.keyUsed));
@@ -391,10 +394,11 @@ function notesCell() {
     notes.forEach((b, k) => {
       const off = on(PT_RM[k]);
       b.classList.toggle("off", off);
+      setAttr(b, "aria-pressed", String(!off));
       b.classList.toggle("in", !off && ((M.notesUsed >> k) & 1) === 1);
       b.classList.toggle("midi", midi > 0 && ((M.midiNotes >> k) & 1) === 1);
     });
-    midiBtns.forEach((b, i) => b.classList.toggle("sel", i === midi));
+    midiBtns.forEach((b, i) => pickBtn(b, i === midi));
     tpv.textContent = tpText(val("ptTranspose"));
   };
   liveMeters.push(cell);
@@ -443,8 +447,8 @@ function stackCell(onChange) {
   box.append(midi);
   const refresh = () => {
     const m = on("hvMidi");
-    btns.forEach((b, i) => b.classList.toggle("sel", !m && i === choice("hvStack")));
-    midi.classList.toggle("sel", m);
+    btns.forEach((b, i) => pickBtn(b, !m && i === choice("hvStack")));
+    pickBtn(midi, m);
   };
   for (const id of ["hvStack", "hvMidi"]) { P[id].valueChangedEvent.addListener(() => { refresh(); onChange(); }); P[id].propertiesChangedEvent.addListener(refresh); }
   refresh();
@@ -751,6 +755,11 @@ function knob(id, label, sub, fmt, def, bipolar = false) {
     arc.setAttribute("d", Math.abs(a - from) < 0.5 ? "" : arcFor(face, Math.min(from, a), Math.max(from, a)));
     ptr.setAttribute("transform", `rotate(${a} ${fc.cx} ${fc.cy})`);
     valEl.textContent = fmt(s.getScaledValue());
+    const { start, end } = s.properties;   // screen readers: the value, its range and how it reads
+    k.setAttribute("aria-valuenow", String(+s.getScaledValue().toFixed(4)));
+    k.setAttribute("aria-valuemin", String(Math.min(start, end)));
+    k.setAttribute("aria-valuemax", String(Math.max(start, end)));
+    k.setAttribute("aria-valuetext", valEl.textContent);
   };
   const setNorm = (n) => { s.setNormalisedValue(clamp(n, 0, 1)); refresh(); anyEdited(); };
   // Wheel and arrow keys: one step at a time, each burst one undo step in the host (see burst()).
@@ -823,7 +832,7 @@ function seg(id, label, sub, labels, vertical = false, order = null) {
     box.appendChild(b);
     return b;
   });
-  const refresh = () => btns.forEach((b, k) => b.classList.toggle("sel", shown[k] === s.getChoiceIndex()));
+  const refresh = () => btns.forEach((b, k) => { if (shown[k] >= 0) pickBtn(b, shown[k] === s.getChoiceIndex()); });
   s.valueChangedEvent.addListener(refresh);
   s.propertiesChangedEvent.addListener(refresh);
   refresh();
@@ -846,7 +855,7 @@ function toggle(id, label, sub, onText, offText) {
   cell.className = "cell";
   cell.innerHTML = `<span class="cell-label">${label}</span><span class="cell-sub">${sub}</span><button type="button" class="chip"></button>`;
   const b = cell.querySelector("button");
-  const refresh = () => { b.textContent = s.getValue() ? onText : offText; b.classList.toggle("on", !!s.getValue()); };
+  const refresh = () => { b.textContent = s.getValue() ? onText : offText; b.classList.toggle("on", !!s.getValue()); b.setAttribute("aria-pressed", String(!!s.getValue())); };
   b.addEventListener("click", () => { s.setValue(!s.getValue()); refresh(); anyEdited(); });
   s.valueChangedEvent.addListener(refresh);
   refresh();
@@ -951,7 +960,7 @@ function sourceCell() {
         list.forEach((x) => mk(x.name, x.name));
       }
     }
-    for (const [b, name] of btns) b.classList.toggle("sel", (umSources.selected || "") === name);
+    for (const [b, name] of btns) pickBtn(b, (umSources.selected || "") === name);
   };
   cell.refresh();
   return cell;
@@ -983,7 +992,7 @@ setInterval(() => { if (beat) fetchSources(); }, 1000);
 
 function applyMode() {
   const b = choice("mode") === 1;
-  document.querySelectorAll("#mode button").forEach((x) => x.classList.toggle("sel", Number(x.dataset.m) === (b ? 1 : 0)));
+  document.querySelectorAll("#mode button").forEach((x) => pickBtn(x, Number(x.dataset.m) === (b ? 1 : 0)));
   if (b === beat && cellsEl.dataset.page) return;
   beat = b;
   document.body.classList.toggle("beat", beat);
@@ -1018,8 +1027,13 @@ const hexes = MODULES.map((m, i) => {
   h.style.left = `${col * 96 + (row % 2) * 48 + 36}px`;
   h.style.top = `${row * 79 + 2}px`;
   h.innerHTML = `<div class="rim"></div><div class="face"><span class="num">${String(i + 1).padStart(2, "0")}</span>
-    <span class="name">${m.name}</span><span class="stat"></span>${m.onId ? '<button type="button" class="dot" aria-label="On / off"></button>' : ""}</div>`;
+    <span class="name">${m.name}</span><span class="stat"></span>${m.onId ? `<button type="button" class="dot" aria-label="${m.name} on / off"></button>` : ""}</div>`;
+  // A cell is a button: Tab to it, Enter or Space opens it (the dot inside is its own button).
+  h.tabIndex = 0;
+  h.setAttribute("role", "button");
+  h.setAttribute("aria-label", `${String(i + 1).padStart(2, "0")} ${m.name}`);
   h.addEventListener("click", () => select(i));
+  h.addEventListener("keydown", (e) => { if (e.target === h && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); select(i); } });
   const dot = h.querySelector(".dot");
   if (dot) dot.addEventListener("click", (e) => { e.stopPropagation(); P[m.onId].setValue(!on(m.onId)); refreshHive(); renderModuleHead(); anyEdited(); });
   hive.appendChild(h);
@@ -1029,11 +1043,16 @@ function refreshHive() {
   MODULES.forEach((m, i) => {
     const h = hexes[i];
     const isOn = !m.onId || on(m.onId);
-    const [text, active] = m.stat();
     h.classList.toggle("off", !isOn);
-    h.classList.toggle("idle", !active);
     h.classList.toggle("sel", i === selected);
-    h.querySelector(".stat").textContent = isOn ? text : "off";
+    setAttr(h, "aria-current", i === selected ? "true" : "false");
+    const dot = h.querySelector(".dot");
+    if (dot) setAttr(dot, "aria-pressed", String(isOn));
+    try {   // (one module's odd reading doesn't stop the rest of the honeycomb)
+      const [text, active] = m.stat();
+      h.classList.toggle("idle", !active);
+      h.querySelector(".stat").textContent = isOn ? text : "off";
+    } catch { /* keeps its last status */ }
   });
 }
 
@@ -1047,7 +1066,7 @@ function renderModuleHead() {
   $("mod-what").textContent = m.what;
   const pw = $("mod-power");
   pw.hidden = !m.onId;
-  if (m.onId) { pw.textContent = on(m.onId) ? "ON" : "OFF"; pw.classList.toggle("on", on(m.onId)); }
+  if (m.onId) { pw.textContent = on(m.onId) ? "ON" : "OFF"; pw.classList.toggle("on", on(m.onId)); pw.setAttribute("aria-pressed", String(on(m.onId))); pw.setAttribute("aria-label", `${m.name} on / off`); }
   $("mod-kept").hidden = beat || !(report && report.ok && keptFor(selected));
 }
 $("mod-power").addEventListener("click", () => {
@@ -1613,6 +1632,8 @@ function analyzeBlock() {
   const h = head("AUTO ANALYZE");
   const sw = el("button", `chip aa-switch${analyze && analyze.on ? " on" : ""}`, analyze && analyze.on ? "ON" : "OFF");
   sw.type = "button";
+  sw.setAttribute("aria-pressed", String(!!(analyze && analyze.on)));
+  sw.setAttribute("aria-label", "Auto Analyze on / off");
   sw.addEventListener("click", async () => { await aaSet(!(analyze && analyze.on)); await fetchAnalyze(); });
   h.append(sw);
   body.append(h, para(analyzeStatus(), "l-p aa-status"));
@@ -1729,7 +1750,7 @@ function renderLearn(force = true) {
   learnKey = key;
   const scroll = body.scrollTop;
   body.replaceChildren();
-  document.querySelectorAll("#learn-tabs button").forEach((b) => b.classList.toggle("sel", b.dataset.tab === learnTab));
+  document.querySelectorAll("#learn-tabs button").forEach((b) => { b.classList.toggle("sel", b.dataset.tab === learnTab); b.setAttribute("aria-selected", String(b.dataset.tab === learnTab)); });
   if (learnTab === "report") renderReport(); else renderModuleLearn();
   if (!force) body.scrollTop = scroll;
 }
@@ -1853,15 +1874,17 @@ const intensityBtns = INTENSITIES.map((t, i) => {
   $("intensity").append(b);
   return b;
 });
-function refreshIntensity() { intensityBtns.forEach((b, i) => b.classList.toggle("sel", i === choice("aeIntensity"))); }
+function refreshIntensity() { intensityBtns.forEach((b, i) => pickBtn(b, i === choice("aeIntensity"))); }
 P.aeIntensity.valueChangedEvent.addListener(refreshIntensity);
 P.aeIntensity.propertiesChangedEvent.addListener(refreshIntensity);
 
 const abBtns = document.querySelectorAll("#ab button");
 function refreshAB() {
-  abBtns.forEach((b) => b.classList.toggle("sel", (b.dataset.ab === "a") === on("listenA")));
+  abBtns.forEach((b) => pickBtn(b, (b.dataset.ab === "a") === on("listenA")));
   $("match").classList.toggle("on", on("levelMatch"));
+  $("match").setAttribute("aria-pressed", String(on("levelMatch")));
   $("rec").classList.toggle("on", on("recMode"));
+  $("rec").setAttribute("aria-pressed", String(on("recMode")));
   document.body.classList.toggle("rec", on("recMode"));
 }
 abBtns.forEach((b) => b.addEventListener("click", () => { P.listenA.setValue(b.dataset.ab === "a"); refreshAB(); }));
@@ -2074,31 +2097,43 @@ function meterBar(elBar, elText, short, peak) {
   elText.textContent = `${short <= -99 ? "−inf" : fmtNum(short)} LUFS · ${peak <= -99 ? "−inf" : fmtNum(peak)}`;
 }
 
+// Each step of a frame runs on its own: one odd field (an older or newer plug-in) never stops the rest of the window.
+const frameErrors = new Set();
+function frameStep(name, f) {
+  try { f(); } catch (e) { if (!frameErrors.has(name)) { frameErrors.add(name); console.error(`voxMeters (${name}):`, e); } }
+}
 window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
-  Object.assign(M, typeof frame === "string" ? JSON.parse(frame) : frame);
-  songFromFrame(M.songStyle);   // the song's style: this project's, or one just picked in Mixology or Masterology
-  dawFromFrame(M.daw);          // the DAW: found from the host, or picked in any of the three
-  meterBar($("in-bar"), $("in-text"), M.inShort, M.inPeak);
-  meterBar($("out-bar"), $("out-text"), M.outShort, M.outPeak);
-  liveMeters.forEach((c) => c.update());
-  refreshAutoEdit();
-  refreshHive();
+  let f;
+  try { f = typeof frame === "string" ? JSON.parse(frame) : frame; } catch (e) { frameStep("frame", () => { throw e; }); return; }
+  if (!f || typeof f !== "object") return;
+  Object.assign(M, f);
+  frameStep("song", () => songFromFrame(M.songStyle));   // the song's style: this project's, or one just picked in Mixology or Masterology
+  frameStep("daw", () => dawFromFrame(M.daw));           // the DAW: found from the host, or picked in any of the three
+  frameStep("in", () => meterBar($("in-bar"), $("in-text"), M.inShort, M.inPeak));
+  frameStep("out", () => meterBar($("out-bar"), $("out-text"), M.outShort, M.outPeak));
+  liveMeters.forEach((c) => frameStep("cells", () => c.update()));
+  frameStep("autoEdit", refreshAutoEdit);
+  frameStep("hive", refreshHive);
   if (M.umLink > 0 || !beat) lastLinkSeen = performance.now();
-  if (beat) {
+  if (beat) frameStep("beat", () => {
     $("beat-stat").textContent = M.umLink > 0 ? `hearing ${M.umLink > 1 ? M.umLink + " vocals" : "your vocal"}` : "no vocal yet";
     $("beat-text").textContent = M.umLink > 0 ? "Your vocal is linked. While you sing, the beat steps back where your voice is (orange on the spectrum)."
       : "Put Voxology on your vocal track too (VOCAL mode) and press play. They find each other: nothing to route.";
-  }
-  if (M.refVersion !== refVersionSeen) { refVersionSeen = M.refVersion; fetchReference(); }
-  if (M.aeReport !== reportVersion) { const first = reportVersion === -1; reportVersion = M.aeReport; fetchReport(!first); }
-  if (M.aaVersion !== analyzeSeen) { analyzeSeen = M.aaVersion; fetchAnalyze(); }
-  else if (learnTab === "report") { const st = document.querySelector(".aa-status"); if (st) st.textContent = analyzeStatus(); }
-  const match = (on("levelMatch") ? ` · MATCH ${fmtSigned(M.matchDb)}` : "") + (M.recMode ? ` · REC ${M.latencyMs.toFixed(1)} ms` : "");
-  $("status").classList.toggle("bypassed", on("bypass"));
-  $("status").textContent = `${on("bypass") ? "BYPASSED · CLICK TO SWITCH ON" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY"}${match}${M.bpm > 0 ? ` · ${M.bpm.toFixed(0)} BPM` : ""}${M.mixology ? " · MIXOLOGY ✓" : ""}`;
-  $("status").title = on("bypass") ? "Voxology's own bypass is on (saved with the project, or automated). Click to switch Voxology back on." : M.mixology ? (beat ? "Mixology is in this project: it knows this track is the beat." : "Mixology is in this project: it sees what Voxology does on this vocal and won't add a second compressor, reverb or delay.") : "";
-  draw();
-  if (learnTab === "module") renderLearn(false);
+  });
+  frameStep("reference", () => { if (M.refVersion !== refVersionSeen) { refVersionSeen = M.refVersion; fetchReference(); } });
+  frameStep("report", () => { if (M.aeReport !== reportVersion) { const first = reportVersion === -1; reportVersion = M.aeReport; fetchReport(!first); } });
+  frameStep("analyze", () => {
+    if (M.aaVersion !== analyzeSeen) { analyzeSeen = M.aaVersion; fetchAnalyze(); }
+    else if (learnTab === "report") { const st = document.querySelector(".aa-status"); if (st) st.textContent = analyzeStatus(); }
+  });
+  frameStep("status", () => {
+    const match = (on("levelMatch") ? ` · MATCH ${fmtSigned(M.matchDb)}` : "") + (M.recMode ? ` · REC ${M.latencyMs.toFixed(1)} ms` : "");
+    $("status").classList.toggle("bypassed", on("bypass"));
+    $("status").textContent = `${on("bypass") ? "BYPASSED · CLICK TO SWITCH ON" : on("listenA") ? "A: ORIGINAL" : "B: VOXOLOGY"}${match}${M.bpm > 0 ? ` · ${M.bpm.toFixed(0)} BPM` : ""}${M.mixology ? " · MIXOLOGY ✓" : ""}`;
+    $("status").title = on("bypass") ? "Voxology's own bypass is on (saved with the project, or automated). Click to switch Voxology back on." : M.mixology ? (beat ? "Mixology is in this project: it knows this track is the beat." : "Mixology is in this project: it sees what Voxology does on this vocal and won't add a second compressor, reverb or delay.") : "";
+  });
+  frameStep("draw", draw);
+  frameStep("learn", () => { if (learnTab === "module") renderLearn(false); });
 });
 
 // Refresh everything once the parameter values have arrived.
