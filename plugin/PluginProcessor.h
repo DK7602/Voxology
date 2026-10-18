@@ -33,7 +33,7 @@ public:
     bool isBeatMode() const noexcept { return modeParam != nullptr && modeParam->load() > 0.5f; }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override;   // off the suite link (an inactive project, an insert switched off)
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
@@ -217,7 +217,10 @@ private:
     suite::SongStyle songStyle { suite::StyleInfo::From::voxology };   // under styleLock
     std::atomic<std::uint32_t> styleVersion { 0 };
     std::atomic<bool> vocalStyleMine { false };   // saved with the project
-    const std::string detectedDaw = suite::dawFromHostPath (juce::PluginHostType::getHostPath().toStdString());
+    const std::string detectedDaw = suite::dawFromHost (juce::PluginHostType::getHostPath().toStdString(),
+                                                        juce::PluginHostType().getHostDescription());
+    suite::Presence suitePresence;   // taking part in the suite link (prepareToPlay .. releaseResources)
+    void leaveSuite();
     suite::SharedChoice daw { suite::StyleInfo::From::voxology, suite::Choice::daw };   // under styleLock
     void suggestVocalStyle();                     // the song style's vocal style, unless you picked one
     float suiteCompDb = 0.0f;

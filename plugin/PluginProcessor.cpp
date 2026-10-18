@@ -41,6 +41,18 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
     startTimerHz (4);
 }
 
+namespace
+{
+    // A state loaded while a different style (or DAW) is already live in the project (a preset, A / B compare) comes
+    // back as not picked, so it follows the project instead of switching all three plug-ins.
+    void followLiveChoice (suite::SharedChoice& c, suite::Choice which)
+    {
+        suite::StyleInfo live;
+        if (c.style().pickedAt != 0 && suite::Link::process().readChoice (which, live, suite::nowMs()) && live.key != c.style().key)
+            c.setUnpicked (c.style().key, c.style().name);
+    }
+}
+
 VoxologyAudioProcessor::~VoxologyAudioProcessor()
 {
     stopTimer();
@@ -88,8 +100,30 @@ void VoxologyAudioProcessor::resolveUnmaskSource()
         }
 }
 
+void VoxologyAudioProcessor::releaseResources()
+{
+    suitePresence.stop();   // off the suite link at the next tick
+}
+
+void VoxologyAudioProcessor::leaveSuite()
+{
+    // Mixology stops seeing this vocal at once, and a style or DAW only this instance kept alive lapses (another
+    // project, or the next one opened, doesn't take it).
+    auto& link = suite::Link::process();
+    link.releaseVocal (suiteSlot, suiteId);
+    suiteSlot = -1;
+    const juce::ScopedLock sl (styleLock);
+    songStyle.leave (link, suiteId);
+    daw.leave (link, suiteId);
+    mixology = {};
+}
+
 void VoxologyAudioProcessor::timerCallback()
 {
+    // Only while the host runs this Voxology: a project that is open but not active keeps its timer running, and
+    // must neither take another song's style nor look present to Mixology. It joins again at the next prepareToPlay.
+    if (suitePresence.update (suite::nowMs()) == suite::Presence::Step::leave)
+        leaveSuite();
     publishSuite();   // four times a second (its heartbeat)
     if (++timerTicks % 4 != 0) return;
 
@@ -97,7 +131,7 @@ void VoxologyAudioProcessor::timerCallback()
 
     // Share a Voxology-on-the-beat's key with Honey Tune in this host (it can't see the link: another plug-in file).
     const auto bk = vox::UnmaskLink::instance().readBeatKey (-1);
-    if (bk.present && bk.beat.ready && bk.beat.confidence >= kBeatKeySure)
+    if (bk.present && bk.beat.ready && bk.beat.confidence >= kBeatKeySure && suitePresence.takingPart())
     {
         int key = 0, scale = 1;
         vox::followBeatKey (bk.beat, 0, key, scale);
@@ -125,12 +159,15 @@ void VoxologyAudioProcessor::updateTrackProperties (const TrackProperties& prope
 
 void VoxologyAudioProcessor::publishSuite()
 {
+    if (! suitePresence.takingPart()) return;
     auto& link = suite::Link::process();
     const auto now = suite::nowMs();
     suite::MixInfo mix;
     const bool mixologyHere = link.readMix (mix, now);
-    // The song's style: the newest choice in Voxology, Mixology or Masterology wins.
+    // The song's style: the newest choice in Voxology, Mixology or Masterology wins (from a moment after joining, so
+    // the plug-ins of a project just switched away from have left first).
     bool adopted = false;
+    if (suitePresence.settled (now))
     {
         const juce::ScopedLock sl (styleLock);
         adopted = songStyle.sync (link, suiteId, now);
@@ -220,9 +257,11 @@ void VoxologyAudioProcessor::pickDaw (const std::string& key)
 {
     {
         const juce::ScopedLock sl (styleLock);
-        if (key.empty()) daw.setUnpicked (detectedDaw, suite::dawName (detectedDaw));
-        else if (key != daw.style().key || daw.style().pickedAt == 0) daw.pick (key, suite::dawName (key));
-        else return;
+        // "Found: <your DAW>" ("") is a fresh pick of the DAW found from the host, so every plug-in follows it.
+        // (Going back to "not picked" was undone at once: this instance itself kept the earlier pick alive.)
+        const auto& wanted = key.empty() ? detectedDaw : key;
+        if (wanted == daw.style().key && daw.style().pickedAt != 0) return;
+        daw.pick (wanted, suite::dawName (wanted));
     }
     ++styleVersion;
     publishSuite();   // the others follow at once
@@ -298,6 +337,7 @@ void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
     // The same in VOCAL and BEAT, so beat and vocal stay lined up (Record mode: much less, while recording).
     wantedLatency = active().latencySamples();
     setLatencySamples (wantedLatency.load());
+    suitePresence.start();   // on the suite link from the next tick
 }
 
 void VoxologyAudioProcessor::handleAsyncUpdate()
@@ -725,6 +765,7 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
                 const juce::ScopedLock sl (styleLock);
                 songStyle = suite::SongStyle { suite::StyleInfo::From::voxology };
                 songStyle.restore (xml->getStringAttribute ("songStyle").toStdString());
+                followLiveChoice (songStyle, suite::Choice::style);   // a preset doesn't change the song's style
                 vocalStyleMine.store (hasStyle ? xml->getIntAttribute ("vsMine", 0) != 0 : true);
                 ++styleVersion;
             }
@@ -734,6 +775,7 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
                 daw = suite::SharedChoice { suite::StyleInfo::From::voxology, suite::Choice::daw };
                 if (! daw.restore (xml->getStringAttribute ("daw").toStdString()))
                     daw.setUnpicked (detectedDaw, suite::dawName (detectedDaw));
+                followLiveChoice (daw, suite::Choice::daw);
             }
             xml->removeAttribute ("daw");
             xml->removeAttribute ("vsMine");

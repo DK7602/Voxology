@@ -383,7 +383,7 @@ void VoxWebEditor::timerCallback()
         const auto d = audioProcessor.dawNow();
         auto* dw = new juce::DynamicObject();
         dw->setProperty ("key", juce::String::fromUTF8 (d.key.c_str()));
-        dw->setProperty ("picked", d.pickedAt != 0);   // false: found from the host
+        dw->setProperty ("picked", d.pickedAt != 0 && d.key != audioProcessor.dawDetected());   // false: the one found from the host
         dw->setProperty ("from", static_cast<int> (d.from));
         dw->setProperty ("detected", juce::String::fromUTF8 (audioProcessor.dawDetected().c_str()));
         frame->setProperty ("daw", juce::var (dw));
