@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.52.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.52.1. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.52.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.52.1**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -385,6 +385,8 @@ finished mix into the master. In the same Cubase project they tell each other wh
   where you haven't picked the STYLE yourself (or chose **Follow the song** in the STYLE list): a song with rap verses and a melodic hook keeps each track's vocal style.
   Projects from before the shared style keep their vocal style as it was.
 - **The beat's key** found by a Voxology in BEAT mode reaches Honey Tune and every Voxology in the project.
+- **Only the project that plays.** With two projects open, the one that isn't active doesn't change the other's style
+  or DAW, and loading a preset doesn't switch the song's style when the project already has one.
 - **Same DAW, same process.** The link only works inside one program. DAWs that can run each plug-in in its own process
   keep them apart: in Bitwig set Settings > Plug-ins > Plug-in hosting to "By manufacturer" or "Together", in REAPER
   don't run them as separate / dedicated processes, in FL Studio don't make them bridged.

@@ -1,4 +1,4 @@
-# Voxology: resume here (updated 2026-10-17, v0.52.0; the newest sections are at the bottom)
+# Voxology: resume here (updated 2026-10-18, v0.52.1; the newest sections are at the bottom)
 
 Read this first in a new chat. Code: github.com/DK7602/voxology, branch `claude/upbeat-faraday-iyzicv` (the current one;
 `claude/voxology` was the first).
@@ -1853,3 +1853,13 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   screen readers, failed Auto-Edit banner, mock.js covers every native function.
 - Build: build.yml packages Voxology-Windows (VST3 + docs/INSTALL.txt) and runs auval (aumf Vox1 Voxa, aufx Hny1 Voxa)
   on the Mac job. README rewritten (13 modules). Manual: install, MIXOLOGY states, minimum versions, Honey Tune per DAW.
+- v0.52.0 CI green: run 39078738782 (after a test fix: MSVC's std::normal_distribution draws other numbers than GCC's,
+  so tests/Signals.h now uses a portable Box-Muller generator). In the Beta 3 suite installers (Mixology run 39075478035).
+
+## v0.52.1 With the Masterology audit (2026-10-18)
+- Released with Masterology 0.29.4 and Mixology 0.21.1. SuiteLink.h (layout stays 4) gains suite::Presence and
+  suite::dawFromHost: Voxology joins the link at prepareToPlay and leaves at releaseResources (vocal slot, shared style
+  / DAW, beat key), so an inactive project neither takes another song's style nor shows in Mixology; "Found: <DAW>" is
+  a fresh pick; a preset follows the project's style (followLiveChoice); the DAW also from JUCE's host name.
+- JUCE's index.js served with its private class method renamed (macOS 11 / Safari 14 couldn't parse it: no UI there).
+- daws.js: realtimeExport (the same file in all three). Mac CI: auval needs Apple's success line.
