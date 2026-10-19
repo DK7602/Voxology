@@ -5,6 +5,8 @@ export interface TempoEstimate {
   period: number;
   /** 0..1: how clearly the winning period stands out */
   confidence: number;
+  /** the strongest rival periods (frames) with their scores, best first; [0] is the winner */
+  candidates: { period: number; score: number }[];
 }
 
 const PRIOR_BPM = 115; // log-Gaussian tempo prior centre (most pop / rock sits around 100-130)
@@ -80,7 +82,19 @@ export function estimateTempo(env: Float64Array, fps: number): TempoEstimate {
   const sorted = scores.slice().sort((a, b) => a - b);
   const med = sorted[Math.floor(sorted.length / 2)];
   const confidence = bestScore > 0 ? Math.max(0, Math.min(1, (bestScore - med) / bestScore)) : 0;
-  return { period: lag, confidence };
+  // local maxima of the score over the BPM grid: the rival readings of the pulse
+  const peaks: { period: number; score: number }[] = [];
+  for (let k = 1; k + 1 < scores.length; k++) {
+    if (scores[k] > scores[k - 1] && scores[k] >= scores[k + 1]) peaks.push({ period: (fps * 60) / (MIN_BPM + 0.1 * k), score: scores[k] });
+  }
+  peaks.sort((a, b) => b.score - a.score);
+  // one entry per reading: drop peaks within 3 % of a stronger one
+  const candidates = [{ period: lag, score: bestScore }];
+  for (const p of peaks) {
+    if (candidates.length >= 8) break;
+    if (candidates.every((c) => Math.abs(p.period / c.period - 1) > 0.03)) candidates.push(p);
+  }
+  return { period: lag, confidence, candidates };
 }
 
 /**

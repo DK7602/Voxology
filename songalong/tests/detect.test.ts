@@ -48,6 +48,16 @@ describe("chord detection on synthesized songs", () => {
       expect(Math.abs(r.bpm - bpm)).toBeLessThan(2);
     }
   });
+  it("uses the chord changes when accents run the whole bar", () => {
+    // accents every three 16ths across the bar (3+3+3+3+2+2): the rhythm alone reads 4/3 too fast,
+    // but the chords change once a bar
+    const bar = (accents: number[], ghost: number) => Array.from({ length: 16 }, (_, i) => (accents.includes(i) ? 1 : ghost));
+    for (const strum of [bar([0, 3, 6, 9, 12, 14], 0.12), bar([0, 3, 6, 10, 13], 0.15)]) {
+      const { r } = chordAccuracy({ bpm: 87, chords: ["F#m7", "A", "E", "B7"], repeats: 6, instrument: "guitar", strum, kick: "none", bass: "none" });
+      console.log("bar accents:", r.bpm);
+      expect(Math.abs(r.bpm - 87)).toBeLessThan(2);
+    }
+  });
   it("spells flats in a flat key", () => {
     const { r } = chordAccuracy({ bpm: 100, chords: ["Eb", "Bb", "Cm", "Ab"], repeats: 3, ending: ["Eb"], instrument: "guitar" });
     console.log("flat:", r.bpm, r.key, r.chords.slice(0, 8).map((c) => c.name).join(" "));

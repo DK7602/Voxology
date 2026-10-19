@@ -12,8 +12,8 @@
 //   5. key (profiles + tonic chord), a key-aware second chord pass, spelling in the key
 
 import { DEFAULT_MAJOR, DEFAULT_MINOR, keyPrefersFlats, noteName, parseKey } from "../../shared/music/notes";
-import { estimateTempo, trackBeats } from "./beats";
-import { beatChroma, semitoneSpectrogram } from "./chroma";
+import { estimateTempo, trackBeats, type TempoEstimate } from "./beats";
+import { beatChroma, harmonicPeriodicity, semitoneSpectrogram } from "./chroma";
 import { Vocabulary, decodeChords, emissionScores } from "./chords";
 import { clamp, median, resample } from "./dsp";
 import { estimateKey, keyScale, type KeyEstimate } from "./key";
@@ -57,13 +57,16 @@ export function detectChords(samples: Float32Array, sampleRate: number, opts: De
   const onset = onsetEnvelope(x, RATE);
   const tempo = estimateTempo(onset.env, onset.fps);
   const { start: audibleStart, end: audibleEnd } = audibleRange(onset.rms, onset.fps);
-  const tracked = trackBeats(onset.env, tempo.period).map((f) => f / onset.fps + onset.latency);
-  const period = tempo.period / onset.fps;
   if (audibleEnd <= audibleStart) return silentResult(duration);
-  const beats = completeBeats(tracked, period, audibleStart, audibleEnd);
 
-  progress(0.25, "Listening to the harmony");
-  const spec = semitoneSpectrogram(x, RATE, (f) => progress(0.25 + 0.6 * f, "Listening to the harmony"));
+  progress(0.2, "Listening to the harmony");
+  const spec = semitoneSpectrogram(x, RATE, (f) => progress(0.2 + 0.6 * f, "Listening to the harmony"));
+  const beatPeriodFrames = chooseByHarmony(tempo, onset.fps, harmonicPeriodicity(spec));
+  // when the harmony overruled the rhythm, the loud accents sit off the beat: keep the grid steady
+  const tightness = beatPeriodFrames === tempo.period ? 100 : 800;
+  const tracked = trackBeats(onset.env, beatPeriodFrames, tightness).map((f) => f / onset.fps + onset.latency);
+  const period = beatPeriodFrames / onset.fps;
+  const beats = completeBeats(tracked, period, audibleStart, audibleEnd);
   const chroma = beatChroma(spec, beats);
 
   progress(0.88, "Naming the chords");
@@ -120,6 +123,34 @@ export function detectChords(samples: Float32Array, sampleRate: number, opts: De
     duration,
     confidence,
   };
+}
+
+/**
+ * The rhythm alone can mistake an accented strum for the beat: a pattern accented every three
+ * 16ths reads as a pulse 4/3 as fast. Chords, though, change on bar lines. Among the rival
+ * readings that aren't simply double or half the winner, take one whose bars (and half / double
+ * bars) line up with where the harmony repeats when the winner's clearly don't.
+ */
+function chooseByHarmony(tempo: TempoEstimate, fps: number, harmony: (seconds: number) => number): number {
+  const best = tempo.candidates[0];
+  if (!best) return tempo.period;
+  const fit = (frames: number) => {
+    const p = frames / fps;
+    return harmony(4 * p) + 0.5 * harmony(2 * p) + 0.5 * harmony(8 * p);
+  };
+  let choice = tempo.period;
+  let choiceFit = fit(tempo.period);
+  for (const c of tempo.candidates.slice(1)) {
+    if (c.score < 0.45 * best.score) continue;
+    const octaves = Math.log2(c.period / tempo.period);
+    if (Math.abs(octaves - Math.round(octaves)) < 0.12) continue; // double / half: harmony can't tell
+    const f = fit(c.period);
+    if (f > choiceFit + 0.05 && f > 1.6 * choiceFit) {
+      choice = c.period;
+      choiceFit = f;
+    }
+  }
+  return choice;
 }
 
 /** First and last moments the music is within 40 dB of its loudest frames. */

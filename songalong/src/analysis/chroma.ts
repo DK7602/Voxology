@@ -215,3 +215,61 @@ export function beatChroma(spec: SemitoneSpectrogram, beatTimes: number[]): Beat
   }
   return { treble, bass, tonal, level };
 }
+
+/**
+ * How strongly the harmony repeats at a given lag (seconds), 0..1. Built from a chord-change
+ * curve (how much the smoothed chroma differs 0.14 s before and after each frame), whose
+ * autocorrelation peaks at the spacing of chord changes: usually the bar or the half-bar.
+ */
+export function harmonicPeriodicity(spec: SemitoneSpectrogram, maxSeconds = 12): (seconds: number) => number {
+  const F = spec.frames;
+  const chroma = new Float64Array(F * 12);
+  for (let t = 0; t < F; t++) {
+    const row = t * PITCHES;
+    for (let p = 0; p < PITCHES; p++) chroma[t * 12 + ((PITCH_LO + p) % 12)] += spec.logSpec[row + p];
+  }
+  // smooth over +-2 frames, then scale each frame to unit length
+  const sm = new Float64Array(F * 12);
+  for (let t = 0; t < F; t++) {
+    let norm = 0;
+    for (let k = 0; k < 12; k++) {
+      let v = 0;
+      for (let d = -2; d <= 2; d++) {
+        const u = Math.min(F - 1, Math.max(0, t + d));
+        v += chroma[u * 12 + k];
+      }
+      sm[t * 12 + k] = v;
+      norm += v * v;
+    }
+    norm = Math.sqrt(norm);
+    for (let k = 0; k < 12; k++) sm[t * 12 + k] = norm > 1e-6 ? sm[t * 12 + k] / norm : 0;
+  }
+  const D = 3;
+  const nov = new Float64Array(F);
+  let mean = 0;
+  for (let t = D; t + D < F; t++) {
+    let dot = 0;
+    for (let k = 0; k < 12; k++) dot += sm[(t + D) * 12 + k] * sm[(t - D) * 12 + k];
+    nov[t] = Math.max(0, 1 - dot);
+    mean += nov[t];
+  }
+  mean /= Math.max(1, F);
+  for (let t = 0; t < F; t++) nov[t] -= mean;
+  const maxLag = Math.min(F - 1, Math.ceil(maxSeconds / spec.hop) + 2);
+  const r = new Float64Array(Math.max(1, maxLag + 1));
+  for (let lag = 0; lag <= maxLag; lag++) {
+    let acc = 0;
+    for (let t = 0; t + lag < F; t++) acc += nov[t] * nov[t + lag];
+    r[lag] = acc / (F - lag);
+  }
+  const r0 = r[0] > 0 ? r[0] : 1;
+  const at = (x: number) => {
+    const i = Math.floor(x);
+    if (i < 0 || i + 1 >= r.length) return 0;
+    return (r[i] + (r[i + 1] - r[i]) * (x - i)) / r0;
+  };
+  return (seconds: number) => {
+    const x = seconds / spec.hop;
+    return Math.max(0, at(x - 1), at(x - 0.5), at(x), at(x + 0.5), at(x + 1));
+  };
+}

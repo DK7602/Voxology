@@ -22,7 +22,7 @@ export interface SongSpec {
   snare?: boolean;
   hats?: boolean;
   instrument?: "pad" | "piano" | "guitar";
-  /** guitar only: strum loudness for each 16th note of a 2-beat cycle (8 values, 0 = rest),
+  /** guitar only: strum loudness for each 16th note of a repeating cycle (8 values = 2 beats, 16 = a bar; 0 = rest),
    *  e.g. [1, 0.2, 0.2, 0.9, 0.2, 0.2, 0.9, 0.3] for an accented 3+3+2 pattern */
   strum?: number[];
   bass?: "beats" | "eighths" | "none";
@@ -232,7 +232,7 @@ export function synthSong(spec: SongSpec): SynthSong {
           const k = notes.indexOf(m);
           if (spec.strum) {
             for (let q = i * 4; q < j * 4; q++) {
-              const amp = spec.strum[q % 8];
+              const amp = spec.strum[q % spec.strum.length];
               if (!amp) continue;
               const up = q % 2 === 1; // up-strums run high to low
               const kk = up ? notes.length - 1 - k : k;
