@@ -3,7 +3,7 @@
 // shared catalog so the next person gets it instantly.
 
 import type { PrepAnalysis } from "../shared/prep";
-import { guessSongName, type SongName } from "../shared/songName";
+import { guessSongName, tidyTitle, type SongName } from "../shared/songName";
 import { Timeline } from "../shared/timeline";
 import type { LyricLine, SongDoc } from "../shared/types";
 import { distinctChords, validateSongDoc } from "../shared/validate";
@@ -64,7 +64,8 @@ export async function lyricsFor(a: PrepAnalysis, ai: SpeechAi | undefined, progr
   let lyrics: AlignedLyrics = { lines: [], timing: "none" };
   let lyricSource = "";
   if (found) {
-    name = { artist: found.artist || name.artist, title: found.title || name.title };
+    const artist = found.artist || name.artist;
+    name = { artist, title: tidyTitle(found.title || name.title, artist) };
     if (found.instrumental) lyricSource = "instrumental";
     else if (found.synced.length) {
       progress("Lining up the lyrics with the video", 0.93);

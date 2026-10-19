@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PrepAnalysis, PrepEvent, PrepareEvent } from "../shared/prep";
-import { cleanTitle, guessSongName } from "../shared/songName";
+import { cleanTitle, guessSongName, tidyTitle } from "../shared/songName";
 import { estimateOffset, matchInOrder } from "../worker/align";
 import { parseLrc } from "../worker/lyrics";
 import { isoDuration } from "../worker/youtube";
@@ -118,6 +118,13 @@ describe("song names from YouTube", () => {
       title: "Song",
     });
     expect(guessSongName({ title: "Test Artist - Paper Boats feat. Guest | Lyrics", channel: "c" }).title).toBe("Paper Boats");
+  });
+  it("drops the artist from a lyrics-site title", () => {
+    expect(tidyTitle("Test Artist - Paper Boats", "Test Artist")).toBe("Paper Boats");
+    expect(tidyTitle("test artist: Paper Boats", "Test Artist")).toBe("Paper Boats");
+    expect(tidyTitle("Paper Boats", "Test Artist")).toBe("Paper Boats");
+    expect(tidyTitle("A.B. - Song (Live)", "A.B.")).toBe("Song (Live)");
+    expect(tidyTitle("Test Artist", "Test Artist")).toBe("Test Artist");
   });
   it("reads ISO durations", () => {
     expect(isoDuration("PT3M45S")).toBe(225);

@@ -49,3 +49,11 @@ export function guessSongName(meta: { title: string; channel: string; artist?: s
   if (quoted && quoted[1]) return { artist: withoutFeatures(quoted[1]), title: withoutFeatures(quoted[2]) };
   return { artist: cleanChannel(meta.channel), title: withoutFeatures(title) };
 }
+
+/** Lyrics-site names are typed in by people: "Oasis - Wonderwall" as a track name, for example. */
+export function tidyTitle(title: string, artist: string): string {
+  const t = title.trim();
+  if (!artist.trim()) return t;
+  const escaped = artist.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return t.replace(new RegExp(`^${escaped}\\s*[-–—:]\\s*`, "i"), "").trim() || t;
+}
