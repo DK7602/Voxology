@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { bars as makeBars } from "../../shared/timeline";
 import { parseChord } from "../../shared/music/chords";
 import { ChordName } from "../components/ChordName";
 import type { PlayerEngine } from "../player/engine";
 import { useBeatSelect, usePlayerState, useTick, type ChordView } from "../player/hooks";
+import { PLAYHEAD } from "./LyricsLane";
 
 interface Cell {
   start: number;
@@ -60,35 +61,60 @@ export function ChordStrip({ engine, view, lead = false }: { engine: PlayerEngin
   const scroller = useRef<HTMLDivElement>(null);
   const progress = useRef<HTMLDivElement>(null);
   const cellRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // each cell's left edge and width inside the scrolling content
+  const boxes = useRef<{ x: number; w: number }[]>([]);
 
-  // x of a cell inside the scrolling strip's content
-  const leftOf = (el: HTMLElement) => {
-    const sc = scroller.current!;
-    return el.getBoundingClientRect().left - sc.getBoundingClientRect().left + sc.scrollLeft;
+  // The strip glides so that "now" stays under the same spot as the lyrics' now line.
+  const place = (beat: number) => {
+    const sc = scroller.current;
+    const bar = progress.current;
+    if (!sc || !bar || !flat.length) return;
+    let i = 0;
+    let lo = 0;
+    let hi = flat.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (flat[mid].start <= beat + 1e-6) {
+        i = mid;
+        lo = mid + 1;
+      } else hi = mid - 1;
+    }
+    const c = flat[i];
+    const box = boxes.current[i];
+    if (!box) return;
+    const f = (beat - c.start) / (c.end - c.start);
+    const x = box.x + Math.min(1, f) * box.w;
+    sc.scrollLeft = x - PLAYHEAD * sc.clientWidth;
+    bar.style.left = box.x + "px";
+    bar.style.width = (beat < c.start ? 0 : Math.min(1, f) * box.w) + "px";
   };
 
-  // keep the current bar about a quarter in from the left
-  useEffect(() => {
-    const el = cellRefs.current[active];
-    const sc = scroller.current;
-    if (!el || !sc) return;
-    const target = leftOf(el) - sc.clientWidth * 0.22;
-    if (Math.abs(sc.scrollLeft - target) > 4) sc.scrollTo({ left: Math.max(0, target) });
-  }, [active]);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const sc = scroller.current;
+      if (!sc) return;
+      const base = sc.getBoundingClientRect().left - sc.scrollLeft;
+      boxes.current = flat.map((_c, i) => {
+        const el = cellRefs.current[i];
+        if (!el) return { x: 0, w: 0 };
+        const r = el.getBoundingClientRect();
+        return { x: r.left - base, w: r.width };
+      });
+      place(engine.beat);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (scroller.current) ro.observe(scroller.current);
+    let live = true;
+    void document.fonts?.ready.then(() => live && measure());
+    return () => {
+      live = false;
+      ro.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flat, view, lead]);
 
-  useTick(engine, (_t, beat) => {
-    const bar = progress.current;
-    const c = flat[active];
-    const el = cellRefs.current[active];
-    if (!bar) return;
-    if (!c || !el) {
-      bar.style.width = "0";
-      return;
-    }
-    const f = Math.max(0, Math.min(1, (beat - c.start) / (c.end - c.start)));
-    bar.style.left = leftOf(el) + "px";
-    bar.style.width = el.offsetWidth * f + "px";
-  });
+  useTick(engine, (_t, beat) => place(beat));
 
   const loopFrom = loop.on ? loop.from ?? 0 : null;
   const loopTo = loop.on ? loop.to ?? length : null;
@@ -113,6 +139,7 @@ export function ChordStrip({ engine, view, lead = false }: { engine: PlayerEngin
   return (
     <div className="strip-wrap inset">
       <div className={"strip" + (lead ? " lead" : "")} ref={scroller} role="list" aria-label={lead ? "Lead notes by bar" : "Chords by bar"}>
+        <div className="strip-pad" style={{ width: `${PLAYHEAD * 100}%` }} aria-hidden="true" />
         {cells.map((row, b) => (
           <div key={b} className={"bar" + (row[0].phrase ? " phrase" : "")} style={{ minWidth: row.length > 1 ? (lead ? 46 : 70) * row.length + 10 : undefined }}>
             {row.map((c) => {
@@ -140,8 +167,10 @@ export function ChordStrip({ engine, view, lead = false }: { engine: PlayerEngin
             })}
           </div>
         ))}
+        <div className="strip-pad" style={{ width: `${(1 - PLAYHEAD) * 100}%` }} aria-hidden="true" />
         <div ref={progress} className="progress" aria-hidden="true" />
       </div>
+      <div className="strip-playhead" style={{ left: `calc(4px + ${PLAYHEAD} * (100% - 8px))` }} aria-hidden="true" />
     </div>
   );
 }

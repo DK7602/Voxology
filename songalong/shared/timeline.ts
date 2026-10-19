@@ -95,14 +95,50 @@ export interface PlacedChord {
   carried: boolean;
 }
 
+/** Beats a sung line takes, guessed from its length (lyrics usually carry only start times). */
+function sungBeats(text: string, bpm: number): number {
+  const seconds = Math.min(12, Math.max(1.2, text.length / 12 + 0.6));
+  return (seconds * (bpm || 100)) / 60;
+}
+
+export interface LineSpan {
+  start: number;
+  /** where the line's chords stop: the next line, or the start of an instrumental break */
+  cut: number;
+  /** where the next line starts (or the song ends) */
+  until: number;
+  /** where the words end, for spreading chords across them */
+  textEnd: number;
+}
+
+/** Line i's span. When the next line is more than two bars after the words end (a solo, the
+ *  outro), the chords in between belong to an instrumental gap (`gapAfterLine`) rather than
+ *  piling up at the end of the line. */
+export function lineSpan(doc: SongDoc, i: number): LineSpan {
+  const line = doc.lines[i];
+  const start = line.beat;
+  const bpb = doc.beatsPerBar || 4;
+  const until = i + 1 < doc.lines.length ? doc.lines[i + 1].beat : Math.max(doc.length, start + bpb);
+  let textEnd: number;
+  if (line.end !== undefined && line.end < until) textEnd = Math.max(start, line.end);
+  else if (doc.chords.some((c) => c.col !== undefined && c.beat >= start && c.beat < until)) {
+    // a chord sheet placed these chords in the words: they all belong to the line
+    return { start, cut: until, until, textEnd: until };
+  } else {
+    const guess = start + sungBeats(line.text, doc.bpm);
+    textEnd = until - guess > 2 * bpb ? guess : until;
+  }
+  // a chord just after the last word still belongs to the line
+  const cut = textEnd < until ? Math.min(until, textEnd + 1) : until;
+  return { start, cut, until, textEnd };
+}
+
 /** Chords over line i, with the column each sits at. A chord still sounding from before the
  *  line is included (carried) at column 0 when no chord starts with the line. Columns not
  *  stored are placed in proportion to time across the text, snapped to the start of a word. */
 export function chordsInLine(doc: SongDoc, i: number): PlacedChord[] {
   const line = doc.lines[i];
-  const start = line.beat;
-  const end = i + 1 < doc.lines.length ? doc.lines[i + 1].beat : Math.max(doc.length, start + doc.beatsPerBar);
-  const textEnd = lineEnd(doc.lines, i, end);
+  const { start, cut, textEnd } = lineSpan(doc, i);
   const out: PlacedChord[] = [];
   const eps = 1e-6;
   const sounding = indexAt(doc.chords, start + eps);
@@ -112,7 +148,7 @@ export function chordsInLine(doc: SongDoc, i: number): PlacedChord[] {
   for (let c = Math.max(0, sounding); c < doc.chords.length; c++) {
     const ch = doc.chords[c];
     if (ch.beat < start - eps) continue;
-    if (ch.beat >= end - eps) break;
+    if (ch.beat >= cut - eps) break;
     const col =
       ch.col !== undefined
         ? Math.min(ch.col, line.text.length)
@@ -120,6 +156,33 @@ export function chordsInLine(doc: SongDoc, i: number): PlacedChord[] {
     out.push({ chord: ch, index: c, col: Math.max(0, col), carried: false });
   }
   return out;
+}
+
+export interface GapRow {
+  start: number;
+  end: number;
+  /** in time order; the first may be carried over from the line */
+  chords: PlacedChord[];
+}
+
+/** The instrumental break after line i (chords only), or null when the next line follows on. */
+export function gapAfterLine(doc: SongDoc, i: number): GapRow | null {
+  const { cut, until } = lineSpan(doc, i);
+  if (cut >= until - 1e-6) return null;
+  const eps = 1e-6;
+  const out: PlacedChord[] = [];
+  const sounding = indexAt(doc.chords, cut + eps);
+  if (sounding >= 0 && doc.chords[sounding].beat < cut - eps) {
+    out.push({ chord: doc.chords[sounding], index: sounding, col: 0, carried: true });
+  }
+  for (let c = Math.max(0, sounding); c < doc.chords.length; c++) {
+    const ch = doc.chords[c];
+    if (ch.beat < cut - eps) continue;
+    if (ch.beat >= until - eps) break;
+    out.push({ chord: ch, index: c, col: out.length, carried: false });
+  }
+  if (!out.some((p) => !p.carried)) return null;
+  return { start: cut, end: until, chords: out };
 }
 
 function snapToWord(text: string, col: number): number {

@@ -63,6 +63,17 @@ click **Manage** there and give the *Cloudflare Workers and Pages* GitHub app ac
 - Lyrics: LRCLIB (free, unlicensed). Switch to Musixmatch (licensed) before opening the app to the
   public: replace `findLyrics()` in `worker/lyrics.ts`.
 
+### Sign in with Apple / Google / Facebook (optional)
+Each button works once its secrets are set (`npx wrangler secret put NAME`, or Settings → Variables and Secrets).
+Every provider needs the redirect URL `https://<your app>/api/auth/oauth/<google|facebook|apple>/callback`.
+- **Google** (free): Google Cloud console → APIs & Services → Credentials → OAuth client ID (Web application).
+  Secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+- **Facebook** (free): developers.facebook.com → create an app with Facebook Login.
+  Secrets `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`.
+- **Apple** (needs the Apple Developer Program): a Services ID with Sign in with Apple, plus a key (.p8).
+  Secrets `APPLE_CLIENT_ID` (the Services ID), `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (the .p8 file's text).
+Migration `0003_oauth.sql` adds the table that links those accounts to SongAlong users.
+
 ### Password-reset email (pick one)
 1. **Cloudflare Email Service**. Needs Workers Paid and a domain on Cloudflare: onboard the domain under Email Service →
    Email Sending, uncomment `send_email` in `wrangler.jsonc`, and set `MAIL_FROM` to an address on that domain.

@@ -49,28 +49,8 @@ export function Artwork({
 export function Logo({ compact }: { compact?: boolean }) {
   return (
     <span className="logo" aria-label="SongAlong">
-      <svg viewBox="0 0 40 52" width={compact ? 26 : 36} height={compact ? 34 : 47} aria-hidden="true">
-        <defs>
-          <linearGradient id="logo-gold" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#f6dd8a" />
-            <stop offset="0.5" stopColor="#c9a227" />
-            <stop offset="1" stopColor="#8a6512" />
-          </linearGradient>
-          <linearGradient id="logo-green" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#2a8a55" />
-            <stop offset="1" stopColor="#0b3d22" />
-          </linearGradient>
-        </defs>
-        <path d="M22 4v32" stroke="url(#logo-gold)" strokeWidth="4" strokeLinecap="round" />
-        <path d="M22 4c4 6 14 7 13 17-2-5-7-7-13-8" fill="url(#logo-gold)" />
-        <ellipse cx="13" cy="38" rx="11" ry="8" transform="rotate(-22 13 38)" fill="url(#logo-green)" stroke="url(#logo-gold)" strokeWidth="1.5" />
-      </svg>
-      {!compact && (
-        <span className="logo-text">
-          <span className="logo-song">Song</span>
-          <span className="logo-along">Along</span>
-        </span>
-      )}
+      <img className="logo-emblem" src="/brand/emblem.webp" alt="" width={compact ? 28 : 58} height={compact ? 28 : 58} />
+      {!compact && <img className="logo-text" src="/brand/wordmark.webp" alt="" width={174} height={48} />}
     </span>
   );
 }

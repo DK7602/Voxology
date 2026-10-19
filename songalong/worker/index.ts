@@ -12,6 +12,7 @@ import { playlists } from "./playlists";
 import { loadSession } from "./session";
 import { songs } from "./songs";
 import { helper } from "./helperApi";
+import { oauth } from "./oauth";
 import { youtube } from "./youtube";
 
 export type { Env } from "./env";
@@ -26,9 +27,12 @@ const securityHeaders: MiddlewareHandler<AppEnv> = async (c, next) => {
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+// Apple posts its sign-in result from appleid.apple.com; the state cookie protects that route.
+const CROSS_SITE_OK = /^\/api\/auth\/oauth\/[a-z]+\/callback$/;
+
 /** Blocks cross-site writes: an Origin header, when sent, must be this app's. */
 const sameOriginWrites: MiddlewareHandler<AppEnv> = async (c, next) => {
-  if (!SAFE_METHODS.has(c.req.method)) {
+  if (!SAFE_METHODS.has(c.req.method) && !CROSS_SITE_OK.test(c.req.path)) {
     const origin = c.req.header("Origin");
     const allowed = new Set([new URL(c.req.url).origin, appOrigin(c)]);
     const crossSite = origin === undefined ? c.req.header("Sec-Fetch-Site") === "cross-site" : !allowed.has(origin);
@@ -51,6 +55,7 @@ app.use("*", securityHeaders);
 app.use("*", sameOriginWrites);
 app.use("*", loadSession);
 
+app.route("/auth/oauth", oauth);
 app.route("/auth", auth);
 app.route("/songs", songs);
 app.route("/playlists", playlists);

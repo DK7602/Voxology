@@ -16,7 +16,7 @@ export interface SentMail {
   text: string;
 }
 
-const MIGRATIONS = ["0001_init.sql", "0002_youtube.sql"].map((f) =>
+const MIGRATIONS = ["0001_init.sql", "0002_youtube.sql", "0003_oauth.sql"].map((f) =>
   readFileSync(new URL(`../../migrations/${f}`, import.meta.url), "utf8"),
 );
 

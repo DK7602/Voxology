@@ -38,6 +38,7 @@
   --chip-bg: #f7efd8;
   --chip-ink: #8a6512;
   --chord-red: #b3121b;
+  --now: #d0142c;
   --danger: #a3241d;
   --focus: 0 0 0 3px rgba(23, 106, 63, 0.35);
   --nav-bg: linear-gradient(180deg, rgba(253, 249, 238, 0.97), rgba(245, 236, 214, 0.97));
@@ -79,6 +80,7 @@
   --chip-bg: transparent;
   --chip-ink: #e2bd55;
   --chord-red: #b3121b;
+  --now: #ff4b55;
   --danger: #e0675e;
   --focus: 0 0 0 3px rgba(241, 210, 122, 0.4);
   --nav-bg: linear-gradient(180deg, rgba(10, 26, 19, 0.96), rgba(6, 18, 13, 0.96));
@@ -477,15 +479,19 @@ textarea {
   gap: 16px;
 }
 
+/* pages are as wide as the top bar and fill the window's height */
 .page {
   flex: 1;
   width: 100%;
-  max-width: 1600px;
-  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+.page > .page-panel {
+  flex: 1 0 auto;
 }
 
 .page-panel {
-  padding: 24px;
+  padding: 28px 30px;
 }
 .page-head {
   display: flex;

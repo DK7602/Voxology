@@ -198,9 +198,21 @@
   position: relative;
   display: flex;
   overflow-x: auto;
-  scroll-behavior: smooth;
   scrollbar-width: none;
   border-radius: 12px;
+}
+.strip-pad {
+  flex: none;
+}
+.strip-playhead {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  margin-left: -1px;
+  background: color-mix(in srgb, var(--now) 70%, transparent);
+  z-index: 3;
+  pointer-events: none;
 }
 .strip::-webkit-scrollbar {
   display: none;
@@ -264,9 +276,9 @@
   position: absolute;
   left: 0;
   bottom: 0;
-  height: 4px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--green-2), var(--green-hi));
+  height: 6px;
+  border-radius: 3px;
+  background: var(--now);
   width: 0;
   z-index: 2;
 }
@@ -342,67 +354,108 @@
   background: var(--cat);
 }
 
-/* ---------- lyrics lane ---------- */
+/* ---------- lyrics: one line, scrolling past the now line ---------- */
 .lane {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr) minmax(0, 1.2fr) minmax(0, 0.8fr);
-  align-items: stretch;
-  min-height: 118px;
-  padding: 10px;
+  padding: 0;
   overflow: hidden;
 }
-.lane-slot {
+.ribbon {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ribbon::-webkit-scrollbar {
+  display: none;
+}
+.ribbon-track {
+  display: flex;
+  align-items: flex-end;
+  width: max-content;
+  /* room to scroll the first and last words to the now line */
+  padding: 26px 78% 16px 22%;
+}
+.rb-row {
   position: relative;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  padding: 10px 12px;
-  border-radius: 12px;
-  text-align: center;
-  min-width: 0;
+  flex: none;
+  margin-right: 46px;
+  cursor: pointer;
+  transition: opacity 0.25s;
 }
-.lane-slot.past,
-.lane-slot.far {
-  opacity: 0.45;
+.rb-row.past {
+  opacity: 0.35;
 }
-.lane-slot.current {
-  background: var(--green-tint);
-  border: 1px solid color-mix(in srgb, var(--green-2) 35%, transparent);
+.rb-row:not(.past):not(.current) {
+  opacity: 0.7;
 }
-.lane-slot .section-name {
+.rb-section {
   position: absolute;
-  top: 2px;
-  left: 12px;
+  top: -22px;
+  left: 0;
   font-size: 12px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-faint);
+  white-space: nowrap;
 }
-.playhead {
+.ribbon .cl-line {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  max-width: none;
+}
+.ribbon .cl-chord {
+  font-size: 25px;
+}
+.ribbon .cl-chord.now {
+  color: inherit;
+}
+.ribbon .cl-chord .now,
+.rb-chord.now {
+  color: var(--now);
+}
+.ribbon .cl-words {
+  font-size: 30px;
+  white-space: pre;
+  color: var(--ink);
+}
+.rb-chords {
+  display: flex;
+  align-items: flex-end;
+}
+.rb-chord,
+.rb-rest {
+  flex: none;
+  display: block;
+  font-size: 25px;
+  line-height: 1.2;
+  padding-bottom: 46px;
+  background: linear-gradient(90deg, var(--ink-faint) 35%, transparent 0) 0 calc(100% - 18px) / 10px 2px repeat-x;
+}
+.rb-rest {
+  color: var(--ink-faint);
+}
+.rb-chord.carried {
+  opacity: 0.45;
+}
+.lane-playhead {
   position: absolute;
-  top: 8px;
-  bottom: 8px;
+  top: 26px;
+  bottom: 6px;
   width: 3px;
-  left: 0;
+  margin-left: -1px;
   border-radius: 2px;
-  background: var(--green);
+  background: var(--now);
   z-index: 2;
+  pointer-events: none;
 }
-.playhead::before {
+.lane-playhead::before {
   content: "";
   position: absolute;
-  top: -6px;
+  top: -4px;
   left: -4px;
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: var(--green);
-  border: 2px solid var(--panel-solid);
-}
-:root[data-theme="dark"] .playhead,
-:root[data-theme="dark"] .playhead::before {
-  background: #eaf7ee;
+  background: var(--now);
 }
 
 /* chords over words (lane, summary and print) */
@@ -431,9 +484,6 @@
   font-size: 20px;
   line-height: 1.3;
   white-space: pre-wrap;
-}
-.lane-slot.current .cl-words {
-  color: var(--ink);
 }
 .lane-empty {
   font-style: italic;
@@ -909,13 +959,13 @@
   .bar {
     min-width: 110px;
   }
-  .lane {
-    grid-template-columns: minmax(0, 1fr);
-    min-height: 0;
+  .ribbon .cl-words {
+    font-size: 23px;
   }
-  .lane-slot.past,
-  .lane-slot.far {
-    display: none;
+  .ribbon .cl-chord,
+  .rb-chord,
+  .rb-rest {
+    font-size: 21px;
   }
   .inst-row {
     flex-wrap: nowrap;

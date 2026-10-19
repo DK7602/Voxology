@@ -3,6 +3,7 @@ import { useAuth } from "./auth";
 import { NavBar } from "./components/NavBar";
 import { SongEditorPage } from "./editor/SongEditor";
 import { ForgotPasswordPage, LoginPage, RegisterPage, ResetPasswordPage } from "./pages/AuthPages";
+import { PrivacyPage, TermsPage } from "./pages/LegalPages";
 import {
   DiscoverPage,
   HomePage,
@@ -18,7 +19,11 @@ import { PrintPage } from "./song/PrintPage";
 import { SongPage } from "./song/SongPage";
 
 function Loading() {
-  return <div className="auth-wrap"><div className="panel" style={{ padding: 24 }}>Loading SongAlong…</div></div>;
+  return (
+    <div className="boot" aria-busy="true">
+      <img src="/brand/emblem.webp" alt="Loading SongAlong" width={110} height={110} />
+    </div>
+  );
 }
 
 /** Signed-in area: redirects to sign-in otherwise. */
@@ -56,6 +61,8 @@ export function App() {
       </Route>
       {/* reachable signed in or out: the link comes from an email */}
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
       <Route element={<RequireUser shell={false} />}>
         <Route path="/song/:id/print" element={<PrintPage />} />
       </Route>

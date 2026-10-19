@@ -3,7 +3,7 @@
 import type { SongDoc } from "../../shared/types";
 import { chordOverLyricRows, exportChordPro } from "../../shared/chordpro";
 import { songToMidi } from "../../shared/midi";
-import { chordsInLine } from "../../shared/timeline";
+import { chordsInLine, gapAfterLine } from "../../shared/timeline";
 import type { ChordView, ViewSettings } from "../player/hooks";
 import { downloadBlob, safeFileName } from "../components/ui";
 
@@ -38,8 +38,11 @@ export function chordSheetText(doc: SongDoc, view: ChordView, s: ViewSettings): 
     const placed = chordsInLine(doc, i)
       .filter((p) => !p.carried || !line.text)
       .map((p) => ({ name: view.shown(p.chord.name), col: line.text ? p.col : 0 }));
+    const gap = gapAfterLine(doc, i);
+    const gapRow = gap ? gap.chords.filter((p) => !p.carried).map((p) => view.shown(p.chord.name)).join("  ") : "";
     if (!line.text) {
       out.push(placed.map((p) => p.name).join("  "));
+      if (gapRow) out.push(gapRow);
       return;
     }
     const { chordRow, lyric } = chordOverLyricRows(line.text, placed);
@@ -47,6 +50,7 @@ export function chordSheetText(doc: SongDoc, view: ChordView, s: ViewSettings): 
     for (const c of chordRow) row = row.padEnd(c.col, " ") + c.name;
     if (row.trim()) out.push(row);
     out.push(lyric.trimEnd());
+    if (gapRow) out.push(gapRow);
   });
   return out.join("\n") + "\n";
 }

@@ -36,7 +36,8 @@ export function SettingsPage() {
     try {
       await api.changePassword(pw.current, pw.next);
       setPw({ current: "", next: "", again: "" });
-      toast("Password changed. Other devices were signed out.");
+      if (!user.hasPassword) setUser({ ...user, hasPassword: true });
+      toast(user.hasPassword ? "Password changed. Other devices were signed out." : "Password set. You can now also log in with your email.");
     } catch (err) {
       toast(errorText(err), true);
     }
@@ -45,7 +46,7 @@ export function SettingsPage() {
     e.preventDefault();
     if (!confirm("Delete your account, songs, playlists and uploads for good?")) return;
     try {
-      await api.deleteAccount(delPw);
+      await api.deleteAccount(delPw, delPw);
       await logout().catch(() => {});
       navigate("/login");
     } catch (err) {
@@ -132,11 +133,18 @@ export function SettingsPage() {
           <button className="btn">Save name</button>
         </form>
         <p className="muted">Signed in as {user.email}</p>
+        {!user.hasPassword && (
+          <p className="muted" style={{ marginTop: 12 }}>
+            You log in with Apple, Google or Facebook. Set a password to also log in with your email.
+          </p>
+        )}
         <form onSubmit={changePassword} className="form-grid" style={{ marginTop: 12 }}>
-          <label className="field">
-            <span>Current password</span>
-            <input className="input" type="password" autoComplete="current-password" required value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
-          </label>
+          {user.hasPassword && (
+            <label className="field">
+              <span>Current password</span>
+              <input className="input" type="password" autoComplete="current-password" required value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
+            </label>
+          )}
           <label className="field">
             <span>New password</span>
             <input className="input" type="password" autoComplete="new-password" required minLength={PASSWORD_MIN} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
@@ -146,7 +154,7 @@ export function SettingsPage() {
             <input className="input" type="password" autoComplete="new-password" required value={pw.again} onChange={(e) => setPw({ ...pw, again: e.target.value })} />
           </label>
           <div style={{ display: "flex", alignItems: "end" }}>
-            <button className="btn btn-primary">Change password</button>
+            <button className="btn btn-primary">{user.hasPassword ? "Change password" : "Set password"}</button>
           </div>
         </form>
         <div style={{ marginTop: 16 }}>
@@ -158,8 +166,15 @@ export function SettingsPage() {
         <h2>Delete account</h2>
         <form onSubmit={deleteAccount} style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
           <label className="field" style={{ flex: 1, minWidth: 220 }}>
-            <span>Your password, to confirm</span>
-            <input className="input" type="password" autoComplete="current-password" required value={delPw} onChange={(e) => setDelPw(e.target.value)} />
+            <span>{user.hasPassword ? "Your password, to confirm" : "Type DELETE to confirm"}</span>
+            <input
+              className="input"
+              type={user.hasPassword ? "password" : "text"}
+              autoComplete={user.hasPassword ? "current-password" : "off"}
+              required
+              value={delPw}
+              onChange={(e) => setDelPw(e.target.value)}
+            />
           </label>
           <button className="btn btn-danger">Delete my account</button>
         </form>

@@ -8,6 +8,8 @@ export interface LinePlacement {
   /** the chord sounding right now */
   now?: boolean;
   key: string | number;
+  /** index in doc.chords, exposed as data-ci so the one-line lyrics can find each chord */
+  index?: number;
 }
 
 /** A lyric line with each chord sitting above the word it falls on. */
@@ -18,7 +20,7 @@ export function ChordLine({ text, chords }: { text: string; chords: LinePlacemen
       <span className="cl-line instrumental">
         {sorted.map((c) => (
           <span className="cl-seg" key={c.key}>
-            <span className={"cl-chord" + (c.now ? " now" : "")}>
+            <span className={"cl-chord" + (c.now ? " now" : "")} data-ci={c.index}>
               <ChordName symbol={c.name} />
             </span>
             <span className="cl-words"> </span>
@@ -47,7 +49,7 @@ export function ChordLine({ text, chords }: { text: string; chords: LinePlacemen
         <span className="cl-seg" key={s.key}>
           <span className={"cl-chord" + (s.chord?.some((c) => c.now) ? " now" : "")}>
             {s.chord?.map((c, i) => (
-              <span key={c.key}>
+              <span key={c.key} data-ci={c.index} className={c.now ? "now" : undefined}>
                 {i > 0 && " "}
                 <ChordName symbol={c.name} />
               </span>

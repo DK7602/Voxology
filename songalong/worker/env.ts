@@ -17,6 +17,15 @@ export interface Env {
   AI?: import("./align").SpeechAi;
   /** YouTube Data API key for search (optional; without it the prep container searches). */
   YOUTUBE_API_KEY?: string;
+  /** Sign in with Google / Facebook / Apple (each optional; see worker/oauth.ts). */
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  FACEBOOK_APP_ID?: string;
+  FACEBOOK_APP_SECRET?: string;
+  APPLE_CLIENT_ID?: string;
+  APPLE_TEAM_ID?: string;
+  APPLE_KEY_ID?: string;
+  APPLE_PRIVATE_KEY?: string;
 }
 
 export interface UserRow {

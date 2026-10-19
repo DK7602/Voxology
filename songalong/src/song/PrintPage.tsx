@@ -5,7 +5,7 @@ import type { Instrument } from "../../shared/types";
 import { parseChord } from "../../shared/music/chords";
 import { prettyAccidentals } from "../../shared/music/notes";
 import { FRETTED } from "../../shared/music/voicings";
-import { chordsInLine } from "../../shared/timeline";
+import { chordsInLine, gapAfterLine } from "../../shared/timeline";
 import { exportLead } from "../../shared/lead";
 import { api } from "../api";
 import { ChordName, CategoryTag } from "../components/ChordName";
@@ -182,9 +182,20 @@ function Sheet({
               const placed = chordsInLine(doc, i)
                 .filter((p) => !p.carried || !line.text)
                 .map((p) => ({ name: view.shown(p.chord.name), col: p.col, key: p.index }));
+              const gap = gapAfterLine(doc, i);
               return (
-                <div className="sheet-line" key={i}>
-                  <ChordLine text={line.text} chords={placed} />
+                <div key={i}>
+                  <div className="sheet-line">
+                    <ChordLine text={line.text} chords={placed} />
+                  </div>
+                  {gap && (
+                    <div className="sheet-line">
+                      <ChordLine
+                        text=""
+                        chords={gap.chords.filter((p) => !p.carried).map((p, k) => ({ name: view.shown(p.chord.name), col: k, key: p.index }))}
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })}

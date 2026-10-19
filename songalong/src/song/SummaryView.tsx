@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { chordsInLine, indexAt } from "../../shared/timeline";
+import { chordsInLine, gapAfterLine, indexAt } from "../../shared/timeline";
 import { CATEGORY_LABEL } from "../../shared/music/chords";
 import type { PlayerEngine } from "../player/engine";
 import { useBeatSelect, type ChordView } from "../player/hooks";
@@ -42,7 +42,9 @@ export function SummaryView({ engine, view }: { engine: PlayerEngine; view: Chor
           </span>
         </>
       )}
-      {doc.lines.map((line, i) => (
+      {doc.lines.map((line, i) => {
+        const gap = gapAfterLine(doc, i);
+        return (
         <div key={i}>
           {line.section && <div className="sheet-section">{line.section}</div>}
           <span
@@ -59,8 +61,19 @@ export function SummaryView({ engine, view }: { engine: PlayerEngine; view: Chor
                 .map((p) => ({ name: view.shown(p.chord.name), col: p.col, key: p.index, now: p.index === chordIdx }))}
             />
           </span>
+          {gap && (
+            <span className="sheet-line" onClick={() => engine.seekBeat(gap.start)}>
+              <ChordLine
+                text=""
+                chords={gap.chords
+                  .filter((p) => !p.carried)
+                  .map((p, k) => ({ name: view.shown(p.chord.name), col: k, key: p.index, now: p.index === chordIdx }))}
+              />
+            </span>
+          )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

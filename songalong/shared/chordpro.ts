@@ -8,7 +8,7 @@
 
 import { isChordSymbol } from "./music/chords";
 import { emptySong, type ChordEvent, type LyricLine, type SongDoc } from "./types";
-import { chordsInLine } from "./timeline";
+import { chordsInLine, gapAfterLine } from "./timeline";
 
 interface ParsedLine {
   section?: string;
@@ -202,6 +202,11 @@ export function exportChordPro(doc: SongDoc, chordName: (s: string) => string = 
       text = text.slice(0, p.col) + `[${chordName(p.chord.name)}]` + text.slice(p.col);
     }
     out.push(text);
+    const gap = gapAfterLine(doc, i);
+    if (gap) {
+      const chords = gap.chords.filter((p) => !p.carried);
+      if (chords.length) out.push(chords.map((p) => `[${chordName(p.chord.name)}]`).join(" "));
+    }
   });
   return out.join("\n") + "\n";
 }

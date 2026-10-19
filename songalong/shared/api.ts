@@ -10,6 +10,8 @@ export interface User {
   name: string;
   settings: UserSettings;
   createdAt: number;
+  /** false for accounts made with Apple / Google / Facebook that haven't set a password */
+  hasPassword: boolean;
 }
 
 export interface SongSummary {

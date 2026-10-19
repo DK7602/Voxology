@@ -38,7 +38,19 @@ function parseSettings(json: string): UserSettings {
 }
 
 export function toUser(row: UserRow): User {
-  return { id: row.id, email: row.email, name: row.name, settings: parseSettings(row.settings), createdAt: row.created_at };
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    settings: parseSettings(row.settings),
+    createdAt: row.created_at,
+    hasPassword: hasPassword(row),
+  };
+}
+
+/** Accounts made with Apple / Google / Facebook have no password until they set one. */
+function hasPassword(row: UserRow): boolean {
+  return row.password_hash.startsWith("pbkdf2-");
 }
 
 function normaliseEmail(v: unknown): string {
@@ -237,7 +249,7 @@ auth.post("/password", async (c) => {
   const user = currentUser(c);
   const body = await readJsonObject(c);
   const newPassword = checkNewPassword(body.newPassword, "New password");
-  await confirmPassword(c, user, body.currentPassword, MESSAGES.wrongPassword);
+  if (hasPassword(user)) await confirmPassword(c, user, body.currentPassword, MESSAGES.wrongPassword);
   const db = c.env.DB;
   const now = Date.now();
   await db.batch([
@@ -251,7 +263,8 @@ auth.post("/password", async (c) => {
 auth.post("/delete", async (c) => {
   const user = currentUser(c);
   const body = await readJsonObject(c);
-  await confirmPassword(c, user, body.password, "Password is incorrect");
+  if (hasPassword(user)) await confirmPassword(c, user, body.password, "Password is incorrect");
+  else if (body.confirm !== "DELETE") throw new HttpError(400, 'Type DELETE to confirm');
   await deleteAllAudio(c.env, user.id);
   const db = c.env.DB;
   // Other users' favorites / playlists / progress may point at this user's songs (no foreign key,

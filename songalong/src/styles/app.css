@@ -18,27 +18,20 @@
 }
 .logo {
   display: inline-flex;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
+}
+.logo-emblem {
+  width: 58px;
+  height: 58px;
+  margin: -6px -4px -6px -8px;
 }
 .logo-text {
-  font-family: "Playfair Display", Georgia, serif;
-  font-weight: 700;
-  font-size: 40px;
-  line-height: 1;
-  letter-spacing: -0.01em;
+  width: auto;
+  height: 48px;
 }
-.logo-song {
-  color: var(--green);
-}
-:root[data-theme="dark"] .logo-song {
-  color: #fbf3da;
-}
-.logo-along {
-  background: linear-gradient(180deg, #f3d77d, #c39a2e 55%, #8d6a12);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+:root[data-theme="light"] .logo-text {
+  filter: drop-shadow(0 1px 1px rgba(70, 40, 0, 0.45));
 }
 .nav-search {
   display: flex;
@@ -134,8 +127,12 @@
     top: 6px;
     border-radius: 16px;
   }
+  .logo-emblem {
+    width: 46px;
+    height: 46px;
+  }
   .logo-text {
-    font-size: 28px;
+    height: 34px;
   }
   .nav-links,
   .nav-gear {
@@ -326,15 +323,16 @@
 .hero {
   display: grid;
   grid-template-columns: 1.3fr 1fr;
-  gap: 24px;
+  gap: 32px;
   align-items: center;
+  padding: 14px 0 26px;
 }
 .hero h1 {
-  font-size: 40px;
+  font-size: 50px;
   line-height: 1.1;
 }
 .hero p {
-  font-size: 19px;
+  font-size: 20px;
   color: var(--ink-soft);
   margin: 10px 0 18px;
 }
@@ -348,7 +346,7 @@
   grid-template-columns: 44px 1fr;
   gap: 4px 12px;
   align-items: center;
-  padding: 14px;
+  padding: 20px 18px;
   border-radius: 14px;
   background: var(--tile);
   border: 1px solid var(--tile-border);
@@ -380,37 +378,302 @@
   }
 }
 
-/* ---------- auth pages ---------- */
-.auth-wrap {
-  min-height: 100%;
+.boot {
+  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 24px 16px;
+}
+.boot img {
+  animation: boot-pulse 1.4s ease-in-out infinite alternate;
+}
+@keyframes boot-pulse {
+  from {
+    opacity: 0.55;
+    transform: scale(0.96);
+  }
+}
+
+/* ---------- sign-in screens: always black and gold ---------- */
+.auth-scene {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 520px);
+  align-items: center;
+  gap: 40px;
+  padding: 40px 6vw;
+  background: #000 url("/bg/night.webp") center / cover no-repeat;
+  color: #f4ead2;
+}
+.auth-brand {
+  display: grid;
+  justify-items: center;
+}
+.auth-logo {
+  width: min(620px, 100%);
+  height: auto;
+  /* the logo art is on black: screen blending lets the background show through */
+  mix-blend-mode: screen;
+}
+.auth-tagline {
+  margin: -9% 0 0;
+  font-size: 26px;
+  color: #f6e7c1;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-shadow: 0 0 18px rgba(255, 190, 80, 0.35);
 }
 .auth-card {
-  width: min(460px, 100%);
-  padding: 34px 32px 28px;
+  position: relative;
   display: grid;
-  gap: 18px;
-}
-.auth-card .logo {
-  justify-self: center;
+  gap: 16px;
+  padding: 44px 40px 30px;
+  border-radius: 30px;
+  background: linear-gradient(165deg, rgba(28, 22, 12, 0.94), rgba(6, 5, 3, 0.96) 45%, rgba(14, 10, 4, 0.95));
+  border: 1.5px solid rgba(240, 196, 92, 0.85);
+  box-shadow:
+    0 0 0 1px rgba(255, 214, 120, 0.15) inset,
+    0 0 26px rgba(255, 186, 60, 0.45),
+    0 0 80px rgba(255, 170, 40, 0.18),
+    0 30px 60px rgba(0, 0, 0, 0.6);
 }
 .auth-card h1 {
-  font-size: 26px;
+  margin: 0;
   text-align: center;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 46px;
+  font-weight: 700;
+  line-height: 1.15;
+  background: linear-gradient(180deg, #fff1c4, #e9bf5c 45%, #b9862a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
-.auth-card p.lead {
-  margin: -8px 0 0;
+.auth-lead {
+  margin: -6px 0 6px;
   text-align: center;
-  color: var(--ink-soft);
+  color: #e9e1cf;
+  font-size: 18px;
 }
-.auth-links {
+.auth-form {
+  display: grid;
+  gap: 16px;
+}
+.auth-field {
   display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  align-items: center;
+  height: 60px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1.3px solid rgba(232, 190, 90, 0.75);
+  box-shadow: 0 0 12px rgba(255, 190, 70, 0.18), inset 0 0 10px rgba(255, 190, 70, 0.06);
+}
+.auth-field:focus-within {
+  border-color: #ffd877;
+  box-shadow: 0 0 0 3px rgba(255, 205, 100, 0.25), 0 0 18px rgba(255, 190, 70, 0.35);
+}
+.auth-field-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  color: #f0c766;
+}
+.auth-field input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #f8f1df;
+  font: inherit;
+  font-size: 18px;
+}
+.auth-field input::placeholder {
+  color: #cfc6b4;
+}
+.auth-field input:-webkit-autofill {
+  -webkit-text-fill-color: #f8f1df;
+  caret-color: #f8f1df;
+  transition: background-color 9999s;
+}
+.auth-eye {
+  flex: none;
+  width: 56px;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  color: #f0d58a;
+  cursor: pointer;
+}
+.auth-forgot {
+  justify-self: end;
+  margin-top: -6px;
+  font-size: 15px;
+}
+.auth-gold {
+  position: relative;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 16px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1205;
+  background: linear-gradient(180deg, #ffe9a3 0%, #f3c95c 40%, #d49b2c 100%);
+  box-shadow: 0 0 22px rgba(255, 190, 60, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -2px 6px rgba(120, 70, 0, 0.35);
+}
+.auth-gold svg {
+  position: absolute;
+  right: 22px;
+}
+.auth-gold:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+.auth-or {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #bfb39a;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+.auth-or::before,
+.auth-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(232, 190, 90, 0.6), transparent);
+}
+.auth-outline {
+  width: 100%;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  border: 1.3px solid rgba(240, 196, 92, 0.85);
+  background: rgba(0, 0, 0, 0.35);
+  color: #fbf3de;
+  font: inherit;
+  font-size: 19px;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 0 14px rgba(255, 190, 70, 0.2);
+}
+.auth-social {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.auth-social-btn {
+  display: grid;
+  justify-items: center;
   gap: 8px;
-  font-size: 16px;
+  padding: 16px 6px 12px;
+  border-radius: 16px;
+  border: 1.2px solid rgba(232, 190, 90, 0.7);
+  background: linear-gradient(180deg, rgba(30, 24, 14, 0.85), rgba(4, 3, 2, 0.9));
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(255, 190, 70, 0.15);
+}
+.auth-social-btn span {
+  display: grid;
+  font-size: 13px;
+  line-height: 1.25;
+  color: #e8e0cf;
+}
+.auth-social-btn b {
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+}
+.auth-notice {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(150, 30, 20, 0.35);
+  border: 1px solid rgba(255, 120, 100, 0.5);
+  color: #ffe3dc;
+  font-size: 15px;
+}
+.auth-notice.ok {
+  background: rgba(30, 90, 50, 0.35);
+  border-color: rgba(120, 220, 150, 0.45);
+  color: #e3ffe9;
+}
+.auth-legal {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 14px;
+  color: #d8cfbd;
+}
+.auth-card a:not(.auth-outline) {
+  color: #f0c766;
+}
+.legal-scene {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+}
+.legal-card {
+  width: min(820px, 100%);
+}
+.legal-logo {
+  display: block;
+  width: auto;
+  height: 48px;
+  margin: 0 auto;
+}
+.legal-card h1 {
+  font-size: 40px;
+}
+.legal-body {
+  font-size: 17px;
+  line-height: 1.6;
+  color: #efe6d2;
+}
+.legal-body h2 {
+  margin: 18px 0 6px;
+  font-size: 22px;
+  color: #f0c766;
+}
+@media (max-width: 900px) {
+  .auth-scene {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 0;
+    padding: 18px 14px 30px;
+  }
+  .auth-logo {
+    width: min(330px, 80vw);
+  }
+  .auth-tagline {
+    margin: -11% 0 14px;
+    font-size: 18px;
+  }
+  .auth-card {
+    padding: 30px 20px 22px;
+    border-radius: 24px;
+  }
+  .auth-card h1 {
+    font-size: 36px;
+  }
+}
+@media (max-width: 400px) {
+  .auth-social-btn b {
+    font-size: 15px;
+  }
 }
 .check {
   display: flex;
