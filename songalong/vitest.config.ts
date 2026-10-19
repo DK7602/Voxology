@@ -5,7 +5,10 @@ import { defineConfig } from "vitest/config";
 // Worker routes are written against web-standard APIs that Node also has.
 export default defineConfig({
   resolve: {
-    alias: { "cloudflare:workers": fileURLToPath(new URL("./tests/helpers/cloudflare-workers-stub.ts", import.meta.url)) },
+    alias: {
+      "cloudflare:workers": fileURLToPath(new URL("./tests/helpers/cloudflare-workers-stub.ts", import.meta.url)),
+      "cloudflare:sockets": fileURLToPath(new URL("./tests/helpers/cloudflare-sockets-stub.ts", import.meta.url)),
+    },
   },
   test: {
     include: ["tests/**/*.test.ts"],

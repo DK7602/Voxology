@@ -3,7 +3,11 @@ export interface Env {
   AUDIO: R2Bucket;
   /** Cloudflare Email Service binding (optional). */
   EMAIL?: SendEmail;
-  /** Resend API key (optional secret), used when EMAIL is not bound. */
+  /** Gmail account that sends the mail when EMAIL is not bound (optional secrets): the address,
+   *  and an app password from myaccount.google.com/apppasswords (needs 2-Step Verification). */
+  GMAIL_USER?: string;
+  GMAIL_APP_PASSWORD?: string;
+  /** Resend API key (optional secret), used when neither EMAIL nor Gmail is set up. */
   RESEND_API_KEY?: string;
   APP_NAME: string;
   /** e.g. `SongAlong <no-reply@example.com>` */

@@ -77,9 +77,14 @@ Every provider needs the redirect URL `https://<your app>/api/auth/oauth/<google
 Migration `0003_oauth.sql` adds the table that links those accounts to SongAlong users.
 
 ### Password-reset email (pick one)
-1. **Cloudflare Email Service**. Needs Workers Paid and a domain on Cloudflare: onboard the domain under Email Service →
+1. **Gmail** (free, no domain needed; in use now). Use a Gmail account for the app, turn on 2-Step Verification,
+   and create an app password at myaccount.google.com/apppasswords. Add two secrets (Settings → Variables and
+   Secrets, type **Secret**): `GMAIL_USER` (the address) and `GMAIL_APP_PASSWORD` (the 16 letters; spaces are fine).
+   Mail goes out from that address, named after `MAIL_FROM`'s name ("SongAlong"). Gmail allows about 500 a day.
+2. **Cloudflare Email Service**. Needs Workers Paid and a domain on Cloudflare: onboard the domain under Email Service →
    Email Sending, uncomment `send_email` in `wrangler.jsonc`, and set `MAIL_FROM` to an address on that domain.
-2. **Resend**: `npx wrangler secret put RESEND_API_KEY` and set `MAIL_FROM` to a sender verified in Resend.
+   It takes over from Gmail once bound.
+3. **Resend**: `npx wrangler secret put RESEND_API_KEY` and set `MAIL_FROM` to a sender verified in Resend.
 
 Optional: set `APP_URL` (e.g. `https://songalong.example.com`) so reset links always use your domain.
 

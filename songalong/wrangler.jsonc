@@ -33,13 +33,14 @@
   // YouTube's official search; without it the prep container searches.
   "vars": {
     "APP_NAME": "SongAlong",
-    // Sender for password-reset mail. Must be on a domain onboarded to Cloudflare Email Service
-    // (or verified in Resend if RESEND_API_KEY is set instead).
+    // Sender for password-reset mail. With Gmail only the name is used (mail comes from
+    // GMAIL_USER); with Cloudflare Email Service or Resend the address must be on your domain.
     "MAIL_FROM": "SongAlong <no-reply@example.com>"
   }
   // Password-reset email, pick one:
-  //  1. Cloudflare Email Service (Workers Paid + a domain on Cloudflare): uncomment below.
-  //  2. Resend: `wrangler secret put RESEND_API_KEY`.
-  //  With neither, the reset link is written to the Worker log (fine for testing only).
+  //  1. Gmail: secrets GMAIL_USER and GMAIL_APP_PASSWORD (an app password; see README).
+  //  2. Cloudflare Email Service (Workers Paid + a domain on Cloudflare): uncomment below.
+  //  3. Resend: `wrangler secret put RESEND_API_KEY`.
+  //  With none, the reset link is written to the Worker log (fine for testing only).
   // "send_email": [{ "name": "EMAIL" }]
 }

@@ -1,8 +1,10 @@
-// Outgoing mail: Cloudflare Email Service binding, else Resend, else the reset link goes to the
-// log (development). Sending never throws; failures are logged.
+// Outgoing mail: Cloudflare Email Service binding, else a Gmail account (SMTP with an app
+// password), else Resend, else the reset link goes to the log (development). Sending never
+// throws; failures are logged.
 
 import type { Env } from "./env";
 import { errorText } from "./http";
+import { sendSmtp } from "./smtp";
 
 export interface MailMessage {
   to: string;
@@ -18,6 +20,10 @@ export function parseMailbox(from: string): { email: string; name?: string } {
   return { email: from.trim() };
 }
 
+export function canSendMail(env: Env): boolean {
+  return Boolean(env.EMAIL || (env.GMAIL_USER && env.GMAIL_APP_PASSWORD) || env.RESEND_API_KEY);
+}
+
 /** Returns true when a transport accepted the message. */
 export async function sendMail(env: Env, msg: MailMessage): Promise<boolean> {
   try {
@@ -25,6 +31,13 @@ export async function sendMail(env: Env, msg: MailMessage): Promise<boolean> {
       const mailbox = parseMailbox(env.MAIL_FROM);
       const from = mailbox.name ? { email: mailbox.email, name: mailbox.name } : mailbox.email;
       await env.EMAIL.send({ from, to: msg.to, subject: msg.subject, html: msg.html, text: msg.text });
+      return true;
+    }
+    if (env.GMAIL_USER && env.GMAIL_APP_PASSWORD) {
+      // Google shows app passwords in groups of four ("abcd efgh ijkl mnop")
+      const account = { host: "smtp.gmail.com", user: env.GMAIL_USER.trim(), pass: env.GMAIL_APP_PASSWORD.replace(/\s+/g, "") };
+      const fromName = parseMailbox(env.MAIL_FROM).name || env.APP_NAME;
+      await sendSmtp(account, { fromName, ...msg });
       return true;
     }
     if (env.RESEND_API_KEY) {
@@ -91,7 +104,7 @@ If you didn't ask for this, you can ignore this email; your password won't chang
 }
 
 export async function sendPasswordReset(env: Env, to: string, name: string, link: string): Promise<void> {
-  if (!env.EMAIL && !env.RESEND_API_KEY) {
+  if (!canSendMail(env)) {
     // Development: no mail transport configured.
     console.log(`[${env.APP_NAME}] password reset link for ${to}: ${link}`);
     return;
