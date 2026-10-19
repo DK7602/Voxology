@@ -38,6 +38,16 @@ describe("chord detection on synthesized songs", () => {
     expect(["Am", "C"]).toContain(r.key);
     expect(accuracy).toBeGreaterThan(0.8);
   });
+  it("finds the beat under an accented 3+3+2 strum, not the accents", () => {
+    // 16th-note strumming accented on 1, the "a" of 1 and the "&" of 2: the accents repeat every
+    // three 16ths, which once read as 116 or 130 BPM for an 87 BPM song
+    const strum = [1, 0.2, 0.2, 0.9, 0.2, 0.2, 0.9, 0.35];
+    for (const bpm of [75, 87, 95]) {
+      const { r, accuracy } = chordAccuracy({ bpm, chords: ["F#m7", "A", "E", "B7"], repeats: 5, instrument: "guitar", strum, kick: "none", bass: "none" });
+      console.log("strum:", bpm, "->", r.bpm, accuracy.toFixed(2));
+      expect(Math.abs(r.bpm - bpm)).toBeLessThan(2);
+    }
+  });
   it("spells flats in a flat key", () => {
     const { r } = chordAccuracy({ bpm: 100, chords: ["Eb", "Bb", "Cm", "Ab"], repeats: 3, ending: ["Eb"], instrument: "guitar" });
     console.log("flat:", r.bpm, r.key, r.chords.slice(0, 8).map((c) => c.name).join(" "));

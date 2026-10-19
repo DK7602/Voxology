@@ -41,13 +41,14 @@ function peakNear(r: Float64Array, lag: number): number {
 
 /**
  * Global tempo from the onset autocorrelation. Each candidate period is scored by its own
- * autocorrelation plus half that at twice the period (bars and half-bars repeat too: this is
- * Ellis's "TPS2", which favours the beat level over the tatum), weighted by a log-Gaussian
- * prior around 115 BPM. Searching a fine BPM grid with interpolated lags gives a fractional
- * period directly.
+ * autocorrelation plus half that at twice and four times the period (half-bars and bars repeat
+ * too: Ellis's "TPS2" extended to the bar), weighted by a log-Gaussian prior around 115 BPM.
+ * The bar term matters for accented strums: a 3+3+2 pattern repeats strongly every three 16ths,
+ * a false pulse whose "bars" don't line up, while the true beat's do. Searching a fine BPM grid
+ * with interpolated lags gives a fractional period directly.
  */
 export function estimateTempo(env: Float64Array, fps: number): TempoEstimate {
-  const maxLag = Math.ceil((fps * 60 * 2) / MIN_BPM) + 2;
+  const maxLag = Math.ceil((fps * 60 * 4) / MIN_BPM) + 2;
   const r = autocorrelation(env, maxLag);
   const priorLag = (fps * 60) / PRIOR_BPM;
   let bestScore = -Infinity;
@@ -57,7 +58,7 @@ export function estimateTempo(env: Float64Array, fps: number): TempoEstimate {
     const lag = (fps * 60) / bpm;
     const oct = Math.log2(lag / priorLag) / PRIOR_OCTAVES;
     const w = Math.exp(-0.5 * oct * oct);
-    const score = w * (peakNear(r, lag) + 0.5 * peakNear(r, 2 * lag));
+    const score = w * (peakNear(r, lag) + 0.5 * peakNear(r, 2 * lag) + 0.5 * peakNear(r, 4 * lag));
     scores.push(score);
     if (score > bestScore) {
       bestScore = score;
