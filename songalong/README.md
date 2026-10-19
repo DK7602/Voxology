@@ -49,7 +49,9 @@ npm run db:migrate:remote     # apply migrations to the real D1 database
 npm run deploy                # build + wrangler deploy
 ```
 Or connect the repo in the Cloudflare dashboard (Workers → Create → Import a repository). Set **root directory**
-`songalong`, **build command** `npm run build`, and **deploy command** `npx wrangler deploy`.
+`songalong`, **build command** `npm run build`, and **deploy command** `npx wrangler deploy`. The Worker must be
+named `songalong`, and **Settings → Build → Branch control** must point at the branch that holds this folder (the
+repo's default branch doesn't).
 
 ### Search any song
 - Needs **Workers Paid** ($5/month) for the song-prep container and Workers AI (speech recognition).
