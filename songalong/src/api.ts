@@ -68,7 +68,6 @@ export const api = {
     request<{ ok: true }>("POST", "/auth/password", { currentPassword, newPassword }),
   updateMe: (b: { name?: string; settings?: UserSettings }) => request<{ user: User }>("PATCH", "/auth/me", b),
   deleteAccount: (password: string, confirm?: string) => request<{ ok: true }>("POST", "/auth/delete", { password, confirm }),
-  oauthProviders: () => request<{ providers: Record<string, boolean> }>("GET", "/auth/oauth/providers"),
 
   // songs
   songs: (scope: SongScope, q?: string) =>

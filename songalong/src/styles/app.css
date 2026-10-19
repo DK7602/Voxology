@@ -571,35 +571,6 @@
   cursor: pointer;
   box-shadow: 0 0 14px rgba(255, 190, 70, 0.2);
 }
-.auth-social {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-.auth-social-btn {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  padding: 16px 6px 12px;
-  border-radius: 16px;
-  border: 1.2px solid rgba(232, 190, 90, 0.7);
-  background: linear-gradient(180deg, rgba(30, 24, 14, 0.85), rgba(4, 3, 2, 0.9));
-  color: #fff;
-  font: inherit;
-  cursor: pointer;
-  box-shadow: 0 0 12px rgba(255, 190, 70, 0.15);
-}
-.auth-social-btn span {
-  display: grid;
-  font-size: 13px;
-  line-height: 1.25;
-  color: #e8e0cf;
-}
-.auth-social-btn b {
-  font-size: 17px;
-  font-weight: 600;
-  color: #fff;
-}
 .auth-notice {
   padding: 12px 14px;
   border-radius: 12px;
@@ -613,39 +584,7 @@
   border-color: rgba(120, 220, 150, 0.45);
   color: #e3ffe9;
 }
-.auth-legal {
-  margin: 4px 0 0;
-  text-align: center;
-  font-size: 14px;
-  color: #d8cfbd;
-}
 .auth-card a:not(.auth-outline) {
-  color: #f0c766;
-}
-.legal-scene {
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
-}
-.legal-card {
-  width: min(820px, 100%);
-}
-.legal-logo {
-  display: block;
-  width: auto;
-  height: 48px;
-  margin: 0 auto;
-}
-.legal-card h1 {
-  font-size: 40px;
-}
-.legal-body {
-  font-size: 17px;
-  line-height: 1.6;
-  color: #efe6d2;
-}
-.legal-body h2 {
-  margin: 18px 0 6px;
-  font-size: 22px;
   color: #f0c766;
 }
 @media (max-width: 900px) {
@@ -668,11 +607,6 @@
   }
   .auth-card h1 {
     font-size: 36px;
-  }
-}
-@media (max-width: 400px) {
-  .auth-social-btn b {
-    font-size: 15px;
   }
 }
 .check {

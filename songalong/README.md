@@ -63,7 +63,9 @@ click **Manage** there and give the *Cloudflare Workers and Pages* GitHub app ac
 - Lyrics: LRCLIB (free, unlicensed). Switch to Musixmatch (licensed) before opening the app to the
   public: replace `findLyrics()` in `worker/lyrics.ts`.
 
-### Sign in with Apple / Google / Facebook (optional)
+### Sign in with Apple / Google / Facebook (off for now)
+The buttons were taken off the sign-in screens until launch (the server side, `worker/oauth.ts`, stays and
+is tested; put the buttons back from git history when the keys are ready).
 Each button works once its secrets are set (`npx wrangler secret put NAME`, or Settings → Variables and Secrets).
 Every provider needs the redirect URL `https://<your app>/api/auth/oauth/<google|facebook|apple>/callback`.
 - **Google** (free): Google Cloud console → APIs & Services → Credentials → OAuth client ID (Web application).
