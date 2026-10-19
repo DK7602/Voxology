@@ -1126,3 +1126,9 @@
   min-width: 44px;
   font-size: 19px;
 }
+
+/* diagrams never spill out of their card */
+.diagram-card svg {
+  max-width: 100%;
+  height: auto;
+}

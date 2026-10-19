@@ -187,7 +187,10 @@ function loadYouTubeApi(): Promise<void> {
 
 export class YouTubeMedia implements MediaAdapter {
   readonly kind = "youtube" as const;
+  /** set only once YouTube says the player is ready: before that its methods don't exist yet */
   private player: YTPlayer | null = null;
+  private readonly box: HTMLDivElement;
+  private destroyed = false;
   private smooth = new Smoother();
   private rate = 1;
   private wantPlay = false;
@@ -198,22 +201,34 @@ export class YouTubeMedia implements MediaAdapter {
   onError?: (message: string) => void;
 
   constructor(host: HTMLElement, videoId: string) {
+    // YouTube swaps the mount for its iframe; the box around it lets destroy() remove it for sure
+    this.box = document.createElement("div");
+    this.box.style.cssText = "width:100%;height:100%";
     const mount = document.createElement("div");
-    host.appendChild(mount);
+    this.box.appendChild(mount);
+    host.appendChild(this.box);
     this.ready = loadYouTubeApi().then(
       () =>
         new Promise<void>((resolve) => {
-          this.player = new window.YT!.Player(mount, {
+          if (this.destroyed) return resolve();
+          const p = new window.YT!.Player(mount, {
             videoId,
             width: "100%",
             height: "100%",
-            playerVars: { playsinline: 1, rel: 0, modestbranding: 1, enablejsapi: 1, origin: location.origin },
+            playerVars: { playsinline: 1, rel: 0, modestbranding: 1, enablejsapi: 1, autoplay: 0, origin: location.origin },
             events: {
               onReady: () => {
-                if (this.pendingSeek !== null) this.player!.seekTo(this.pendingSeek, true);
+                if (this.destroyed) {
+                  safely(() => p.destroy());
+                  return resolve();
+                }
+                this.player = p;
+                if (this.pendingSeek !== null) p.seekTo(this.pendingSeek, true);
+                if (this.rate !== 1) p.setPlaybackRate(this.rate);
                 resolve();
               },
               onStateChange: (e: { data: number }) => {
+                if (this.destroyed) return;
                 // 1 playing, 2 paused, 0 ended
                 if (e.data === 0) this.onEnded?.();
                 if (e.data === 1 && !this.wantPlay) this.onExternalPlayState?.(true);
@@ -238,7 +253,8 @@ export class YouTubeMedia implements MediaAdapter {
   async play() {
     this.wantPlay = true;
     await this.ready;
-    this.player!.playVideo();
+    if (this.destroyed || !this.wantPlay) return;
+    this.player?.playVideo();
   }
   pause() {
     this.wantPlay = false;
@@ -267,10 +283,23 @@ export class YouTubeMedia implements MediaAdapter {
     return (this.player?.getAvailablePlaybackRates() ?? [0.25, 0.5, 0.75, 1, 1.25, 1.5]).filter((r) => r >= 0.5 && r <= 1.5);
   }
   destroy() {
-    try {
-      this.player?.destroy();
-    } catch {
-      /* already gone */
+    this.destroyed = true;
+    this.wantPlay = false;
+    const p = this.player;
+    this.player = null;
+    if (p) {
+      safely(() => p.pauseVideo());
+      safely(() => p.destroy());
     }
+    // the iframe goes with the box, so nothing keeps playing in the background
+    this.box.remove();
+  }
+}
+
+function safely(fn: () => void) {
+  try {
+    fn();
+  } catch {
+    /* the player is already gone */
   }
 }

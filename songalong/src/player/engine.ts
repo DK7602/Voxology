@@ -258,8 +258,12 @@ export class PlayerEngine {
   }
 
   destroy() {
-    this.stop();
-    this.media.destroy();
+    try {
+      this.stop();
+    } finally {
+      // always let go of the media, so a video can't keep playing after the page closes
+      this.media.destroy();
+    }
     this.stateListeners.clear();
     this.tickListeners.clear();
   }

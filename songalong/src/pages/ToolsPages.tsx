@@ -134,7 +134,7 @@ export function ChordLibraryPage() {
           ? (() => {
               const v = pianoVoicing(symbol);
               return v ? (
-                <div className="diagram-card piano" style={{ width: "auto" }}>
+                <div className="diagram-card piano" style={{ width: "auto", gridColumn: "span 2" }}>
                   <PianoDiagram voicing={v} size={220} />
                   <button className="btn btn-sm" onClick={() => play(pianoMidi(v))}><IconSpeaker size={18} /> Play</button>
                 </div>
@@ -148,7 +148,7 @@ export function ChordLibraryPage() {
                   className="btn btn-sm"
                   onClick={async () => {
                     const midis = voicingMidi(v, inst);
-                    if (v.order) {
+                    if (v.order || inst === "bass") {
                       const ctx = await unlockAudio();
                       arpeggio(midis, ctx.currentTime + 0.02, 0.3, inst);
                     } else void play(midis);
