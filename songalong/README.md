@@ -52,7 +52,9 @@ Or connect the repo in the Cloudflare dashboard (Workers → Create → Import a
 
 Optional: set `APP_URL` (e.g. `https://songalong.example.com`) so reset links always use your domain.
 
-## Textures
+## Look
 
-`scripts/make-textures.py` generates the liquid-gold and frosted-glass art in `public/textures/`
-(`python3 scripts/make-textures.py`).
+Backgrounds are the smooth glass images in `public/bg/` (gold page; white / cream panels in light
+mode, black in dark mode; green for active controls). Swap them there, or change the `--bg-image`,
+`--panel`, `--tile` and `--green-glass` tokens in `src/styles/theme.css`. The search bar and the
+chord / lyric timeline use plain colours (`--plain*`) on purpose.

@@ -1,20 +1,27 @@
-/* SongAlong look: liquid gold with frosted glass: white & cream (light) or black (dark), green glass accents. */
+/* SongAlong look: smooth gold glass behind everything; white & cream glass panels (light) or black
+   glass (dark); green glass for active controls. The search bar and the chord / lyric timeline
+   stay plain so they don't distract while playing. */
 
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg-image: url("/textures/bg-light.webp");
+  --bg-image: url("/bg/gold.webp");
   --bg-color: #c9a13a;
-  /* white frosted glass panels, cream frosted glass tiles, green frosted glass accents */
-  --panel: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(252, 248, 238, 0.4)), url("/textures/glass-white.webp") 0 0 / 360px;
+  --panel: url("/bg/white.webp") center / cover;
   --panel-solid: #faf7ef;
   --panel-border: rgba(196, 156, 52, 0.55);
   --panel-shadow: 0 18px 40px rgba(78, 52, 6, 0.28), 0 2px 0 rgba(255, 255, 255, 0.7) inset;
   --inset: #f6efdc;
   --inset-border: rgba(190, 150, 60, 0.35);
-  --tile: linear-gradient(180deg, rgba(255, 253, 246, 0.55), rgba(255, 248, 232, 0.15)), url("/textures/glass-cream.webp") 0 0 / 300px;
+  /* small controls show a zoomed-in smooth part of each image, so no highlight crosses their text */
+  --tile: url("/bg/cream.webp") 42% 18% / 320%;
   --tile-border: rgba(170, 135, 55, 0.35);
-  --green-glass: linear-gradient(160deg, rgba(42, 138, 85, 0.55), rgba(10, 64, 36, 0.78) 70%), url("/textures/glass-green.webp") 0 0 / 260px;
+  --green-glass: url("/bg/green.webp") 58% 22% / 300%;
+  /* plain surfaces: search, chord / note strip, lyric lane */
+  --plain: #fbfaf6;
+  --plain-cell: #f5f1e8;
+  --plain-border: rgba(160, 130, 60, 0.28);
+  --plain-active: #13603a;
   --ink: #18261d;
   --ink-soft: #5d5a4b;
   --ink-faint: #a59d86;
@@ -41,18 +48,21 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg-image: url("/textures/bg-dark.webp");
-  --bg-color: #0a2016;
-  /* black frosted glass panels, green frosted glass accents */
-  --panel: linear-gradient(180deg, rgba(22, 26, 24, 0.55), rgba(4, 6, 5, 0.62)), url("/textures/glass-black.webp") 0 0 / 360px;
+  --bg-image: url("/bg/gold.webp");
+  --bg-color: #a8801f;
+  --panel: linear-gradient(rgba(6, 8, 7, 0.4), rgba(6, 8, 7, 0.4)), url("/bg/black.webp") center / cover;
   --panel-solid: #121614;
   --panel-border: rgba(212, 175, 72, 0.6);
   --panel-shadow: 0 18px 44px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 230, 160, 0.12) inset;
   --inset: rgba(6, 16, 12, 0.85);
   --inset-border: rgba(212, 175, 72, 0.35);
-  --tile: linear-gradient(180deg, rgba(30, 34, 32, 0.7), rgba(4, 6, 5, 0.75)), url("/textures/glass-black.webp") 0 0 / 300px;
+  --tile: url("/bg/black.webp") 45% 28% / 320%;
   --tile-border: rgba(212, 175, 72, 0.4);
-  --green-glass: linear-gradient(160deg, rgba(40, 150, 88, 0.45), rgba(6, 52, 28, 0.82) 70%), url("/textures/glass-green.webp") 0 0 / 260px;
+  --green-glass: url("/bg/green.webp") 58% 22% / 300%;
+  --plain: #0c0e0d;
+  --plain-cell: #141716;
+  --plain-border: rgba(212, 175, 72, 0.3);
+  --plain-active: #13603a;
   --ink: #f3ead2;
   --ink-soft: #c8bb98;
   --ink-faint: #7f7660;
@@ -95,9 +105,17 @@ body {
   font-size: 17px;
   line-height: 1.35;
   color: var(--ink);
-  background: var(--bg-color) var(--bg-image) center / cover fixed no-repeat;
+  background: var(--bg-color);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+}
+/* the page backdrop, fixed behind everything (background-attachment: fixed misbehaves on phones) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg-color) var(--bg-image) center / cover no-repeat;
 }
 
 h1,
@@ -143,7 +161,6 @@ textarea {
   border: 1px solid var(--panel-border);
   border-radius: 18px;
   box-shadow: var(--panel-shadow);
-  backdrop-filter: blur(6px);
 }
 
 .inset {
@@ -249,8 +266,7 @@ textarea {
   height: 78px;
   border-radius: 50%;
   border: 3px solid var(--gold);
-  background: radial-gradient(circle at 35% 30%, rgba(60, 170, 100, 0.55), rgba(8, 60, 32, 0.6) 62%, rgba(4, 36, 18, 0.9)),
-    url("/textures/glass-green.webp") 0 0 / 160px;
+  background: radial-gradient(circle at 35% 30%, rgba(80, 190, 120, 0.35), transparent 60%), url("/bg/green.webp") 30% 40% / 400%;
   color: #fff;
   cursor: pointer;
   box-shadow: 0 0 0 4px rgba(233, 199, 102, 0.25), 0 8px 20px rgba(10, 50, 28, 0.45);
