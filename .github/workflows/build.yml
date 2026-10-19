@@ -4,7 +4,10 @@ name: Build & Test
 # 2,000 a month). For a Mac build: Actions -> Build & Test -> Run workflow, tick "Also build macOS".
 on:
   push:
+    # the SongAlong web app has its own workflow (songalong.yml)
+    paths-ignore: ["songalong/**", ".github/workflows/songalong.yml"]
   pull_request:
+    paths-ignore: ["songalong/**", ".github/workflows/songalong.yml"]
   workflow_dispatch:
     inputs:
       mac:

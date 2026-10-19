@@ -1,0 +1,98 @@
+/* Add / edit a song. */
+.ed-section {
+  padding: 18px 0;
+  border-top: 1px solid var(--inset-border);
+}
+.ed-section h2 {
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+.ed-section code {
+  font-size: 14px;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--inset);
+}
+.source-pick {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.source {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 2px 10px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--tile-border);
+  background: var(--tile);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+.source svg {
+  grid-row: span 2;
+  color: var(--accent-text);
+}
+.source span {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.source.on {
+  background: var(--green-glass);
+  color: var(--on-green);
+  border-color: var(--gold);
+}
+.source.on svg,
+.source.on span {
+  color: var(--on-green);
+}
+.dropzone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 14px;
+  border: 2px dashed var(--tile-border);
+  background: var(--inset);
+  cursor: pointer;
+}
+.dropzone input {
+  margin-left: auto;
+  max-width: 260px;
+}
+.progress-row {
+  display: grid;
+  gap: 4px;
+  font-size: 15px;
+}
+.progress-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--inset);
+  overflow: hidden;
+}
+.progress-track > div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--green-2), var(--green-hi));
+  transition: width 0.2s ease;
+}
+.timing-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 420px) 1fr;
+  gap: 16px;
+}
+.tap-btn {
+  min-height: 64px;
+  font-size: 19px;
+  white-space: normal;
+}
+@media (max-width: 760px) {
+  .timing-grid {
+    grid-template-columns: 1fr;
+  }
+  .dropzone {
+    flex-wrap: wrap;
+  }
+}

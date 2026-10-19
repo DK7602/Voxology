@@ -1,0 +1,14 @@
+{
+  "name": "SongAlong",
+  "short_name": "SongAlong",
+  "description": "Play along with chords and lyrics in time.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a2016",
+  "theme_color": "#0a2016",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

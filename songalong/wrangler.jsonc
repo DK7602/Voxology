@@ -1,0 +1,34 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "songalong",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "assets": {
+    // The React app. Unknown paths fall back to index.html (client-side routes);
+    // /api/* always reaches the Worker.
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "songalong-db",
+      "database_id": "44326a4b-4c57-4ff3-ab3e-9325eee30d4b",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "AUDIO", "bucket_name": "songalong-audio" }],
+  "vars": {
+    "APP_NAME": "SongAlong",
+    // Sender for password-reset mail. Must be on a domain onboarded to Cloudflare Email Service
+    // (or verified in Resend if RESEND_API_KEY is set instead).
+    "MAIL_FROM": "SongAlong <no-reply@example.com>"
+  }
+  // Password-reset email, pick one:
+  //  1. Cloudflare Email Service (Workers Paid + a domain on Cloudflare): uncomment below.
+  //  2. Resend: `wrangler secret put RESEND_API_KEY`.
+  //  With neither, the reset link is written to the Worker log (fine for testing only).
+  // "send_email": [{ "name": "EMAIL" }]
+}

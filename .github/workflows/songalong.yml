@@ -1,0 +1,34 @@
+name: SongAlong (web app)
+
+# Typecheck, tests and a production build of songalong/ (the play-along web app).
+on:
+  push:
+    paths: ["songalong/**", ".github/workflows/songalong.yml"]
+  pull_request:
+    paths: ["songalong/**", ".github/workflows/songalong.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: songalong-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: songalong
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: songalong/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc -b
+      - name: Tests
+        run: npx vitest run
+      - name: Build
+        run: npx vite build
