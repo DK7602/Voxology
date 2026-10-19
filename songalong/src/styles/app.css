@@ -322,7 +322,7 @@
 
 .hero {
   display: grid;
-  grid-template-columns: 1.3fr 1fr;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   gap: 32px;
   align-items: center;
   padding: 14px 0 26px;
@@ -368,10 +368,10 @@
 }
 @media (max-width: 900px) {
   .hero {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .quick-actions {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .hero h1 {
     font-size: 30px;
@@ -696,6 +696,28 @@
 .notice.error {
   background: rgba(163, 36, 29, 0.1);
   color: var(--danger);
+}
+
+/* ---------- installing the app ---------- */
+.install-steps {
+  display: grid;
+  gap: 12px;
+  margin: 4px 0 0;
+  padding-left: 22px;
+  font-size: 17px;
+  line-height: 1.5;
+}
+.install-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: 0 2px;
+  vertical-align: middle;
+  border-radius: 8px;
+  background: var(--plain-cell);
+  border: 1px solid var(--plain-border);
+  color: #1f7ae0;
 }
 
 /* ---------- settings / forms ---------- */

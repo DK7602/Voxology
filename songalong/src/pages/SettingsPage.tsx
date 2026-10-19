@@ -6,6 +6,8 @@ import { api } from "../api";
 import { useAuth, useUser } from "../auth";
 import { Toggle, errorText, useToast } from "../components/ui";
 import { HelperSettings } from "./HelperSettings";
+import { InstallButton, IosInstallSteps } from "../components/InstallButton";
+import { useInstall } from "../install";
 
 export function SettingsPage() {
   const user = useUser();
@@ -121,6 +123,8 @@ export function SettingsPage() {
         </div>
       </section>
 
+      <AppSection />
+
       <HelperSettings />
 
       <section className="settings-section">
@@ -180,5 +184,31 @@ export function SettingsPage() {
         </form>
       </section>
     </div>
+  );
+}
+
+/** Install SongAlong on this phone, tablet or computer. */
+function AppSection() {
+  const { state } = useInstall();
+  return (
+    <section className="settings-section">
+      <h2>App</h2>
+      <div className="setting-row">
+        <div className="label">
+          <b>Install SongAlong</b>
+          <span>
+            {state === "installed"
+              ? "You're using the installed app."
+              : state === "prompt"
+                ? "Add SongAlong to this device with its own icon. It opens full screen and starts faster."
+                : state === "ios"
+                  ? "On iPhone and iPad, install from Safari's Share menu:"
+                  : "Open SongAlong in Chrome (Android, Windows, Mac) or Safari (iPhone, iPad) to install it as an app."}
+          </span>
+        </div>
+        {state === "prompt" && <InstallButton className="btn btn-primary" />}
+      </div>
+      {state === "ios" && <IosInstallSteps />}
+    </section>
   );
 }

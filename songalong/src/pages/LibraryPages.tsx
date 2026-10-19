@@ -15,6 +15,7 @@ import {
   IconTuner,
   IconYoutube,
 } from "../components/Icons";
+import { InstallButton } from "../components/InstallButton";
 import { errorText, useToast } from "../components/ui";
 import { SongSearchBox } from "./SearchPage";
 
@@ -94,6 +95,7 @@ export function HomePage() {
             <Link className="btn" to="/discover">
               <IconCompass size={20} /> Try an example
             </Link>
+            <InstallButton />
           </div>
         </div>
         <div className="quick-actions">

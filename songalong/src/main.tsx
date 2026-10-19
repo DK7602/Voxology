@@ -12,6 +12,7 @@ import "./styles/song.css";
 import { App } from "./App";
 import { AuthProvider } from "./auth";
 import { ToastProvider } from "./components/ui";
+import { startInstallSupport } from "./install";
 import { applyTheme } from "./theme";
 
 // paint the right theme before the user's settings load
@@ -21,6 +22,8 @@ try {
 } catch {
   applyTheme("system");
 }
+
+startInstallSupport();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
