@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PrepAnalysis, PrepEvent, PrepareEvent } from "../shared/prep";
 import { cleanTitle, guessSongName, tidyTitle } from "../shared/songName";
 import { estimateOffset, matchInOrder } from "../worker/align";
-import { parseLrc } from "../worker/lyrics";
+import { findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
 import { isoDuration } from "../worker/youtube";
 import { Client, makeEnv, signUp } from "./helpers/workerEnv";
 
@@ -133,6 +133,27 @@ describe("song names from YouTube", () => {
 });
 
 describe("lyrics timing", () => {
+  it("tries LRCLIB again when it is busy", async () => {
+    const saved = retryDelays.ms;
+    retryDelays.ms = [0, 0, 0];
+    try {
+      const ok = fakeLrclib();
+      let busy = 2;
+      const flaky = vi.fn(async (url: string | URL | Request) => {
+        if (busy-- > 0) return new Response('{"name":"ServerOverloaded"}', { status: 503 });
+        return ok(url);
+      });
+      const found = await findLyrics({ artist: "Test Artist", title: "Paper Boats" }, 80, flaky as unknown as typeof fetch);
+      expect(found?.synced.length).toBeGreaterThan(0);
+      expect(flaky).toHaveBeenCalledTimes(3);
+      // a plain "not found" is not retried
+      const missing = vi.fn(async () => new Response("not found", { status: 404 }));
+      expect(await findLyrics({ artist: "A", title: "B" }, 80, missing as unknown as typeof fetch)).toBeNull();
+      expect(missing).toHaveBeenCalledTimes(3); // get + two searches, once each
+    } finally {
+      retryDelays.ms = saved;
+    }
+  });
   it("parses LRC", () => {
     const l = parseLrc("[ar: x]\n[00:10.50] one two\n[01:02.00][01:30.00] again\n");
     expect(l).toEqual([

@@ -75,13 +75,23 @@ function trimBlank(lines: string[]): string[] {
   return lines.slice(a, b);
 }
 
+/** Waits between tries when LRCLIB is busy (tests make it instant). */
+export const retryDelays = { ms: [700, 2000, 4000] };
+
+/** GET JSON; null when not found. LRCLIB sometimes answers "server busy" (503) or rate-limits
+ *  (429): those, and network errors, are retried, so a busy moment doesn't cost a song its lyrics. */
 async function getJson<T>(url: string, fetcher: typeof fetch): Promise<T | null> {
-  try {
-    const res = await fetcher(url, { headers: HEADERS });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    return null;
+  for (let attempt = 0; ; attempt++) {
+    let retry = false;
+    try {
+      const res = await fetcher(url, { headers: HEADERS });
+      if (res.ok) return (await res.json()) as T;
+      retry = res.status === 429 || res.status >= 500;
+    } catch {
+      retry = true;
+    }
+    if (!retry || attempt >= retryDelays.ms.length) return null;
+    await new Promise((r) => setTimeout(r, retryDelays.ms[attempt]));
   }
 }
 
