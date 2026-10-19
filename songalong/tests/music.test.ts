@@ -156,3 +156,40 @@ describe("bass", () => {
     expect(Math.max(...m)).toBeLessThan(58);
   });
 });
+
+describe("tuner", () => {
+  /** A plucked-string-like tone: a few harmonics, a little noise. */
+  function tone(freq: number, sr: number, seconds = 0.2) {
+    const n = Math.round(sr * seconds);
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const t = i / sr;
+      out[i] = 0.5 * Math.sin(2 * Math.PI * freq * t) + 0.3 * Math.sin(2 * Math.PI * 2 * freq * t + 0.4) + 0.15 * Math.sin(2 * Math.PI * 3 * freq * t + 1.1) + 0.01 * (Math.random() * 2 - 1);
+    }
+    return out;
+  }
+  const cents = (f: number, ref: number) => 1200 * Math.log2(f / ref);
+
+  it("reads guitar strings to within a cent", async () => {
+    const { detectPitch } = await import("../src/tools/pitch");
+    const sr = 48000;
+    for (const [f0, off] of [[82.41, 0], [110, 7], [146.83, -12], [196, 3], [246.94, -4], [329.63, 20], [440, 0]]) {
+      const f = f0 * Math.pow(2, off / 1200);
+      const got = detectPitch(tone(f, sr).subarray(0, 4096), sr)!;
+      expect(Math.abs(cents(got, f)), `${f0} ${off}`).toBeLessThan(1);
+    }
+  });
+
+  it("reads bass strings (down to the low E) after the 4x averaging", async () => {
+    const { detectPitch } = await import("../src/tools/pitch");
+    const sr = 48000;
+    for (const [f0, off] of [[41.2, 0], [41.2, -9], [55, 5], [73.42, 0], [98, -3]]) {
+      const f = f0 * Math.pow(2, off / 1200);
+      const buf = tone(f, sr).subarray(0, 8192);
+      const small = new Float32Array(2048);
+      for (let i = 0; i < small.length; i++) small[i] = 0.25 * (buf[4 * i] + buf[4 * i + 1] + buf[4 * i + 2] + buf[4 * i + 3]);
+      const got = detectPitch(small, sr / 4, 35, 400)!;
+      expect(Math.abs(cents(got, f)), `${f0} ${off}`).toBeLessThan(1.5);
+    }
+  });
+});

@@ -3,46 +3,68 @@ import { FRETTED } from "../../shared/music/voicings";
 import { midiName, midiToFreq } from "../../shared/music/notes";
 import type { Instrument } from "../../shared/types";
 import { strum, unlockAudio } from "../player/synth";
+import { detectPitch } from "./pitch";
 
-/** Pitch of a mono buffer by normalised autocorrelation (good for single plucked strings). */
-export function detectPitch(buf: Float32Array, sampleRate: number, minHz = 50, maxHz = 1200): number | null {
-  let rms = 0;
-  for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
-  rms = Math.sqrt(rms / buf.length);
-  if (rms < 0.01) return null;
-  const minLag = Math.floor(sampleRate / maxHz);
-  const maxLag = Math.min(Math.floor(sampleRate / minHz), buf.length >> 1);
-  const n = buf.length - maxLag;
-  let bestLag = -1;
-  let best = 0;
-  const corr = new Float32Array(maxLag + 2);
-  for (let lag = minLag; lag <= maxLag; lag++) {
-    let c = 0;
-    let e1 = 0;
-    let e2 = 0;
-    for (let i = 0; i < n; i++) {
-      c += buf[i] * buf[i + lag];
-      e1 += buf[i] * buf[i];
-      e2 += buf[i + lag] * buf[i + lag];
-    }
-    corr[lag] = c / Math.sqrt(e1 * e2 + 1e-12);
-  }
-  // first strong peak (avoids octave-down errors)
-  const top = Math.max(...corr.slice(minLag, maxLag + 1));
-  for (let lag = minLag + 1; lag < maxLag; lag++) {
-    if (corr[lag] > 0.9 * top && corr[lag] >= corr[lag - 1] && corr[lag] >= corr[lag + 1]) {
-      bestLag = lag;
-      best = corr[lag];
-      break;
-    }
-  }
-  if (bestLag < 0 || best < 0.6) return null;
-  // parabolic interpolation
-  const a = corr[bestLag - 1];
-  const b = corr[bestLag];
-  const c = corr[bestLag + 1];
-  const shift = (a - c) / (2 * (a - 2 * b + c) || 1);
-  return sampleRate / (bestLag + shift);
+/**
+ * A strobe display: bands of stripes drift right when the note is sharp and left when it is flat,
+ * faster the further off it is, and stand still when it is in tune. The lower bands move at half
+ * and a quarter of the speed of the top one, so even a cent or two shows as a slow drift.
+ */
+function Strobe({ live }: { live: React.MutableRefObject<{ cents: number | null; at: number }> }) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const cv = canvas.current;
+    if (!cv) return;
+    const g = cv.getContext("2d");
+    if (!g) return;
+    let raf = 0;
+    let last = performance.now();
+    let phase = 0;
+    let glow = 0;
+    const draw = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const dpr = window.devicePixelRatio || 1;
+      const w = cv.clientWidth;
+      const h = cv.clientHeight;
+      if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+        cv.width = Math.round(w * dpr);
+        cv.height = Math.round(h * dpr);
+      }
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const { cents, at } = live.current;
+      const fresh = cents !== null && now - at < 600;
+      // drift speed: 4 px a second per cent (top band), capped
+      if (fresh) phase += Math.max(-60, Math.min(60, cents!)) * 4 * dt;
+      const inTune = fresh && Math.abs(cents!) <= 2;
+      glow += ((inTune ? 1 : 0) - glow) * Math.min(1, dt * 6);
+      g.clearRect(0, 0, w, h);
+      const rows = [
+        { y: 0, hgt: h * 0.4, stripe: 28, speed: 1 },
+        { y: h * 0.42, hgt: h * 0.3, stripe: 14, speed: 0.5 },
+        { y: h * 0.74, hgt: h * 0.26, stripe: 7, speed: 0.25 },
+      ];
+      for (const r of rows) {
+        const off = ((((phase * r.speed) % (2 * r.stripe)) + 2 * r.stripe) % (2 * r.stripe)) - 2 * r.stripe;
+        const grad = g.createLinearGradient(0, r.y, 0, r.y + r.hgt);
+        const a = fresh ? 1 : 0.25;
+        if (glow > 0.5) {
+          grad.addColorStop(0, `rgba(120, 255, 170, ${a})`);
+          grad.addColorStop(1, `rgba(20, 160, 90, ${a})`);
+        } else {
+          grad.addColorStop(0, `rgba(255, 233, 160, ${a})`);
+          grad.addColorStop(0.5, `rgba(233, 180, 70, ${a})`);
+          grad.addColorStop(1, `rgba(160, 105, 20, ${a})`);
+        }
+        g.fillStyle = grad;
+        for (let x = off; x < w; x += 2 * r.stripe) g.fillRect(x, r.y, r.stripe, r.hgt);
+      }
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [live]);
+  return <canvas ref={canvas} className="strobe" aria-hidden="true" />;
 }
 
 export function Tuner({ instrument = "guitar" }: { instrument?: Instrument }) {
@@ -51,6 +73,8 @@ export function Tuner({ instrument = "guitar" }: { instrument?: Instrument }) {
   const [error, setError] = useState<string | null>(null);
   const [reading, setReading] = useState<{ freq: number; midi: number; cents: number } | null>(null);
   const stop = useRef<(() => void) | null>(null);
+  // the strobe reads this every frame (no re-render needed)
+  const live = useRef<{ cents: number | null; at: number }>({ cents: null, at: 0 });
 
   useEffect(() => () => stop.current?.(), []);
 
@@ -69,6 +93,8 @@ export function Tuner({ instrument = "guitar" }: { instrument?: Instrument }) {
       const small = new Float32Array(analyser.fftSize / 4);
       let raf = 0;
       let smooth = 0;
+      let shown = 0;
+      const recent: number[] = [];
       const loop = () => {
         analyser.getFloatTimeDomainData(buf);
         let f: number | null;
@@ -77,10 +103,21 @@ export function Tuner({ instrument = "guitar" }: { instrument?: Instrument }) {
           f = detectPitch(small, ctx.sampleRate / 4, 35, 400);
         } else f = detectPitch(buf, ctx.sampleRate);
         if (f) {
-          smooth = smooth && Math.abs(Math.log2(f / smooth)) < 0.05 ? smooth * 0.7 + f * 0.3 : f;
+          const jump = !smooth || Math.abs(Math.log2(f / smooth)) >= 0.05;
+          smooth = jump ? f : smooth * 0.7 + f * 0.3;
+          if (jump) recent.length = 0;
           const midiF = 69 + 12 * Math.log2(smooth / 440);
           const midi = Math.round(midiF);
-          setReading({ freq: smooth, midi, cents: Math.round((midiF - midi) * 100) });
+          // the median of the last few readings keeps the number steady
+          recent.push((midiF - midi) * 100);
+          if (recent.length > 7) recent.shift();
+          const cents = [...recent].sort((a, b) => a - b)[recent.length >> 1];
+          live.current = { cents, at: performance.now() };
+          const now = performance.now();
+          if (now - shown > 90) {
+            shown = now;
+            setReading({ freq: smooth, midi, cents: Math.round(cents) });
+          }
         }
         raf = requestAnimationFrame(loop);
       };
@@ -89,6 +126,7 @@ export function Tuner({ instrument = "guitar" }: { instrument?: Instrument }) {
         cancelAnimationFrame(raf);
         stream.getTracks().forEach((t) => t.stop());
         src.disconnect();
+        live.current = { cents: null, at: 0 };
         setOn(false);
       };
       setOn(true);
@@ -101,11 +139,11 @@ export function Tuner({ instrument = "guitar" }: { instrument?: Instrument }) {
     ? inst.tuning.reduce((a, b) => (Math.abs(b - reading.midi) < Math.abs(a - reading.midi) ? b : a))
     : null;
   const cents = reading?.cents ?? 0;
-  const inTune = reading && Math.abs(cents) <= 5;
+  const inTune = reading && Math.abs(cents) <= 2;
 
   return (
-    <div style={{ display: "grid", gap: 16, justifyItems: "center" }}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+    <div className="tuner">
+      <div className="tuner-strings">
         {inst.tuning.map((m, i) => (
           <button
             key={i}
@@ -120,22 +158,24 @@ export function Tuner({ instrument = "guitar" }: { instrument?: Instrument }) {
           </button>
         ))}
       </div>
-      <div className="display" style={{ fontSize: 72, lineHeight: 1, color: inTune ? "var(--green-hi)" : "var(--heading)" }}>
-        {reading ? midiName(reading.midi) : "—"}
+      <div className={"tuner-face" + (inTune ? " in-tune" : "")}>
+        <div className="tuner-note">
+          <span className="flat-mark" aria-hidden="true">♭</span>
+          <b>{reading ? midiName(reading.midi) : "—"}</b>
+          <span className="sharp-mark" aria-hidden="true">♯</span>
+        </div>
+        <Strobe live={live} />
+        <div className="tuner-readout" aria-live="polite">
+          {reading
+            ? inTune
+              ? "In tune"
+              : `${cents > 0 ? "+" : ""}${cents} cents · ${cents < 0 ? "tune up" : "tune down"}`
+            : on
+              ? "Play one string…"
+              : "Standard tuning: " + inst.tuningNames.join(" ")}
+          {reading && <span className="faint"> · {reading.freq.toFixed(1)} Hz</span>}
+        </div>
       </div>
-      <svg viewBox="0 0 300 80" width="300" aria-label={reading ? `${cents} cents` : "No note"}>
-        <line x1="20" x2="280" y1="60" y2="60" stroke="var(--ink-faint)" strokeWidth="2" />
-        {[-50, -25, 0, 25, 50].map((c) => (
-          <g key={c}>
-            <line x1={150 + c * 2.6} x2={150 + c * 2.6} y1={c === 0 ? 30 : 48} y2="60" stroke="var(--ink-soft)" strokeWidth={c === 0 ? 3 : 1.5} />
-            <text x={150 + c * 2.6} y="76" textAnchor="middle" fontSize="11" fill="var(--ink-soft)">{c > 0 ? "+" + c : c}</text>
-          </g>
-        ))}
-        {reading && (
-          <circle cx={150 + Math.max(-50, Math.min(50, cents)) * 2.6} cy="44" r="9" fill={inTune ? "var(--green-hi)" : "var(--gold)"} />
-        )}
-      </svg>
-      <div className="muted">{reading ? `${reading.freq.toFixed(1)} Hz · ${cents > 0 ? "+" : ""}${cents} cents ${inTune ? "· in tune" : cents < 0 ? "· tune up" : "· tune down"}` : on ? "Play one string..." : "Standard tuning: " + inst.tuningNames.join(" ")}</div>
       {error && <div className="notice error">{error}</div>}
       {!on ? (
         <button className="btn btn-primary" onClick={start}>Start tuner (uses the microphone)</button>

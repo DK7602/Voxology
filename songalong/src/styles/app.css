@@ -698,6 +698,73 @@
   color: var(--danger);
 }
 
+/* ---------- tuner (strobe) ---------- */
+.tuner {
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+}
+.tuner-strings {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.tuner-face {
+  width: min(560px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 18px 18px 14px;
+  border-radius: 22px;
+  background: linear-gradient(170deg, #1c160c, #050403 55%, #0d0a05);
+  border: 1.5px solid rgba(240, 196, 92, 0.75);
+  box-shadow: 0 0 22px rgba(255, 186, 60, 0.3), inset 0 0 18px rgba(255, 200, 80, 0.08);
+  color: #f6ecd4;
+  transition: box-shadow 0.3s, border-color 0.3s;
+}
+.tuner-face.in-tune {
+  border-color: rgba(120, 255, 170, 0.85);
+  box-shadow: 0 0 26px rgba(80, 230, 140, 0.45), inset 0 0 18px rgba(80, 230, 140, 0.1);
+}
+.tuner-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  font-family: "Playfair Display", Georgia, serif;
+}
+.tuner-note b {
+  min-width: 2.4ch;
+  text-align: center;
+  font-size: 76px;
+  line-height: 1;
+  background: linear-gradient(180deg, #fff1c4, #e9bf5c 50%, #b9862a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.in-tune .tuner-note b {
+  background: linear-gradient(180deg, #d9ffe6, #5ee39a 55%, #1d9d58);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.tuner-note .flat-mark,
+.tuner-note .sharp-mark {
+  font-size: 30px;
+  color: rgba(240, 196, 92, 0.55);
+}
+.strobe {
+  width: 100%;
+  height: 96px;
+  border-radius: 12px;
+  background: #000;
+  border: 1px solid rgba(240, 196, 92, 0.35);
+}
+.tuner-readout {
+  text-align: center;
+  font-size: 18px;
+}
+
 /* ---------- installing the app ---------- */
 .install-steps {
   display: grid;
