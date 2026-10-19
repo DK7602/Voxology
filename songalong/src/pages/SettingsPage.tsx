@@ -5,6 +5,7 @@ import type { Instrument, UserSettings } from "../../shared/types";
 import { api } from "../api";
 import { useAuth, useUser } from "../auth";
 import { Toggle, errorText, useToast } from "../components/ui";
+import { HelperSettings } from "./HelperSettings";
 
 export function SettingsPage() {
   const user = useUser();
@@ -118,6 +119,8 @@ export function SettingsPage() {
           </div>
         </div>
       </section>
+
+      <HelperSettings />
 
       <section className="settings-section">
         <h2>Account</h2>

@@ -54,6 +54,8 @@ export interface SongDoc {
   lines: LyricLine[];
   /** song length in beats */
   length: number;
+  /** where the chords / lyrics came from, shown small under the title */
+  credits?: string;
 }
 
 export type Instrument = "guitar" | "ukulele" | "piano" | "mandolin";

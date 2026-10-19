@@ -287,6 +287,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
                 by <b>{doc.artist}</b>
               </div>
             )}
+            {doc.credits && <div className="credits">{doc.credits}{!record.mine && " · Spot a wrong chord? ⋮ → Save an editable copy"}</div>}
           </div>
           <div className="head-actions">
             <button className={"icon-btn" + (favorite ? " fav" : "")} onClick={toggleFavorite} aria-pressed={favorite} aria-label={favorite ? "Remove from My Library" : "Save to My Library"}>

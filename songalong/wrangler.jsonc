@@ -20,6 +20,17 @@
     }
   ],
   "r2_buckets": [{ "binding": "AUDIO", "bucket_name": "songalong-audio" }],
+  // Speech recognition (lining lyrics up with a video). Needs nothing extra on Workers Paid.
+  "ai": { "binding": "AI" },
+  // Song prep in the cloud: yt-dlp + ffmpeg + chord detection (prep/Dockerfile). Needs Workers
+  // Paid. Songs YouTube refuses here go to the user's PC helper instead.
+  "containers": [
+    { "class_name": "PrepContainer", "image": "./prep/Dockerfile", "max_instances": 3, "instance_type": "standard-1" }
+  ],
+  "durable_objects": { "bindings": [{ "name": "PREP", "class_name": "PrepContainer" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PrepContainer"] }],
+  // Optional secret: YOUTUBE_API_KEY (`wrangler secret put YOUTUBE_API_KEY`) makes search use
+  // YouTube's official search; without it the prep container searches.
   "vars": {
     "APP_NAME": "SongAlong",
     // Sender for password-reset mail. Must be on a domain onboarded to Cloudflare Email Service

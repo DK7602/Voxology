@@ -11,6 +11,14 @@ import type {
   User,
   UserSettings,
 } from "../shared/api";
+import type { PrepareEvent, PrepStatus, YouTubeResult } from "../shared/prep";
+
+export interface HelperKey {
+  id: string;
+  name: string;
+  createdAt: number;
+  lastSeenAt: number | null;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -92,6 +100,13 @@ export const api = {
   reorderPlaylist: (id: string, songIds: string[]) =>
     request<{ ok: true }>("PUT", `/playlists/${encodeURIComponent(id)}/order`, { songIds }),
 
+  // search any song / prepare it
+  ytSearch: (q: string) => request<{ results: YouTubeResult[] }>("GET", `/youtube/search?q=${encodeURIComponent(q)}`),
+  prepStatus: (videoId: string) => request<PrepStatus>("GET", `/youtube/status/${encodeURIComponent(videoId)}`),
+  helpers: () => request<{ helpers: HelperKey[] }>("GET", "/helper/tokens"),
+  createHelper: (name: string) => request<{ token: string; id: string; name: string }>("POST", "/helper/tokens", { name }),
+  deleteHelper: (id: string) => request<{ ok: true }>("DELETE", `/helper/tokens/${encodeURIComponent(id)}`),
+
   // audio
   audioFiles: () => request<{ files: AudioFile[] }>("GET", "/audio"),
   deleteAudio: (key: string) => request<{ ok: true }>("DELETE", `/audio/${encodeURIComponent(key)}`),
@@ -125,4 +140,53 @@ export function uploadAudio(file: File, onProgress?: (fraction: number) => void)
     xhr.onerror = () => reject(new ApiError(0, "Upload failed. Check your connection."));
     xhr.send(file);
   });
+}
+
+/** Starts preparing a YouTube song and calls `onEvent` for each progress line. Resolves with the
+ *  last event (ready / waiting_pc / error), or null if the connection dropped before the end. */
+export async function prepareSong(
+  body: { videoId: string; title?: string; channel?: string; duration?: number; retry?: boolean },
+  onEvent: (e: PrepareEvent) => void,
+  signal?: AbortSignal,
+): Promise<PrepareEvent | null> {
+  const res = await fetch("/api/youtube/prepare", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok || !res.body) {
+    let msg = `Couldn't start (${res.status}).`;
+    try {
+      msg = ((await res.json()) as { error?: string }).error ?? msg;
+    } catch {
+      /* not JSON */
+    }
+    throw new ApiError(res.status, msg);
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  let last: PrepareEvent | null = null;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (value) buf += dec.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        const e = JSON.parse(line) as PrepareEvent;
+        onEvent(e);
+        if (e.type !== "progress") last = e;
+      }
+      if (done) break;
+    }
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    return last; // connection dropped: the caller falls back to polling the status
+  }
+  return last;
 }

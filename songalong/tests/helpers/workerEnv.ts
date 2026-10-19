@@ -16,11 +16,13 @@ export interface SentMail {
   text: string;
 }
 
-const MIGRATION = readFileSync(new URL("../../migrations/0001_init.sql", import.meta.url), "utf8");
+const MIGRATIONS = ["0001_init.sql", "0002_youtube.sql"].map((f) =>
+  readFileSync(new URL(`../../migrations/${f}`, import.meta.url), "utf8"),
+);
 
 export function makeEnv(overrides: Partial<Record<keyof Env, unknown>> = {}) {
   const db = new FakeD1();
-  db.sqlite.exec(MIGRATION);
+  for (const m of MIGRATIONS) db.sqlite.exec(m);
   const r2 = new FakeR2();
   const mail: SentMail[] = [];
   const email = {

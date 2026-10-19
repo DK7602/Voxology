@@ -5,16 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/build-prep.mjs && tsc -b && vite build",
     "preview": "npm run build && vite preview",
     "deploy": "npm run build && wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply songalong-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply songalong-db --remote",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "cf-typegen": "wrangler types worker/worker-configuration.d.ts"
+    "cf-typegen": "wrangler types worker/worker-configuration.d.ts",
+    "build:prep": "node scripts/build-prep.mjs"
   },
   "dependencies": {
+    "@cloudflare/containers": "^0.3.7",
     "@fontsource/eb-garamond": "^5.3.0",
     "@fontsource/playfair-display": "^5.3.0",
     "hono": "^4.13.13",

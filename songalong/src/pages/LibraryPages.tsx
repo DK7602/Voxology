@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import type { PlaylistSummary, SongSummary } from "../../shared/api";
 import { prettyAccidentals } from "../../shared/music/notes";
 import { api, type SongScope } from "../api";
@@ -16,6 +16,7 @@ import {
   IconYoutube,
 } from "../components/Icons";
 import { errorText, useToast } from "../components/ui";
+import { SongSearchBox } from "./SearchPage";
 
 export function SongCard({ s }: { s: SongSummary }) {
   return (
@@ -84,8 +85,9 @@ export function HomePage() {
       <section className="hero">
         <div>
           <h1>{first ? `Welcome back, ${first}` : "Welcome to SongAlong"}</h1>
-          <p>Play along with chords and lyrics in time, on guitar, ukulele, piano or mandolin, in any key and with any capo.</p>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <p>Search any song, tap play, and the chords and lyrics scroll in time: guitar, ukulele, piano or mandolin, any key, any capo.</p>
+          <SongSearchBox big />
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
             <Link className="btn btn-primary" to="/new">
               <IconPlus size={20} /> Add a song
             </Link>
@@ -178,21 +180,6 @@ export function LibraryPage() {
           </>
         }
       />
-    </div>
-  );
-}
-
-export function SearchPage() {
-  const [params] = useSearchParams();
-  const q = params.get("q") ?? "";
-  const { songs, error } = useSongs("search", q);
-  return (
-    <div className="panel page-panel">
-      <div className="page-head">
-        <h1>Results for “{q}”</h1>
-        <span className="muted">Titles, artists and chords</span>
-      </div>
-      <SongGrid songs={q ? songs : []} error={error} empty="No songs match. Try a chord name like Bbm7 or an artist." />
     </div>
   );
 }

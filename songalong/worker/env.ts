@@ -10,6 +10,13 @@ export interface Env {
   MAIL_FROM: string;
   /** Public origin of the app, e.g. https://songalong.example.com (for links in email). */
   APP_URL?: string;
+  /** Song-prep container (yt-dlp + ffmpeg + chord detection). Optional: without it, songs go
+   *  straight to the user's PC helper. */
+  PREP?: DurableObjectNamespace<import("./prepContainer").PrepContainer>;
+  /** Workers AI, for speech recognition when lining lyrics up with a video. */
+  AI?: import("./align").SpeechAi;
+  /** YouTube Data API key for search (optional; without it the prep container searches). */
+  YOUTUBE_API_KEY?: string;
 }
 
 export interface UserRow {
@@ -28,5 +35,8 @@ export interface AppEnv {
     user: UserRow | null;
     /** SHA-256 hex of the current session token */
     sessionHash: string | null;
+    /** set on PC-helper requests (Bearer helper key) */
+    helperUserId?: string;
+    helperTokenHash?: string;
   };
 }

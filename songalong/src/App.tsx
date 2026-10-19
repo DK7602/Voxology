@@ -9,8 +9,9 @@ import {
   LibraryPage,
   PlaylistPage,
   PlaylistsPage,
-  SearchPage,
 } from "./pages/LibraryPages";
+import { PreparePage } from "./pages/PreparePage";
+import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ChordLibraryPage, ToolsPage, TunerPage } from "./pages/ToolsPages";
 import { PrintPage } from "./song/PrintPage";
@@ -66,6 +67,7 @@ export function App() {
         <Route path="/playlists" element={<PlaylistsPage />} />
         <Route path="/playlists/:id" element={<PlaylistPage />} />
         <Route path="/song/:id" element={<SongPage />} />
+        <Route path="/yt/:videoId" element={<PreparePage />} />
         <Route path="/song/:id/edit" element={<SongEditorPage />} />
         <Route path="/new" element={<SongEditorPage />} />
         <Route path="/tools" element={<ToolsPage />} />

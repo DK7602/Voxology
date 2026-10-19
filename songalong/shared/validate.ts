@@ -213,6 +213,7 @@ export function validateSongDoc(input: unknown): SongDoc {
     length: optNumber(input, "length", "Song length", lastBeat, 0, 1_000_000),
   };
   if (lead.length) doc.lead = lead;
+  if (typeof input.credits === "string" && input.credits.trim()) doc.credits = cleanLine(input.credits, 200);
   const beatTimes = validateBeatTimes(input.beatTimes);
   if (beatTimes) doc.beatTimes = beatTimes;
   return doc;

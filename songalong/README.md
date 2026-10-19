@@ -20,18 +20,24 @@ One **Cloudflare Worker** serves both the React app (static assets) and the API 
 | R2 `songalong-audio` | Recordings users upload (private to the uploader) |
 
 Where songs come from:
-- **Upload a recording** (MP3/WAV/M4A). The browser finds the beat, key and chords automatically.
-- **YouTube video**. The video plays along with a chord sheet you paste, and you tap-sync the timing.
-- **Backing track only**. Paste a chord sheet and SongAlong strums the chords for you.
-
-Lyrics come from what you paste or type. Nothing is fetched from lyric sites, because song lyrics are licensed.
+- **Search any song.** Pick a result and SongAlong prepares it in about 20–45 seconds. It fetches the
+  audio, finds the beat, key and chords, looks up timed lyrics (LRCLIB) and lines them up with the
+  video using speech recognition. Then it plays inside SongAlong. Prepared songs are saved to a
+  shared catalog, so they open instantly next time, for everyone.
+  - The audio work runs in a **Cloudflare container** (`prep/`: yt-dlp + ffmpeg + the chord
+    detector). YouTube sometimes refuses cloud servers; those songs go to the user's **PC helper**
+    (Settings → Your PC helper), which runs the same code at home and reuses Sample Snagger's tools.
+  - Only chords, timing and lyrics are kept; the audio is deleted after analysis.
+- **Upload a recording** (MP3/WAV/M4A): the same detection runs in the browser.
+- **Paste a chord sheet** (chords over lyrics or ChordPro), with or without a YouTube video.
 
 ## Develop
 
 ```
 npm install
 npm run db:migrate:local      # local D1 (once)
-npm run dev                   # http://localhost:5173
+npm run dev                   # http://localhost:5173 (no container / AI: songs queue for the PC helper)
+SONGALONG_FULL_DEV=1 npm run dev   # with the container (needs Docker) and Workers AI (needs `wrangler login`)
 npm test                      # music engine, chord detection, API tests
 ```
 In local dev, password-reset links are printed to the terminal instead of being emailed.
@@ -44,6 +50,14 @@ npm run deploy                # build + wrangler deploy
 ```
 Or connect the repo in the Cloudflare dashboard (Workers → Create → Import a repository). Set **root directory**
 `songalong`, **build command** `npm run build`, and **deploy command** `npx wrangler deploy`.
+
+### Search any song
+- Needs **Workers Paid** ($5/month) for the song-prep container and Workers AI (speech recognition).
+  `npm run deploy` builds the container image with Docker (or deploy through Workers Builds).
+- Optional: `npx wrangler secret put YOUTUBE_API_KEY` (free key from Google Cloud: YouTube Data
+  API v3) makes search use YouTube's official search; without it the container searches.
+- Lyrics: LRCLIB (free, unlicensed). Switch to Musixmatch (licensed) before opening the app to the
+  public: replace `findLyrics()` in `worker/lyrics.ts`.
 
 ### Password-reset email (pick one)
 1. **Cloudflare Email Service**. Needs Workers Paid and a domain on Cloudflare: onboard the domain under Email Service →

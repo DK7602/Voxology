@@ -11,8 +11,11 @@ import { appOrigin, HttpError, type Ctx } from "./http";
 import { playlists } from "./playlists";
 import { loadSession } from "./session";
 import { songs } from "./songs";
+import { helper } from "./helperApi";
+import { youtube } from "./youtube";
 
 export type { Env } from "./env";
+export { PrepContainer } from "./prepContainer";
 
 const securityHeaders: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
@@ -52,6 +55,8 @@ app.route("/auth", auth);
 app.route("/songs", songs);
 app.route("/playlists", playlists);
 app.route("/audio", audio);
+app.route("/youtube", youtube);
+app.route("/helper", helper);
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 app.onError(handleError);
