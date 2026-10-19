@@ -1,21 +1,11 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
-import { chordsInLine, gapAfterLine, indexAt, lineWords } from "../../shared/timeline";
-import { parseChord } from "../../shared/music/chords";
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import { chordsInLine, gapAfterLine, indexAt, lineWords, wordStarts } from "../../shared/timeline";
 import type { SongDoc } from "../../shared/types";
-import { ChordName } from "../components/ChordName";
 import type { PlayerEngine } from "../player/engine";
-import { useBeatSelect, usePlayerState, useTick, type ChordView } from "../player/hooks";
-import { ChordLine } from "./ChordLine";
+import { useBeatSelect, usePlayerState, useTick } from "../player/hooks";
 
 /** Where "now" sits, as a share of the width. The chord strip uses the same spot. */
 export const PLAYHEAD = 0.22;
-
-interface RowChord {
-  index: number;
-  beat: number;
-  col: number;
-  carried: boolean;
-}
 
 interface Row {
   start: number;
@@ -23,25 +13,19 @@ interface Row {
   /** the words; empty for the intro and instrumental breaks */
   text: string;
   section?: string;
-  chords: RowChord[];
+  /** chord changes in the words (beat, column): where the words are at those beats, for lines
+   *  without word times. The chords themselves are shown by the chord strip. */
+  marks: { beat: number; col: number }[];
   /** when each word is sung (beats), when known */
   words?: number[];
   wordsEnd?: number;
-}
-
-/** "N.C.": nothing to play, so nothing is shown for it. */
-function isNoChord(name: string): boolean {
-  return (parseChord(name)?.category ?? "none") === "none";
 }
 
 /** The song as one row: the intro, each lyric line, and the instrumental breaks between them. */
 export function ribbonRows(doc: SongDoc, length: number): Row[] {
   const rows: Row[] = [];
   const first = doc.lines[0]?.beat ?? length;
-  if (first > 0) {
-    const chords = doc.chords.flatMap((c, index) => (c.beat < first ? [{ index, beat: c.beat, col: 0, carried: false }] : []));
-    rows.push({ start: 0, end: first, text: "", section: doc.lines.length ? "Intro" : undefined, chords });
-  }
+  if (first > 0) rows.push({ start: 0, end: first, text: "", section: doc.lines.length ? "Intro" : undefined, marks: [] });
   doc.lines.forEach((line, i) => {
     const gap = gapAfterLine(doc, i);
     const until = i + 1 < doc.lines.length ? doc.lines[i + 1].beat : Math.max(length, line.beat + 1);
@@ -51,19 +35,32 @@ export function ribbonRows(doc: SongDoc, length: number): Row[] {
       end: gap ? gap.start : until,
       text: line.text,
       section: line.section,
-      chords: chordsInLine(doc, i).map((p) => ({ index: p.index, beat: p.carried ? line.beat : p.chord.beat, col: p.col, carried: p.carried })),
+      marks: chordsInLine(doc, i).flatMap((p) => (p.carried ? [] : [{ beat: p.chord.beat, col: p.col }])),
       ...(words ? { words, wordsEnd: line.wordsEnd } : {}),
     });
-    if (gap) {
-      rows.push({
-        start: gap.start,
-        end: gap.end,
-        text: "",
-        chords: gap.chords.map((p) => ({ index: p.index, beat: p.carried ? gap.start : p.chord.beat, col: 0, carried: p.carried })),
-      });
-    }
+    if (gap) rows.push({ start: gap.start, end: gap.end, text: "", marks: [] });
   });
   return rows;
+}
+
+/** The line's words, each in a span marked with its word number (data-wi), so the lane can find
+ *  where every word is. */
+function markedWords(text: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  let pos = 0;
+  wordStarts(text).forEach((at, k) => {
+    if (at > pos) out.push(text.slice(pos, at));
+    let end = at;
+    while (end < text.length && !/\s/.test(text[end])) end++;
+    out.push(
+      <span key={k} data-wi={k}>
+        {text.slice(at, end)}
+      </span>,
+    );
+    pos = end;
+  });
+  if (pos < text.length) out.push(text.slice(pos));
+  return out;
 }
 
 interface Anchor {
@@ -89,29 +86,18 @@ function xAt(pts: Anchor[], b: number, pxPerBeat: number): number {
   return q.b > p.b ? p.x + ((b - p.b) / (q.b - p.b)) * (q.x - p.x) : q.x;
 }
 
-/** The lyrics on one line with the chords above the words, scrolling past a fixed "now" line. */
-export function LyricsLane({ engine, view }: { engine: PlayerEngine; view: ChordView }) {
+/** The lyrics on one line, scrolling past a fixed "now" line: word by word where the song has
+ *  word times, otherwise steadily through each line. */
+export function LyricsLane({ engine }: { engine: PlayerEngine }) {
   const doc = engine.timeline.doc;
   const length = engine.timeline.lengthBeats;
   const { countIn } = usePlayerState(engine);
   const rows = useMemo(() => ribbonRows(doc, length), [doc, length]);
+  const rowStarts = useMemo(() => rows.map((r) => ({ beat: r.start })), [rows]);
   // instrumental parts: about 95 px a second
   const pxPerBeat = Math.min(70, Math.max(26, (95 * 60) / (doc.bpm || 100)));
 
-  const pos = useBeatSelect(engine, (beat) => {
-    let lo = 0;
-    let hi = rows.length - 1;
-    let r = -1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (rows[mid].start <= beat + 1e-6) {
-        r = mid;
-        lo = mid + 1;
-      } else hi = mid - 1;
-    }
-    return `${r}:${indexAt(doc.chords, beat)}`;
-  });
-  const [rowIdx, chordIdx] = pos.split(":").map(Number);
+  const rowIdx = useBeatSelect(engine, (beat) => indexAt(rowStarts, beat));
 
   const scroller = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
@@ -133,36 +119,36 @@ export function LyricsLane({ engine, view }: { engine: PlayerEngine; view: Chord
       rows.forEach((row, r) => {
         const el = rowRefs.current[r];
         if (!el) return;
-        const box = el.getBoundingClientRect();
-        if (row.words) {
-          // each word reaches "now" as it is sung; the last one is crossed while it lasts
-          let lastB = -Infinity;
-          let lastRight = 0;
-          row.words.forEach((b, k) => {
-            const we = el.querySelector(`[data-wi="${k}"]`);
-            if (!we) return;
-            const wb = we.getBoundingClientRect();
-            pts.push({ b, x: wb.left - base });
-            lastB = b;
-            lastRight = wb.right - base;
-          });
+        const spans = [...el.querySelectorAll<HTMLElement>("[data-wi]")].map((s) => s.getBoundingClientRect());
+        const content = (el.querySelector(".rb-words, .rb-rest") ?? el).getBoundingClientRect();
+        const right = (spans.at(-1)?.right ?? content.right) - base;
+        let lastB: number;
+        if (row.words && spans.length === row.words.length) {
+          // each word reaches "now" as it is sung
+          row.words.forEach((b, k) => pts.push({ b, x: spans[k].left - base }));
+          lastB = row.words[row.words.length - 1];
           const endB = Math.min(row.wordsEnd ?? lastB + 1, row.end - 0.1);
-          if (lastB > -Infinity && endB > lastB) pts.push({ b: endB, x: lastRight });
+          // the last word is crossed while it lasts
+          if (endB > lastB) pts.push({ b: endB, x: right });
           return;
         }
-        pts.push({ b: row.start, x: box.left - base });
-        let lastB = row.start;
-        for (const c of row.chords) {
-          if (c.carried) continue;
-          const ce = el.querySelector(`[data-ci="${c.index}"]`);
-          if (!ce) continue;
-          pts.push({ b: c.beat, x: ce.getBoundingClientRect().left - base });
-          lastB = c.beat;
+        pts.push({ b: row.start, x: content.left - base });
+        lastB = row.start;
+        // where the words are when the chords change
+        const starts = wordStarts(row.text);
+        for (const m of row.marks) {
+          if (m.beat <= lastB || !spans.length) continue;
+          let k = 0;
+          while (k + 1 < starts.length && starts[k + 1] <= m.col) k++;
+          const s = spans[k];
+          const len = Math.max(1, row.text.slice(starts[k]).search(/\s|$/));
+          const x = m.col >= row.text.length ? right : s.left + Math.min(1, Math.max(0, (m.col - starts[k]) / len)) * s.width - base;
+          pts.push({ b: m.beat, x });
+          lastB = m.beat;
         }
         // reach the end of the words just before the next row starts, then cross the gap
-        const words = el.querySelector(".cl-line, .rb-chords") ?? el;
         const endB = row.end - Math.min(0.5, (row.end - lastB) * 0.15);
-        if (endB > lastB) pts.push({ b: endB, x: words.getBoundingClientRect().right - base });
+        if (endB > lastB) pts.push({ b: endB, x: right });
       });
       pts.sort((p, q) => p.b - q.b);
       for (let k = 1; k < pts.length; k++) pts[k].x = Math.max(pts[k].x, pts[k - 1].x);
@@ -178,9 +164,9 @@ export function LyricsLane({ engine, view }: { engine: PlayerEngine; view: Chord
       live = false;
       ro.disconnect();
     };
-    // re-measure when the rows or the chord names (transpose, capo) change
+    // re-measure when the rows change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, view, pxPerBeat]);
+  }, [rows, pxPerBeat]);
 
   useTick(engine, (_t, beat) => place(beat));
 
@@ -190,30 +176,24 @@ export function LyricsLane({ engine, view }: { engine: PlayerEngine; view: Chord
         <div className="ribbon-track" ref={track}>
           {rows.map((row, r) => {
             const when = r < rowIdx ? " past" : r === rowIdx ? " current" : "";
+            const sung = row.text.trim();
             return (
               <div
                 key={r}
                 ref={(el) => {
                   rowRefs.current[r] = el;
                 }}
-                className={"rb-row" + when + (row.text.trim() ? "" : " instrumental")}
+                className={"rb-row" + when + (sung ? "" : " instrumental")}
                 onClick={() => engine.seekBeat(row.start)}
               >
                 {row.section && <span className="rb-section">{row.section}</span>}
-                {row.text.trim() ? (
-                  <ChordLine
-                    text={row.text}
-                    wordMarks={!!row.words}
-                    chords={row.chords.filter((c) => !isNoChord(doc.chords[c.index].name)).map((c) => ({
-                      name: view.shown(doc.chords[c.index].name),
-                      col: c.col,
-                      key: c.index,
-                      index: c.carried ? undefined : c.index,
-                      now: c.index === chordIdx && r === rowIdx,
-                    }))}
-                  />
+                {sung ? (
+                  <span className="rb-words">{markedWords(row.text)}</span>
                 ) : (
-                  <InstrumentalRow row={row} doc={doc} view={view} pxPerBeat={pxPerBeat} nowIndex={r === rowIdx ? chordIdx : -1} />
+                  // music without words: a rest as long as it lasts
+                  <span className="rb-rest" style={{ width: Math.min(1600, Math.max(56, (row.end - row.start) * pxPerBeat)) }}>
+                    ♪
+                  </span>
                 )}
               </div>
             );
@@ -227,28 +207,5 @@ export function LyricsLane({ engine, view }: { engine: PlayerEngine; view: Chord
         </div>
       )}
     </div>
-  );
-}
-
-/** Chords only, each as wide as it lasts. */
-function InstrumentalRow({ row, doc, view, pxPerBeat, nowIndex }: { row: Row; doc: SongDoc; view: ChordView; pxPerBeat: number; nowIndex: number }) {
-  const lead = row.chords.length ? row.chords[0].beat - row.start : row.end - row.start;
-  return (
-    <span className="rb-chords">
-      {lead > 0.01 && <span className="rb-rest" style={{ width: Math.min(1600, lead * pxPerBeat) }}>♪</span>}
-      {row.chords.map((c, k) => {
-        const next = k + 1 < row.chords.length ? row.chords[k + 1].beat : row.end;
-        return (
-          <span
-            key={c.index + (c.carried ? "c" : "")}
-            className={"rb-chord" + (c.index === nowIndex ? " now" : "") + (c.carried ? " carried" : "")}
-            data-ci={c.carried ? undefined : c.index}
-            style={{ width: Math.min(1600, Math.max(56, (next - c.beat) * pxPerBeat)) }}
-          >
-            {!isNoChord(doc.chords[c.index].name) && <ChordName symbol={view.shown(doc.chords[c.index].name)} />}
-          </span>
-        );
-      })}
-    </span>
   );
 }

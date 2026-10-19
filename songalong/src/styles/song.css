@@ -397,44 +397,21 @@
   color: var(--ink-faint);
   white-space: nowrap;
 }
-.ribbon .cl-line {
-  flex-wrap: nowrap;
-  justify-content: flex-start;
-  max-width: none;
-}
-.ribbon .cl-chord {
-  font-size: 25px;
-}
-.ribbon .cl-chord.now {
-  color: inherit;
-}
-.ribbon .cl-chord .now,
-.rb-chord.now {
-  color: var(--now);
-}
-.ribbon .cl-words {
-  font-size: 30px;
+/* the words only (the chord strip above shows the chords) */
+.rb-words,
+.rb-rest {
+  display: block;
+  font-size: 42px;
+  line-height: 1.3;
   white-space: pre;
+}
+.rb-words {
   color: var(--ink);
 }
-.rb-chords {
-  display: flex;
-  align-items: flex-end;
-}
-.rb-chord,
-.rb-rest {
-  flex: none;
-  display: block;
-  font-size: 25px;
-  line-height: 1.2;
-  padding-bottom: 46px;
-  background: linear-gradient(90deg, var(--ink-faint) 35%, transparent 0) 0 calc(100% - 18px) / 10px 2px repeat-x;
-}
+/* music without words: a dotted rest as long as it lasts */
 .rb-rest {
   color: var(--ink-faint);
-}
-.rb-chord.carried {
-  opacity: 0.45;
+  background: linear-gradient(90deg, var(--ink-faint) 35%, transparent 0) 0 calc(100% - 12px) / 10px 2px repeat-x;
 }
 .lane-playhead {
   position: absolute;
@@ -971,13 +948,9 @@
   .bar {
     min-width: 110px;
   }
-  .ribbon .cl-words {
-    font-size: 23px;
-  }
-  .ribbon .cl-chord,
-  .rb-chord,
+  .rb-words,
   .rb-rest {
-    font-size: 21px;
+    font-size: 32px;
   }
   .inst-row {
     flex-wrap: nowrap;

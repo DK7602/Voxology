@@ -352,7 +352,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
         {mode === "animated" ? (
           <>
             <ChordStrip key={part} engine={engine} view={view} lead={part === "lead"} />
-            <LyricsLane engine={engine} view={view} />
+            <LyricsLane engine={engine} />
           </>
         ) : (
           <SummaryView key={part} engine={engine} view={view} />
