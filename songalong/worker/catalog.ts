@@ -3,11 +3,11 @@
 // shared catalog so the next person gets it instantly.
 
 import type { PrepAnalysis } from "../shared/prep";
-import { guessSongName, tidyTitle, type SongName } from "../shared/songName";
+import { guessSongName, nameCandidates, tidyTitle, type SongName } from "../shared/songName";
 import { Timeline } from "../shared/timeline";
 import type { LyricLine, SongDoc } from "../shared/types";
 import { distinctChords, validateSongDoc } from "../shared/validate";
-import { alignPlain, alignSynced, transcribeAll, type AlignedLyrics, type SpeechAi } from "./align";
+import { alignPlain, alignSynced, alignVersion, transcribeAll, type AlignedLyrics, type SpeechAi } from "./align";
 import { findLyrics } from "./lyrics";
 import { encodeChords, newSongId } from "./songData";
 
@@ -60,7 +60,15 @@ export type Progress = (stage: string, fraction: number) => void;
 export async function lyricsFor(a: PrepAnalysis, ai: SpeechAi | undefined, progress: Progress, fetcher: typeof fetch = fetch) {
   let name = guessSongName(a.meta);
   progress("Finding the lyrics", 0.9);
-  const found = await findLyrics(name, a.meta.duration || a.detect.duration, fetcher);
+  const videoDuration = a.meta.duration || a.detect.duration;
+  let found: Awaited<ReturnType<typeof findLyrics>> = null;
+  for (const candidate of nameCandidates(a.meta)) {
+    found = await findLyrics(candidate, videoDuration, fetcher);
+    if (found) {
+      name = candidate;
+      break;
+    }
+  }
   let lyrics: AlignedLyrics = { lines: [], timing: "none" };
   let lyricSource = "";
   if (found) {
@@ -69,7 +77,11 @@ export async function lyricsFor(a: PrepAnalysis, ai: SpeechAi | undefined, progr
     if (found.instrumental) lyricSource = "instrumental";
     else if (found.synced.length) {
       progress("Lining up the lyrics with the video", 0.93);
-      lyrics = await alignSynced(found.synced, a.chunks, ai);
+      // the same recording: one offset fits; another version (a cover, a live take): follow the singing
+      const sameRecording = !found.duration || !videoDuration || Math.abs(found.duration - videoDuration) <= 12;
+      lyrics = sameRecording
+        ? await alignSynced(found.synced, a.chunks, ai)
+        : await alignVersion(found.synced, a.chunks, ai, found.duration, videoDuration);
       lyricSource = "LRCLIB";
     } else if (found.plain.length) {
       progress("Lining up the lyrics with the video", 0.93);

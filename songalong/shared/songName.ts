@@ -5,16 +5,17 @@ export interface SongName {
   title: string;
 }
 
+// Words that mark a bracketed / piped part of a title as decoration rather than the song's name.
 const NOISE =
-  /\b(official|video|audio|lyrics?|visuali[sz]er|music video|mv|hd|hq|4k|remaster(ed)?|explicit|clean|full song|with lyrics|lyric video|official audio|official video|official music video|color coded)\b/i;
+  /\b(official|video|audio|lyrics?|visuali[sz]er|music video|mv|hd|hq|4k|remaster(ed)?|explicit|clean|full song|with lyrics|lyric video|official audio|official video|official music video|color coded|cover|acoustic|live|karaoke|instrumental|unplugged|session|tutorial|lesson|chords|tabs?|playthrough|backing track)\b/i;
 
 /** Removes "(Official Video)", "[HD]", "| Lyrics" and similar decorations. */
 export function cleanTitle(s: string): string {
   let t = s;
   // bracketed decorations
   t = t.replace(/[([{【]([^)\]}】]*)[)\]}】]/g, (m, inner: string) => (NOISE.test(inner) ? "" : m));
-  // trailing " | Official Video", " - Lyrics"
-  t = t.replace(/\s*[|•]\s*[^|•]*$/g, (m) => (NOISE.test(m) ? "" : m));
+  // trailing " | Official Video", " || ACOUSTIC" (repeatedly: "| Ed Sheeran | Guitar Cover" keeps the name)
+  for (let k = 0; k < 3; k++) t = t.replace(/\s*[|•]+\s*[^|•]*$/, (m) => (NOISE.test(m) ? "" : m));
   t = t.replace(/\s+-\s+(official|lyrics?|audio|video)[^-]*$/i, "");
   return t.replace(/\s{2,}/g, " ").trim();
 }
@@ -56,4 +57,32 @@ export function tidyTitle(title: string, artist: string): string {
   if (!artist.trim()) return t;
   const escaped = artist.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return t.replace(new RegExp(`^${escaped}\\s*[-–—:]\\s*`, "i"), "").trim() || t;
+}
+
+/**
+ * The names worth looking a video's lyrics up under, most likely first. Uploads write
+ * "Artist - Song", but covers often write "Song - Artist" (or "Song | Artist"), so both orders
+ * are tried; yt-dlp's own artist / track tags come first when present.
+ */
+export function nameCandidates(meta: { title: string; channel: string; artist?: string; track?: string }): SongName[] {
+  const out: SongName[] = [];
+  const add = (n: SongName) => {
+    const artist = n.artist.trim();
+    const title = n.title.trim();
+    if (title && !out.some((o) => o.artist.toLowerCase() === artist.toLowerCase() && o.title.toLowerCase() === title.toLowerCase())) {
+      out.push({ artist, title });
+    }
+  };
+  if (meta.artist && meta.track) add(guessSongName(meta));
+  const title = cleanTitle(meta.title);
+  const parts = title
+    .split(/\s+[-–—|]+\s+/)
+    .map((p) => withoutFeatures(cleanTitle(p)).replace(/^["“]|["”]$/g, ""))
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    add({ artist: parts[0], title: parts.slice(1).join(" ") });
+    add({ artist: parts[parts.length - 1], title: parts.slice(0, -1).join(" ") });
+  }
+  add(guessSongName({ title: meta.title, channel: meta.channel }));
+  return out.slice(0, 3);
 }

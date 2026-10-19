@@ -106,20 +106,22 @@ export async function findLyrics(name: SongName, videoDuration: number, fetcher:
     );
     if (exact && (exact.syncedLyrics || exact.plainLyrics || exact.instrumental)) return toFound(exact);
   }
-  const searches = [
-    name.artist ? `${BASE}/search?${q({ track_name: name.title, artist_name: name.artist })}` : null,
-    `${BASE}/search?${q({ q: `${name.artist} ${name.title}`.trim() })}`,
-  ].filter((u): u is string => !!u);
-  for (const url of searches) {
+  // by artist + title: right at any length (a cover or live take differs from the record);
+  // the loose full-text search must also be close in length, or it may be another song
+  const searches: { url: string; strict: boolean }[] = [
+    ...(name.artist ? [{ url: `${BASE}/search?${q({ track_name: name.title, artist_name: name.artist })}`, strict: false }] : []),
+    { url: `${BASE}/search?${q({ q: `${name.artist} ${name.title}`.trim() })}`, strict: true },
+  ];
+  for (const { url, strict } of searches) {
     const list = await getJson<LrclibTrack[]>(url, fetcher);
     if (!list?.length) continue;
-    const best = pickBest(list, videoDuration);
+    const best = pickBest(list, videoDuration, strict);
     if (best) return toFound(best);
   }
   return null;
 }
 
-function pickBest(list: LrclibTrack[], videoDuration: number): LrclibTrack | null {
+function pickBest(list: LrclibTrack[], videoDuration: number, strict = true): LrclibTrack | null {
   const scored = list
     .filter((t) => t.syncedLyrics || t.plainLyrics)
     .map((t) => {
@@ -128,7 +130,7 @@ function pickBest(list: LrclibTrack[], videoDuration: number): LrclibTrack | nul
       const score = (t.syncedLyrics ? 0 : 30) + Math.min(lenDiff, 120);
       return { t, score, lenDiff };
     })
-    .filter((x) => videoDuration <= 0 || x.lenDiff < 90)
+    .filter((x) => !strict || videoDuration <= 0 || x.lenDiff < 90)
     .sort((a, b) => a.score - b.score);
   return scored[0]?.t ?? null;
 }

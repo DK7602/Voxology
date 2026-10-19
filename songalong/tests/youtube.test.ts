@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PrepAnalysis, PrepEvent, PrepareEvent } from "../shared/prep";
-import { cleanTitle, guessSongName, tidyTitle } from "../shared/songName";
-import { estimateOffset, matchInOrder } from "../worker/align";
+import { cleanTitle, guessSongName, nameCandidates, tidyTitle } from "../shared/songName";
+import { alignVersion, anchorChain, estimateOffset, matchInOrder, transcribe, warp } from "../worker/align";
 import { findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
 import { isoDuration } from "../worker/youtube";
 import { Client, makeEnv, signUp } from "./helpers/workerEnv";
@@ -127,6 +127,18 @@ describe("song names from YouTube", () => {
     expect(tidyTitle("A.B. - Song (Live)", "A.B.")).toBe("Song (Live)");
     expect(tidyTitle("Test Artist", "Test Artist")).toBe("Test Artist");
   });
+  it("reads cover titles both ways round, without the decorations", () => {
+    expect(nameCandidates({ title: "Paper Boats - Test Artist || ACOUSTIC", channel: "Some Covers" })).toEqual([
+      { artist: "Paper Boats", title: "Test Artist" },
+      { artist: "Test Artist", title: "Paper Boats" },
+    ]);
+    expect(nameCandidates({ title: "Paper Boats | Test Artist | Guitar Cover", channel: "x" }).slice(0, 2)).toEqual([
+      { artist: "Paper Boats", title: "Test Artist" },
+      { artist: "Test Artist", title: "Paper Boats" },
+    ]);
+    expect(nameCandidates({ title: "Test Artist - Paper Boats (Live)", channel: "x" })[0]).toEqual({ artist: "Test Artist", title: "Paper Boats" });
+    expect(cleanTitle("Paper Boats (Piano Karaoke)")).toBe("Paper Boats");
+  });
   it("reads ISO durations", () => {
     expect(isoDuration("PT3M45S")).toBe(225);
     expect(isoDuration("PT1H2M")).toBe(3720);
@@ -134,6 +146,52 @@ describe("song names from YouTube", () => {
 });
 
 describe("lyrics timing", () => {
+  it("times another version's lyrics by where the lines are heard", async () => {
+    // the record sings at 10, 14, 18, 22 s; this cover is faster and starts sooner
+    const lines = LINES.map((text, i) => ({ time: 10 + i * 4, text }));
+    const heard = [
+      { start: 4, end: 6, text: LINES[0] },
+      { start: 13, end: 15, text: LINES[3] },
+    ];
+    const chain = anchorChain(lines, heard);
+    expect(chain).toEqual([{ lyric: 10, video: 4 }, { lyric: 22, video: 13 }]);
+    expect(warp(chain, 16)).toBeCloseTo(8.5); // halfway between the anchors
+    const ai = { async run() { return { segments: heard }; } };
+    const out = await alignVersion(lines, [{ start: 0, mp3: "AAAA" }], ai, 120, 90);
+    expect(out.timing).toBe("aligned");
+    expect(out.lines.map((l) => Math.round(l.time * 10) / 10)).toEqual([4, 7, 10, 13]);
+    // nothing heard: the record's timing is scaled to the video's length
+    const silent = { async run() { return { segments: [] }; } };
+    expect((await alignVersion(lines, [{ start: 0, mp3: "AAAA" }], silent, 120, 60)).lines[0].time).toBe(5);
+  });
+  it("finds lyrics for a cover by artist and title even when its length differs", async () => {
+    const record = { id: 9, trackName: "Paper Boats", artistName: "Test Artist", duration: 200, instrumental: false, plainLyrics: LINES.join("\n"), syncedLyrics: LRC };
+    const byName = vi.fn(async (url: string | URL | Request) => {
+      const u = String(url);
+      if (u.includes("/search?track_name=")) return Response.json([record]);
+      if (u.includes("/search?q=")) return Response.json([record]);
+      return new Response("not found", { status: 404 });
+    });
+    const found = await findLyrics({ artist: "Test Artist", title: "Paper Boats" }, 82, byName as unknown as typeof fetch);
+    expect(found?.duration).toBe(200);
+    // a loose full-text match that long is not trusted
+    const looseOnly = vi.fn(async (url: string | URL | Request) =>
+      String(url).includes("/search?q=") ? Response.json([record]) : new Response("not found", { status: 404 }),
+    );
+    expect(await findLyrics({ artist: "", title: "Paper Boats" }, 82, looseOnly as unknown as typeof fetch)).toBeNull();
+  });
+  it("hears singing the voice filter drops", async () => {
+    const calls: boolean[] = [];
+    const ai = {
+      async run(_m: string, input: Record<string, unknown>) {
+        calls.push(input.vad_filter as boolean);
+        return input.vad_filter ? { segments: [] } : { segments: [{ start: 1, end: 3, text: LINES[0] }] };
+      },
+    };
+    const segs = await transcribe(ai, { start: 30, mp3: "AAAA" });
+    expect(calls).toEqual([true, false]);
+    expect(segs).toEqual([{ start: 31, end: 33, text: LINES[0] }]);
+  });
   it("tries LRCLIB again when it is busy", async () => {
     const saved = retryDelays.ms;
     retryDelays.ms = [0, 0, 0];
