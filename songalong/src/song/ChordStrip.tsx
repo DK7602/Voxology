@@ -161,7 +161,8 @@ export function ChordStrip({ engine, view, lead = false }: { engine: PlayerEngin
                   title={`Bar ${c.bar + 1}${c.carried ? " (held)" : ""} — click to jump, shift-click to loop bars`}
                 >
                   {cat !== "none" && <span className={"cat-dot cat-" + cat} aria-hidden="true" />}
-                  <ChordName symbol={shown} />
+                  {/* no chord (N.C.): a blank card */}
+                  {cat === "none" ? <span className="sr-only">No chord</span> : <ChordName symbol={shown} />}
                 </div>
               );
             })}

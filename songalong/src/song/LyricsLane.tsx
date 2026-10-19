@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { chordsInLine, gapAfterLine, indexAt } from "../../shared/timeline";
+import { parseChord } from "../../shared/music/chords";
 import type { SongDoc } from "../../shared/types";
 import { ChordName } from "../components/ChordName";
 import type { PlayerEngine } from "../player/engine";
@@ -23,6 +24,11 @@ interface Row {
   text: string;
   section?: string;
   chords: RowChord[];
+}
+
+/** "N.C.": nothing to play, so nothing is shown for it. */
+function isNoChord(name: string): boolean {
+  return (parseChord(name)?.category ?? "none") === "none";
 }
 
 /** The song as one row: the intro, each lyric line, and the instrumental breaks between them. */
@@ -176,7 +182,7 @@ export function LyricsLane({ engine, view }: { engine: PlayerEngine; view: Chord
                 {row.text.trim() ? (
                   <ChordLine
                     text={row.text}
-                    chords={row.chords.map((c) => ({
+                    chords={row.chords.filter((c) => !isNoChord(doc.chords[c.index].name)).map((c) => ({
                       name: view.shown(doc.chords[c.index].name),
                       col: c.col,
                       key: c.index,
@@ -217,7 +223,7 @@ function InstrumentalRow({ row, doc, view, pxPerBeat, nowIndex }: { row: Row; do
             data-ci={c.carried ? undefined : c.index}
             style={{ width: Math.min(1600, Math.max(56, (next - c.beat) * pxPerBeat)) }}
           >
-            <ChordName symbol={view.shown(doc.chords[c.index].name)} />
+            {!isNoChord(doc.chords[c.index].name) && <ChordName symbol={view.shown(doc.chords[c.index].name)} />}
           </span>
         );
       })}
