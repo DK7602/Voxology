@@ -161,7 +161,32 @@ export async function alignVersion(
   const segs = await transcribeSome(ai, chunks, chunks.map((_, i) => i));
   const anchors = anchorChain(lines, segs);
   if (!anchors.length) return { lines: scaled(), timing: "synced" };
-  return { lines: lines.map((l) => ({ ...l, time: Math.max(0, warp(anchors, l.time, ratio)) })), timing: "aligned" };
+  return { lines: versionLines(lines, anchors, ratio, videoDuration), timing: "aligned" };
+}
+
+/**
+ * Places the lyric lines on the video through the anchors. A stretch of the lyrics that the video
+ * gets through at under a third of the record's pace is a part this version leaves out (a verse,
+ * a repeated chorus): its lines are dropped rather than crammed together. Ends follow the
+ * version's usual pace.
+ */
+export function versionLines(lines: TimedLine[], anchors: Anchor[], ratio: number, videoDuration: number): TimedLine[] {
+  const stretchRate = (k: number) => (anchors[k + 1].video - anchors[k].video) / Math.max(1e-6, anchors[k + 1].lyric - anchors[k].lyric);
+  const rates = anchors.slice(1).map((_, k) => stretchRate(k)).filter((r) => r >= 0.5 && r <= 2).sort((a, b) => a - b);
+  const pace = rates.length ? rates[rates.length >> 1] : ratio;
+  const anchored = new Set(anchors.map((a) => a.lyric));
+  const out: TimedLine[] = [];
+  for (const l of lines) {
+    if (!anchored.has(l.time) && anchors.length >= 2) {
+      let k = -1;
+      for (let i = 0; i + 1 < anchors.length; i++) if (anchors[i].lyric < l.time && l.time < anchors[i + 1].lyric) k = i;
+      if (k >= 0 && stretchRate(k) < 0.33) continue; // not sung in this version
+    }
+    const time = warp(anchors, l.time, pace);
+    if (time < -1 || (videoDuration > 0 && time > videoDuration + 1)) continue;
+    out.push({ ...l, time: Math.max(0, time) });
+  }
+  return out;
 }
 
 export interface Anchor {

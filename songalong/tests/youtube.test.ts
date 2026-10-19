@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PrepAnalysis, PrepEvent, PrepareEvent } from "../shared/prep";
 import { cleanTitle, guessSongName, nameCandidates, tidyTitle } from "../shared/songName";
-import { alignVersion, anchorChain, estimateOffset, matchInOrder, transcribe, warp } from "../worker/align";
+import { alignVersion, anchorChain, estimateOffset, matchInOrder, transcribe, versionLines, warp } from "../worker/align";
 import { findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
 import { isoDuration } from "../worker/youtube";
 import { Client, makeEnv, signUp } from "./helpers/workerEnv";
@@ -179,6 +179,19 @@ describe("lyrics timing", () => {
       String(url).includes("/search?q=") ? Response.json([record]) : new Response("not found", { status: 404 }),
     );
     expect(await findLyrics({ artist: "", title: "Paper Boats" }, 82, looseOnly as unknown as typeof fetch)).toBeNull();
+  });
+  it("leaves out the parts another version doesn't sing", async () => {
+    // record: lines every 4 s; the version sings lines 0-1, skips 2-5, then sings 6-7
+    const lines = Array.from({ length: 8 }, (_, i) => ({ time: 10 + i * 4, text: `line ${i} words here` }));
+    const anchors = [
+      { lyric: 10, video: 5 },
+      { lyric: 14, video: 9 },
+      { lyric: 34, video: 11 },
+      { lyric: 38, video: 15 },
+    ];
+    const out = versionLines(lines, anchors, 1, 60);
+    expect(out.map((l) => l.text.split(" ")[1])).toEqual(["0", "1", "6", "7"]);
+    expect(out.map((l) => l.time)).toEqual([5, 9, 11, 15]);
   });
   it("hears singing the voice filter drops", async () => {
     const calls: boolean[] = [];
