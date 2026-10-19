@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
-import { chordsInLine, gapAfterLine, indexAt } from "../../shared/timeline";
+import { chordsInLine, gapAfterLine, indexAt, lineWords } from "../../shared/timeline";
 import { parseChord } from "../../shared/music/chords";
 import type { SongDoc } from "../../shared/types";
 import { ChordName } from "../components/ChordName";
@@ -24,6 +24,9 @@ interface Row {
   text: string;
   section?: string;
   chords: RowChord[];
+  /** when each word is sung (beats), when known */
+  words?: number[];
+  wordsEnd?: number;
 }
 
 /** "N.C.": nothing to play, so nothing is shown for it. */
@@ -42,12 +45,14 @@ export function ribbonRows(doc: SongDoc, length: number): Row[] {
   doc.lines.forEach((line, i) => {
     const gap = gapAfterLine(doc, i);
     const until = i + 1 < doc.lines.length ? doc.lines[i + 1].beat : Math.max(length, line.beat + 1);
+    const words = lineWords(line);
     rows.push({
       start: line.beat,
       end: gap ? gap.start : until,
       text: line.text,
       section: line.section,
       chords: chordsInLine(doc, i).map((p) => ({ index: p.index, beat: p.carried ? line.beat : p.chord.beat, col: p.col, carried: p.carried })),
+      ...(words ? { words, wordsEnd: line.wordsEnd } : {}),
     });
     if (gap) {
       rows.push({
@@ -129,6 +134,22 @@ export function LyricsLane({ engine, view }: { engine: PlayerEngine; view: Chord
         const el = rowRefs.current[r];
         if (!el) return;
         const box = el.getBoundingClientRect();
+        if (row.words) {
+          // each word reaches "now" as it is sung; the last one is crossed while it lasts
+          let lastB = -Infinity;
+          let lastRight = 0;
+          row.words.forEach((b, k) => {
+            const we = el.querySelector(`[data-wi="${k}"]`);
+            if (!we) return;
+            const wb = we.getBoundingClientRect();
+            pts.push({ b, x: wb.left - base });
+            lastB = b;
+            lastRight = wb.right - base;
+          });
+          const endB = Math.min(row.wordsEnd ?? lastB + 1, row.end - 0.1);
+          if (lastB > -Infinity && endB > lastB) pts.push({ b: endB, x: lastRight });
+          return;
+        }
         pts.push({ b: row.start, x: box.left - base });
         let lastB = row.start;
         for (const c of row.chords) {
@@ -182,6 +203,7 @@ export function LyricsLane({ engine, view }: { engine: PlayerEngine; view: Chord
                 {row.text.trim() ? (
                   <ChordLine
                     text={row.text}
+                    wordMarks={!!row.words}
                     chords={row.chords.filter((c) => !isNoChord(doc.chords[c.index].name)).map((c) => ({
                       name: view.shown(doc.chords[c.index].name),
                       col: c.col,

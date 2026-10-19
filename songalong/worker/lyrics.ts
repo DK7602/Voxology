@@ -7,6 +7,10 @@ export interface TimedLine {
   /** seconds from the start of the recording the lyrics were timed to */
   time: number;
   text: string;
+  /** when each word (run of non-spaces) is sung, once heard; seconds */
+  words?: number[];
+  /** when the last word ends; seconds */
+  wordsEnd?: number;
 }
 
 export interface FoundLyrics {

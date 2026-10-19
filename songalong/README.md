@@ -22,7 +22,8 @@ One **Cloudflare Worker** serves both the React app (static assets) and the API 
 Where songs come from:
 - **Search any song.** Pick a result and SongAlong prepares it in about 20–45 seconds. It fetches the
   audio, finds the beat, key and chords, looks up timed lyrics (LRCLIB) and lines them up with the
-  video using speech recognition. Then it plays inside SongAlong. Prepared songs are saved to a
+  video word by word using speech recognition, so the lyrics follow the singing. Then it plays
+  inside SongAlong. Prepared songs are saved to a
   shared catalog, so they open instantly next time, for everyone.
   - The audio work runs in a **Cloudflare container** (`prep/`: yt-dlp + ffmpeg + the chord
     detector). YouTube sometimes refuses cloud servers; those songs go to the user's **PC helper**

@@ -26,6 +26,11 @@ export interface LyricLine {
   section?: string;
   /** optional end beat (an instrumental gap follows) */
   end?: number;
+  /** when each word is sung (beats): one per word of `text` (runs of non-spaces), found by
+   *  listening to the song. Lets the lyrics follow the singing word by word. */
+  words?: number[];
+  /** when the last word ends (beats) */
+  wordsEnd?: number;
 }
 
 export interface SongDoc {

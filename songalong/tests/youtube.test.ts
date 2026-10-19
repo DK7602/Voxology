@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PrepAnalysis, PrepEvent, PrepareEvent } from "../shared/prep";
 import { cleanTitle, guessSongName, nameCandidates, tidyTitle } from "../shared/songName";
-import { alignVersion, anchorChain, estimateOffset, matchInOrder, transcribe, versionLines, warp } from "../worker/align";
+import { alignVersion, anchorChain, estimateOffset, matchInOrder, timeWords, transcribe, versionLines, warp, type Segment } from "../worker/align";
 import { findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
 import { isoDuration } from "../worker/youtube";
 import { Client, makeEnv, signUp } from "./helpers/workerEnv";
@@ -156,13 +156,11 @@ describe("lyrics timing", () => {
     const chain = anchorChain(lines, heard);
     expect(chain).toEqual([{ lyric: 10, video: 4 }, { lyric: 22, video: 13 }]);
     expect(warp(chain, 16)).toBeCloseTo(8.5); // halfway between the anchors
-    const ai = { async run() { return { segments: heard }; } };
-    const out = await alignVersion(lines, [{ start: 0, mp3: "AAAA" }], ai, 120, 90);
+    const out = alignVersion(lines, heard, 120, 90);
     expect(out.timing).toBe("aligned");
     expect(out.lines.map((l) => Math.round(l.time * 10) / 10)).toEqual([4, 7, 10, 13]);
     // nothing heard: the record's timing is scaled to the video's length
-    const silent = { async run() { return { segments: [] }; } };
-    expect((await alignVersion(lines, [{ start: 0, mp3: "AAAA" }], silent, 120, 60)).lines[0].time).toBe(5);
+    expect(alignVersion(lines, [], 120, 60).lines[0].time).toBe(5);
   });
   it("finds lyrics for a cover by artist and title even when its length differs", async () => {
     const record = { id: 9, trackName: "Paper Boats", artistName: "Test Artist", duration: 200, instrumental: false, plainLyrics: LINES.join("\n"), syncedLyrics: LRC };
@@ -264,13 +262,46 @@ describe("lyrics timing", () => {
       },
     };
     const segs = await transcribe(ai, { start: 30, mp3: "AAAA" });
-    expect(segs[0].words?.[0]).toEqual({ word: " Today", start: 38.1 });
+    expect(segs[0].words?.[0]).toMatchObject({ word: " Today", start: 38.1 });
     const est = estimateOffset(lines, segs);
     expect(est.matches).toBe(4);
     expect(est.offset).toBeCloseTo(15, 1);
     // the phrase starts alone would have put the words 2.5 s early
     const phrasesOnly = segs.map(({ start, end, text }) => ({ start, end, text }));
     expect(estimateOffset(lines, phrasesOnly).offset).toBeLessThan(14);
+  });
+  it("times each word where it is sung", () => {
+    // line times as the lyrics site has them (each a little off), and what is heard
+    const lines = [
+      { time: 10, text: "Candles in the morning window" },
+      { time: 15.5, text: "Paper boats along the river, ooh" },
+      { time: 19, text: "Every bell is ringing slower" },
+      { time: 25, text: "Carry me home across the water" },
+    ];
+    const seg = (words: [string, number, number][]): Segment => ({
+      start: words[0][1],
+      end: words[words.length - 1][2],
+      text: words.map((w) => w[0]).join(" "),
+      words: words.map(([word, start, end]) => ({ word: ` ${word}`, start, end })),
+    });
+    const segs = [
+      // the phrase starts in the intro: "Candles" seems to last 2.3 s
+      seg([["Candles", 9, 11.3], ["in", 11.3, 11.5], ["the", 11.5, 11.7], ["morning", 11.7, 12.3], ["window.", 12.3, 13.4]]),
+      // sung early; the held "ooh" isn't heard
+      seg([["Paper", 14.2, 14.6], ["boats", 14.6, 15], ["along", 15, 15.5], ["the", 15.5, 15.8], ["river.", 15.8, 17.5]]),
+      // "ringing" sung as "ringin'", "bell" misheard
+      seg([["Every", 18.1, 18.4], ["bill", 18.4, 18.8], ["is", 18.8, 19], ["ringin", 19, 19.6], ["slower", 19.6, 20.8]]),
+    ];
+    const out = timeWords(lines, segs);
+    expect(out[0].time).toBeCloseTo(10.58, 2); // shortly before "Candles" ends
+    expect(out[0].words!.slice(1)).toEqual([11.3, 11.5, 11.7, 12.3]);
+    expect(out[0].wordsEnd).toBe(13.4);
+    expect(out[1].time).toBe(14.2); // earlier than the lyrics site said
+    expect(out[1].words![5]).toBeGreaterThan(15.8); // "ooh" after "river"
+    expect(out[1].words![5]).toBeLessThanOrEqual(19);
+    expect(out[2].words).toEqual([18.1, 18.4, 18.8, 19, 19.6]); // "bell" placed between its neighbours
+    // never heard: keeps its time, no word times
+    expect(out[3]).toEqual({ time: 25, text: "Carry me home across the water" });
   });
   it("places plain lyrics in order, filling gaps", () => {
     const segs = [

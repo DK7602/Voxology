@@ -95,6 +95,22 @@ export interface PlacedChord {
   carried: boolean;
 }
 
+/** Where each word of a lyric line starts in its text (a word is a run of non-spaces). */
+export function wordStarts(text: string): number[] {
+  const out: number[] = [];
+  const re = /\S+/g;
+  for (let m = re.exec(text); m; m = re.exec(text)) out.push(m.index);
+  return out;
+}
+
+/** The line's word times, when they still fit it: one per word, starting where the line does
+ *  (an edit that moves the line leaves them behind). */
+export function lineWords(line: LyricLine): number[] | null {
+  const w = line.words;
+  if (!w?.length || w.length !== wordStarts(line.text).length || Math.abs(w[0] - line.beat) > 0.5) return null;
+  return w;
+}
+
 /** Beats a sung line takes, guessed from its length (lyrics usually carry only start times). */
 function sungBeats(text: string, bpm: number): number {
   const seconds = Math.min(12, Math.max(1.2, text.length / 12 + 0.6));
@@ -125,8 +141,9 @@ export function lineSpan(doc: SongDoc, i: number): LineSpan {
     // a chord sheet placed these chords in the words: they all belong to the line
     return { start, cut: until, until, textEnd: until };
   } else {
-    const guess = start + sungBeats(line.text, doc.bpm);
-    textEnd = until - guess > 2 * bpb ? guess : until;
+    const words = lineWords(line);
+    const sung = words ? (line.wordsEnd ?? words[words.length - 1] + 1) : start + sungBeats(line.text, doc.bpm);
+    textEnd = until - sung > 2 * bpb ? sung : until;
   }
   // a chord just after the last word still belongs to the line
   const cut = textEnd < until ? Math.min(until, textEnd + 1) : until;
@@ -135,10 +152,12 @@ export function lineSpan(doc: SongDoc, i: number): LineSpan {
 
 /** Chords over line i, with the column each sits at. A chord still sounding from before the
  *  line is included (carried) at column 0 when no chord starts with the line. Columns not
- *  stored are placed in proportion to time across the text, snapped to the start of a word. */
+ *  stored go over the word being sung when the chord changes (with word times), or are placed
+ *  in proportion to time across the text, snapped to the start of a word. */
 export function chordsInLine(doc: SongDoc, i: number): PlacedChord[] {
   const line = doc.lines[i];
   const { start, cut, textEnd } = lineSpan(doc, i);
+  const words = lineWords(line);
   const out: PlacedChord[] = [];
   const eps = 1e-6;
   const sounding = indexAt(doc.chords, start + eps);
@@ -152,7 +171,9 @@ export function chordsInLine(doc: SongDoc, i: number): PlacedChord[] {
     const col =
       ch.col !== undefined
         ? Math.min(ch.col, line.text.length)
-        : snapToWord(line.text, Math.round(((ch.beat - start) / Math.max(textEnd - start, eps)) * line.text.length));
+        : words
+          ? colAtBeat(line, words, ch.beat)
+          : snapToWord(line.text, Math.round(((ch.beat - start) / Math.max(textEnd - start, eps)) * line.text.length));
     out.push({ chord: ch, index: c, col: Math.max(0, col), carried: false });
   }
   return out;
@@ -183,6 +204,19 @@ export function gapAfterLine(doc: SongDoc, i: number): GapRow | null {
   }
   if (!out.some((p) => !p.carried)) return null;
   return { start: cut, end: until, chords: out };
+}
+
+/** The column of the word being sung at beat b: the word it falls in, or the next one when b is
+ *  in the second half of the gap to it; past the last word's end, the end of the text. */
+function colAtBeat(line: LyricLine, words: number[], b: number): number {
+  const starts = wordStarts(line.text);
+  let k = 0;
+  while (k + 1 < words.length && words[k + 1] <= b + 1e-6) k++;
+  if (b < words[0]) return 0;
+  const last = k === words.length - 1;
+  const next = last ? (line.wordsEnd ?? words[k] + 1) : words[k + 1];
+  if (last) return b >= next ? line.text.length : starts[k];
+  return b - words[k] < (next - words[k]) / 2 ? starts[k] : starts[k + 1];
 }
 
 function snapToWord(text: string, col: number): number {

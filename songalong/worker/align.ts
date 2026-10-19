@@ -1,9 +1,11 @@
 // Putting lyrics on the video's clock. LRCLIB's timing belongs to the record; the video may have
-// an intro or a different edit, so a few pieces of the song are run through speech recognition
-// and matched to the lyric lines to find the offset. When there is no timing at all, the plain
+// an intro or a different edit, so the song is run through speech recognition and the lyric lines
+// are matched to what is heard to find the offset. When there is no timing at all, the plain
 // lyrics are matched line by line, and with no lyrics the recognised words become the lyrics.
+// Last, every lyric word is matched to the heard words, so the lyrics can follow the singing.
 
 import type { PrepChunk } from "../shared/prep";
+import { wordStarts } from "../shared/timeline";
 import type { TimedLine } from "./lyrics";
 
 export interface Segment {
@@ -12,13 +14,16 @@ export interface Segment {
   text: string;
   /** when each word starts: much closer than the segment's start, which often falls in the
    *  music before the singing, or a line or two early when a segment holds several lines */
-  words?: { word: string; start: number }[];
+  words?: { word: string; start: number; end?: number }[];
 }
 
-/** One heard word (as words() spells it) and when it starts. */
+/** One heard word (as words() spells it), when it starts and ends. */
 export interface HeardWord {
   text: string;
   start: number;
+  end: number;
+  /** the first word of a heard phrase: its start may lie in the music before it */
+  lead?: boolean;
 }
 
 /** What we need from the Workers AI binding (kept narrow so tests can fake it). */
@@ -49,7 +54,13 @@ export async function transcribe(ai: SpeechAi, chunk: PrepChunk): Promise<Segmen
       .map((s) => {
         const seg: Segment = { start: chunk.start + s.start, end: chunk.start + s.end, text: s.text.trim() };
         const timed = (s.words ?? []).filter((w) => typeof w.word === "string" && Number.isFinite(w.start));
-        if (timed.length) seg.words = timed.map((w) => ({ word: w.word, start: chunk.start + w.start }));
+        if (timed.length) {
+          seg.words = timed.map((w) => ({
+            word: w.word,
+            start: chunk.start + w.start,
+            ...(Number.isFinite(w.end) ? { end: chunk.start + w.end } : {}),
+          }));
+        }
         return seg;
       });
     // no segment timing but some words: one segment for the piece
@@ -102,12 +113,15 @@ export function heardWords(segs: Segment[]): HeardWord[] {
   const out: HeardWord[] = [];
   for (const s of segs) {
     if (s.words?.length) {
-      for (const w of s.words) for (const text of words(w.word)) out.push({ text, start: w.start });
+      s.words.forEach((w, i) => {
+        const end = w.end ?? s.words![i + 1]?.start ?? s.end;
+        for (const text of words(w.word)) out.push({ text, start: w.start, end: Math.max(w.start, end), lead: i === 0 });
+      });
       continue;
     }
     const ws = words(s.text);
     const step = s.end > s.start ? (s.end - s.start) / ws.length : 0;
-    ws.forEach((text, i) => out.push({ text, start: s.start + i * step }));
+    ws.forEach((text, i) => out.push({ text, start: s.start + i * step, end: s.start + (i + 1) * step, lead: i === 0 }));
   }
   return out.sort((a, b) => a.start - b.start);
 }
@@ -161,12 +175,12 @@ function median(xs: number[]): number {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-/** Runs speech recognition on the chunks at these indexes, a few at a time. */
-async function transcribeSome(ai: SpeechAi, chunks: PrepChunk[], idx: number[]): Promise<Segment[]> {
+/** Runs speech recognition over the whole song, a few pieces at a time. */
+export async function listen(chunks: PrepChunk[], ai: SpeechAi | undefined): Promise<Segment[]> {
+  if (!ai) return [];
   const out: Segment[] = [];
-  for (let i = 0; i < idx.length; i += 3) {
-    const batch = idx.slice(i, i + 3).filter((k) => k >= 0 && k < chunks.length);
-    const results = await Promise.all(batch.map((k) => transcribe(ai, chunks[k])));
+  for (let i = 0; i < chunks.length; i += 4) {
+    const results = await Promise.all(chunks.slice(i, i + 4).map((c) => transcribe(ai, c)));
     out.push(...results.flat());
   }
   return out.sort((a, b) => a.start - b.start);
@@ -179,23 +193,8 @@ export interface AlignedLyrics {
   timing: LyricsTiming;
 }
 
-/** Timed (LRC) lyrics -> video time. Listens to the pieces where the singing should start, and a
- *  few more if needed, until enough lines are heard to agree on the offset. */
-export async function alignSynced(lines: TimedLine[], chunks: PrepChunk[], ai: SpeechAi | undefined, chunkSeconds = 30): Promise<AlignedLyrics> {
-  if (!ai || !chunks.length) return { lines, timing: "synced" };
-  const firstSung = lines.find((l) => l.text)?.time ?? 0;
-  const first = Math.floor(firstSung / chunkSeconds);
-  const order = [first, first + 1, first + 2, first - 1, first + 3, first + 4, Math.floor(chunks.length / 2)];
-  const tried = new Set<number>();
-  const segs: Segment[] = [];
-  for (let round = 0; round < order.length; round += 2) {
-    const next = order.slice(round, round + 2).filter((k) => k >= 0 && k < chunks.length && !tried.has(k));
-    next.forEach((k) => tried.add(k));
-    segs.push(...(await transcribeSome(ai, chunks, next)));
-    const est = estimateOffset(lines, segs);
-    if (est.matches >= 3) return { lines: lines.map((l) => ({ ...l, time: l.time + est.offset })), timing: "aligned" };
-    if (tried.size >= 6) break;
-  }
+/** Timed (LRC) lyrics -> video time: the offset most heard lines agree on. */
+export function alignSynced(lines: TimedLine[], segs: Segment[]): AlignedLyrics {
   const est = estimateOffset(lines, segs);
   if (est.matches >= 1) return { lines: lines.map((l) => ({ ...l, time: l.time + est.offset })), timing: "aligned" };
   return { lines, timing: "synced" };
@@ -207,17 +206,9 @@ export async function alignSynced(lines: TimedLine[], chunks: PrepChunk[], ai: S
  * video time, kept in order), and the lyrics' own timing is stretched between them. With no
  * anchor at all, the timing is scaled to the video's length.
  */
-export async function alignVersion(
-  lines: TimedLine[],
-  chunks: PrepChunk[],
-  ai: SpeechAi | undefined,
-  lyricDuration: number,
-  videoDuration: number,
-): Promise<AlignedLyrics> {
+export function alignVersion(lines: TimedLine[], segs: Segment[], lyricDuration: number, videoDuration: number): AlignedLyrics {
   const ratio = lyricDuration > 0 && videoDuration > 0 ? videoDuration / lyricDuration : 1;
   const scaled = () => lines.map((l) => ({ ...l, time: l.time * ratio }));
-  if (!ai || !chunks.length) return { lines: scaled(), timing: "synced" };
-  const segs = await transcribeSome(ai, chunks, chunks.map((_, i) => i));
   const anchors = anchorChain(lines, segs);
   if (!anchors.length) return { lines: scaled(), timing: "synced" };
   return { lines: versionLines(lines, anchors, ratio, videoDuration), timing: "aligned" };
@@ -300,11 +291,9 @@ export function warp(anchors: Anchor[], t: number, fallbackRate = 1): number {
 }
 
 /** Plain lyrics (no timing) -> lines placed where speech recognition hears them, in order. */
-export async function alignPlain(plain: string[], chunks: PrepChunk[], ai: SpeechAi | undefined): Promise<AlignedLyrics> {
-  const sung = plain.filter((l) => l.trim());
-  if (!ai || !chunks.length) return { lines: [], timing: "none" };
-  const segs = await transcribeSome(ai, chunks, chunks.map((_, i) => i));
-  return { lines: matchInOrder(sung, segs), timing: "aligned" };
+export function alignPlain(plain: string[], segs: Segment[]): AlignedLyrics {
+  if (!segs.length) return { lines: [], timing: "none" };
+  return { lines: matchInOrder(plain.filter((l) => l.trim()), segs), timing: "aligned" };
 }
 
 /** Greedy in-order matching of lines to segments; unmatched lines are spread between neighbours. */
@@ -343,8 +332,131 @@ export function matchInOrder(lines: string[], segs: Segment[]): TimedLine[] {
 }
 
 /** No lyrics found anywhere: the words speech recognition hears become the lyric lines. */
-export async function transcribeAll(chunks: PrepChunk[], ai: SpeechAi | undefined): Promise<AlignedLyrics> {
-  if (!ai || !chunks.length) return { lines: [], timing: "none" };
-  const segs = await transcribeSome(ai, chunks, chunks.map((_, i) => i));
+export function transcribeAll(segs: Segment[]): AlignedLyrics {
+  if (!segs.length) return { lines: [], timing: "none" };
   return { lines: segs.map((s) => ({ time: s.words?.[0]?.start ?? s.start, text: s.text })), timing: "transcribed" };
+}
+
+/** How far (seconds) a word may be heard from where its line's timing expects it. */
+const WORD_WINDOW = 6;
+
+/** A word as it is compared: no apostrophes, and "-ing" sung as "-in'". */
+function matchKey(w: string): string {
+  return w.replace(/'/g, "").replace(/ing$/, "in");
+}
+
+function wordMatch(a: string, b: string): number {
+  if (a === b) return 1;
+  if (a.length >= 4 && b.length >= 4 && (a.startsWith(b) || b.startsWith(a) || editDistance1(a, b))) return 0.7;
+  return 0;
+}
+
+/** At most one letter added, dropped or changed. */
+function editDistance1(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1);
+  return a.length > b.length ? a.slice(i + 1) === b.slice(i) : a.slice(i) === b.slice(i + 1);
+}
+
+/** When a heard word starts. A phrase's first word that lasts long has most likely been given the
+ *  music before it, so it is taken to start shortly before it ends. */
+function sungStart(h: HeardWord): number {
+  if (h.lead && h.end - h.start > 1) return h.end - Math.min(h.end - h.start, 0.3 + 0.06 * h.text.length);
+  return h.start;
+}
+
+/**
+ * Times every lyric word by matching the lyrics, word by word and in order, to what speech
+ * recognition heard (each word only near where its line is expected). A line with enough of its
+ * words heard gets `words` (and starts at its first word); the words in between that weren't
+ * heard are spread by their place in the text. Lines barely heard keep their timing.
+ */
+export function timeWords(lines: TimedLine[], segs: Segment[]): TimedLine[] {
+  const heard = heardWords(segs);
+  if (!heard.length || !lines.length) return lines;
+  const keys = heard.map((h) => matchKey(h.text));
+  const want: { key: string; expect: number }[] = [];
+  const layout = lines.map((l, li) => {
+    const starts = wordStarts(l.text);
+    const next = lines[li + 1]?.time ?? l.time + 8;
+    const span = Math.max(0.5, Math.min(next - l.time, 0.07 * l.text.length + 0.6));
+    for (const st of starts) {
+      const token = l.text.slice(st).split(/\s/, 1)[0];
+      want.push({ key: matchKey(words(token)[0] ?? ""), expect: l.time + (span * st) / Math.max(1, l.text.length) });
+    }
+    return starts;
+  });
+
+  // the best in-order matching (longest common subsequence, weighted by how well words match)
+  const n = want.length;
+  const m = heard.length;
+  const W = m + 1;
+  const score = new Float32Array((n + 1) * W);
+  const move = new Uint8Array((n + 1) * W); // 1: lyric word not heard, 2: heard word not in the lyrics, 3: match
+  for (let i = 1; i <= n; i++) {
+    const a = want[i - 1];
+    for (let j = 1; j <= m; j++) {
+      let best = score[(i - 1) * W + j];
+      let mv = 1;
+      if (score[i * W + j - 1] > best) {
+        best = score[i * W + j - 1];
+        mv = 2;
+      }
+      if (a.key && Math.abs(heard[j - 1].start - a.expect) <= WORD_WINDOW) {
+        const s = wordMatch(a.key, keys[j - 1]);
+        if (s > 0 && score[(i - 1) * W + j - 1] + s > best) {
+          best = score[(i - 1) * W + j - 1] + s;
+          mv = 3;
+        }
+      }
+      score[i * W + j] = best;
+      move[i * W + j] = mv;
+    }
+  }
+  const at: (HeardWord | null)[] = new Array(n).fill(null);
+  for (let i = n, j = m; i > 0 && j > 0; ) {
+    const mv = move[i * W + j];
+    if (mv === 3) at[--i] = heard[--j];
+    else if (mv === 1) i--;
+    else j--;
+  }
+
+  const out: TimedLine[] = [];
+  let first = 0;
+  let floor = -Infinity; // nothing may come before the previous line's last word
+  lines.forEach((l, li) => {
+    const starts = layout[li];
+    const mine = at.slice(first, first + starts.length);
+    first += starts.length;
+    const hits = mine.flatMap((h, k) => (h ? [{ k, t: sungStart(h), end: h.end }] : []));
+    const ceiling = lines[li + 1]?.time ?? Infinity;
+    if (!starts.length || hits.length < Math.max(1, Math.ceil(starts.length / 3))) {
+      const time = Math.max(l.time, floor);
+      out.push({ text: l.text, time });
+      floor = Math.max(floor, time);
+      return;
+    }
+    // seconds per letter, for words before the first / after the last heard one
+    const a = hits[0];
+    const z = hits[hits.length - 1];
+    const perChar = z.k > a.k ? Math.min(0.25, Math.max(0.04, (z.t - a.t) / Math.max(1, starts[z.k] - starts[a.k]))) : 0.08;
+    const times = starts.map((st, k) => {
+      const h = mine[k];
+      if (h) return sungStart(h);
+      const before = [...hits].reverse().find((x) => x.k < k);
+      const after = hits.find((x) => x.k > k);
+      if (before && after) return before.t + ((after.t - before.t) * (st - starts[before.k])) / Math.max(1, starts[after.k] - starts[before.k]);
+      if (after) return Math.max(floor, after.t - (starts[after.k] - st) * perChar);
+      return Math.min(ceiling, before!.t + (st - starts[before!.k]) * perChar);
+    });
+    for (let k = 1; k < times.length; k++) times[k] = Math.max(times[k], times[k - 1]);
+    const lastWord = times.length - 1;
+    const lastHeard = mine[lastWord];
+    const wordsEnd = lastHeard ? Math.max(lastHeard.end, times[lastWord]) : times[lastWord] + 0.3 + 0.06 * (l.text.length - starts[lastWord]);
+    out.push({ text: l.text, time: times[0], words: times, wordsEnd });
+    floor = Math.max(floor, times[lastWord]);
+  });
+  return out;
 }

@@ -4,7 +4,9 @@ import { exportChordPro, importChordSheet } from "../shared/chordpro";
 import { parseChord } from "../shared/music/chords";
 import { bestCapo, capoOptions } from "../shared/music/capo";
 import { songToMidi } from "../shared/midi";
-import { Timeline, bars, chordsInLine, indexAt } from "../shared/timeline";
+import { Timeline, bars, chordsInLine, indexAt, lineWords } from "../shared/timeline";
+import { validateSongDoc } from "../shared/validate";
+import type { SongDoc } from "../shared/types";
 
 describe("demo songs", () => {
   it("parse into valid documents", () => {
@@ -47,6 +49,36 @@ describe("timeline", () => {
     const b = bars(doc, doc.length);
     expect(b.length).toBe(doc.length / 4);
     expect(b[0].changes[0].chordIndex).toBe(0);
+  });
+  it("puts chords over the word being sung when the line has word times", () => {
+    const doc: SongDoc = {
+      ...DEMO_SONGS[0].doc,
+      bpm: 120,
+      chords: [
+        { beat: 0, name: "G" },
+        { beat: 5.2, name: "D" }, // early in "boats"
+        { beat: 7.4, name: "Em" }, // late in the gap after "along": goes over "the"
+        { beat: 12, name: "C" }, // after the last word ends
+      ],
+      // "Paper boats along the river": a long "river" held to beat 11
+      lines: [{ beat: 4, text: "Paper boats along the river", words: [4, 5, 6, 8, 8.5], wordsEnd: 11 }],
+      length: 16,
+    };
+    const cols = chordsInLine(doc, 0).map((p) => [p.chord.name, p.col, p.carried]);
+    expect(cols).toEqual([
+      ["G", 0, true],
+      ["D", 6, false],
+      ["Em", 18, false],
+      ["C", 27, false],
+    ]);
+    // a line moved since its words were timed leaves the word times out
+    expect(lineWords({ ...doc.lines[0], beat: 6 })).toBeNull();
+    expect(lineWords({ ...doc.lines[0], text: "Paper boats" })).toBeNull();
+    // saving keeps word times only when there is one per word, in order
+    const saved = validateSongDoc({ ...doc, lines: [doc.lines[0], { beat: 20, text: "two words", words: [21] }, { beat: 30, text: "out of order", words: [30, 32, 31] }] });
+    expect(saved.lines[0]).toMatchObject({ words: [4, 5, 6, 8, 8.5], wordsEnd: 11 });
+    expect(saved.lines[1].words).toBeUndefined();
+    expect(saved.lines[2].words).toBeUndefined();
   });
 });
 

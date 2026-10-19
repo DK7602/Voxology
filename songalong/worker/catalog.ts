@@ -7,7 +7,7 @@ import { guessSongName, nameCandidates, tidyTitle, type SongName } from "../shar
 import { Timeline } from "../shared/timeline";
 import type { LyricLine, SongDoc } from "../shared/types";
 import { distinctChords, validateSongDoc } from "../shared/validate";
-import { alignPlain, alignSynced, alignVersion, transcribeAll, type AlignedLyrics, type SpeechAi } from "./align";
+import { alignPlain, alignSynced, alignVersion, listen, timeWords, transcribeAll, type AlignedLyrics, type Segment, type SpeechAi } from "./align";
 import { findLyrics } from "./lyrics";
 import { encodeChords, newSongId } from "./songData";
 
@@ -35,6 +35,7 @@ export function buildSongDoc(a: PrepAnalysis, name: SongName, lyrics: AlignedLyr
   if (credits) doc.credits = credits;
   const tl = new Timeline(doc);
   const lines: LyricLine[] = [];
+  const toBeat = (t: number) => Math.round(tl.timeToBeat(t) * 100) / 100;
   for (const l of lyrics.lines) {
     const beat = Math.round(tl.timeToBeat(l.time) * 4) / 4;
     const prev = lines.at(-1);
@@ -46,9 +47,16 @@ export function buildSongDoc(a: PrepAnalysis, name: SongName, lyrics: AlignedLyr
     if (beat < -8 || beat > d.length + 8) continue;
     if (prev && Math.abs(prev.beat - beat) < 0.25) {
       prev.text = `${prev.text} / ${l.text}`.slice(0, 500);
+      delete prev.words;
+      delete prev.wordsEnd;
       continue;
     }
-    lines.push({ beat, text: l.text.slice(0, 500) });
+    const line: LyricLine = { beat, text: l.text.slice(0, 500) };
+    if (l.words?.length && line.text === l.text) {
+      line.words = l.words.map(toBeat);
+      if (l.wordsEnd !== undefined) line.wordsEnd = toBeat(l.wordsEnd);
+    }
+    lines.push(line);
   }
   doc.lines = lines;
   return doc;
@@ -71,29 +79,39 @@ export async function lyricsFor(a: PrepAnalysis, ai: SpeechAi | undefined, progr
   }
   let lyrics: AlignedLyrics = { lines: [], timing: "none" };
   let lyricSource = "";
+  // what speech recognition hears over the whole song, once (not needed for instrumentals)
+  let heard: Segment[] | null = null;
+  const hear = async () => {
+    if (!heard) {
+      progress("Listening to the singing", 0.92);
+      heard = await listen(a.chunks, ai);
+    }
+    return heard;
+  };
   if (found) {
     const artist = found.artist || name.artist;
     name = { artist, title: tidyTitle(found.title || name.title, artist) };
     if (found.instrumental) lyricSource = "instrumental";
     else if (found.synced.length) {
-      progress("Lining up the lyrics with the video", 0.93);
+      const segs = await hear();
+      progress("Lining up the lyrics with the video", 0.96);
       // the same recording: one offset fits; another version (a cover, a live take): follow the singing
       const sameRecording = !found.duration || !videoDuration || Math.abs(found.duration - videoDuration) <= 12;
-      lyrics = sameRecording
-        ? await alignSynced(found.synced, a.chunks, ai)
-        : await alignVersion(found.synced, a.chunks, ai, found.duration, videoDuration);
+      lyrics = sameRecording ? alignSynced(found.synced, segs) : alignVersion(found.synced, segs, found.duration, videoDuration);
       lyricSource = "LRCLIB";
     } else if (found.plain.length) {
-      progress("Lining up the lyrics with the video", 0.93);
-      lyrics = await alignPlain(found.plain, a.chunks, ai);
+      const segs = await hear();
+      progress("Lining up the lyrics with the video", 0.96);
+      lyrics = alignPlain(found.plain, segs);
       lyricSource = lyrics.lines.length ? "LRCLIB" : "";
     }
   }
   if (!lyrics.lines.length && lyricSource !== "instrumental" && ai) {
-    progress("Listening for the words", 0.93);
-    lyrics = await transcribeAll(a.chunks, ai);
+    lyrics = transcribeAll(await hear());
     if (lyrics.lines.length) lyricSource = "speech recognition (may have mistakes)";
   }
+  // each word where it is sung
+  if (heard && lyrics.lines.length) lyrics = { ...lyrics, lines: timeWords(lyrics.lines, heard) };
   const credits = ["Chords found automatically", lyricSource && lyricSource !== "instrumental" ? `Lyrics: ${lyricSource}` : ""]
     .filter(Boolean)
     .join(" · ");

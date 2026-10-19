@@ -11,6 +11,7 @@ import type {
   SongDoc,
   UserSettings,
 } from "./types";
+import { wordStarts } from "./timeline";
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -166,9 +167,25 @@ function validateLines(v: unknown): LyricLine[] {
       if (section) line.section = section;
     }
     if (typeof l.end === "number" && Number.isFinite(l.end) && l.end > l.beat) line.end = l.end;
+    const words = validWords(l.words, text);
+    if (words) {
+      line.words = words;
+      const last = words[words.length - 1];
+      if (typeof l.wordsEnd === "number" && Number.isFinite(l.wordsEnd) && l.wordsEnd >= last) line.wordsEnd = round2(l.wordsEnd);
+    }
     return line;
   });
   return out.sort((a, b) => a.beat - b.beat);
+}
+
+const round2 = (x: number) => Math.round(x * 100) / 100;
+
+/** Word times kept only when there is one per word, in order. */
+function validWords(v: unknown, text: string): number[] | undefined {
+  if (!Array.isArray(v) || !v.length || v.length !== wordStarts(text).length) return undefined;
+  if (!v.every((t) => typeof t === "number" && Number.isFinite(t))) return undefined;
+  const words = (v as number[]).map(round2);
+  return words.every((t, i) => i === 0 || t >= words[i - 1]) ? words : undefined;
 }
 
 function validateBeatTimes(v: unknown): number[] | undefined {
