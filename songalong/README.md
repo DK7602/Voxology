@@ -52,6 +52,8 @@ Or connect the repo in the Cloudflare dashboard (Workers → Create → Import a
 `songalong`, **build command** `npm run build`, and **deploy command** `npx wrangler deploy`. The Worker must be
 named `songalong`, and **Settings → Build → Branch control** must point at the branch that holds this folder (the
 repo's default branch doesn't).
+If a push doesn't start a build and **Settings → Build** says the project is disconnected from your Git account,
+click **Manage** there and give the *Cloudflare Workers and Pages* GitHub app access to this repository.
 
 ### Search any song
 - Needs **Workers Paid** ($5/month) for the song-prep container and Workers AI (speech recognition).
