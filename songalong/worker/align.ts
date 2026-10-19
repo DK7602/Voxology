@@ -10,6 +10,15 @@ export interface Segment {
   start: number;
   end: number;
   text: string;
+  /** when each word starts: much closer than the segment's start, which often falls in the
+   *  music before the singing, or a line or two early when a segment holds several lines */
+  words?: { word: string; start: number }[];
+}
+
+/** One heard word (as words() spells it) and when it starts. */
+export interface HeardWord {
+  text: string;
+  start: number;
 }
 
 /** What we need from the Workers AI binding (kept narrow so tests can fake it). */
@@ -19,7 +28,10 @@ export interface SpeechAi {
 
 const MODEL = "@cf/openai/whisper-large-v3-turbo";
 
-type WhisperResult = { segments?: { start: number; end: number; text: string }[]; text?: string };
+type WhisperResult = {
+  segments?: { start: number; end: number; text: string; words?: { word: string; start: number; end: number }[] }[];
+  text?: string;
+};
 
 /** Speech recognition for one piece of the song. The voice filter (VAD) keeps the model from
  *  inventing words in instrumental parts, but it is made for speech and can drop singing over
@@ -34,7 +46,12 @@ export async function transcribe(ai: SpeechAi, chunk: PrepChunk): Promise<Segmen
     })) as WhisperResult;
     const segs = (res.segments ?? [])
       .filter((s) => typeof s.text === "string" && s.text.trim())
-      .map((s) => ({ start: chunk.start + s.start, end: chunk.start + s.end, text: s.text.trim() }));
+      .map((s) => {
+        const seg: Segment = { start: chunk.start + s.start, end: chunk.start + s.end, text: s.text.trim() };
+        const timed = (s.words ?? []).filter((w) => typeof w.word === "string" && Number.isFinite(w.start));
+        if (timed.length) seg.words = timed.map((w) => ({ word: w.word, start: chunk.start + w.start }));
+        return seg;
+      });
     // no segment timing but some words: one segment for the piece
     if (!segs.length && res.text?.trim()) return [{ start: chunk.start, end: chunk.start + 30, text: res.text.trim() }];
     return segs;
@@ -61,8 +78,10 @@ export function words(text: string): string[] {
 
 /** Word-overlap similarity (Dice), 0..1. */
 export function similarity(a: string, b: string): number {
-  const wa = words(a);
-  const wb = words(b);
+  return dice(words(a), words(b));
+}
+
+function dice(wa: string[], wb: string[]): number {
   if (!wa.length || !wb.length) return 0;
   const counts = new Map<string, number>();
   for (const w of wa) counts.set(w, (counts.get(w) ?? 0) + 1);
@@ -77,19 +96,59 @@ export function similarity(a: string, b: string): number {
   return (2 * common) / (wa.length + wb.length);
 }
 
-/** Offset (video time - lyric time) that the most line / segment matches agree on. */
-export function estimateOffset(lines: TimedLine[], segs: Segment[]): { offset: number; matches: number } {
-  const candidates: number[] = [];
-  for (const line of lines) {
-    if (words(line.text).length < 2) continue;
-    for (const s of segs) {
-      if (similarity(line.text, s.text) >= 0.5) candidates.push(s.start - line.time);
+/** Every heard word in order, with when it starts. A segment without word times has its words
+ *  spread evenly over it. */
+export function heardWords(segs: Segment[]): HeardWord[] {
+  const out: HeardWord[] = [];
+  for (const s of segs) {
+    if (s.words?.length) {
+      for (const w of s.words) for (const text of words(w.word)) out.push({ text, start: w.start });
+      continue;
     }
+    const ws = words(s.text);
+    const step = s.end > s.start ? (s.end - s.start) / ws.length : 0;
+    ws.forEach((text, i) => out.push({ text, start: s.start + i * step }));
   }
+  return out.sort((a, b) => a.start - b.start);
+}
+
+/**
+ * Where a lyric line is heard: the time its first word is sung, and how well the words there match
+ * the line (0..1). The line may start at its first word, or at its second when the first was
+ * misheard.
+ */
+export function lineHits(line: string, heard: HeardWord[], min = 0.6): { time: number; sim: number }[] {
+  const want = words(line);
+  if (want.length < 2) return [];
+  const hits: { time: number; sim: number }[] = [];
+  for (let i = 0; i < heard.length; i++) {
+    const skip = heard[i].text === want[0] ? 0 : heard[i].text === want[1] ? 1 : -1;
+    if (skip < 0) continue;
+    const rest = want.slice(skip);
+    const sim = dice(rest, heard.slice(i, i + rest.length + 1).map((w) => w.text));
+    if (sim < min) continue;
+    // a misheard first word was most likely the word heard just before
+    const prev = heard[i - 1];
+    const time = skip === 0 ? heard[i].start : prev && heard[i].start - prev.start < 1.5 ? prev.start : heard[i].start - 0.3;
+    const last = hits[hits.length - 1];
+    if (last && time - last.time < 1) {
+      if (sim > last.sim) hits[hits.length - 1] = { time, sim };
+      continue;
+    }
+    hits.push({ time, sim });
+  }
+  return hits;
+}
+
+/** Offset (video time - lyric time) that the most places where lines are heard agree on. */
+export function estimateOffset(lines: TimedLine[], segs: Segment[]): { offset: number; matches: number } {
+  const heard = heardWords(segs);
+  const candidates: number[] = [];
+  for (const line of lines) for (const hit of lineHits(line.text, heard)) candidates.push(hit.time - line.time);
   if (!candidates.length) return { offset: 0, matches: 0 };
   let best: number[] = [];
   for (const c of candidates) {
-    const cluster = candidates.filter((x) => Math.abs(x - c) <= 1.25);
+    const cluster = candidates.filter((x) => Math.abs(x - c) <= 1);
     if (cluster.length > best.length || (cluster.length === best.length && Math.abs(median(cluster)) < Math.abs(median(best)))) best = cluster;
   }
   return { offset: median(best), matches: best.length };
@@ -194,15 +253,12 @@ export interface Anchor {
   video: number;
 }
 
-/** The longest run of line / heard-segment matches that moves forward in both clocks. */
+/** The longest run of places where lines are heard that moves forward in both clocks. */
 export function anchorChain(lines: TimedLine[], segs: Segment[]): Anchor[] {
+  const heard = heardWords(segs);
   const pairs: (Anchor & { sim: number })[] = [];
   for (const line of lines) {
-    if (words(line.text).length < 2) continue;
-    for (const s of segs) {
-      const sim = similarity(line.text, s.text);
-      if (sim >= 0.5) pairs.push({ lyric: line.time, video: s.start, sim });
-    }
+    for (const hit of lineHits(line.text, heard, 0.5)) pairs.push({ lyric: line.time, video: hit.time, sim: hit.sim });
   }
   pairs.sort((a, b) => a.lyric - b.lyric || a.video - b.video);
   const n = pairs.length;
@@ -266,7 +322,9 @@ export function matchInOrder(lines: string[], segs: Segment[]): TimedLine[] {
       }
     }
     if (best >= 0) {
-      times[i] = segs[best].start;
+      // where in the segment the line starts
+      const hits = lineHits(line, heardWords([segs[best]]), 0.3).sort((a, b) => b.sim - a.sim);
+      times[i] = hits[0]?.time ?? segs[best].start;
       s = best + 1;
     }
   });
@@ -288,5 +346,5 @@ export function matchInOrder(lines: string[], segs: Segment[]): TimedLine[] {
 export async function transcribeAll(chunks: PrepChunk[], ai: SpeechAi | undefined): Promise<AlignedLyrics> {
   if (!ai || !chunks.length) return { lines: [], timing: "none" };
   const segs = await transcribeSome(ai, chunks, chunks.map((_, i) => i));
-  return { lines: segs.map((s) => ({ time: s.start, text: s.text })), timing: "transcribed" };
+  return { lines: segs.map((s) => ({ time: s.words?.[0]?.start ?? s.start, text: s.text })), timing: "transcribed" };
 }

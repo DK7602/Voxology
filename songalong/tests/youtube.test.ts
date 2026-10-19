@@ -241,6 +241,37 @@ describe("lyrics timing", () => {
     expect(est.matches).toBe(4);
     expect(est.offset).toBeCloseTo(INTRO + 0.3, 1);
   });
+  it("times lines by when their first word is sung, not when the heard phrase starts", async () => {
+    // the record sings at 23.09 s; the video has 15 s more before it. Speech recognition starts
+    // its phrases in the guitar before the singing, and puts two lines in one phrase.
+    const lines = [
+      { time: 23.09, text: "Today is gonna be the day" },
+      { time: 25.4, text: "That they're gonna throw it back to you" },
+      { time: 28.2, text: "By now, you should've somehow" },
+      { time: 30.5, text: "Realized what you gotta do" },
+    ];
+    // word times: the given ones, then a word every quarter second
+    const timed = (start: number, text: string, at: number[]) =>
+      text.split(" ").map((word, i) => ({ word: ` ${word}`, start: at[i] ?? (at[at.length - 1] ?? start) + (i - at.length + 1) * 0.25, end: 0 }));
+    const ai = {
+      async run() {
+        return {
+          segments: [
+            { start: 5.5, end: 12, text: "Today is gonna be the day that they're gonna throw it back to you", words: timed(8.1, "Today is gonna be the day that they're gonna throw it back to you", [8.1, 8.4, 8.6, 8.9, 9.1, 9.3, 10.4]) },
+            { start: 12.5, end: 18, text: "By now, you should've somehow realized what you gotta do", words: timed(13.2, "By now, you should've somehow realized what you gotta do", [13.2, 13.5, 13.8, 14.1, 14.5, 15.5]) },
+          ],
+        };
+      },
+    };
+    const segs = await transcribe(ai, { start: 30, mp3: "AAAA" });
+    expect(segs[0].words?.[0]).toEqual({ word: " Today", start: 38.1 });
+    const est = estimateOffset(lines, segs);
+    expect(est.matches).toBe(4);
+    expect(est.offset).toBeCloseTo(15, 1);
+    // the phrase starts alone would have put the words 2.5 s early
+    const phrasesOnly = segs.map(({ start, end, text }) => ({ start, end, text }));
+    expect(estimateOffset(lines, phrasesOnly).offset).toBeLessThan(14);
+  });
   it("places plain lyrics in order, filling gaps", () => {
     const segs = [
       { start: 12, end: 14, text: LINES[0] },
