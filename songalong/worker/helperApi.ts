@@ -122,7 +122,8 @@ export function checkAnalysis(input: unknown, videoId: string): PrepAnalysis {
     Array.isArray(a.detect.chords) && a.detect.chords.length < 5000 &&
     a.detect.chords.every((ch) => typeof ch.beat === "number" && typeof ch.name === "string" && ch.name.length < 40) &&
     typeof a.detect.bpm === "number" && typeof a.detect.key === "string" &&
-    Array.isArray(a.chunks) && a.chunks.length <= 40 && a.chunks.every((ch) => typeof ch.start === "number" && typeof ch.mp3 === "string" && ch.mp3.length < 1_500_000);
+    Array.isArray(a.chunks) && a.chunks.length <= 40 && a.chunks.every((ch) => typeof ch.start === "number" && typeof ch.mp3 === "string" && ch.mp3.length < 1_500_000) &&
+    (a.engine === undefined || (Number.isInteger(a.engine) && a.engine >= 1 && a.engine < 1000));
   if (!ok) throw new HttpError(400, "The helper sent something unexpected");
   return a;
 }

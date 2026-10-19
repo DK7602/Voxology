@@ -89,7 +89,7 @@ export async function lyricsFor(a: PrepAnalysis, ai: SpeechAi | undefined, progr
 }
 
 /** Saves (or refreshes) the catalog song for a video and marks the job ready. Returns the song id. */
-export async function saveCatalogSong(db: D1Database, videoId: string, doc: SongDoc): Promise<string> {
+export async function saveCatalogSong(db: D1Database, videoId: string, doc: SongDoc, engine = 1): Promise<string> {
   const clean = validateSongDoc(doc);
   const existing = await db.prepare("SELECT song_id FROM yt_songs WHERE video_id = ?").bind(videoId).first<{ song_id: string | null }>();
   const id = existing?.song_id ?? newSongId();
@@ -104,8 +104,8 @@ export async function saveCatalogSong(db: D1Database, videoId: string, doc: Song
       )
       .bind(id, CATALOG_OWNER, clean.title, clean.artist, clean.genre, clean.key, clean.bpm, chords, JSON.stringify(clean), now),
     db
-      .prepare("UPDATE yt_songs SET status = 'ready', song_id = ?, stage = 'Ready', progress = 1, error = '', updated_at = ? WHERE video_id = ?")
-      .bind(id, now, videoId),
+      .prepare("UPDATE yt_songs SET status = 'ready', song_id = ?, stage = 'Ready', progress = 1, error = '', engine = ?, updated_at = ? WHERE video_id = ?")
+      .bind(id, engine, now, videoId),
   ]);
   return id;
 }
@@ -120,5 +120,5 @@ export async function finishPrep(
 ): Promise<string> {
   const { name, lyrics, credits } = await lyricsFor(a, ai, progress, fetcher);
   progress("Saving", 0.98);
-  return saveCatalogSong(db, a.videoId, buildSongDoc(a, name, lyrics, credits));
+  return saveCatalogSong(db, a.videoId, buildSongDoc(a, name, lyrics, credits), a.engine ?? 1);
 }

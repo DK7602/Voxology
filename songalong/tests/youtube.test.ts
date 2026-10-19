@@ -38,6 +38,7 @@ function analysis(videoId: string): PrepAnalysis {
       confidence: 0.8,
     },
     chunks: [0, 30, 60].map((start) => ({ start, mp3: "AAAA" })),
+    engine: 2,
   };
 }
 
@@ -207,6 +208,8 @@ describe("preparing a song", () => {
     expect(song.doc.lines).toHaveLength(4);
     // the empty last LRC line ends the final line
     expect(song.doc.lines[3].end).toBe(Math.round(((28 + INTRO - 2) / 0.5) * 4) / 4);
+    // which detection version made it
+    expect((await env.DB.prepare("SELECT engine FROM yt_songs WHERE video_id = 'abcdefghijk'").first<{ engine: number }>())?.engine).toBe(2);
     // asking again is instant
     const again = await readEvents(await client.fetch("POST", "/api/youtube/prepare", { json: { videoId: "abcdefghijk" } }));
     expect(again).toEqual([{ type: "ready", songId }]);

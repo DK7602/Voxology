@@ -12,6 +12,7 @@ import {
   CHUNK_SECONDS,
   MAX_SONG_SECONDS,
   type PrepAnalysis,
+  PREP_ENGINE,
   type PrepChunk,
   type PrepErrorCode,
   type PrepMeta,
@@ -165,6 +166,7 @@ export async function analyseFile(file: string, meta: PrepMeta, videoId: string,
       confidence: d.confidence,
     },
     chunks,
+    engine: PREP_ENGINE,
   };
 }
 
