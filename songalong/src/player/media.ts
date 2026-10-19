@@ -194,6 +194,8 @@ export class YouTubeMedia implements MediaAdapter {
   private smooth = new Smoother();
   private rate = 1;
   private wantPlay = false;
+  /** YouTube starts a video that hasn't played yet when it is seeked, so until then a seek is
+   *  only remembered, and made when playing starts */
   private pendingSeek: number | null = null;
   readonly ready: Promise<void>;
   onEnded?: () => void;
@@ -223,7 +225,6 @@ export class YouTubeMedia implements MediaAdapter {
                   return resolve();
                 }
                 this.player = p;
-                if (this.pendingSeek !== null) p.seekTo(this.pendingSeek, true);
                 if (this.rate !== 1) p.setPlaybackRate(this.rate);
                 resolve();
               },
@@ -231,6 +232,8 @@ export class YouTubeMedia implements MediaAdapter {
                 if (this.destroyed) return;
                 // 1 playing, 2 paused, 0 ended
                 if (e.data === 0) this.onEnded?.();
+                // started from the video itself: go to where the app is
+                if (e.data === 1) this.seekPending();
                 if (e.data === 1 && !this.wantPlay) this.onExternalPlayState?.(true);
                 if (e.data === 2 && this.wantPlay) this.onExternalPlayState?.(false);
                 if (e.data === 1) this.wantPlay = true;
@@ -246,14 +249,22 @@ export class YouTubeMedia implements MediaAdapter {
   private playing() {
     return this.player?.getPlayerState() === 1;
   }
+  private seekPending() {
+    if (!this.player || this.pendingSeek === null) return;
+    const t = this.pendingSeek;
+    this.pendingSeek = null;
+    this.smooth.reset();
+    this.player.seekTo(Math.max(0, t), true);
+  }
   time() {
-    if (!this.player) return this.pendingSeek ?? 0;
+    if (!this.player || this.pendingSeek !== null) return this.pendingSeek ?? 0;
     return this.smooth.read(this.player.getCurrentTime() ?? 0, this.playing(), this.rate);
   }
   async play() {
     this.wantPlay = true;
     await this.ready;
     if (this.destroyed || !this.wantPlay) return;
+    this.seekPending();
     this.player?.playVideo();
   }
   pause() {
@@ -262,8 +273,14 @@ export class YouTubeMedia implements MediaAdapter {
   }
   seek(t: number) {
     this.smooth.reset();
-    if (!this.player) this.pendingSeek = t;
-    else this.player.seekTo(Math.max(0, t), true);
+    // seeking is safe while playing (1), paused (2) or buffering (3), or when about to play
+    const state = this.player?.getPlayerState();
+    if (!this.player || (!this.wantPlay && state !== 1 && state !== 2 && state !== 3)) {
+      this.pendingSeek = t;
+      return;
+    }
+    this.pendingSeek = null;
+    this.player.seekTo(Math.max(0, t), true);
   }
   setRate(r: number) {
     const avail = this.rates();
