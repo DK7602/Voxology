@@ -48,7 +48,7 @@ export function TunerPage() {
       <div className="page-head">
         <h1>Tuner</h1>
         <div className="seg" role="group" aria-label="Instrument">
-          {(["guitar", "ukulele", "mandolin"] as const).map((i) => (
+          {(["guitar", "ukulele", "mandolin", "bass"] as const).map((i) => (
             <button key={i} aria-pressed={inst === i} onClick={() => setInst(i)}>
               {FRETTED[i].name}
             </button>
@@ -86,7 +86,7 @@ export function ChordLibraryPage() {
       <div className="page-head">
         <h1>Chord library</h1>
         <div className="seg" role="group" aria-label="Instrument">
-          {(["guitar", "ukulele", "piano", "mandolin"] as Instrument[]).map((i) => (
+          {(["guitar", "ukulele", "piano", "mandolin", "bass"] as Instrument[]).map((i) => (
             <button key={i} aria-pressed={inst === i} onClick={() => setInst(i)}>
               {i[0].toUpperCase() + i.slice(1)}
             </button>

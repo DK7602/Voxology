@@ -122,3 +122,37 @@ describe("lead notes with octaves", () => {
     expect(parseChord("E4")?.suffix).toBe("sus4"); // a bare E4 is still the chord
   });
 });
+
+describe("bass", () => {
+  it("shows chords as low-to-high shapes with the bass note lowest and labelled tones", async () => {
+    const { fretVoicings, voicingMidi } = await import("../shared/music/voicings");
+    for (const sym of ["G", "C", "A", "Em", "G7", "Cmaj7", "Bm7b5", "D/F#", "E5"]) {
+      const v = fretVoicings(sym, "bass", 3);
+      expect(v.length, sym).toBeGreaterThan(0);
+      for (const x of v) {
+        const m = voicingMidi(x, "bass");
+        // rising across the strings, no doubled note
+        const inOrder = x.frets.flatMap((f, i) => (f === null ? [] : [[28, 33, 38, 43][i] + f]));
+        expect(inOrder).toEqual([...m]);
+        expect(new Set(m).size).toBe(m.length);
+        expect(x.labels).toBeDefined();
+      }
+    }
+    // the bass note is lowest: the slash note for D/F#, the root otherwise
+    expect(fretVoicings("D/F#", "bass")[0].labels!.find((l) => l !== null)).toBe("3");
+    expect(fretVoicings("G", "bass")[0].labels!.find((l) => l !== null)).toBe("R");
+    // major vs minor shows in the third; sevenths and flat fifths are in the shape
+    expect(fretVoicings("E", "bass")[0].labels).toContain("3");
+    expect(fretVoicings("Em", "bass")[0].labels).toContain("b3");
+    expect(fretVoicings("G7", "bass")[0].labels).toContain("b7");
+    expect(fretVoicings("Bm7b5", "bass")[0].labels).toContain("b5");
+  });
+  it("plays a melody in the bass's own range", async () => {
+    const { fretVoicings, voicingMidi } = await import("../shared/music/voicings");
+    const riff = fretVoicings("notes:E4 G4 A4", "bass");
+    expect(riff.length).toBeGreaterThan(0);
+    const m = voicingMidi(riff[0], "bass");
+    expect(m.map((x) => x % 12)).toEqual([4, 7, 9]);
+    expect(Math.max(...m)).toBeLessThan(58);
+  });
+});

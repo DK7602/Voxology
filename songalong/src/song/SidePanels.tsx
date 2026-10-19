@@ -47,7 +47,7 @@ export function SongDetails({ doc, view, settings, chords }: { doc: SongDoc; vie
         <dt>Time</dt>
         <dd>{doc.beatsPerBar}/4</dd>
         <dt>Capo</dt>
-        <dd>{view.usesCapo ? settings.capo : settings.instrument === "piano" ? "—" : "None"}</dd>
+        <dd>{view.usesCapo ? settings.capo : settings.instrument === "piano" || settings.instrument === "bass" ? "—" : "None"}</dd>
         {doc.genre && (
           <>
             <dt>Genre</dt>

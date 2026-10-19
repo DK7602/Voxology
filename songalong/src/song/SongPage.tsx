@@ -13,6 +13,7 @@ import {
   IconHeart,
   IconList,
   IconMandolin,
+  IconBass,
   IconMore,
   IconPiano,
   IconPlayCircle,
@@ -78,6 +79,7 @@ const INSTRUMENTS: { id: Instrument; label: string; icon: typeof IconGuitar }[] 
   { id: "ukulele", label: "Ukulele", icon: IconUkulele },
   { id: "piano", label: "Piano", icon: IconPiano },
   { id: "mandolin", label: "Mandolin", icon: IconMandolin },
+  { id: "bass", label: "Bass", icon: IconBass },
 ];
 
 function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: PracticeSettings; onChanged: (r: SongRecord) => void }) {
@@ -399,7 +401,9 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
         <ToolsPanel
           simplify={settings.simplify}
           onTranspose={() => setModal("transpose")}
-          onCapo={() => (settings.instrument === "piano" ? toast("Capo is for guitar, ukulele and mandolin.") : setModal("capo"))}
+          onCapo={() =>
+            settings.instrument === "piano" || settings.instrument === "bass" ? toast("Capo is for guitar, ukulele and mandolin.") : setModal("capo")
+          }
           onTuner={() => setModal("tuner")}
           onMidi={() => downloadMidi(doc, view)}
           onPrint={print}
@@ -408,7 +412,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
         <SimilarSongs songs={similar} />
       </aside>
 
-      {modal === "capo" && settings.instrument !== "piano" && (
+      {modal === "capo" && settings.instrument !== "piano" && settings.instrument !== "bass" && (
         <CapoFinder
           doc={doc}
           view={view}

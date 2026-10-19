@@ -87,7 +87,7 @@ export function SettingsPage() {
             <span>Used when you open a song for the first time</span>
           </div>
           <div className="seg" role="group" aria-label="Instrument">
-            {(["guitar", "ukulele", "piano", "mandolin"] as Instrument[]).map((i) => (
+            {(["guitar", "ukulele", "piano", "mandolin", "bass"] as Instrument[]).map((i) => (
               <button key={i} aria-pressed={(s.instrument ?? "guitar") === i} onClick={() => set({ instrument: i })}>
                 {i[0].toUpperCase() + i.slice(1)}
               </button>

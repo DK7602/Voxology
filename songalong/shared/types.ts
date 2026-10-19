@@ -58,7 +58,7 @@ export interface SongDoc {
   credits?: string;
 }
 
-export type Instrument = "guitar" | "ukulele" | "piano" | "mandolin";
+export type Instrument = "guitar" | "ukulele" | "piano" | "mandolin" | "bass";
 
 export interface UserSettings {
   theme?: "light" | "dark" | "system";

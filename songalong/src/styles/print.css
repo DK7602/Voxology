@@ -114,6 +114,9 @@ body.print-body {
 .print-page .fret-diagram .dot.riff {
   fill: #2f5bb5;
 }
+.print-page .fret-diagram .dot.root {
+  fill: #b3121b;
+}
 .print-page .fret-diagram .fret-num {
   fill: #000;
 }

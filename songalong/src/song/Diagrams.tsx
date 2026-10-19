@@ -56,7 +56,7 @@ export function Diagrams({ engine, view, settings, leftHanded, choices, onChoose
     const ctx = await unlockAudio();
     const v = voicingFor(original, view, settings, choices[original] ?? 0);
     if (!v) return;
-    if (v.riff) arpeggio(v.midis, ctx.currentTime + 0.02, 0.32, settings.instrument);
+    if (v.riff || settings.instrument === "bass") arpeggio(v.midis, ctx.currentTime + 0.02, 0.32, settings.instrument);
     else strum(v.midis, ctx.currentTime + 0.02, { instrument: settings.instrument, velocity: 0.9, spread: 0.035 });
   };
 

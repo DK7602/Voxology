@@ -1,4 +1,5 @@
-// How to play a chord: fingerings for guitar, ukulele and mandolin, keys for piano.
+// How to play a chord: fingerings for guitar, ukulele and mandolin, keys for piano, and for bass
+// where the root and the chord tones lie (labelled R, 3, 5 ... the way bass players learn them).
 //
 // Fretted voicings come from a small table of the standard open shapes (so beginners see the
 // shapes they know first) plus a search over the fretboard that scores every playable shape:
@@ -35,8 +36,13 @@ export const MANDOLIN: FrettedInstrument = {
   id: "mandolin", name: "Mandolin", tuning: [55, 62, 69, 76], tuningNames: ["G", "D", "A", "E"],
   span: 4, minStrings: 3, bassWeight: 0.4,
 };
+/** 4-string bass, an octave below the guitar's low four strings. */
+export const BASS: FrettedInstrument = {
+  id: "bass", name: "Bass", tuning: [28, 33, 38, 43], tuningNames: ["E", "A", "D", "G"],
+  span: 4, minStrings: 3, bassWeight: 1,
+};
 export const FRETTED: Record<FrettedInstrument["id"], FrettedInstrument> = {
-  guitar: GUITAR, ukulele: UKULELE, mandolin: MANDOLIN,
+  guitar: GUITAR, ukulele: UKULELE, mandolin: MANDOLIN, bass: BASS,
 };
 
 export interface Barre {
@@ -58,6 +64,8 @@ export interface FretVoicing {
   difficulty: number;
   /** order labels for single notes / riffs (1, 2, 3 ...) instead of fingers */
   order?: (number | null)[];
+  /** bass: each note's place in the chord (R, 3, 5, b7 ...) instead of fingers */
+  labels?: (string | null)[];
 }
 
 const MAX_FRET = 15;
@@ -85,7 +93,7 @@ const MANDOLIN_SHAPES: Record<string, string> = {
   G: "0023", C: "0230", D: "2002", Em: "0220", Am: "2235", A: "2245", E: "1224", Dm: "2001",
 };
 const TABLES: Record<FrettedInstrument["id"], Record<string, string>> = {
-  guitar: GUITAR_SHAPES, ukulele: UKULELE_SHAPES, mandolin: MANDOLIN_SHAPES,
+  guitar: GUITAR_SHAPES, ukulele: UKULELE_SHAPES, mandolin: MANDOLIN_SHAPES, bass: {},
 };
 
 function parseShape(s: string): (number | null)[] {
@@ -301,6 +309,8 @@ export function fretVoicings(symbol: string, instId: FrettedInstrument["id"], ma
   let result: FretVoicing[] = [];
   if (chord && (chord.category === "note" || chord.category === "notes")) {
     result = noteVoicings(chord, inst);
+  } else if (chord && chord.category !== "none" && instId === "bass") {
+    result = bassVoicings(chord, inst);
   } else if (chord && chord.category !== "none") {
     const t = targetFor(chord);
     const all = search(inst, t).sort((a, b) => a.difficulty - b.difficulty);
@@ -344,6 +354,50 @@ function diverse(sorted: FretVoicing[]): FretVoicing[] {
   return out;
 }
 
+const INTERVAL_NAMES = ["R", "b2", "2", "b3", "3", "4", "b5", "5", "#5", "6", "b7", "7"];
+
+/**
+ * Bass: the chord's notes under one hand, the bass note (root, or the slash note) lowest. Bass
+ * players play these one at a time (root, fifth, octave, third ...), so a shape needs the bass
+ * note and the third (or sus note) but not every tone; the fifth and sevenths are a bonus.
+ * Each dot is labelled with its place in the chord.
+ */
+function bassVoicings(chord: Chord, inst: FrettedInstrument): FretVoicing[] {
+  const full = targetFor(chord);
+  const pc = (i: number) => mod12(chord.root + i);
+  const has = (i: number) => full.required.includes(pc(i));
+  const third = [3, 4, 2, 5].find(has);
+  const fifth = [6, 8].find(has); // a flat or sharp fifth is part of the chord's sound
+  const seventh = [10, 11, 9].find(has);
+  const tries = [
+    [third, fifth, seventh],
+    [third, fifth],
+    [third],
+  ].map((extra) => [...new Set([full.bass, chord.root, ...extra.filter((i): i is number => i !== undefined).map(pc)])]);
+  for (const required of tries) {
+    const t: Target = {
+      ...full,
+      required,
+      // the rest of the chord is welcome: each one missing costs a little
+      optional: new Set([...full.pcs].filter((x) => !required.includes(x))),
+    };
+    const found = search(inst, t)
+      // low to high across the strings, like the arpeggio it is: the bass note on the lowest
+      // string played, and no note doubled (open A and the E string's 5th fret)
+      .filter((v) => {
+        const m = v.frets.flatMap((f, i) => (f === null ? [] : [inst.tuning[i] + f]));
+        return m.every((x, i) => i === 0 || x > m[i - 1]);
+      })
+      .sort((a, b) => a.difficulty - b.difficulty);
+    if (!found.length) continue;
+    return diverse(found).map((v) => ({
+      ...v,
+      labels: v.frets.map((f, s) => (f === null ? null : INTERVAL_NAMES[mod12(inst.tuning[s] + f - chord.root)])),
+    }));
+  }
+  return [];
+}
+
 /** Single notes / riffs: the lowest comfortable position for each note, keeping the hand still. */
 function noteVoicings(chord: Chord, inst: FrettedInstrument): FretVoicing[] {
   const seq = chord.category === "notes" ? chord.sequence ?? [chord.root] : [chord.root];
@@ -358,9 +412,17 @@ function noteVoicings(chord: Chord, inst: FrettedInstrument): FretVoicing[] {
     let d = w * 0.3;
     // A riff may use one string twice; the diagram can show one dot per string, so a repeated
     // string keeps its first note (the order label shows the sequence).
+    const lowest = Math.min(...inst.tuning);
+    const highest = Math.max(...inst.tuning) + MAX_FRET;
     seq.forEach((pc, idx) => {
       if (!ok) return;
-      const exact = noteMidi(chord, idx);
+      // a written octave the instrument can't reach moves by octaves into range; bass plays a
+      // melody in whatever octave fits under the hand
+      let exact = inst.id === "bass" ? null : noteMidi(chord, idx);
+      if (exact !== null) {
+        while (exact < lowest) exact += 12;
+        while (exact > highest) exact -= 12;
+      }
       let best: { s: number; f: number } | null = null;
       for (let s = 0; s < n; s++) {
         for (let f = w === 0 ? 0 : w; f <= w + inst.span; f++) {

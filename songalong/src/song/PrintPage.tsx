@@ -43,7 +43,7 @@ export function PrintPage() {
   const settings: ViewSettings = {
     transpose: parseInt(params.get("t") ?? "0", 10) || 0,
     capo: parseInt(params.get("c") ?? "0", 10) || 0,
-    instrument: (["guitar", "ukulele", "piano", "mandolin"].includes(params.get("i") ?? "") ? params.get("i") : "guitar") as Instrument,
+    instrument: (["guitar", "ukulele", "piano", "mandolin", "bass"].includes(params.get("i") ?? "") ? params.get("i") : "guitar") as Instrument,
     simplify: params.get("s") === "1",
     capoShapes: params.get("sh") !== "0",
   };
@@ -117,6 +117,7 @@ function Sheet({
             <option value="ukulele">Ukulele</option>
             <option value="piano">Piano</option>
             <option value="mandolin">Mandolin</option>
+            <option value="bass">Bass</option>
           </select>
         </label>
         <label>

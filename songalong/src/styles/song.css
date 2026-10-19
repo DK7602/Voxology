@@ -629,6 +629,18 @@
 .fret-diagram .dot.riff {
   fill: #2f5bb5;
 }
+/* bass: the root stands out from the other chord tones */
+.fret-diagram .dot.root,
+:root[data-theme="dark"] .fret-diagram .dot.root {
+  fill: var(--now);
+}
+.fret-diagram .open-label {
+  fill: var(--green-2);
+  font: 700 13px "EB Garamond", serif;
+}
+.fret-diagram .open-label.root {
+  fill: var(--now);
+}
 .fret-diagram .dot-label {
   fill: #fff;
   font: 600 12px "EB Garamond", serif;

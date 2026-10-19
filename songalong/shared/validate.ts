@@ -36,7 +36,7 @@ export const SONG_LIMITS = {
   minBeat: -16,
 } as const;
 
-const INSTRUMENTS: readonly Instrument[] = ["guitar", "ukulele", "piano", "mandolin"];
+const INSTRUMENTS: readonly Instrument[] = ["guitar", "ukulele", "piano", "mandolin", "bass"];
 const THEMES = ["light", "dark", "system"] as const;
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 

@@ -1,4 +1,4 @@
-// Chord boxes: fretboard diagrams for guitar / ukulele / mandolin and a keyboard for piano.
+// Chord boxes: fretboard diagrams for guitar / ukulele / mandolin / bass and a keyboard for piano.
 import type { FretVoicing, PianoVoicing } from "../../shared/music/voicings";
 import { noteName } from "../../shared/music/notes";
 
@@ -19,10 +19,13 @@ export function FretDiagram({ voicing, strings, leftHanded, caption, size = 150 
   const w = 150;
   const gridW = w - padX * 2;
   const fretH = 26;
-  const gridH = fretH * FRETS_SHOWN;
+  const base = voicing.baseFret;
+  // four frets, or five when a (bass) shape reaches further
+  const highest = Math.max(0, ...voicing.frets.filter((f): f is number => f !== null));
+  const fretsShown = Math.min(6, Math.max(FRETS_SHOWN, highest - base + 1));
+  const gridH = fretH * fretsShown;
   const h = top + gridH + (caption ? 34 : 18);
   const sx = (s: number) => padX + ((leftHanded ? strings - 1 - s : s) * gridW) / (strings - 1);
-  const base = voicing.baseFret;
   const fy = (f: number) => top + (f - base + 0.5) * fretH;
   const isRiff = !!voicing.order;
   const dotR = strings > 4 ? 9.5 : 11;
@@ -31,7 +34,7 @@ export function FretDiagram({ voicing, strings, leftHanded, caption, size = 150 
     <svg viewBox={`0 0 ${w} ${h}`} width={size} height={(size * h) / w} className="fret-diagram" role="img"
       aria-label={"Frets: " + voicing.frets.map((f) => (f === null ? "x" : f)).join(" ")}>
       {/* frets */}
-      {Array.from({ length: FRETS_SHOWN + 1 }, (_, i) => (
+      {Array.from({ length: fretsShown + 1 }, (_, i) => (
         <line key={"f" + i} x1={padX} x2={padX + gridW} y1={top + i * fretH} y2={top + i * fretH}
           className="grid" strokeWidth={i === 0 && base === 1 ? 5 : 1.4} />
       ))}
@@ -51,11 +54,17 @@ export function FretDiagram({ voicing, strings, leftHanded, caption, size = 150 
             <path d="M-5 -5 L5 5 M5 -5 L-5 5" strokeWidth={1.8} />
           </g>
         ) : f === 0 ? (
-          <circle key={"o" + s} cx={sx(s)} cy={top - 13} r={5} className="open" strokeWidth={1.6} />
+          voicing.labels ? (
+            <text key={"o" + s} x={sx(s)} y={top - 8} textAnchor="middle" className={"open-label" + (voicing.labels[s] === "R" ? " root" : "")}>
+              {voicing.labels[s]}
+            </text>
+          ) : (
+            <circle key={"o" + s} cx={sx(s)} cy={top - 13} r={5} className="open" strokeWidth={1.6} />
+          )
         ) : null,
       )}
-      {/* barres */}
-      {voicing.barres
+      {/* barres (bass shapes are played one note at a time: no barres) */}
+      {!voicing.labels && voicing.barres
         .filter((b) => b.to > b.from)
         .map((b, i) => {
           const x1 = Math.min(sx(b.from), sx(b.to));
@@ -82,11 +91,12 @@ export function FretDiagram({ voicing, strings, leftHanded, caption, size = 150 
           return null;
         }
         const inBarre = voicing.barres.some((b) => b.to > b.from && b.fret === f && s >= b.from && s <= b.to);
-        if (inBarre && !isRiff) return null;
-        const label = isRiff ? voicing.order?.[s] : voicing.fingers[s];
+        if (inBarre && !isRiff && !voicing.labels) return null;
+        const label = voicing.labels ? voicing.labels[s] : isRiff ? voicing.order?.[s] : voicing.fingers[s];
+        const isRoot = voicing.labels?.[s] === "R";
         return (
           <g key={"d" + s}>
-            <circle cx={sx(s)} cy={fy(f)} r={dotR} className={isRiff ? "dot riff" : "dot"} />
+            <circle cx={sx(s)} cy={fy(f)} r={dotR} className={isRiff ? "dot riff" : isRoot ? "dot root" : "dot"} />
             {label ? (
               <text x={sx(s)} y={fy(f) + 4.5} textAnchor="middle" className="dot-label">{label}</text>
             ) : null}

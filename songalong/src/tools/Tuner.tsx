@@ -5,13 +5,13 @@ import type { Instrument } from "../../shared/types";
 import { strum, unlockAudio } from "../player/synth";
 
 /** Pitch of a mono buffer by normalised autocorrelation (good for single plucked strings). */
-export function detectPitch(buf: Float32Array, sampleRate: number): number | null {
+export function detectPitch(buf: Float32Array, sampleRate: number, minHz = 50, maxHz = 1200): number | null {
   let rms = 0;
   for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i];
   rms = Math.sqrt(rms / buf.length);
   if (rms < 0.01) return null;
-  const minLag = Math.floor(sampleRate / 1200);
-  const maxLag = Math.min(Math.floor(sampleRate / 50), buf.length >> 1);
+  const minLag = Math.floor(sampleRate / maxHz);
+  const maxLag = Math.min(Math.floor(sampleRate / minHz), buf.length >> 1);
   const n = buf.length - maxLag;
   let bestLag = -1;
   let best = 0;
@@ -61,14 +61,21 @@ export function Tuner({ instrument = "guitar" }: { instrument?: Instrument }) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
       const src = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 4096;
+      const bass = inst.id === "bass";
+      analyser.fftSize = bass ? 8192 : 4096;
       src.connect(analyser);
       const buf = new Float32Array(analyser.fftSize);
+      // bass: average every 4 samples first (its notes are all under 400 Hz) so the search stays quick
+      const small = new Float32Array(analyser.fftSize / 4);
       let raf = 0;
       let smooth = 0;
       const loop = () => {
         analyser.getFloatTimeDomainData(buf);
-        const f = detectPitch(buf, ctx.sampleRate);
+        let f: number | null;
+        if (bass) {
+          for (let i = 0; i < small.length; i++) small[i] = 0.25 * (buf[4 * i] + buf[4 * i + 1] + buf[4 * i + 2] + buf[4 * i + 3]);
+          f = detectPitch(small, ctx.sampleRate / 4, 35, 400);
+        } else f = detectPitch(buf, ctx.sampleRate);
         if (f) {
           smooth = smooth && Math.abs(Math.log2(f / smooth)) < 0.05 ? smooth * 0.7 + f * 0.3 : f;
           const midiF = 69 + 12 * Math.log2(smooth / 440);

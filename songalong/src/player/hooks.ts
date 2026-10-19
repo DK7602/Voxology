@@ -61,7 +61,8 @@ export function useChordView(doc: SongDoc, s: ViewSettings): ChordView {
   return useMemo(() => {
     const spelling = spellingForKey(doc.key, s.transpose);
     const fretted = s.instrument !== "piano";
-    const usesCapo = fretted && s.capo > 0;
+    // bass players don't use a capo: bass always shows the notes as they sound
+    const usesCapo = fretted && s.instrument !== "bass" && s.capo > 0;
     const sounding = (sym: string) => transposeSymbol(s.simplify ? simplifySymbol(sym) : sym, s.transpose, spelling);
     const shown = (sym: string) => (usesCapo && s.capoShapes ? shapeFor(sounding(sym), s.capo) : sounding(sym));
     const key = parseKey(doc.key);

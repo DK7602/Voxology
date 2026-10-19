@@ -86,7 +86,7 @@ export function HomePage() {
       <section className="hero">
         <div>
           <h1>{first ? `Welcome back, ${first}` : "Welcome to SongAlong"}</h1>
-          <p>Search any song, tap play, and the chords and lyrics scroll in time: guitar, ukulele, piano or mandolin, any key, any capo.</p>
+          <p>Search any song, tap play, and the chords and lyrics scroll in time: guitar, bass, ukulele, piano or mandolin, any key, any capo.</p>
           <SongSearchBox big />
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
             <Link className="btn btn-primary" to="/new">
@@ -117,7 +117,7 @@ export function HomePage() {
           <button className="quick-action" onClick={() => navigate("/tools/tuner")}>
             <IconTuner size={30} />
             <b>Tune up</b>
-            <span>Guitar, ukulele, mandolin</span>
+            <span>Guitar, bass, ukulele, mandolin</span>
           </button>
         </div>
       </section>

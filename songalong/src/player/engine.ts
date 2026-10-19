@@ -334,6 +334,16 @@ export class PlayerEngine {
         arpeggio(v.midis, when, step, this.instrument);
         continue;
       }
+      if (this.instrument === "bass") {
+        // a simple bass line: the bass note on each chord change and on beats 1 and 3
+        const hitEvery = bpb === 4 ? 2 : bpb;
+        if (starts || posInBar % hitEvery === 0) {
+          const next = Math.min(end, b + hitEvery - (posInBar % hitEvery));
+          const until = ctx.currentTime + (this.timeline.beatToTime(next) - now) / rate - 0.02;
+          strum([v.midis[0]], when, { instrument: "bass", velocity: starts || posInBar === 0 ? 0.95 : 0.75, until });
+        }
+        continue;
+      }
       if (this.instrument === "piano") {
         if (starts || posInBar === 0) {
           const until = ctx.currentTime + (this.timeline.beatToTime(Math.min(end, b + bpb - posInBar)) - now) / rate;

@@ -38,21 +38,21 @@ function pluckBuffer(midi: number, instrument: Instrument): AudioBuffer {
   if (hit) return hit;
   const c = audioContext();
   const sr = c.sampleRate;
-  const dur = instrument === "mandolin" ? 1.6 : instrument === "ukulele" ? 1.4 : 2.6;
+  const dur = instrument === "mandolin" ? 1.6 : instrument === "ukulele" ? 1.4 : instrument === "bass" ? 3 : 2.6;
   const buf = c.createBuffer(1, Math.floor(sr * dur), sr);
   const data = buf.getChannelData(0);
   const period = sr / midiToFreq(midi);
   const n = Math.max(2, Math.round(period));
   const ring = new Float32Array(n);
   // pick position / brightness by instrument
-  const bright = instrument === "mandolin" ? 0.9 : instrument === "ukulele" ? 0.55 : 0.7;
+  const bright = instrument === "mandolin" ? 0.9 : instrument === "ukulele" ? 0.55 : instrument === "bass" ? 0.3 : 0.7;
   let last = 0;
   for (let i = 0; i < n; i++) {
     const noise = Math.random() * 2 - 1;
     last = last + bright * (noise - last); // low-passed noise burst = softer pick
     ring[i] = last;
   }
-  const decay = instrument === "guitar" ? 0.996 : 0.992;
+  const decay = instrument === "bass" ? 0.998 : instrument === "guitar" ? 0.996 : 0.992;
   let idx = 0;
   let prev = 0;
   for (let i = 0; i < data.length; i++) {

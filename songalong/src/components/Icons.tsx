@@ -201,6 +201,13 @@ export const IconMandolin = (p: P) => (
     <circle cx="8.5" cy="15.5" r="1.4" />
   </Svg>
 );
+export const IconBass = (p: P) => (
+  <Svg {...p}>
+    <path d="m11 13 9.5-9.5M19.5 1.8l2.7 2.7" />
+    <path d="M10.6 13.4a3.3 3.3 0 0 0-4.6.3 2.3 2.3 0 0 1-1.7.7A2.5 2.5 0 0 0 2 16.9C2 19.8 4.3 22 7.1 22a2.5 2.5 0 0 0 2.5-2.3 2.3 2.3 0 0 1 .7-1.7 3.3 3.3 0 0 0 .3-4.6z" fill="currentColor" fillOpacity={0.3} />
+    <path d="m5.6 18.4 2.6-2.6" />
+  </Svg>
+);
 export const IconList = (p: P) => (
   <Svg {...p}>
     <path d="M9 6h11M9 12h11M9 18h11" />
