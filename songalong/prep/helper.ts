@@ -7,15 +7,16 @@
 // It uses yt-dlp, ffmpeg and deno. If Sample Snagger is installed its copies are reused; anything
 // missing is downloaded once into the SongAlong tools folder.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream, existsSync } from "node:fs";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir, platform, arch } from "node:os";
 import { dirname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
+import { fileURLToPath } from "node:url";
 import { createGunzip, inflateRawSync } from "node:zlib";
-import type { PrepAnalysis } from "../shared/prep";
+import { PREP_ENGINE, type PrepAnalysis } from "../shared/prep";
 import { PrepError, prepareVideo, type Tools } from "./core";
 
 const VERSION = "1.0.0";
@@ -147,14 +148,38 @@ async function api(path: string, init: RequestInit = {}): Promise<Response> {
   });
 }
 
+/** Replaces this file with the site's newer helper and runs that instead (same window, same key). */
+async function updateAndRestart(): Promise<never> {
+  say("A newer helper is out: getting it...");
+  const res = await fetch(`${site}/helper/songalong-helper.mjs`);
+  if (!res.ok) throw new Error(`couldn't download the newer helper (${res.status})`);
+  const me = fileURLToPath(import.meta.url);
+  await writeFile(me, Buffer.from(await res.arrayBuffer()));
+  say("Restarting with it.");
+  const run = spawnSync(process.execPath, [me, ...process.argv.slice(2)], {
+    stdio: "inherit",
+    env: { ...process.env, SONGALONG_UPDATED: String(PREP_ENGINE) },
+  });
+  process.exit(run.status ?? 0);
+}
+
+let updateRefused = false;
+
 async function work(tools: Tools) {
-  const res = await api(`/api/helper/next?v=${VERSION}`);
+  const res = await api(`/api/helper/next?v=${VERSION}&engine=${PREP_ENGINE}`);
   if (res.status === 401) {
     say("This helper's key isn't valid any more. Create a new one in SongAlong → Settings → Your PC helper.");
     process.exit(1);
   }
   if (!res.ok) throw new Error(`SongAlong answered ${res.status}`);
-  const { job } = (await res.json()) as { job: { videoId: string; title: string } | null };
+  const { job, update } = (await res.json()) as { job: { videoId: string; title: string } | null; update?: boolean };
+  if (update) {
+    // just updated and still told to: the download was old (a cache), so don't go round again
+    if (!process.env.SONGALONG_UPDATED) await updateAndRestart();
+    if (!updateRefused) say("SongAlong has a newer helper, but this one couldn't update itself. Close this window and start the helper again.");
+    updateRefused = true;
+    return false;
+  }
   if (!job) return false;
 
   say(`Preparing "${job.title || job.videoId}"...`);

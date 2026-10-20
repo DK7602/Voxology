@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { PrepAnalysis, PrepEvent, PrepareEvent } from "../shared/prep";
+import { PREP_ENGINE, type PrepAnalysis, type PrepEvent, type PrepareEvent } from "../shared/prep";
 import { cleanTitle, guessSongName, nameCandidates, tidyTitle } from "../shared/songName";
 import { alignVersion, anchorChain, estimateOffset, matchInOrder, oneOffsetFits, steadyChain, timeWords, transcribe, versionLines, warp, type Segment } from "../worker/align";
 import { believableTiming, findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
@@ -505,9 +505,13 @@ describe("preparing a song", () => {
     const { token } = (await client.call("POST", "/api/helper/tokens", { name: "Studio PC" })).body;
     const pc = new Client(env);
     const auth = { headers: { Authorization: `Bearer ${token}` }, origin: null };
-    const next = await pc.call("GET", "/api/helper/next", undefined, auth);
+    // a helper with older song-preparing code is told to update itself, and gets no song
+    for (const old of ["/api/helper/next", `/api/helper/next?v=1.0.0&engine=${PREP_ENGINE - 1}`]) {
+      expect((await pc.call("GET", old, undefined, auth)).body).toEqual({ job: null, update: true });
+    }
+    const next = await pc.call("GET", `/api/helper/next?engine=${PREP_ENGINE}`, undefined, auth);
     expect(next.body.job).toMatchObject({ videoId: "zyxwvutsrqp" });
-    expect((await pc.call("GET", "/api/helper/next", undefined, auth)).body.job).toBeNull();
+    expect((await pc.call("GET", `/api/helper/next?engine=${PREP_ENGINE}`, undefined, auth)).body.job).toBeNull();
     await pc.call("POST", "/api/helper/jobs/zyxwvutsrqp/progress", { stage: "Getting the song", fraction: 0.2 }, auth);
     status = (await client.call("GET", "/api/youtube/status/zyxwvutsrqp")).body;
     expect(status).toMatchObject({ status: "working", helperOnline: true });
@@ -517,10 +521,10 @@ describe("preparing a song", () => {
     expect(status).toMatchObject({ status: "ready", songId: done.body.songId });
 
     // keys are private to their owner and can be revoked
-    expect((await pc.call("GET", "/api/helper/next", undefined, { headers: { Authorization: "Bearer sah_nottherealkeyatall123" }, origin: null })).status).toBe(401);
+    expect((await pc.call("GET", `/api/helper/next?engine=${PREP_ENGINE}`, undefined, { headers: { Authorization: "Bearer sah_nottherealkeyatall123" }, origin: null })).status).toBe(401);
     const list = (await client.call("GET", "/api/helper/tokens")).body.helpers;
     await client.call("DELETE", `/api/helper/tokens/${list[0].id}`);
-    expect((await pc.call("GET", "/api/helper/next", undefined, auth)).status).toBe(401);
+    expect((await pc.call("GET", `/api/helper/next?engine=${PREP_ENGINE}`, undefined, auth)).status).toBe(401);
   });
 
   it("a new PC helper key replaces keys that never connected", async () => {
@@ -529,7 +533,7 @@ describe("preparing a song", () => {
     const make = async () => (await client.call("POST", "/api/helper/tokens", { name: "Windows PC" })).body.token as string;
     const list = async () => (await client.call("GET", "/api/helper/tokens")).body.helpers as { lastSeenAt: number | null }[];
     const pc = new Client(env);
-    const ask = (token: string) => pc.call("GET", "/api/helper/next", undefined, { headers: { Authorization: `Bearer ${token}` }, origin: null });
+    const ask = (token: string) => pc.call("GET", `/api/helper/next?engine=${PREP_ENGINE}`, undefined, { headers: { Authorization: `Bearer ${token}` }, origin: null });
 
     const first = await make();
     const second = await make(); // pressed again before running the first download

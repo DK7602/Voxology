@@ -3,7 +3,7 @@
 //   PC helper (Bearer key):   GET /next, POST /jobs/:videoId/progress|result|fail
 
 import { Hono, type MiddlewareHandler } from "hono";
-import { isVideoId, type PrepAnalysis } from "../shared/prep";
+import { isVideoId, PREP_ENGINE, type PrepAnalysis } from "../shared/prep";
 import { finishPrep } from "./catalog";
 import { randomToken, sha256Hex } from "./crypto";
 import type { AppEnv } from "./env";
@@ -69,6 +69,9 @@ const helperAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
 helper.get("/next", helperAuth, async (c) => {
   const db = c.env.DB;
   const now = Date.now();
+  // a helper with older song-preparing code updates itself before it gets a song (one from
+  // before it said its version can't, and gets none: it's told to restart where it's started)
+  if (Number(c.req.query("engine") ?? 0) < PREP_ENGINE) return c.json({ job: null, update: true });
   // jobs a helper dropped (PC switched off mid-song) go back in the queue
   await db
     .prepare("UPDATE yt_songs SET status = 'waiting_pc', claimed_by = NULL WHERE status = 'working' AND source = 'pc' AND claimed_at < ?")
