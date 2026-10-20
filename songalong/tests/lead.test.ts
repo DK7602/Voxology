@@ -56,6 +56,14 @@ describe("the lead part", () => {
       { beat: 4, name: "note:A4" },
       { beat: 5, name: "N.C." },
     ]);
+    // a note a little late on an 8th goes to the 8th; a real 16th stays; a repeat is one note
+    const late = [note(1.14, 1.3, 72), note(1.3, 1.48, 72), note(1.75, 2, 74)];
+    expect(leadPart(late, slow, false).map((e) => [e.beat, e.name])).toEqual([
+      [1, "note:C5"],
+      [1.5, "N.C."],
+      [1.75, "note:D5"],
+      [2, "N.C."],
+    ]);
   });
 });
 

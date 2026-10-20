@@ -17,8 +17,10 @@ const TOGETHER = 0.035;
 /** the top note of two or more starting together is a chord's top string unless it stands at
  *  least this far above them (a tune sung or played over a strum) */
 const CLEAR_ABOVE = 6;
-/** the grid: 16th notes */
+/** the grid: 16th notes, but a note this close to an 8th goes there (a note picked again while
+ *  it still rings is heard a little late) */
 const SLOT = 0.25;
+const EIGHTH_PULL = 0.15;
 /** at most this many notes in one slot (a fast run), so the name stays short */
 const MAX_RUN = 5;
 /** Fractional beat at time t (straight lines between beats, extended at both ends). */
@@ -62,14 +64,26 @@ export function topLine(notes: Note[]): Note[] {
   });
 }
 
+/** A beat position on the grid: the nearest 8th when close to one, else the nearest 16th. */
+function onGrid(beat: number): number {
+  const eighth = Math.round(beat * 2) / 2;
+  return Math.abs(beat - eighth) <= EIGHTH_PULL ? eighth : Math.round(beat / SLOT) * SLOT;
+}
+
 /** The lead part as events on the beat grid. */
 export function leadPart(notes: Note[], beatTimes: number[], flats: boolean): ChordEvent[] {
   if (beatTimes.length < 2) return [];
-  const line = topLine(notes);
+  // a note heard twice in a row within a 16th is one note, lasting to the end of both
+  const line: Note[] = [];
+  for (const n of topLine(notes)) {
+    const prev = line.at(-1);
+    if (prev && prev.pitch === n.pitch && beatAt(beatTimes, n.start) - beatAt(beatTimes, prev.start) < SLOT) prev.end = Math.max(prev.end, n.end);
+    else line.push({ ...n });
+  }
   // notes by slot
   const slots = new Map<number, { notes: Note[]; end: number }>();
   for (const n of line) {
-    const slot = Math.round(beatAt(beatTimes, n.start) / SLOT) * SLOT;
+    const slot = onGrid(beatAt(beatTimes, n.start));
     if (slot < 0) continue;
     const end = Math.max(slot + SLOT, Math.round(beatAt(beatTimes, n.end) / SLOT) * SLOT);
     const s = slots.get(slot);
