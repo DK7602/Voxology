@@ -478,7 +478,8 @@ export function timeWords(lines: TimedLine[], segs: Segment[]): TimedLine[] {
     const mine = at.slice(first, first + starts.length);
     first += starts.length;
     const hits = mine.flatMap((h, k) => (h ? [{ k, t: sungStart(h), end: h.end }] : []));
-    const ceiling = lines[li + 1]?.time ?? Infinity;
+    // the next sung line (an instrumental "♪" line moves after this one's last word instead)
+    const ceiling = lines.slice(li + 1).find((x) => words(x.text).length)?.time ?? Infinity;
     if (!starts.length || hits.length < Math.max(1, Math.ceil(starts.length / 3))) {
       const time = Math.max(l.time, floor);
       out.push({ text: l.text, time });

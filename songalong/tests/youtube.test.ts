@@ -381,6 +381,25 @@ describe("lyrics timing", () => {
     expect(line.words![6]).toBeGreaterThan(line.words![5]); // "on)" after it
     expect(line.words![6]).toBeLessThan(16);
   });
+  it("lets the last words of a line run past an instrumental break marked too early", () => {
+    const lines = [
+      { time: 10, text: "Candles in the morning window (glow)" },
+      { time: 11.5, text: "♪" },
+      { time: 16, text: "Paper boats along the river" },
+    ];
+    const segs: Segment[] = [
+      {
+        start: 10,
+        end: 12,
+        text: "Candles in the morning window",
+        words: ["Candles", "in", "the", "morning", "window"].map((word, i) => ({ word: ` ${word}`, start: 10 + i * 0.4, end: 10.4 + i * 0.4 })),
+      },
+    ];
+    const [line, rest] = timeWords(lines, segs);
+    expect(line.words![4]).toBeCloseTo(11.6); // "window", after the break was said to start
+    expect(line.words![5]).toBeCloseTo(12.15); // "(glow)" once it has ended
+    expect(rest).toEqual({ text: "♪", time: 12.15 }); // the break starts after the line
+  });
   it("places plain lyrics in order, filling gaps", () => {
     const segs = [
       { start: 12, end: 14, text: LINES[0] },
