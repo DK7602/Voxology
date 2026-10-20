@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PrepAnalysis, PrepEvent, PrepareEvent } from "../shared/prep";
 import { cleanTitle, guessSongName, nameCandidates, tidyTitle } from "../shared/songName";
-import { alignVersion, anchorChain, estimateOffset, matchInOrder, oneOffsetFits, timeWords, transcribe, versionLines, warp, type Segment } from "../worker/align";
+import { alignVersion, anchorChain, estimateOffset, matchInOrder, oneOffsetFits, steadyChain, timeWords, transcribe, versionLines, warp, type Segment } from "../worker/align";
 import { findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
 import { isoDuration } from "../worker/youtube";
 import { Client, makeEnv, signUp } from "./helpers/workerEnv";
@@ -120,6 +120,7 @@ describe("song names from YouTube", () => {
   });
   it("cleans titles and finds artist / title", () => {
     expect(cleanTitle("Test Artist - Paper Boats (Official Video) [HD]")).toBe("Test Artist - Paper Boats");
+    expect(cleanTitle("Paper Boats (Performance Track In Key of E)")).toBe("Paper Boats");
     expect(guessSongName({ title: "Test Artist - Paper Boats (Official Video)", channel: "x" })).toEqual({ artist: "Test Artist", title: "Paper Boats" });
     expect(guessSongName({ title: "Paper Boats", channel: "Test Artist - Topic" })).toEqual({ artist: "Test Artist", title: "Paper Boats" });
     expect(guessSongName({ title: "whatever", channel: "c", artist: "Real Artist, Guest", track: "Song ft. Someone" })).toEqual({
@@ -185,6 +186,17 @@ describe("lyrics timing", () => {
       String(url).includes("/search?q=") ? Response.json([record]) : new Response("not found", { status: 404 }),
     );
     expect(await findLyrics({ artist: "", title: "Paper Boats" }, 82, looseOnly as unknown as typeof fetch)).toBeNull();
+  });
+  it("doesn't trust words 'heard' in music without singing", () => {
+    // a version that skips a part: steady apart from one jump
+    expect(steadyChain([{ lyric: 10, video: 5 }, { lyric: 14, video: 9 }, { lyric: 34, video: 11 }, { lyric: 38, video: 15 }, { lyric: 42, video: 19 }])).toBe(true);
+    // a piano cover the model "hears" bits of the tune in: jumps all over
+    const erratic = [{ lyric: 10, video: 40 }, { lyric: 20, video: 41 }, { lyric: 60, video: 43 }, { lyric: 70, video: 90 }, { lyric: 90, video: 91 }, { lyric: 95, video: 92 }];
+    expect(steadyChain(erratic)).toBe(false);
+    const lines = erratic.map((a, i) => ({ time: a.lyric, text: `${LINES[i % 4]} ${i}` }));
+    const heard = erratic.map((a, i) => ({ start: a.video, end: a.video + 1, text: lines[i].text }));
+    // the record's timing, stretched to the video, instead
+    expect(alignVersion(lines, heard, 100, 50)).toEqual({ lines: lines.map((l) => ({ ...l, time: l.time / 2 })), timing: "synced" });
   });
   it("leaves out the parts another version doesn't sing", async () => {
     // record: lines every 4 s; the version sings lines 0-1, skips 2-5, then sings 6-7

@@ -7,7 +7,7 @@ export interface SongName {
 
 // Words that mark a bracketed / piped part of a title as decoration rather than the song's name.
 const NOISE =
-  /\b(official|video|audio|lyrics?|visuali[sz]er|music video|mv|hd|hq|4k|remaster(ed)?|explicit|clean|full song|with lyrics|lyric video|official audio|official video|official music video|color coded|cover|acoustic|live|karaoke|instrumental|unplugged|session|tutorial|lesson|chords|tabs?|playthrough|backing track)\b/i;
+  /\b(official|video|audio|lyrics?|visuali[sz]er|music video|mv|hd|hq|4k|remaster(ed)?|explicit|clean|full song|with lyrics|lyric video|official audio|official video|official music video|color coded|cover|acoustic|live|karaoke|instrumental|unplugged|session|tutorial|lesson|chords|tabs?|playthrough|backing track|performance track|in the key of|key of [a-g])\b/i;
 
 /** Removes "(Official Video)", "[HD]", "| Lyrics" and similar decorations. */
 export function cleanTitle(s: string): string {

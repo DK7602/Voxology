@@ -237,7 +237,7 @@ export function alignVersion(lines: TimedLine[], segs: Segment[], lyricDuration:
   const ratio = lyricDuration > 0 && videoDuration > 0 ? videoDuration / lyricDuration : 1;
   const scaled = () => lines.map((l) => ({ ...l, time: l.time * ratio }));
   const anchors = anchorChain(lines, segs);
-  if (!anchors.length) return { lines: scaled(), timing: "synced" };
+  if (!anchors.length || !steadyChain(anchors)) return { lines: scaled(), timing: "synced" };
   return { lines: versionLines(lines, anchors, ratio, videoDuration), timing: "aligned" };
 }
 
@@ -269,6 +269,17 @@ export function versionLines(lines: TimedLine[], anchors: Anchor[], ratio: numbe
 export interface Anchor {
   lyric: number;
   video: number;
+}
+
+/**
+ * Whether the anchors read like someone singing the song: from one to the next, the video mostly
+ * keeps a believable pace against the record (a version may still skip a part). Words "heard" in
+ * music without singing (the model knows the tune) give anchors that jump about.
+ */
+export function steadyChain(anchors: Anchor[]): boolean {
+  const rates = anchors.slice(1).map((a, k) => (a.video - anchors[k].video) / Math.max(1e-6, a.lyric - anchors[k].lyric));
+  if (rates.length < 2) return true;
+  return rates.filter((r) => r >= 0.5 && r <= 2).length >= 0.6 * rates.length;
 }
 
 /** The longest run of places where lines are heard that moves forward in both clocks. */

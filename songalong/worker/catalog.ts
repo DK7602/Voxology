@@ -3,7 +3,7 @@
 // shared catalog so the next person gets it instantly.
 
 import type { PrepAnalysis } from "../shared/prep";
-import { guessSongName, nameCandidates, tidyTitle, type SongName } from "../shared/songName";
+import { cleanTitle, guessSongName, nameCandidates, tidyTitle, type SongName } from "../shared/songName";
 import { Timeline } from "../shared/timeline";
 import type { LyricLine, SongDoc } from "../shared/types";
 import { distinctChords, validateSongDoc } from "../shared/validate";
@@ -90,7 +90,7 @@ export async function lyricsFor(a: PrepAnalysis, ai: SpeechAi | undefined, progr
   };
   if (found) {
     const artist = found.artist || name.artist;
-    name = { artist, title: tidyTitle(found.title || name.title, artist) };
+    name = { artist, title: tidyTitle(cleanTitle(found.title) || name.title, artist) };
     if (found.instrumental) lyricSource = "instrumental";
     else if (found.synced.length) {
       const segs = await hear();
@@ -114,8 +114,8 @@ export async function lyricsFor(a: PrepAnalysis, ai: SpeechAi | undefined, progr
     lyrics = transcribeAll(await hear());
     if (lyrics.lines.length) lyricSource = "speech recognition (may have mistakes)";
   }
-  // each word where it is sung
-  if (heard && lyrics.lines.length) lyrics = { ...lyrics, lines: timeWords(lyrics.lines, heard) };
+  // each word where it is sung (when the lines were found in what is heard: then it is singing)
+  if (heard && lyrics.lines.length && lyrics.timing !== "synced") lyrics = { ...lyrics, lines: timeWords(lyrics.lines, heard) };
   const credits = ["Chords found automatically", lyricSource && lyricSource !== "instrumental" ? `Lyrics: ${lyricSource}` : ""]
     .filter(Boolean)
     .join(" · ");
