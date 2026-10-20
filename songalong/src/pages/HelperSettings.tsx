@@ -19,7 +19,13 @@ export function HelperSettings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const connected = keys?.some((k) => k.lastSeenAt !== null) ?? false;
+  const started = keys?.some((k) => k.lastSeenAt === null) ?? false;
+
   const connect = async () => {
+    // a second key is rarely what's wanted: the same downloaded file starts the helper every time
+    if (connected && !confirm("A computer is already connected. To start it again, double-click SongAlong-Helper.cmd on that computer: it doesn't need a new one.\n\nConnect a different computer?")) return;
+    if (!connected && started && !confirm("You've already started: double-click the SongAlong-Helper.cmd you downloaded.\n\nMake a new one instead? The earlier download will stop working.")) return;
     try {
       const r = await api.createHelper(navigator.platform.toLowerCase().includes("win") ? "Windows PC" : "My computer");
       setFresh(r.token);
@@ -59,7 +65,15 @@ export function HelperSettings() {
                   <b>
                     <span className={"dot-status" + (online ? " on" : "")} aria-hidden="true" /> {k.name}
                   </b>
-                  <span>{online ? "Connected now" : k.lastSeenAt ? `Last seen ${new Date(k.lastSeenAt).toLocaleString()}` : "Not connected yet"}</span>
+                  <span>
+                    {online
+                      ? "Connected now"
+                      : k.lastSeenAt
+                        ? `Not running (last seen ${new Date(k.lastSeenAt).toLocaleString()}). To start it, double-click SongAlong-Helper.cmd on that computer.`
+                        : connected
+                          ? "Never connected. If you don't need it, disconnect it."
+                          : "Not connected yet: double-click the SongAlong-Helper.cmd you downloaded."}
+                  </span>
                 </div>
                 <button
                   className="btn btn-sm btn-danger"
@@ -77,25 +91,35 @@ export function HelperSettings() {
         </div>
       ) : null}
       {!fresh && (
-        <button className="btn btn-primary" onClick={connect}>
-          Connect a computer
+        <button className={"btn" + (connected ? "" : " btn-primary")} onClick={connect}>
+          {connected ? "Connect another computer" : "Connect a computer"}
         </button>
       )}
       {fresh && (
         <div className="notice" style={{ display: "grid", gap: 10 }}>
           <b>Set up your computer (one time)</b>
-          <ol style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+          <span className="faint" style={{ fontSize: 15 }}>Do this on the computer that will prepare songs, not on your phone.</span>
+          <ol style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 8 }}>
             <li>
-              Install <a href="https://nodejs.org" target="_blank" rel="noreferrer">Node.js</a> (the LTS download) if you don't have it.
-            </li>
-            <li>
-              <button className="btn btn-sm" onClick={() => downloadBlob(windowsLauncher(fresh), "SongAlong-Helper.cmd", "text/plain")}>
-                Download the Windows helper
+              <button className="btn btn-sm btn-primary" onClick={() => downloadBlob(windowsLauncher(fresh), "SongAlong-Helper.cmd", "text/plain")}>
+                Download the helper
               </button>{" "}
-              and double-click it. Keep the window open while you use SongAlong (minimising it is fine).
+              (Windows), then open your Downloads folder and double-click <b>SongAlong-Helper.cmd</b>. If Windows says “Windows protected your PC”,
+              choose <b>More info → Run anyway</b>.
             </li>
             <li>
-              Mac / Linux: run this in Terminal{" "}
+              The first time, it gets its tools (a minute or so). It's working when its window says <b>Connected</b> and a green dot shows above. Leave
+              the window open; minimising it is fine.
+            </li>
+            <li>
+              Only if the window says <b>Node.js is needed first</b>: install <a href="https://nodejs.org" target="_blank" rel="noreferrer">Node.js</a>{" "}
+              (the LTS download), then double-click the helper again.
+            </li>
+          </ol>
+          <details>
+            <summary style={{ cursor: "pointer" }}>Mac or Linux?</summary>
+            <p style={{ margin: "8px 0" }}>
+              With <a href="https://nodejs.org" target="_blank" rel="noreferrer">Node.js</a> installed, run this in Terminal:{" "}
               <button
                 className="btn btn-sm"
                 onClick={() =>
@@ -107,11 +131,12 @@ export function HelperSettings() {
               >
                 Copy command
               </button>
-              <pre className="helper-cmd">{`curl -O ${site}/helper/songalong-helper.mjs && node songalong-helper.mjs --site ${site} --token ${fresh}`}</pre>
-            </li>
-          </ol>
+            </p>
+            <pre className="helper-cmd">{`curl -O ${site}/helper/songalong-helper.mjs && node songalong-helper.mjs --site ${site} --token ${fresh}`}</pre>
+          </details>
           <span className="faint" style={{ fontSize: 14 }}>
-            The download contains a private key for your account. Don't share it; disconnect it here if you do.
+            After a restart, double-click the same file again: you don't need a new one. It contains a private key for your account, so don't share
+            it; disconnect it here if you do.
           </span>
           <button className="btn btn-sm" style={{ justifySelf: "start" }} onClick={() => setFresh(null)}>
             Done

@@ -35,9 +35,12 @@ helper.post("/tokens", async (c) => {
   const name = typeof body.name === "string" && body.name.trim() ? body.name.trim().slice(0, 60) : "My PC";
   const token = "sah_" + randomToken();
   const hash = await sha256Hex(token);
-  await c.env.DB.prepare("INSERT INTO helper_tokens (token_hash, user_id, name, created_at) VALUES (?, ?, ?, ?)")
-    .bind(hash, user.id, name, Date.now())
-    .run();
+  // a new key replaces any that never connected (a download that wasn't run), so pressing
+  // "Connect a computer" again doesn't leave a list of computers that will never show up
+  await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM helper_tokens WHERE user_id = ? AND last_seen_at IS NULL").bind(user.id),
+    c.env.DB.prepare("INSERT INTO helper_tokens (token_hash, user_id, name, created_at) VALUES (?, ?, ?, ?)").bind(hash, user.id, name, Date.now()),
+  ]);
   return c.json({ token, id: hash.slice(0, 12), name });
 });
 

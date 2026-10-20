@@ -523,6 +523,24 @@ describe("preparing a song", () => {
     expect((await pc.call("GET", "/api/helper/next", undefined, auth)).status).toBe(401);
   });
 
+  it("a new PC helper key replaces keys that never connected", async () => {
+    const { env } = makeEnv();
+    const { client } = await signUp(env, "keys@example.com");
+    const make = async () => (await client.call("POST", "/api/helper/tokens", { name: "Windows PC" })).body.token as string;
+    const list = async () => (await client.call("GET", "/api/helper/tokens")).body.helpers as { lastSeenAt: number | null }[];
+    const pc = new Client(env);
+    const ask = (token: string) => pc.call("GET", "/api/helper/next", undefined, { headers: { Authorization: `Bearer ${token}` }, origin: null });
+
+    const first = await make();
+    const second = await make(); // pressed again before running the first download
+    expect(await list()).toHaveLength(1);
+    expect((await ask(first)).status).toBe(401);
+    expect((await ask(second)).status).toBe(200); // the newest download works, and is now connected
+    await make(); // another computer: the connected one stays
+    expect((await list()).map((k) => k.lastSeenAt !== null).sort()).toEqual([false, true]);
+    expect((await ask(second)).status).toBe(200);
+  });
+
   it("an unusable video fails with a clear message", async () => {
     const { env } = makeEnv({
       PREP: fakePrep(() => [{ type: "error", code: "unavailable", message: "This video can't be used." }]),
