@@ -123,7 +123,11 @@ export class PlayerEngine {
   private wire(m: MediaAdapter) {
     m.onEnded = () => {
       if (this.state.loop.on) this.seekBeat(this.state.loop.from ?? 0);
-      else this.pause();
+      else {
+        // played to the end: ready to play again from the top
+        this.pause();
+        this.restart();
+      }
     };
     m.onExternalPlayState = (playing) => {
       if (playing && !this.state.playing) this.startRunning();

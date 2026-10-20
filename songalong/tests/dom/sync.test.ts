@@ -9,40 +9,8 @@ vi.mock("../../src/player/synth", () => ({
 }));
 
 import { DEMO_SONGS } from "../../shared/demoSongs";
-import type { MediaAdapter } from "../../src/player/media";
 import { PlayerEngine } from "../../src/player/engine";
-
-/** A recording whose clock the test moves by hand. */
-class FakeMedia implements MediaAdapter {
-  readonly kind = "audio" as const;
-  now = 0;
-  playing = false;
-  time() {
-    return this.now;
-  }
-  async play() {
-    this.playing = true;
-  }
-  pause() {
-    this.playing = false;
-  }
-  seek(t: number) {
-    this.now = t;
-  }
-  setRate(r: number) {
-    return r;
-  }
-  isPlaying() {
-    return this.playing;
-  }
-  duration() {
-    return 200;
-  }
-  rates() {
-    return null;
-  }
-  destroy() {}
-}
+import { FakeMedia } from "./fakeMedia";
 
 const store = new Map<string, string>();
 

@@ -117,6 +117,30 @@ describe("YouTube video", () => {
   });
 });
 
+describe("the end of a YouTube video", () => {
+  it("goes back to the start without playing, then plays from there", async () => {
+    const { media, player } = await open(0);
+    const ended = vi.fn();
+    media.onEnded = ended;
+    await media.play();
+    player.time = 200;
+    player.state = 0;
+    player.events.onStateChange({ data: 0 });
+    expect(ended).toHaveBeenCalled();
+    // the engine pauses and goes back to the start; pausing an ended video leaves it ended
+    media.pause();
+    player.state = 0;
+    const seeks = player.seeks.length;
+    media.seek(0);
+    expect(player.seeks).toHaveLength(seeks); // moving an ended video would start it
+    expect(player.state).toBe(0);
+    expect(media.time()).toBe(0);
+    await media.play();
+    expect(player.seeks.at(-1)).toBe(0);
+    expect(player.state).toBe(1);
+  });
+});
+
 describe("YouTube video where silent playing isn't allowed", () => {
   beforeEach(() => {
     silentPlayAllowed = false;
