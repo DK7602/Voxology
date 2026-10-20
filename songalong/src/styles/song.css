@@ -1042,6 +1042,7 @@
   fill: var(--ink-soft);
   font: 500 13px "EB Garamond", serif;
 }
+/* filled green: this bar (white letters); outlined: the next bar, and gold: now (black letters) */
 .neck-note circle {
   fill: var(--green-2);
   stroke: var(--panel-solid);
@@ -1052,12 +1053,12 @@
   font: 700 12px "EB Garamond", serif;
 }
 .neck-note.next circle {
-  fill: transparent;
+  fill: #faf7ef;
   stroke: var(--green-2);
   stroke-width: 2;
 }
 .neck-note.next text {
-  fill: var(--accent-text);
+  fill: #1b1b1b;
 }
 .neck-note.now circle {
   fill: var(--gold);
@@ -1068,8 +1069,11 @@
   fill: #1b1b1b;
 }
 .neck-order {
-  fill: var(--ink-soft);
-  font: 600 11px "EB Garamond", serif;
+  fill: var(--ink);
+  font: 700 12px "EB Garamond", serif;
+  paint-order: stroke;
+  stroke: var(--panel-solid);
+  stroke-width: 3px;
 }
 .lk.white {
   fill: #fdfbf5;
@@ -1091,6 +1095,9 @@
 .lk-label {
   font: 700 11px "EB Garamond", serif;
   fill: #1b1b1b;
+}
+.lk.bar + .lk-label {
+  fill: #fff;
 }
 .strip.lead .bar {
   min-width: 120px;

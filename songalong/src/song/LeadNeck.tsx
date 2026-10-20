@@ -42,6 +42,23 @@ export function LeadNeck({ engine, view, settings, leftHanded }: { engine: Playe
   const sy = (s: number) => 24 + (leftHanded ? s : strings - 1 - s) * 30;
   const markers = [3, 5, 7, 9, 12, 15];
 
+  // one mark per place on the neck (a riff plays some notes several times): the most urgent
+  // state there, and the order numbers of this bar's notes played there
+  const RANK = { next: 0, bar: 1, now: 2 } as const;
+  type Mark = { string: number; fret: number; midi: number; state: keyof typeof RANK; orders: number[] };
+  const marks = new Map<string, Mark>();
+  visible.forEach(({ e, i }, order) => {
+    const state = i === current ? "now" : e.beat >= from + bpb - 1e-6 ? "next" : "bar";
+    (spots[i] ?? []).forEach((p, k) => {
+      const key = `${p.string}:${p.fret}`;
+      const m = marks.get(key) ?? { string: p.string, fret: p.fret, midi: p.midi, state, orders: [] };
+      if (RANK[state] > RANK[m.state]) m.state = state;
+      if (k === 0 && state !== "next" && !m.orders.includes(order + 1)) m.orders.push(order + 1);
+      marks.set(key, m);
+    });
+  });
+  const placed = [...marks.values()].sort((a, b) => RANK[a.state] - RANK[b.state]);
+
   return (
     <div className="lead-neck inset">
       <div className="lead-head">
@@ -68,16 +85,20 @@ export function LeadNeck({ engine, view, settings, leftHanded }: { engine: Playe
             <text x={14} y={sy(s) + 5} className="neck-num">{noteName(open, false)}</text>
           </g>
         ))}
-        {visible.map(({ e, i }, order) => {
-          const nextBar = e.beat >= from + bpb - 1e-6;
-          return (spots[i] ?? []).map((p, k) => (
-            <g key={`${i}-${k}`} className={"neck-note" + (i === current ? " now" : nextBar ? " next" : "")}>
-              <circle cx={noteX(p.fret)} cy={sy(p.string)} r={i === current ? 15 : 12} />
-              <text x={noteX(p.fret)} y={sy(p.string) + 4.5} textAnchor="middle">{prettyAccidentals(noteName(p.midi, view.keyName.includes("b")))}</text>
-              {k === 0 && <text x={noteX(p.fret) + 13} y={sy(p.string) - 13} className="neck-order">{order + 1}</text>}
-            </g>
-          ));
-        })}
+        {placed.map((m) => (
+          <g key={`${m.string}:${m.fret}`} className={"neck-note " + m.state}>
+            <circle cx={noteX(m.fret)} cy={sy(m.string)} r={m.state === "now" ? 15 : 12} />
+            <text x={noteX(m.fret)} y={sy(m.string) + 4.5} textAnchor="middle">{prettyAccidentals(noteName(m.midi, view.keyName.includes("b")))}</text>
+          </g>
+        ))}
+        {/* the order to play this bar's notes in, over everything else */}
+        {placed
+          .filter((m) => m.orders.length)
+          .map((m) => (
+            <text key={`o${m.string}:${m.fret}`} x={noteX(m.fret) + 14} y={sy(m.string) - 14} className="neck-order">
+              {m.orders.join(",")}
+            </text>
+          ))}
       </svg>
       {visible.length === 0 && <div className="faint" style={{ padding: "4px 12px" }}>No lead notes in these bars — rest, or play along with the chords.</div>}
     </div>
