@@ -143,6 +143,15 @@ describe("lead part", () => {
     expect(spots[0][0].midi).toBe(64);
     expect(spots[0][0].fret).toBeLessThanOrEqual(9);
   });
+  it("reads sharps in the lead part, and # comments", async () => {
+    const { importLead, exportLead } = await import("../shared/lead");
+    const { events, warnings } = importLead("# the riff\nF#4:2 C#5 [F#5] # held\nbar 3: Bb3", 4);
+    expect(warnings).toEqual([]);
+    expect(events.map((e) => [e.beat, e.name])).toEqual([
+      [0, "note:F#4"], [2, "note:C#5"], [3, "F#5"], [8, "note:Bb3"], [9, "N.C."],
+    ]);
+    expect(importLead(exportLead(events, 4), 4).events).toEqual(events);
+  });
   it("demo songs carry lead parts", () => {
     const iron = DEMO_SONGS.find((d) => d.id === "demo-iron-sparks")!.doc;
     expect(iron.lead!.length).toBeGreaterThan(20);

@@ -8,6 +8,7 @@
 //     [E5]      a chord (power chord, double stop...) in the lead part
 //     E4-G4-A4  a quick run of notes inside one slot
 //     bar 5:    jump to the start of bar 5 (bars count from 1)
+//     # ...     a comment, to the end of the line (a "#" inside a note, as in F#4, is a sharp)
 
 import { isChordSymbol, noteMidi, parseChord } from "./music/chords";
 import { parseNote } from "./music/notes";
@@ -21,7 +22,7 @@ export function importLead(text: string, beatsPerBar: number): { events: ChordEv
   const warnings: string[] = [];
   let beat = 0;
   for (const raw of text.split("\n")) {
-    const line = raw.replace(/#.*$/, "").trim();
+    const line = raw.replace(/(^|\s)#.*$/, "").trim();
     if (!line) continue;
     const tokens = line.split(/\s+/);
     for (let k = 0; k < tokens.length; k++) {
