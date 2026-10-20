@@ -22,6 +22,8 @@ export interface SongSpec {
   snare?: boolean;
   hats?: boolean;
   instrument?: "pad" | "piano" | "guitar";
+  /** overdrive on the chord instrument (tanh drive; 0 = clean), like a distorted rock guitar */
+  distortion?: number;
   /** guitar only: strum loudness for each 16th note of a repeating cycle (8 values = 2 beats, 16 = a bar; 0 = rest),
    *  e.g. [1, 0.2, 0.2, 0.9, 0.2, 0.2, 0.9, 0.3] for an accented 3+3+2 pattern */
   strum?: number[];
@@ -46,6 +48,7 @@ export interface SynthSong {
 
 const SUFFIX: Record<string, number[]> = {
   "": [0, 4, 7],
+  "5": [0, 7],
   m: [0, 3, 7],
   "7": [0, 4, 7, 10],
   maj7: [0, 4, 7, 11],
@@ -205,6 +208,9 @@ export function synthSong(spec: SongSpec): SynthSong {
 
   // ---- harmony ----
   const instrument = spec.instrument ?? "pad";
+  // the chord instrument plays into its own track when it is overdriven
+  const drive = spec.distortion ?? 0;
+  const chordBuf = drive > 0 ? new Float32Array(buf.length) : buf;
   const bassMode = spec.bass ?? "beats";
   let i = 0;
   while (i < nBeats) {
@@ -221,11 +227,11 @@ export function synthSong(spec: SongSpec): SynthSong {
         const f = midiFreq(m, cents);
         if (instrument === "pad") {
           for (const det of [-6, 6]) {
-            addNote(buf, sr, t0, dur, f * Math.pow(2, det / 1200), 0.05, "pad", { attack: 0.03, decay: 4, release: 0.04 }, rand());
+            addNote(chordBuf, sr, t0, dur, f * Math.pow(2, det / 1200), 0.05, "pad", { attack: 0.03, decay: 4, release: 0.04 }, rand());
           }
         } else if (instrument === "piano") {
           for (let b = i; b < j; b += 2) {
-            addNote(buf, sr, beatTimes[b], Math.min(2, j - b) * spb, f, 0.08, "piano", { attack: 0.004, decay: 0.9, release: 0.05 }, rand());
+            addNote(chordBuf, sr, beatTimes[b], Math.min(2, j - b) * spb, f, 0.08, "piano", { attack: 0.004, decay: 0.9, release: 0.05 }, rand());
           }
         } else {
           // strummed on every beat (or to the 16th-note pattern), low to high with 12 ms between strings
@@ -236,11 +242,11 @@ export function synthSong(spec: SongSpec): SynthSong {
               if (!amp) continue;
               const up = q % 2 === 1; // up-strums run high to low
               const kk = up ? notes.length - 1 - k : k;
-              addNote(buf, sr, start + (q / 4) * spb + 0.008 * kk, spb / 2, f, 0.08 * amp, "guitar", { attack: 0.003, decay: 0.35, release: 0.03 }, rand());
+              addNote(chordBuf, sr, start + (q / 4) * spb + 0.008 * kk, spb / 2, f, 0.08 * amp, "guitar", { attack: 0.003, decay: 0.35, release: 0.03 }, rand());
             }
           } else {
             for (let b = i; b < j; b++) {
-              addNote(buf, sr, beatTimes[b] + 0.012 * k, spb, f, b === i ? 0.08 : 0.06, "guitar", { attack: 0.003, decay: 0.7, release: 0.03 }, rand());
+              addNote(chordBuf, sr, beatTimes[b] + 0.012 * k, spb, f, b === i ? 0.08 : 0.06, "guitar", { attack: 0.003, decay: 0.7, release: 0.03 }, rand());
             }
           }
         }
@@ -267,6 +273,13 @@ export function synthSong(spec: SongSpec): SynthSong {
       }
     }
     i = j;
+  }
+
+  if (drive > 0) {
+    // soft clipping: the notes' harmonics and their sums and differences (the distortion's own
+    // "thirds" among them), at about the same loudness as the clean guitar
+    const gain = 0.3 / Math.tanh(drive * 0.3);
+    for (let n = 0; n < buf.length; n++) buf[n] += gain * Math.tanh(drive * chordBuf[n]);
   }
 
   if (spec.noise) for (let n = 0; n < buf.length; n++) buf[n] += spec.noise * (rand() * 2 - 1);

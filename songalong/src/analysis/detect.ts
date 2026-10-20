@@ -14,7 +14,7 @@
 import { DEFAULT_MAJOR, DEFAULT_MINOR, keyPrefersFlats, noteName, parseKey } from "../../shared/music/notes";
 import { estimateTempo, trackBeats, type TempoEstimate } from "./beats";
 import { beatChroma, harmonicPeriodicity, semitoneSpectrogram } from "./chroma";
-import { Vocabulary, decodeChords, emissionScores } from "./chords";
+import { Vocabulary, decodeChords, emissionScores, powerChords } from "./chords";
 import { clamp, median, resample } from "./dsp";
 import { estimateKey, keyScale, type KeyEstimate } from "./key";
 import { onsetEnvelope } from "./onset";
@@ -82,30 +82,34 @@ export function detectChords(samples: Float32Array, sampleRate: number, opts: De
   progress(0.97, "Writing the chart");
   const keyName = (key.minor ? DEFAULT_MINOR : DEFAULT_MAJOR)[key.tonic] + (key.minor ? "m" : "");
   const flats = keyPrefersFlats(parseKey(keyName));
-  const nameOf = (s: number) =>
-    s === vocab.nc ? "N.C." : noteName(vocab.roots[s], flats) + vocab.types[vocab.typeOf[s]].suffix;
+  const power = powerChords(chroma, decoded.states, vocab);
+  const nameOf = (s: number, power: boolean) =>
+    s === vocab.nc ? "N.C." : noteName(vocab.roots[s], flats) + (power ? "5" : vocab.types[vocab.typeOf[s]].suffix);
 
   // Make beat 0 a downbeat: drop leading no-chord beats before the first downbeat, or else
   // extrapolate the beats back to the bar start.
   let beatTimes = beats.slice();
   let states = decoded.states.slice();
+  let powered = power.slice();
   const lead = (BEATS_PER_BAR - decoded.phase) % BEATS_PER_BAR;
   if (lead > 0) {
     if (states.slice(0, lead).every((s) => s === vocab.nc) && beatTimes.length > lead) {
       beatTimes = beatTimes.slice(lead);
       states = states.slice(lead);
+      powered = powered.slice(lead);
     } else {
       const p0 = beatTimes.length > 1 ? median(diffs(beatTimes.slice(0, 9))) : period;
       for (let j = 0; j < decoded.phase; j++) {
         beatTimes.unshift(beatTimes[0] - p0);
         states.unshift(vocab.nc);
+        powered.unshift(false);
       }
     }
   }
 
   const chords: { beat: number; name: string }[] = [];
   for (let i = 0; i < states.length; i++) {
-    const name = nameOf(states[i]);
+    const name = nameOf(states[i], powered[i]);
     if (!chords.length || chords[chords.length - 1].name !== name) chords.push({ beat: i, name });
   }
   if (!chords.length) chords.push({ beat: 0, name: "N.C." });

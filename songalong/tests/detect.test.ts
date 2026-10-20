@@ -9,7 +9,7 @@ function chordAccuracy(spec: SongSpec) {
   // map each true beat time to the detected chord sounding then
   let hit = 0;
   let n = 0;
-  const family = (s: string) => s.replace(/(maj7|m7|7)$/, (m) => (m === "m7" ? "m" : "")).replace(/^([A-G][#b]?)$/, "$1");
+  const family = (s: string) => s.replace(/(maj7|m7|7)$/, (m) => (m === "m7" ? "m" : ""));
   song.beatTimes.forEach((t, i) => {
     const truth = song.chordAtBeat[i];
     if (!truth) return;
@@ -63,5 +63,19 @@ describe("chord detection on synthesized songs", () => {
     console.log("flat:", r.bpm, r.key, r.chords.slice(0, 8).map((c) => c.name).join(" "));
     expect(r.chords.some((c) => c.name.startsWith("Bb"))).toBe(true);
     expect(r.chords.some((c) => c.name.includes("#"))).toBe(false);
+  });
+  it("names power chords on a distorted rock guitar, and keeps full chords full", () => {
+    const rock = { bpm: 132, repeats: 3, instrument: "guitar" as const, distortion: 8, snare: true, hats: true, bass: "eighths" as const };
+    const power = chordAccuracy({ ...rock, chords: ["E5", "D5", "A5", "E5:2", "G5:2"] });
+    const names = power.r.chords.map((c) => c.name).filter((n) => n !== "N.C.");
+    console.log("power:", power.r.bpm, names.slice(0, 10).join(" "));
+    // the right roots, all as power chords
+    expect(power.accuracy).toBeGreaterThanOrEqual(0.85);
+    expect(names.filter((n) => n.endsWith("5")).length).toBeGreaterThanOrEqual(0.9 * names.length);
+    const full = chordAccuracy({ ...rock, chords: ["E", "D", "A", "Em:2", "G:2"] });
+    const fullNames = full.r.chords.map((c) => c.name).filter((n) => n !== "N.C.");
+    console.log("full:", fullNames.slice(0, 10).join(" "));
+    expect(full.accuracy).toBeGreaterThanOrEqual(0.85);
+    expect(fullNames.some((n) => n.endsWith("5"))).toBe(false);
   });
 });

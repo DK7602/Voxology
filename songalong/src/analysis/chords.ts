@@ -65,6 +65,36 @@ export class Vocabulary {
 
 const BASS_WEIGHT = 0.3; // how much the bass note votes for the root (cosine units)
 
+/** A chord whose third is under this share of its root and fifth is a power chord. Measured on
+ *  synthesized guitar, clean to heavily overdriven: power chords 0.08-0.32 (overdrive adds a
+ *  faint "third"), full chords 0.51-0.97. */
+const POWER_THIRD = 0.4;
+
+/**
+ * Which beats are power chords (root and fifth, no third: rock guitar's "E5"): each run of one
+ * major or minor chord whose third, summed over the run, is weak next to its root and fifth. The
+ * decoder can't tell those apart (with no third, E and Em fit the same), so this decides them.
+ */
+export function powerChords(ch: BeatChroma, states: number[], vocab: Vocabulary): boolean[] {
+  const out = new Array<boolean>(states.length).fill(false);
+  const sum = new Float64Array(12);
+  for (let i = 0; i < states.length; ) {
+    let j = i;
+    while (j < states.length && states[j] === states[i]) j++;
+    const s = states[i];
+    if (s !== vocab.nc && vocab.types[vocab.typeOf[s]].intervals.length === 3) {
+      const r = vocab.roots[s];
+      sum.fill(0);
+      for (let b = i; b < j; b++) for (let k = 0; k < 12; k++) sum[k] += ch.treble[b][k];
+      const frame = (sum[r] + sum[(r + 7) % 12]) / 2;
+      const third = Math.max(sum[(r + 3) % 12], sum[(r + 4) % 12]);
+      if (frame > 0 && third < POWER_THIRD * frame) out.fill(true, i, j);
+    }
+    i = j;
+  }
+  return out;
+}
+
 /**
  * Emission scores per beat and state, in cosine units (higher = better):
  *   chord: cos(treble chroma, template) + 0.3 * (bass share on the root + 0.3 x on other chord
