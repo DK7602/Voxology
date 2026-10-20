@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PrepAnalysis, PrepEvent, PrepareEvent } from "../shared/prep";
 import { cleanTitle, guessSongName, nameCandidates, tidyTitle } from "../shared/songName";
 import { alignVersion, anchorChain, estimateOffset, matchInOrder, oneOffsetFits, steadyChain, timeWords, transcribe, versionLines, warp, type Segment } from "../worker/align";
-import { findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
+import { believableTiming, findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
 import { isoDuration } from "../worker/youtube";
 import { Client, makeEnv, signUp } from "./helpers/workerEnv";
 
@@ -230,6 +230,20 @@ describe("lyrics timing", () => {
     const segs = await transcribe(ai, { start: 30, mp3: "AAAA" });
     expect(calls).toEqual([false]);
     expect(segs).toEqual([{ start: 31, end: 33, text: LINES[0] }]);
+  });
+  it("passes over lyrics whose timing was typed in carelessly", async () => {
+    // first line at 0:00, nothing for two minutes, then the rest crammed together
+    const careless = ["[00:00.03] " + LINES[0], "[02:14.66]", ...LINES.slice(1).concat(LINES).map((l, i) => `[02:${String(27 + i).padStart(2, "0")}.${i % 2 ? "10" : "60"}] ${l}`)].join("\n");
+    expect(believableTiming(parseLrc(careless))).toBe(false);
+    expect(believableTiming(parseLrc(LRC))).toBe(true);
+    const track = (id: number, duration: number, syncedLyrics: string) => ({ id, trackName: "Paper Boats", artistName: "Test Artist", duration, instrumental: false, plainLyrics: LINES.join("\n"), syncedLyrics });
+    const fetcher = vi.fn(async (url: string | URL | Request) =>
+      String(url).includes("/search") ? Response.json([track(1, 258, careless), track(2, 265, LRC)]) : new Response("not found", { status: 404 }),
+    );
+    // the careless copy is closer in length to the video, but the well-timed one is used
+    const found = await findLyrics({ artist: "Test Artist", title: "Paper Boats" }, 250, fetcher as unknown as typeof fetch);
+    expect(found?.duration).toBe(265);
+    expect(found?.synced[0]).toEqual({ time: 10, text: LINES[0] });
   });
   it("tries LRCLIB again when it is busy", async () => {
     const saved = retryDelays.ms;

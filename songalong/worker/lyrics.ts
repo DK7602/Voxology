@@ -55,8 +55,25 @@ export function parseLrc(lrc: string): TimedLine[] {
   return out.sort((a, b) => a.time - b.time);
 }
 
+/**
+ * Whether timed lyrics look really timed. Some are typed in carelessly: the first line at 0:00,
+ * then nothing for minutes, then the rest a fraction of a second apart. Sung lines are rarely
+ * under a second apart.
+ */
+export function believableTiming(lines: TimedLine[]): boolean {
+  const sung = lines.filter((l) => l.text.trim());
+  let rushed = 0;
+  for (let i = 1; i < sung.length; i++) if (sung[i].time - sung[i - 1].time < 1) rushed++;
+  return rushed <= 0.2 * (sung.length - 1);
+}
+
+function hasGoodTiming(t: LrclibTrack): boolean {
+  return !!t.syncedLyrics && believableTiming(parseLrc(t.syncedLyrics));
+}
+
 function toFound(t: LrclibTrack): FoundLyrics {
-  const synced = t.syncedLyrics ? parseLrc(t.syncedLyrics) : [];
+  // badly timed lyrics: only their words are used
+  const synced = t.syncedLyrics && hasGoodTiming(t) ? parseLrc(t.syncedLyrics) : [];
   const plain = (t.plainLyrics ?? synced.map((l) => l.text).join("\n"))
     .split(/\r?\n/)
     .map((l) => l.trim());
@@ -103,12 +120,15 @@ async function getJson<T>(url: string, fetcher: typeof fetch): Promise<T | null>
  *  timed lyrics and the recording closest in length to the video. */
 export async function findLyrics(name: SongName, videoDuration: number, fetcher: typeof fetch = fetch): Promise<FoundLyrics | null> {
   const q = (p: Record<string, string>) => new URLSearchParams(p).toString();
+  let reserve: LrclibTrack | null = null;
   if (name.artist && name.title && videoDuration > 0) {
     const exact = await getJson<LrclibTrack>(
       `${BASE}/get?${q({ artist_name: name.artist, track_name: name.title, duration: String(Math.round(videoDuration)) })}`,
       fetcher,
     );
-    if (exact && (exact.syncedLyrics || exact.plainLyrics || exact.instrumental)) return toFound(exact);
+    if (exact && (exact.instrumental || hasGoodTiming(exact) || (exact.plainLyrics && !exact.syncedLyrics))) return toFound(exact);
+    // badly timed: look for a better copy below, keeping this one's words in reserve
+    if (exact?.syncedLyrics || exact?.plainLyrics) reserve = exact;
   }
   // by artist + title: right at any length (a cover or live take differs from the record);
   // the loose full-text search must also be close in length, or it may be another song
@@ -122,7 +142,7 @@ export async function findLyrics(name: SongName, videoDuration: number, fetcher:
     const best = pickBest(list, videoDuration, strict);
     if (best) return toFound(best);
   }
-  return null;
+  return reserve ? toFound(reserve) : null;
 }
 
 function pickBest(list: LrclibTrack[], videoDuration: number, strict = true): LrclibTrack | null {
@@ -131,7 +151,7 @@ function pickBest(list: LrclibTrack[], videoDuration: number, strict = true): Lr
     .map((t) => {
       const lenDiff = videoDuration > 0 ? Math.abs(t.duration - videoDuration) : 0;
       // music videos often run longer than the record (intros, skits): allow some slack
-      const score = (t.syncedLyrics ? 0 : 30) + Math.min(lenDiff, 120);
+      const score = (hasGoodTiming(t) ? 0 : 30) + Math.min(lenDiff, 120);
       return { t, score, lenDiff };
     })
     .filter((x) => !strict || videoDuration <= 0 || x.lenDiff < 90)
