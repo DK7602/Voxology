@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { User, UserSettings } from "../shared/api";
 import { api, ApiError } from "./api";
-import { applyTheme, themeOf } from "./theme";
+import { applyTheme, localLook, lookOf, saveLocalLook } from "./theme";
 
 interface AuthState {
   user: User | null;
@@ -28,8 +28,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    applyTheme(user?.settings.theme ?? localTheme());
-  }, [user?.settings.theme]);
+    // the account's look once it has one, else this device's
+    const s = user?.settings;
+    applyTheme(s?.theme || s?.palette ? lookOf(s.theme, s.palette) : localLook());
+  }, [user?.settings.theme, user?.settings.palette]);
 
   const logout = useCallback(async () => {
     try {
@@ -44,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!user) return;
       const settings = { ...user.settings, ...patch };
       setUser({ ...user, settings }); // optimistic
-      if (patch.theme) saveLocalTheme(patch.theme);
+      saveLocalLook(patch);
       const r = await api.updateMe({ settings });
       setUser(r.user);
     },
@@ -68,19 +70,3 @@ export function useUser(): User {
   return user;
 }
 
-function localTheme(): UserSettings["theme"] {
-  try {
-    return themeOf(localStorage.getItem("sa-theme"));
-  } catch {
-    /* storage unavailable */
-  }
-  return "system";
-}
-
-function saveLocalTheme(t: NonNullable<UserSettings["theme"]>) {
-  try {
-    localStorage.setItem("sa-theme", t);
-  } catch {
-    /* storage unavailable */
-  }
-}

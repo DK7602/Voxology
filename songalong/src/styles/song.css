@@ -634,6 +634,10 @@
   stroke: #d8f0dc;
   stroke-width: 1;
 }
+:root[data-palette="usyay"][data-theme="dark"] .fret-diagram .dot {
+  fill: #2f66d6;
+  stroke: #dbe6ff;
+}
 .fret-diagram .dot.riff {
   fill: #2f5bb5;
 }

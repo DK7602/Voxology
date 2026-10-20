@@ -30,8 +30,7 @@
   width: auto;
   height: 48px;
 }
-:root[data-theme="light"] .logo-text,
-:root[data-theme="usyay"] .logo-text {
+:root[data-theme="light"] .logo-text {
   filter: drop-shadow(0 1px 1px rgba(70, 40, 0, 0.45));
 }
 .nav-search {
@@ -103,7 +102,7 @@
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
-:root[data-theme="usyay"] .avatar {
+:root[data-palette="usyay"] .avatar {
   background: radial-gradient(circle at 35% 30%, #ffffff, #c8d7f5 70%);
   border-color: #ffffff;
   color: #1c3f94;
@@ -270,7 +269,7 @@
     radial-gradient(120% 90% at 20% 15%, hsl(calc(44 + var(--art-hue) / 4) 75% 62%), transparent 55%),
     linear-gradient(var(--art-angle), hsl(calc(150 + var(--art-hue)) 55% 16%), hsl(calc(145 + var(--art-hue)) 60% 26%) 60%, hsl(42 60% 38%));
 }
-:root[data-theme="usyay"] .artwork.generated {
+:root[data-palette="usyay"] .artwork.generated {
   background:
     radial-gradient(120% 90% at 20% 15%, rgba(255, 255, 255, 0.75), transparent 50%),
     linear-gradient(var(--art-angle), hsl(calc(222 + var(--art-hue) / 2) 75% 22%), hsl(calc(216 + var(--art-hue) / 2) 75% 44%) 58%, hsl(354 78% 44%));
@@ -771,21 +770,21 @@
   font-size: 18px;
 }
 /* USyay: a navy face with silver lettering */
-:root[data-theme="usyay"] .tuner-face:not(.in-tune) {
+:root[data-palette="usyay"] .tuner-face:not(.in-tune) {
   background: linear-gradient(170deg, #12306f, #061433 55%, #0d2557);
   border-color: rgba(255, 255, 255, 0.8);
   box-shadow: 0 0 22px rgba(120, 170, 255, 0.35), inset 0 0 18px rgba(160, 200, 255, 0.1);
 }
-:root[data-theme="usyay"] .tuner-face:not(.in-tune) .tuner-note b {
+:root[data-palette="usyay"] .tuner-face:not(.in-tune) .tuner-note b {
   background: linear-gradient(180deg, #ffffff, #cfdcf7 50%, #8fa7d9);
   -webkit-background-clip: text;
   background-clip: text;
 }
-:root[data-theme="usyay"] .tuner-note .flat-mark,
-:root[data-theme="usyay"] .tuner-note .sharp-mark {
+:root[data-palette="usyay"] .tuner-note .flat-mark,
+:root[data-palette="usyay"] .tuner-note .sharp-mark {
   color: rgba(255, 255, 255, 0.55);
 }
-:root[data-theme="usyay"] .strobe {
+:root[data-palette="usyay"] .strobe {
   border-color: rgba(255, 255, 255, 0.35);
 }
 

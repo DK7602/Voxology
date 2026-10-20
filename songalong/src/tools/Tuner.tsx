@@ -40,7 +40,7 @@ function Strobe({ live }: { live: React.MutableRefObject<{ cents: number | null;
       glow += ((inTune ? 1 : 0) - glow) * Math.min(1, dt * 6);
       g.clearRect(0, 0, w, h);
       // silver stripes in the red, white and blue theme, else gold
-      const silver = document.documentElement.dataset.theme === "usyay";
+      const silver = document.documentElement.dataset.palette === "usyay";
       const rows = [
         { y: 0, hgt: h * 0.4, stripe: 28, speed: 1 },
         { y: h * 0.42, hgt: h * 0.3, stripe: 14, speed: 0.5 },

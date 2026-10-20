@@ -91,9 +91,10 @@
   --diagram-bg: #0f1d17;
 }
 
-/* USyay: red, white and blue. Blue glass behind everything, white glass panels with navy text,
-   red glass for the controls that are on (and the play button). */
-:root[data-theme="usyay"] {
+/* USyay: red, white and blue. Blue glass behind everything; white glass panels with navy text
+   (light) or deep blue glass with white text (dark); red glass for the controls that are on and
+   the play button. */
+:root[data-palette="usyay"]:not([data-theme="dark"]) {
   color-scheme: light;
   --bg-image: url("/bg/usa-blue.webp");
   --bg-color: #1a5fd0;
@@ -135,6 +136,50 @@
   --overlay: rgba(8, 20, 52, 0.5);
   --grid-line: #1d1d1d;
   --diagram-bg: #f7faff;
+}
+
+:root[data-palette="usyay"][data-theme="dark"] {
+  color-scheme: dark;
+  --bg-image: url("/bg/usa-blue.webp");
+  --bg-color: #0d3a8f;
+  --panel: linear-gradient(rgba(3, 10, 34, 0.8), rgba(3, 10, 34, 0.8)), url("/bg/usa-blue.webp") center / cover;
+  --panel-solid: #081433;
+  --panel-border: rgba(255, 255, 255, 0.55);
+  --panel-shadow: 0 18px 44px rgba(0, 6, 30, 0.6), 0 1px 0 rgba(200, 220, 255, 0.15) inset;
+  --inset: rgba(4, 12, 38, 0.85);
+  --inset-border: rgba(160, 190, 255, 0.3);
+  --tile: linear-gradient(rgba(3, 10, 34, 0.72), rgba(3, 10, 34, 0.72)), url("/bg/usa-blue.webp") 40% 35% / 320%;
+  --tile-border: rgba(160, 190, 255, 0.35);
+  --green-glass: url("/bg/usa-red.webp") 45% 40% / 300%;
+  --play-glass: radial-gradient(circle at 35% 30%, rgba(255, 150, 150, 0.35), transparent 60%), url("/bg/usa-red.webp") 45% 45% / 400%;
+  --play-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3), 0 8px 20px rgba(0, 0, 0, 0.5);
+  --plain: #060e26;
+  --plain-cell: #0b1636;
+  --plain-border: rgba(160, 190, 255, 0.28);
+  --plain-active: #1f4fb8;
+  --ink: #eef3ff;
+  --ink-soft: #b4c2e4;
+  --ink-faint: #6f80aa;
+  --heading: #ffffff;
+  --accent-text: #9cc0ff;
+  --green: #1c3f94;
+  --green-2: #2f66d6;
+  --green-hi: #5b8ff0;
+  --green-tint: rgba(91, 143, 240, 0.2);
+  --on-green: #ffffff;
+  --gold: #e0263f;
+  --gold-hi: #ffffff;
+  --gold-deep: #ff7d88;
+  --chip-bg: transparent;
+  --chip-ink: #9cc0ff;
+  --chord-red: #ff5a64;
+  --now: #ff4b55;
+  --danger: #ff6b6b;
+  --focus: 0 0 0 3px rgba(156, 192, 255, 0.45);
+  --nav-bg: linear-gradient(180deg, rgba(8, 20, 56, 0.96), rgba(4, 12, 38, 0.96));
+  --overlay: rgba(0, 4, 20, 0.6);
+  --grid-line: #dbe3f5;
+  --diagram-bg: #0a1638;
 }
 
 *,

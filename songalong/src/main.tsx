@@ -13,13 +13,13 @@ import { App } from "./App";
 import { AuthProvider } from "./auth";
 import { ToastProvider } from "./components/ui";
 import { startInstallSupport } from "./install";
-import { applyTheme, themeOf } from "./theme";
+import { applyTheme, localLook } from "./theme";
 
 // paint the right theme before the user's settings load
 try {
-  applyTheme(themeOf(localStorage.getItem("sa-theme")));
+  applyTheme(localLook());
 } catch {
-  applyTheme("system");
+  applyTheme();
 }
 
 startInstallSupport();

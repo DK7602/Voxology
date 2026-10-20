@@ -8,9 +8,10 @@ import { Toggle, errorText, useToast } from "../components/ui";
 import { HelperSettings } from "./HelperSettings";
 import { InstallButton, IosInstallSteps } from "../components/InstallButton";
 import { useInstall } from "../install";
-import { THEMES } from "../theme";
+import { MODES, PALETTES, lookOf, type Mode, type Palette } from "../theme";
 
-const THEME_LABEL: Record<(typeof THEMES)[number], string> = { light: "Light", dark: "Dark", usyay: "USyay", system: "Device" };
+const MODE_LABEL: Record<Mode, string> = { light: "Light", dark: "Dark", system: "Device" };
+const PALETTE_LABEL: Record<Palette, string> = { gold: "Gold", usyay: "USyay" };
 import { clampSync, savedSync, saveSync, syncLabel } from "../player/sync";
 import { Manual } from "./Manual";
 
@@ -20,6 +21,7 @@ export function SettingsPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const s = user.settings;
+  const look = lookOf(s.theme, s.palette);
   const [name, setName] = useState(user.name);
   const [pw, setPw] = useState({ current: "", next: "", again: "" });
   const [delPw, setDelPw] = useState("");
@@ -73,13 +75,26 @@ export function SettingsPage() {
         <h2>Look</h2>
         <div className="setting-row">
           <div className="label">
-            <b>Theme</b>
-            <span>Gold & white glass, gold & black glass, red white & blue, or follow your device</span>
+            <b>Colours</b>
+            <span>Gold glass, or USyay's red, white & blue</span>
           </div>
-          <div className="seg" role="group" aria-label="Theme">
-            {THEMES.map((t) => (
-              <button key={t} aria-pressed={(s.theme ?? "system") === t} onClick={() => set({ theme: t })}>
-                {THEME_LABEL[t]}
+          <div className="seg" role="group" aria-label="Colours">
+            {PALETTES.map((p) => (
+              <button key={p} aria-pressed={look.palette === p} onClick={() => set({ palette: p, theme: look.mode })}>
+                {PALETTE_LABEL[p]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="setting-row">
+          <div className="label">
+            <b>Light or dark</b>
+            <span>Light or dark glass, or follow your device</span>
+          </div>
+          <div className="seg" role="group" aria-label="Light or dark">
+            {MODES.map((m) => (
+              <button key={m} aria-pressed={look.mode === m} onClick={() => set({ theme: m, palette: look.palette })}>
+                {MODE_LABEL[m]}
               </button>
             ))}
           </div>

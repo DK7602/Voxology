@@ -29,13 +29,16 @@ export function PrintPage() {
     api.song(id).then((r) => setRecord(r.song)).catch((e) => setError(errorText(e)));
   }, [id]);
 
-  // the sheet is always printed light
+  // the sheet is always printed light, in the usual colours
   useEffect(() => {
-    const prev = document.documentElement.dataset.theme;
-    document.documentElement.dataset.theme = "light";
+    const root = document.documentElement;
+    const prev = { theme: root.dataset.theme, palette: root.dataset.palette };
+    root.dataset.theme = "light";
+    root.dataset.palette = "gold";
     document.body.classList.add("print-body");
     return () => {
-      document.documentElement.dataset.theme = prev;
+      root.dataset.theme = prev.theme;
+      root.dataset.palette = prev.palette;
       document.body.classList.remove("print-body");
     };
   }, []);

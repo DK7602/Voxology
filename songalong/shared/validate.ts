@@ -38,7 +38,8 @@ export const SONG_LIMITS = {
 } as const;
 
 const INSTRUMENTS: readonly Instrument[] = ["guitar", "ukulele", "piano", "mandolin", "bass"];
-const THEMES = ["light", "dark", "usyay", "system"] as const;
+const THEMES = ["light", "dark", "system"] as const;
+const PALETTES = ["gold", "usyay"] as const;
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
 function fail(message: string): never {
@@ -275,7 +276,7 @@ export function validatePracticeSettings(input: unknown): PracticeSettings {
 export function validateUserSettings(input: unknown, base: UserSettings = {}): UserSettings {
   if (!isObject(input)) fail("Settings must be an object");
   const out: UserSettings = { ...base };
-  const fields: (keyof UserSettings)[] = ["theme", "instrument", "leftHanded", "capoShapes", "countIn"];
+  const fields: (keyof UserSettings)[] = ["theme", "palette", "instrument", "leftHanded", "capoShapes", "countIn"];
   for (const k of fields) {
     if (!(k in input)) continue;
     if (input[k] === null) {
@@ -284,8 +285,18 @@ export function validateUserSettings(input: unknown, base: UserSettings = {}): U
     }
     switch (k) {
       case "theme":
+        // the older "usyay" theme is USyay in light
+        if (input.theme === "usyay") {
+          out.theme = "light";
+          if (!("palette" in input)) out.palette = "usyay";
+          break;
+        }
         if (!THEMES.includes(input.theme as (typeof THEMES)[number])) fail("Unknown theme");
         out.theme = input.theme as UserSettings["theme"];
+        break;
+      case "palette":
+        if (!PALETTES.includes(input.palette as (typeof PALETTES)[number])) fail("Unknown colour scheme");
+        out.palette = input.palette as UserSettings["palette"];
         break;
       case "instrument":
         out.instrument = optInstrument(input, "instrument");

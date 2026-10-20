@@ -19,7 +19,7 @@ import {
   IconWrench,
 } from "./Icons";
 import { Popover } from "./ui";
-import { currentTheme } from "../theme";
+import { currentPalette, currentTheme } from "../theme";
 
 const LINKS = [
   { to: "/", label: "Home", icon: IconHome, end: true },
@@ -61,7 +61,8 @@ export function NavBar() {
     e.preventDefault();
     if (q.trim()) navigate(`/search?q=${encodeURIComponent(q.trim())}`);
   };
-  const toggleTheme = () => updateSettings({ theme: currentTheme() === "dark" ? "light" : "dark" });
+  // light <-> dark, keeping the colours
+  const toggleTheme = () => updateSettings({ theme: currentTheme() === "dark" ? "light" : "dark", palette: currentPalette() });
 
   return (
     <>

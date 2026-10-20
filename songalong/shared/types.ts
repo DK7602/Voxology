@@ -66,7 +66,10 @@ export interface SongDoc {
 export type Instrument = "guitar" | "ukulele" | "piano" | "mandolin" | "bass";
 
 export interface UserSettings {
+  /** light or dark, or follow the device ("usyay" is an older way of saying USyay in light) */
   theme?: "light" | "dark" | "usyay" | "system";
+  /** colour scheme: gold glass (the default) or USyay's red, white and blue */
+  palette?: "gold" | "usyay";
   instrument?: Instrument;
   leftHanded?: boolean;
   /** show chord shapes relative to the capo (true) or the sounding chords (false) */
