@@ -112,7 +112,8 @@ export function lineWords(line: LyricLine): number[] | null {
 }
 
 /** Beats a sung line takes, guessed from its length (lyrics usually carry only start times). */
-function sungBeats(text: string, bpm: number): number {
+/** About how long a line takes to sing, in beats, at an ordinary pace. */
+export function sungBeats(text: string, bpm: number): number {
   const seconds = Math.min(12, Math.max(1.2, text.length / 12 + 0.6));
   return (seconds * (bpm || 100)) / 60;
 }

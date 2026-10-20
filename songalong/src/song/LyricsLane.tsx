@@ -1,47 +1,11 @@
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
-import { chordsInLine, gapAfterLine, indexAt, lineWords, wordStarts } from "../../shared/timeline";
-import type { SongDoc } from "../../shared/types";
+import { indexAt, wordStarts } from "../../shared/timeline";
 import type { PlayerEngine } from "../player/engine";
 import { useBeatSelect, usePlayerState, useTick } from "../player/hooks";
+import { ribbonRows, singingPace, untimedEnd } from "./ribbon";
 
 /** Where "now" sits, as a share of the width. The chord strip uses the same spot. */
 export const PLAYHEAD = 0.22;
-
-interface Row {
-  start: number;
-  end: number;
-  /** the words; empty for the intro and instrumental breaks */
-  text: string;
-  section?: string;
-  /** chord changes in the words (beat, column): where the words are at those beats, for lines
-   *  without word times. The chords themselves are shown by the chord strip. */
-  marks: { beat: number; col: number }[];
-  /** when each word is sung (beats), when known */
-  words?: number[];
-  wordsEnd?: number;
-}
-
-/** The song as one row: the intro, each lyric line, and the instrumental breaks between them. */
-export function ribbonRows(doc: SongDoc, length: number): Row[] {
-  const rows: Row[] = [];
-  const first = doc.lines[0]?.beat ?? length;
-  if (first > 0) rows.push({ start: 0, end: first, text: "", section: doc.lines.length ? "Intro" : undefined, marks: [] });
-  doc.lines.forEach((line, i) => {
-    const gap = gapAfterLine(doc, i);
-    const until = i + 1 < doc.lines.length ? doc.lines[i + 1].beat : Math.max(length, line.beat + 1);
-    const words = lineWords(line);
-    rows.push({
-      start: line.beat,
-      end: gap ? gap.start : until,
-      text: line.text,
-      section: line.section,
-      marks: chordsInLine(doc, i).flatMap((p) => (p.carried ? [] : [{ beat: p.chord.beat, col: p.col }])),
-      ...(words ? { words, wordsEnd: line.wordsEnd } : {}),
-    });
-    if (gap) rows.push({ start: gap.start, end: gap.end, text: "", marks: [] });
-  });
-  return rows;
-}
 
 /** The line's words, each in a span marked with its word number (data-wi), so the lane can find
  *  where every word is. */
@@ -93,6 +57,7 @@ export function LyricsLane({ engine }: { engine: PlayerEngine }) {
   const length = engine.timeline.lengthBeats;
   const { countIn } = usePlayerState(engine);
   const rows = useMemo(() => ribbonRows(doc, length), [doc, length]);
+  const pace = useMemo(() => singingPace(rows), [rows]);
   const rowStarts = useMemo(() => rows.map((r) => ({ beat: r.start })), [rows]);
   // instrumental parts: about 95 px a second
   const pxPerBeat = Math.min(70, Math.max(26, (95 * 60) / (doc.bpm || 100)));
@@ -146,8 +111,8 @@ export function LyricsLane({ engine }: { engine: PlayerEngine }) {
           pts.push({ b: m.beat, x });
           lastB = m.beat;
         }
-        // reach the end of the words just before the next row starts, then cross the gap
-        const endB = row.end - Math.min(0.5, (row.end - lastB) * 0.15);
+        // reach the end of the words, then wait there and cross the gap to the next row
+        const endB = untimedEnd(row, lastB, pace, doc.bpm);
         if (endB > lastB) pts.push({ b: endB, x: right });
       });
       pts.sort((p, q) => p.b - q.b);
@@ -166,7 +131,7 @@ export function LyricsLane({ engine }: { engine: PlayerEngine }) {
     };
     // re-measure when the rows change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, pxPerBeat]);
+  }, [rows, pace, pxPerBeat]);
 
   useTick(engine, (_t, beat) => place(beat));
 
