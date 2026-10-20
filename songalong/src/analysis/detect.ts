@@ -12,7 +12,7 @@
 //   5. key (profiles + tonic chord), a key-aware second chord pass, spelling in the key
 
 import { DEFAULT_MAJOR, DEFAULT_MINOR, keyPrefersFlats, noteName, parseKey } from "../../shared/music/notes";
-import { estimateTempo, trackBeats, type TempoEstimate } from "./beats";
+import { estimateTempo, mendSlips, trackBeats, type TempoEstimate } from "./beats";
 import { beatChroma, harmonicPeriodicity, semitoneSpectrogram } from "./chroma";
 import { Vocabulary, decodeChords, emissionScores, powerChords } from "./chords";
 import { clamp, median, resample } from "./dsp";
@@ -62,9 +62,12 @@ export function detectChords(samples: Float32Array, sampleRate: number, opts: De
   progress(0.2, "Listening to the harmony");
   const spec = semitoneSpectrogram(x, RATE, (f) => progress(0.2 + 0.6 * f, "Listening to the harmony"));
   const beatPeriodFrames = chooseByHarmony(tempo, onset.fps, harmonicPeriodicity(spec));
-  // when the harmony overruled the rhythm, the loud accents sit off the beat: keep the grid steady
-  const tightness = beatPeriodFrames === tempo.period ? 100 : 800;
-  const tracked = trackBeats(onset.env, beatPeriodFrames, tightness).map((f) => f / onset.fps + onset.latency);
+  // A steady pulse: at librosa's tightness (100) the tracker would slide half a beat onto the
+  // up-strums for a few bars when they get louder (beats 15% short, then off by half a beat). At
+  // 800 a played tempo still drifts freely; the strums stay on the beat. When the harmony
+  // overruled the rhythm, the loud accents sit off the beat: steadier still.
+  const tightness = beatPeriodFrames === tempo.period ? 800 : 1600;
+  const tracked = mendSlips(trackBeats(onset.env, beatPeriodFrames, tightness).map((f) => f / onset.fps + onset.latency));
   const period = beatPeriodFrames / onset.fps;
   const beats = completeBeats(tracked, period, audibleStart, audibleEnd);
   const chroma = beatChroma(spec, beats);

@@ -193,3 +193,92 @@ export function trackBeats(env: Float64Array, period: number, tightness = 100): 
     return f + Math.max(-0.5, Math.min(0.5, off));
   });
 }
+
+/** a slide moves the beat this far (share of a beat), in at most MAX_SLIDE beats */
+const SLIDE_MIN = 0.3;
+const SLIDE_MAX = 0.7;
+const MAX_SLIDE = 4;
+/** an interval this far off the local beat counts as part of a slide; within it, as steady */
+const OFF = 0.06;
+/** steady beats needed on both sides of a slide */
+const STEADY = 3;
+
+/**
+ * Puts back beats that slid off the beat for a while. When the off-beat strums get louder for
+ * some bars, a tracker can slide onto them: a few beats come 10-20% short (or long), the next
+ * ones sit half a beat off, until it slides back, or to the end. Music doesn't change phase:
+ * every stretch between slides is moved by what the slides moved it, so that it agrees with
+ * the most of the song. A tempo change is no slide: the beats after it don't return to the
+ * pulse before it. Times in seconds, in order; returns the same number of beats.
+ */
+export function mendSlips(beats: number[]): number[] {
+  const n = beats.length;
+  if (n < 2 * STEADY + MAX_SLIDE + 2) return beats;
+  const ibi = beats.slice(1).map((b, i) => b - beats[i]);
+  const steadyAround = (i: number, p: number) => Math.abs(ibi[i] - p) <= OFF * p;
+  const slides: { from: number; to: number; shift: number }[] = []; // intervals from..to
+  for (let i = STEADY; i < ibi.length - STEADY; ) {
+    // the pulse just before
+    const before = ibi.slice(i - STEADY, i);
+    const p = [...before].sort((a, b) => a - b)[STEADY >> 1];
+    let found: { from: number; to: number; shift: number } | null = null;
+    if (before.every((_, k) => steadyAround(i - STEADY + k, p))) {
+      for (let k = 1; k <= MAX_SLIDE && i + k + STEADY <= ibi.length; k++) {
+        const devs = ibi.slice(i, i + k).map((d) => d - p);
+        const shift = devs.reduce((a, b) => a + b, 0);
+        const oneWay = devs.every((d) => Math.sign(d) === Math.sign(shift) && Math.abs(d) > OFF * p);
+        const after = Array.from({ length: STEADY }, (_, j) => i + k + j).every((j) => steadyAround(j, p));
+        if (oneWay && after && Math.abs(shift) >= SLIDE_MIN * p && Math.abs(shift) <= SLIDE_MAX * p) {
+          found = { from: i, to: i + k - 1, shift };
+          break;
+        }
+      }
+    }
+    if (found) {
+      slides.push(found);
+      i = found.to + 1 + STEADY;
+    } else i++;
+  }
+  if (!slides.length) return beats;
+
+  // stretches between slides (beat ranges) and how far each has slid from the first
+  const stretches: { from: number; to: number; offset: number }[] = [];
+  let start = 0;
+  let offset = 0;
+  for (const s of slides) {
+    stretches.push({ from: start, to: s.from, offset });
+    offset += s.shift;
+    start = s.to + 1;
+  }
+  stretches.push({ from: start, to: n - 1, offset });
+  // the offset most of the song's beats agree with (offsets within a quarter beat are one)
+  const p = [...ibi].sort((a, b) => a - b)[ibi.length >> 1];
+  let major = 0;
+  let most = -1;
+  for (const s of stretches) {
+    const weight = stretches.filter((t) => Math.abs(t.offset - s.offset) < 0.25 * p).reduce((w, t) => w + t.to - t.from + 1, 0);
+    if (weight > most) {
+      most = weight;
+      major = s.offset;
+    }
+  }
+  const out = beats.slice();
+  for (const s of stretches) {
+    const off = major - s.offset;
+    if (Math.abs(off) < 0.25 * p) continue; // already with the most of the song
+    // it sits on the off-beat strums, so it moves by whole half-beats (the slides' own lengths
+    // are only roughly that)
+    const own = ibi.slice(s.from, Math.max(s.from + 1, s.to)).sort((a, b) => a - b);
+    const half = (own[own.length >> 1] ?? p) / 2;
+    const shift = Math.round(off / half) * half;
+    for (let i = s.from; i <= s.to; i++) out[i] = beats[i] + shift;
+  }
+  // the beats inside a slide: evenly between the mended beats either side
+  for (const s of slides) {
+    const a = out[s.from];
+    const b = out[s.to + 1];
+    const k = s.to + 1 - s.from;
+    for (let j = 1; j < k; j++) out[s.from + j] = a + ((b - a) * j) / k;
+  }
+  return out;
+}

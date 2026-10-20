@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mendSlips } from "../src/analysis/beats";
 import { detectChords } from "../src/analysis/detect";
 import { synthSong, type SongSpec } from "./helpers/synth";
 
@@ -58,6 +59,27 @@ describe("chord detection on synthesized songs", () => {
       expect(Math.abs(r.bpm - 87)).toBeLessThan(2);
     }
   });
+  it("stays on the beat when the up-strums get louder for a while", () => {
+    // an acoustic cover strummed down-up in 8ths at 74 BPM: four bars in the middle accent the
+    // up-strums (the "and"s). The beat must not slide half a beat onto them and back.
+    const downs = [1, 0, 0.45, 0, 0.9, 0, 0.45, 0];
+    const ups = [0.4, 0, 1, 0, 0.35, 0, 1, 0];
+    const part = (strum: number[], repeats: number) =>
+      synthSong({ bpm: 74, chords: ["G", "D", "Em", "C"], repeats, instrument: "guitar", strum, kick: "none", bass: "none", tail: 0 });
+    const parts = [part(downs, 2), part(ups, 1), part(downs, 2)];
+    const samples = new Float32Array(parts.reduce((n, p) => n + p.samples.length, 0));
+    let at = 0;
+    for (const p of parts) {
+      samples.set(p.samples, at);
+      at += p.samples.length;
+    }
+    const r = detectChords(samples, parts[0].sampleRate);
+    const spb = 60 / 74;
+    // every beat found sits on a played beat (half a beat would be 405 ms off)
+    const off = r.beatTimes.filter((t) => t > 0.5 && t < at / parts[0].sampleRate - 0.5).map((t) => Math.abs(t / spb - Math.round(t / spb)) * spb);
+    console.log("up-strums:", r.bpm, "worst", Math.round(1000 * Math.max(...off)), "ms");
+    expect(Math.max(...off)).toBeLessThan(0.08);
+  });
   it("spells flats in a flat key", () => {
     const { r } = chordAccuracy({ bpm: 100, chords: ["Eb", "Bb", "Cm", "Ab"], repeats: 3, ending: ["Eb"], instrument: "guitar" });
     console.log("flat:", r.bpm, r.key, r.chords.slice(0, 8).map((c) => c.name).join(" "));
@@ -80,5 +102,45 @@ describe("chord detection on synthesized songs", () => {
     // one power chord in a song of full chords: named as a full chord, like the rest
     const mixed = chordAccuracy({ ...rock, chords: ["E5", "D", "A", "G"] });
     expect(mixed.r.chords.some((c) => c.name.endsWith("5"))).toBe(false);
+  });
+});
+
+describe("mending beats that slid off the beat", () => {
+  const P = 0.8;
+  // a steady pulse with a little human unevenness
+  const steady = (n: number, from = 0) => Array.from({ length: n }, (_, i) => from + i * P + 0.012 * Math.sin(i * 2.3));
+  /** beats that slide by `by` over three short (or long) beats after beat `at` */
+  const slid = (beats: number[], at: number, by: number) => beats.map((t, i) => (i <= at ? t : t + by * Math.min(1, (i - at) / 3)));
+
+  it("leaves a steady pulse alone", () => {
+    const b = steady(60);
+    expect(mendSlips(b)).toEqual(b);
+  });
+
+  it("moves a stretch that slid half a beat back, and leaves the rest", () => {
+    const truth = steady(80);
+    const b = slid(slid(truth, 30, -0.42), 50, 0.42); // off the beat for 20 beats, then back
+    const m = mendSlips(b);
+    const off = m.map((t, i) => Math.abs(t - truth[i]));
+    expect(Math.max(...off.slice(0, 31))).toBe(0);
+    expect(Math.max(...off.slice(34, 51))).toBeLessThan(0.03); // back on the beat (by half a beat)
+    expect(Math.max(...off.slice(54))).toBe(0);
+  });
+
+  it("goes with most of the song when the slide lasts to the end", () => {
+    const truth = steady(90);
+    const m = mendSlips(slid(truth, 60, -0.42));
+    expect(Math.abs(m[80] - truth[80])).toBeLessThan(0.03);
+    // ...but when most of the song is after the slide, that part is the beat
+    const late = slid(truth, 20, -0.42);
+    expect(mendSlips(late)[80]).toBe(late[80]);
+  });
+
+  it("leaves a real change of tempo, and a slow ending, alone", () => {
+    const faster = [...steady(40), ...steady(40, 40 * P).map((t, i) => 40 * P + (t - 40 * P) * 0.85 - (i ? 0 : 0))];
+    expect(mendSlips(faster)).toEqual(faster);
+    const b = steady(50);
+    const ending = [...b, ...[1.1, 1.25, 1.45, 1.7].map((x, i, a) => b[49] + a.slice(0, i + 1).reduce((s, y) => s + y * P, 0))];
+    expect(mendSlips(ending)).toEqual(ending);
   });
 });
