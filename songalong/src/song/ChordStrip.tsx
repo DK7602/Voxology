@@ -1,10 +1,24 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { bars as makeBars } from "../../shared/timeline";
 import { parseChord } from "../../shared/music/chords";
 import { ChordName } from "../components/ChordName";
 import type { PlayerEngine } from "../player/engine";
 import { useBeatSelect, usePlayerState, useTick, type ChordView } from "../player/hooks";
 import { PLAYHEAD } from "./LyricsLane";
+import { stripSize } from "./stripScale";
+
+/** Phone-sized screens (the strip's chord names are smaller there). */
+function useNarrow(): boolean {
+  const query = "(max-width: 760px)";
+  const [narrow, setNarrow] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia(query);
+    const on = () => setNarrow(m.matches);
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  return narrow;
+}
 
 interface Cell {
   start: number;
@@ -43,6 +57,8 @@ export function ChordStrip({ engine, view, lead = false }: { engine: PlayerEngin
     return out;
   }, [doc, length]);
   const flat = useMemo(() => cells.flat(), [cells]);
+  const narrow = useNarrow();
+  const size = useMemo(() => stripSize(flat.map((c) => c.end - c.start), { lead, narrow }), [flat, lead, narrow]);
 
   const active = useBeatSelect(engine, (beat) => {
     let lo = 0;
@@ -112,7 +128,7 @@ export function ChordStrip({ engine, view, lead = false }: { engine: PlayerEngin
       ro.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flat, view, lead]);
+  }, [flat, view, lead, size]);
 
   useTick(engine, (_t, beat) => place(beat));
 
@@ -141,13 +157,16 @@ export function ChordStrip({ engine, view, lead = false }: { engine: PlayerEngin
       <div className={"strip" + (lead ? " lead" : "")} ref={scroller} role="list" aria-label={lead ? "Lead notes by bar" : "Chords by bar"}>
         <div className="strip-pad" style={{ width: `${PLAYHEAD * 100}%` }} aria-hidden="true" />
         {cells.map((row, b) => (
-          <div key={b} className={"bar" + (row[0].phrase ? " phrase" : "")} style={{ minWidth: row.length > 1 ? (lead ? 46 : 70) * row.length + 10 : undefined }}>
+          <div key={b} className={"bar" + (row[0].phrase ? " phrase" : "")} style={{ width: (doc.beatsPerBar || 4) * size.beat }}>
             {row.map((c) => {
+              const width = (c.end - c.start) * size.beat;
               const i = flatIndex++;
               const sym = c.chordIndex >= 0 ? doc.chords[c.chordIndex].name : "N.C.";
               const shown = view.shown(sym);
               const cat = parseChord(view.sounding(sym))?.category ?? "none";
               const inLoop = loopFrom !== null && loopTo !== null && c.start >= loopFrom - 1e-6 && c.end <= loopTo + 1e-6;
+              // about how wide the name is at the strip's type size: a longer one in a short chord squeezes
+              const tight = width < (lead ? 19 : narrow ? 22 : 26) * 0.6 * shown.length + 10;
               return (
                 <div
                   key={i}
@@ -155,8 +174,8 @@ export function ChordStrip({ engine, view, lead = false }: { engine: PlayerEngin
                     cellRefs.current[i] = el;
                   }}
                   role="listitem"
-                  className={"cell" + (i === active ? " active" : "") + (c.carried ? " carried" : "") + (inLoop ? " in-loop" : "")}
-                  style={{ flexGrow: c.end - c.start }}
+                  className={"cell" + (i === active ? " active" : "") + (c.carried ? " carried" : "") + (inLoop ? " in-loop" : "") + (tight ? " tight" : "")}
+                  style={{ width }}
                   onClick={(e) => onCellClick(c, e)}
                   title={`Bar ${c.bar + 1}${c.carried ? " (held)" : ""} — click to jump, shift-click to loop bars`}
                 >

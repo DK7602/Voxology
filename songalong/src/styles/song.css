@@ -236,28 +236,40 @@
 .strip::-webkit-scrollbar {
   display: none;
 }
+/* bars and cells are sized by their beats (ChordStrip); the bar line is drawn over the cells
+   rather than as a border, so it adds no width and the strip moves evenly */
 .bar {
   flex: none;
   display: flex;
-  min-width: 150px;
-  border-left: 1px solid var(--tile-border);
   position: relative;
 }
-.bar.phrase {
-  border-left: 3px solid var(--grid-line);
+.bar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--tile-border);
+  z-index: 2;
+  pointer-events: none;
 }
-:root[data-theme="dark"] .bar.phrase {
-  border-left-color: var(--gold);
+.bar.phrase::before {
+  width: 3px;
+  background: var(--grid-line);
 }
-.bar:first-child {
-  border-left: 0;
+:root[data-theme="dark"] .bar.phrase::before {
+  background: var(--gold);
+}
+.bar:first-child::before {
+  display: none;
 }
 .cell {
-  flex: 1;
+  flex: none;
   display: grid;
   place-items: center;
   height: 70px;
-  min-width: 70px;
+  overflow: hidden;
   background: var(--plain-cell);
   border-right: 1px solid var(--plain-border);
   cursor: pointer;
@@ -967,9 +979,6 @@
     height: 58px;
     font-size: 22px;
   }
-  .bar {
-    min-width: 110px;
-  }
   .rb-words,
   .rb-rest {
     font-size: 32px;
@@ -1132,12 +1141,18 @@
 .lk.bar + .lk-label {
   fill: #fff;
 }
-.strip.lead .bar {
-  min-width: 120px;
-}
 .strip.lead .cell {
-  min-width: 44px;
   font-size: 19px;
+}
+/* a quick passing chord: its name squeezes into the beat it has */
+.cell.tight {
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+@media (max-width: 760px) {
+  .cell.tight {
+    font-size: 15px;
+  }
 }
 
 /* diagrams never spill out of their card */
