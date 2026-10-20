@@ -7,7 +7,7 @@ import { guessSongName, nameCandidates, tidyTitle, type SongName } from "../shar
 import { Timeline } from "../shared/timeline";
 import type { LyricLine, SongDoc } from "../shared/types";
 import { distinctChords, validateSongDoc } from "../shared/validate";
-import { alignPlain, alignSynced, alignVersion, listen, timeWords, transcribeAll, type AlignedLyrics, type Segment, type SpeechAi } from "./align";
+import { alignPlain, alignSynced, alignVersion, listen, oneOffsetFits, timeWords, transcribeAll, type AlignedLyrics, type Segment, type SpeechAi } from "./align";
 import { findLyrics } from "./lyrics";
 import { encodeChords, newSongId } from "./songData";
 
@@ -95,9 +95,13 @@ export async function lyricsFor(a: PrepAnalysis, ai: SpeechAi | undefined, progr
     else if (found.synced.length) {
       const segs = await hear();
       progress("Lining up the lyrics with the video", 0.96);
-      // the same recording: one offset fits; another version (a cover, a live take): follow the singing
-      const sameRecording = !found.duration || !videoDuration || Math.abs(found.duration - videoDuration) <= 12;
-      lyrics = sameRecording ? alignSynced(found.synced, segs) : alignVersion(found.synced, segs, found.duration, videoDuration);
+      // the same recording (as long, or one offset fits what is heard): one offset;
+      // another version (a cover, a live take): follow the singing
+      const sameLength = !found.duration || !videoDuration || Math.abs(found.duration - videoDuration) <= 12;
+      lyrics =
+        sameLength || oneOffsetFits(found.synced, segs)
+          ? alignSynced(found.synced, segs)
+          : alignVersion(found.synced, segs, found.duration, videoDuration);
       lyricSource = "LRCLIB";
     } else if (found.plain.length) {
       const segs = await hear();

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PrepAnalysis, PrepEvent, PrepareEvent } from "../shared/prep";
 import { cleanTitle, guessSongName, nameCandidates, tidyTitle } from "../shared/songName";
-import { alignVersion, anchorChain, estimateOffset, matchInOrder, timeWords, transcribe, versionLines, warp, type Segment } from "../worker/align";
+import { alignVersion, anchorChain, estimateOffset, matchInOrder, oneOffsetFits, timeWords, transcribe, versionLines, warp, type Segment } from "../worker/align";
 import { findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
 import { isoDuration } from "../worker/youtube";
 import { Client, makeEnv, signUp } from "./helpers/workerEnv";
@@ -277,6 +277,17 @@ describe("lyrics timing", () => {
     // the phrase starts alone would have put the words 2.5 s early
     const phrasesOnly = segs.map(({ start, end, text }) => ({ start, end, text }));
     expect(estimateOffset(lines, phrasesOnly).offset).toBeLessThan(14);
+  });
+  it("tells the same recording with a longer intro from another version", () => {
+    // sixteen lines over three minutes
+    const lines = Array.from({ length: 16 }, (_, i) => ({ time: 20 + i * 12, text: `${LINES[i % 4]} ${["again", "once more", "tonight", "for good"][i >> 2]}` }));
+    const heardAt = (shift: (t: number) => number) => lines.map((l) => ({ start: shift(l.time), end: shift(l.time) + 3, text: l.text }));
+    // the record with 6 s more at the start (and so a video 14 s longer): one offset fits
+    expect(oneOffsetFits(lines, heardAt((t) => t + 6))).toBe(true);
+    // a cover a tenth faster: the gap grows line by line
+    expect(oneOffsetFits(lines, heardAt((t) => 3 + t * 0.9))).toBe(false);
+    // too little heard to tell
+    expect(oneOffsetFits(lines, heardAt((t) => t + 6).slice(0, 2))).toBe(false);
   });
   it("times each word where it is sung", () => {
     // line times as the lyrics site has them (each a little off), and what is heard

@@ -193,6 +193,25 @@ export interface AlignedLyrics {
   timing: LyricsTiming;
 }
 
+/**
+ * Whether one offset explains where the lines are heard: most lines that are heard at all are
+ * heard where that offset puts them. Then the video is the record itself, with more or less before
+ * or after it (an official video's intro), whatever its length.
+ */
+export function oneOffsetFits(lines: TimedLine[], segs: Segment[]): boolean {
+  const heard = heardWords(segs);
+  const { offset } = estimateOffset(lines, segs);
+  let heardLines = 0;
+  let agree = 0;
+  for (const line of lines) {
+    const hits = lineHits(line.text, heard);
+    if (!hits.length) continue;
+    heardLines++;
+    if (hits.some((h) => Math.abs(h.time - line.time - offset) <= 1.5)) agree++;
+  }
+  return agree >= 3 && agree >= 0.6 * heardLines;
+}
+
 /** Timed (LRC) lyrics -> video time: the offset most heard lines agree on. */
 export function alignSynced(lines: TimedLine[], segs: Segment[]): AlignedLyrics {
   const est = estimateOffset(lines, segs);
