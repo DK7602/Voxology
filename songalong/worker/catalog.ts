@@ -116,7 +116,14 @@ export async function lyricsFor(a: PrepAnalysis, ai: SpeechAi | undefined, progr
   }
   // each word where it is sung (when the lines were found in what is heard: then it is singing)
   if (heard && lyrics.lines.length && lyrics.timing !== "synced") lyrics = { ...lyrics, lines: timeWords(lyrics.lines, heard) };
-  const credits = ["Chords found automatically", lyricSource && lyricSource !== "instrumental" ? `Lyrics: ${lyricSource}` : ""]
+  // listened, but no line was found in what is heard (no singing, e.g. a piano cover): the
+  // lyrics' own timing is a guess for this video, and the song says so
+  const estimated = lyricSource === "LRCLIB" && heard !== null && lyrics.lines.length > 0 && lyrics.timing === "synced";
+  const credits = [
+    "Chords found automatically",
+    lyricSource && lyricSource !== "instrumental" ? `Lyrics: ${lyricSource}` : "",
+    estimated ? "timing estimated (no singing heard)" : "",
+  ]
     .filter(Boolean)
     .join(" · ");
   return { name, lyrics, credits };

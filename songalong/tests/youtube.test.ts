@@ -388,7 +388,7 @@ describe("preparing a song", () => {
     expect(song.isPublic).toBe(true);
     expect(song.mine).toBe(false);
     expect(song.doc.media).toEqual({ kind: "youtube", videoId: "abcdefghijk" });
-    expect(song.doc.credits).toContain("LRCLIB");
+    expect(song.doc.credits).toBe("Chords found automatically · Lyrics: LRCLIB");
     // first line: record 10 s + 5 s intro = 15 s -> beat (15 - 2) / 0.5 = 26
     expect(song.doc.lines[0]).toMatchObject({ text: LINES[0], beat: 26 });
     expect(song.doc.lines).toHaveLength(4);
@@ -402,6 +402,19 @@ describe("preparing a song", () => {
     // another user sees it too
     const { client: other } = await signUp(env, "other@example.com");
     expect((await other.call("GET", `/api/songs/${songId}`)).status).toBe(200);
+  });
+
+  it("says when the lyric timing is a guess (no singing heard)", async () => {
+    vi.stubGlobal("fetch", fakeLrclib());
+    const { env } = makeEnv({
+      PREP: fakePrep((videoId) => [{ type: "result", analysis: analysis(videoId) }]),
+      AI: { async run() { return { segments: [] }; } }, // a piano cover: nothing sung
+    });
+    const { client } = await signUp(env, "piano@example.com");
+    const ready = (await readEvents(await client.fetch("POST", "/api/youtube/prepare", { json: { videoId: "pianocover1" } }))).at(-1)!;
+    const song = (await client.call("GET", `/api/songs/${(ready as { songId: string }).songId}`)).body.song;
+    expect(song.doc.lines).toHaveLength(4);
+    expect(song.doc.credits).toBe("Chords found automatically · Lyrics: LRCLIB · timing estimated (no singing heard)");
   });
 
   it("blocked in the cloud -> the user's PC helper prepares it", async () => {
