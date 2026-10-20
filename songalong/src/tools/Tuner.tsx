@@ -39,6 +39,8 @@ function Strobe({ live }: { live: React.MutableRefObject<{ cents: number | null;
       const inTune = fresh && Math.abs(cents!) <= 2;
       glow += ((inTune ? 1 : 0) - glow) * Math.min(1, dt * 6);
       g.clearRect(0, 0, w, h);
+      // silver stripes in the red, white and blue theme, else gold
+      const silver = document.documentElement.dataset.theme === "usyay";
       const rows = [
         { y: 0, hgt: h * 0.4, stripe: 28, speed: 1 },
         { y: h * 0.42, hgt: h * 0.3, stripe: 14, speed: 0.5 },
@@ -51,6 +53,10 @@ function Strobe({ live }: { live: React.MutableRefObject<{ cents: number | null;
         if (glow > 0.5) {
           grad.addColorStop(0, `rgba(120, 255, 170, ${a})`);
           grad.addColorStop(1, `rgba(20, 160, 90, ${a})`);
+        } else if (silver) {
+          grad.addColorStop(0, `rgba(255, 255, 255, ${a})`);
+          grad.addColorStop(0.5, `rgba(200, 215, 245, ${a})`);
+          grad.addColorStop(1, `rgba(110, 140, 205, ${a})`);
         } else {
           grad.addColorStop(0, `rgba(255, 233, 160, ${a})`);
           grad.addColorStop(0.5, `rgba(233, 180, 70, ${a})`);

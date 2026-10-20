@@ -13,12 +13,11 @@ import { App } from "./App";
 import { AuthProvider } from "./auth";
 import { ToastProvider } from "./components/ui";
 import { startInstallSupport } from "./install";
-import { applyTheme } from "./theme";
+import { applyTheme, themeOf } from "./theme";
 
 // paint the right theme before the user's settings load
 try {
-  const t = localStorage.getItem("sa-theme");
-  applyTheme(t === "light" || t === "dark" ? t : "system");
+  applyTheme(themeOf(localStorage.getItem("sa-theme")));
 } catch {
   applyTheme("system");
 }

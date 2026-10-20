@@ -8,6 +8,9 @@ import { Toggle, errorText, useToast } from "../components/ui";
 import { HelperSettings } from "./HelperSettings";
 import { InstallButton, IosInstallSteps } from "../components/InstallButton";
 import { useInstall } from "../install";
+import { THEMES } from "../theme";
+
+const THEME_LABEL: Record<(typeof THEMES)[number], string> = { light: "Light", dark: "Dark", usyay: "USyay", system: "Device" };
 import { clampSync, savedSync, saveSync, syncLabel } from "../player/sync";
 import { Manual } from "./Manual";
 
@@ -71,12 +74,12 @@ export function SettingsPage() {
         <div className="setting-row">
           <div className="label">
             <b>Theme</b>
-            <span>Gold & white glass, gold & black glass, or follow your device</span>
+            <span>Gold & white glass, gold & black glass, red white & blue, or follow your device</span>
           </div>
           <div className="seg" role="group" aria-label="Theme">
-            {(["light", "dark", "system"] as const).map((t) => (
+            {THEMES.map((t) => (
               <button key={t} aria-pressed={(s.theme ?? "system") === t} onClick={() => set({ theme: t })}>
-                {t === "system" ? "Device" : t[0].toUpperCase() + t.slice(1)}
+                {THEME_LABEL[t]}
               </button>
             ))}
           </div>

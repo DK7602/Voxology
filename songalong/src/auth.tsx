@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { User, UserSettings } from "../shared/api";
 import { api, ApiError } from "./api";
-import { applyTheme } from "./theme";
+import { applyTheme, themeOf } from "./theme";
 
 interface AuthState {
   user: User | null;
@@ -70,8 +70,7 @@ export function useUser(): User {
 
 function localTheme(): UserSettings["theme"] {
   try {
-    const t = localStorage.getItem("sa-theme");
-    if (t === "light" || t === "dark" || t === "system") return t;
+    return themeOf(localStorage.getItem("sa-theme"));
   } catch {
     /* storage unavailable */
   }

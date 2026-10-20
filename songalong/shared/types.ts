@@ -66,7 +66,7 @@ export interface SongDoc {
 export type Instrument = "guitar" | "ukulele" | "piano" | "mandolin" | "bass";
 
 export interface UserSettings {
-  theme?: "light" | "dark" | "system";
+  theme?: "light" | "dark" | "usyay" | "system";
   instrument?: Instrument;
   leftHanded?: boolean;
   /** show chord shapes relative to the capo (true) or the sounding chords (false) */
