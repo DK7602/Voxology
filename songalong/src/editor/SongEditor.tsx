@@ -411,7 +411,7 @@ function TimingTools({ doc, setDoc, mediaOn }: { doc: SongDoc; setDoc: (fn: (d: 
 
   const tap = () => {
     if (next >= items.length) return;
-    const beat = Math.round(engine.timeline.timeToBeat(engine.media.time() - 0.08 * st.speed) / snap) * snap; // allow for reaction time
+    const beat = Math.round(engine.timeline.timeToBeat(engine.heardTime() - 0.08 * st.speed) / snap) * snap; // allow for reaction time
     setDoc((d) => {
       const list = target === "lines" ? [...d.lines] : [...d.chords];
       const prev = next > 0 ? list[next - 1].beat : -Infinity;
@@ -446,7 +446,7 @@ function TimingTools({ doc, setDoc, mediaOn }: { doc: SongDoc; setDoc: (fn: (d: 
   };
 
   const setBeatOne = () => {
-    const t = engine.media.time() - 0.08;
+    const t = engine.heardTime() - 0.08;
     setDoc((d) => {
       if (d.beatTimes?.length) {
         const shift = t - d.beatTimes[0];

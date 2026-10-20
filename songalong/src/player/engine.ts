@@ -3,6 +3,7 @@
 import type { ChordEvent, SongDoc } from "../../shared/types";
 import { Timeline, chordEnd, indexAt } from "../../shared/timeline";
 import { ClockMedia, type MediaAdapter } from "./media";
+import { clampSync, savedSync, saveSync } from "./sync";
 import { arpeggio, audioContext, click, strum, unlockAudio } from "./synth";
 import type { Instrument } from "../../shared/types";
 
@@ -26,6 +27,8 @@ export interface PlayerState {
   metronome: boolean;
   /** bars of count-in before playing (0 = off) */
   countInBars: number;
+  /** seconds later than the media clock that words and chords are shown (sync.ts) */
+  sync: number;
   error: string | null;
   mediaKind: MediaAdapter["kind"];
 }
@@ -54,6 +57,8 @@ export class PlayerEngine {
   private leadScheduledUpTo = -Infinity; // beat position of the last lead event scheduled
   private countTimers: number[] = [];
   private lastBeat = 0;
+  /** where playing started (or was moved to): what is shown waits there for the sound */
+  private shownFrom = 0;
 
   constructor(doc: SongDoc) {
     this.timeline = new Timeline(doc);
@@ -69,6 +74,7 @@ export class PlayerEngine {
       leadGuide: false,
       metronome: false,
       countInBars: 1,
+      sync: savedSync(),
       error: null,
       mediaKind: "none",
     };
@@ -182,6 +188,7 @@ export class PlayerEngine {
   }
 
   private startRunning(startMedia = false) {
+    this.shownFrom = this.media.time();
     this.resetSchedule();
     this.set({ playing: true });
     if (startMedia) {
@@ -220,6 +227,7 @@ export class PlayerEngine {
     const dur = this.media.duration() ?? this.timeline.duration;
     const clamped = Math.max(this.startTime(), Math.min(t, dur));
     this.media.seek(clamped);
+    this.shownFrom = clamped;
     this.lastBeat = this.timeline.timeToBeat(clamped);
     this.resetSchedule();
     this.emitTick(clamped);
@@ -257,6 +265,20 @@ export class PlayerEngine {
   setCountIn(bars: number) {
     this.set({ countInBars: bars });
   }
+  /** Show words and chords this many seconds later (remembered on this device). */
+  setSync(seconds: number) {
+    const sync = clampSync(seconds);
+    saveSync(sync);
+    this.set({ sync });
+  }
+
+  /** Where in the song the sound being heard is: the media clock less the sync delay while
+   *  playing (song seconds pass at the playing speed), never before where playing started. */
+  heardTime(t = this.media.time()): number {
+    const { playing, sync, speed } = this.state;
+    if (!playing || !sync) return t;
+    return sync > 0 ? Math.max(Math.min(t, this.shownFrom), t - sync * speed) : t - sync * speed;
+  }
 
   destroy() {
     try {
@@ -292,8 +314,11 @@ export class PlayerEngine {
           return;
         }
       }
-      this.lastBeat = beat;
-      this.tickListeners.forEach((f) => f(t, beat));
+      // shown as heard: the loop and the end above go by the media itself
+      const heard = this.heardTime(t);
+      const shownBeat = heard === t ? beat : this.timeline.timeToBeat(heard);
+      this.lastBeat = shownBeat;
+      this.tickListeners.forEach((f) => f(heard, shownBeat));
       if (this.state.playing || this.state.countIn !== null) this.raf = requestAnimationFrame(step);
     };
     this.raf = requestAnimationFrame(step);

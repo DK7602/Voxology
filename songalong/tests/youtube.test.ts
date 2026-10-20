@@ -356,6 +356,31 @@ describe("lyrics timing", () => {
     // never heard: keeps its time, no word times
     expect(out[3]).toEqual({ time: 25, text: "Carry me home across the water" });
   });
+  it("puts a backing vocal that wasn't heard after the sung phrase", () => {
+    const lines = [
+      { time: 10, text: "Candles in the morning window (glow on)" },
+      { time: 16, text: "Paper boats along the river" },
+    ];
+    const segs: Segment[] = [
+      {
+        start: 10,
+        end: 13,
+        text: "Candles in the morning window",
+        words: [
+          { word: " Candles", start: 10, end: 10.5 },
+          { word: " in", start: 10.5, end: 10.7 },
+          { word: " the", start: 10.7, end: 10.9 },
+          { word: " morning", start: 10.9, end: 11.4 },
+          { word: " window", start: 11.4, end: 13 }, // held
+        ],
+      },
+    ];
+    const [line] = timeWords(lines, segs);
+    expect(line.words!.slice(0, 5)).toEqual([10, 10.5, 10.7, 10.9, 11.4]);
+    expect(line.words![5]).toBeCloseTo(13.15, 2); // "(glow" once "window" has ended
+    expect(line.words![6]).toBeGreaterThan(line.words![5]); // "on)" after it
+    expect(line.words![6]).toBeLessThan(16);
+  });
   it("places plain lyrics in order, filling gaps", () => {
     const segs = [
       { start: 12, end: 14, text: LINES[0] },

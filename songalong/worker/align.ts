@@ -400,6 +400,15 @@ function editDistance1(a: string, b: string): boolean {
 
 /** When a heard word starts. A phrase's first word that lasts long has most likely been given the
  *  music before it, so it is taken to start shortly before it ends. */
+/** Is the word starting at `at` in brackets: a backing vocal, "...turning back (thunder)"? */
+function inBrackets(text: string, at: number): boolean {
+  const upTo = text.slice(0, at + 1);
+  return upTo.lastIndexOf("(") > upTo.lastIndexOf(")");
+}
+
+/** a backing vocal after the last word heard comes at least this long after that word ends */
+const ANSWER_GAP = 0.15;
+
 function sungStart(h: HeardWord): number {
   if (h.lead && h.end - h.start > 1) return h.end - Math.min(h.end - h.start, 0.3 + 0.06 * h.text.length);
   return h.start;
@@ -489,6 +498,13 @@ export function timeWords(lines: TimedLine[], segs: Segment[]): TimedLine[] {
       if (after) return Math.max(floor, after.t - (starts[after.k] - st) * perChar);
       return Math.min(ceiling, before!.t + (st - starts[before!.k]) * perChar);
     });
+    // a backing vocal after the last word heard (often shouted, so not heard) answers the sung
+    // phrase: it comes once that has ended, not at the singer's pace
+    const answer = starts.findIndex((st, k) => k > z.k && inBrackets(l.text, st));
+    if (answer >= 0) {
+      const shift = Math.max(0, z.end + ANSWER_GAP - times[answer]);
+      for (let k = answer; k < times.length; k++) times[k] = Math.min(ceiling, times[k] + shift);
+    }
     for (let k = 1; k < times.length; k++) times[k] = Math.max(times[k], times[k - 1]);
     const lastWord = times.length - 1;
     const lastHeard = mine[lastWord];

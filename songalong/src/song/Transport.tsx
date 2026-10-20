@@ -41,6 +41,7 @@ export function Transport({ hasLead, engine, view, settings, songKey, bestCapo, 
   const key = parseKey(songKey);
   const keyAt = (t: number) => (key ? prettyAccidentals(transposeKey(key, t).name) : "");
   const playing = st.playing || st.countIn !== null;
+  const syncLabel = Math.abs(st.sync) < 0.005 ? "As the player says" : `${Math.abs(st.sync).toFixed(2)} s ${st.sync > 0 ? "later" : "earlier"}`;
 
   const loopRange = (kind: "song" | "bar" | "line" | "section") => {
     const b = engine.beat;
@@ -79,9 +80,9 @@ export function Transport({ hasLead, engine, view, settings, songKey, bestCapo, 
           {playing ? <IconPause /> : <IconPlay />}
         </button>
         <Popover
-          width={230}
+          width={270}
           trigger={(p) => (
-            <button className={"countin" + (st.countInBars ? "" : " off")} {...p} ref={p.ref} title="Count-in before playing">
+            <button className={"countin" + (st.countInBars ? "" : " off")} {...p} ref={p.ref} title="Count-in and sync">
               <IconTimer size={24} />
               <span className="countin-text">{st.countInBars ? (doc.beatsPerBar === 3 ? "3, 2, 1..." : "4, 3, 2, 1...") : "No count-in"}</span>
             </button>
@@ -95,6 +96,19 @@ export function Transport({ hasLead, engine, view, settings, songKey, bestCapo, 
                   {n === 0 ? "Off" : `${n} bar${n > 1 ? "s" : ""} of clicks`}
                 </button>
               ))}
+              <div className="menu-sep" />
+              <div className="menu-label">Sync words &amp; chords to the sound</div>
+              <div className="menu-item sync-row" style={{ cursor: "default" }}>
+                <button className="btn btn-sm" onClick={() => engine.setSync(st.sync - 0.05)} aria-label="Show words and chords earlier">−</button>
+                <span className="sync-val" aria-live="polite">{syncLabel}</span>
+                <button className="btn btn-sm" onClick={() => engine.setSync(st.sync + 0.05)} aria-label="Show words and chords later">+</button>
+              </div>
+              {Math.abs(st.sync) >= 0.005 && (
+                <button className="menu-item" onClick={() => engine.setSync(0)}>Reset</button>
+              )}
+              <div className="menu-item faint" style={{ cursor: "default", fontSize: 14 }}>
+                Words ahead of the singing? Press + until they match. Bluetooth speakers and headphones add a delay. Kept on this device.
+              </div>
             </>
           )}
         </Popover>
