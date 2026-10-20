@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="promo.css">
+<style>
+  .bg { background-image: url(../../public/bg/black.webp); background-position: 70% 50%; }
+  .shade { background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.2) 45%, rgba(0,0,0,0.65) 100%); }
+  [data-theme="light"] .bg { background-image: url(../../public/bg/cream.webp); background-position: 70% 50%; }
+  [data-theme="light"] .shade { background: linear-gradient(180deg, rgba(255,250,238,0.7) 0%, rgba(255,250,238,0.2) 50%, rgba(250,240,215,0.7) 100%); }
+  h1 { position: absolute; left: 72px; top: 168px; font-size: 90px; }
+  .sub { position: absolute; left: 72px; top: 372px; width: 880px; }
+  .crop { position: absolute; left: 0; width: 1080px; overflow: hidden;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 9%, #000 91%, transparent 100%); }
+  .crop img { position: absolute; display: block; }
+  .strip { top: 492px; height: 104px; }
+  .strip img { height: 104px; left: -264px; }       /* starts just before the playhead */
+  .neck { top: 628px; height: 366px; border-radius: 0; }
+  .neck img { height: 424px; top: -58px; left: -330px; } /* frets 3 to 13, header left out */
+  .legend { position: absolute; left: 0; right: 0; top: 1046px; display: flex; justify-content: center; gap: 40px; font-size: 27px; }
+  .legend div { display: flex; align-items: center; gap: 12px; }
+  .d { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font: 700 17px "EB Garamond", serif; }
+  .d.now { background: var(--gold); border: 2px solid var(--gold-hi); box-shadow: 0 0 12px rgba(233,199,102,0.8); color: #1b1b1b; }
+  .d.bar { background: var(--green); border: 2px solid rgba(0,0,0,0.5); color: #fff; }
+  .d.next { background: #faf7ef; border: 2px solid var(--green); color: #1b1b1b; }
+  .d.ord { background: none; color: var(--text); font-size: 24px; width: auto; }
+  .chips { position: absolute; left: 0; right: 0; top: 1130px; display: flex; justify-content: center; gap: 18px; }
+  .footer { top: 1262px; }
+  .rule { top: 1234px; }
+</style></head>
+<body><div class="canvas">
+  <div class="bg"></div><div class="shade"></div>
+  <div class="brand"><img class="em" src="emblem.png"><img class="wm" src="../../public/brand/wordmark.webp"></div>
+  <h1>Learn the riff,<br><span class="gold-text">note by note.</span></h1>
+  <p class="sub">Switch to Lead and the riffs and solos light up on the neck, bar by bar, in time with the music.</p>
+  <div class="crop strip"><img data-shot="leadstrip.png"></div>
+  <div class="crop neck"><img data-shot="neck.png"></div>
+  <div class="legend">
+    <div><span class="d now">E</span>Play now</div>
+    <div><span class="d bar">G</span>This bar</div>
+    <div><span class="d next">F♯</span>Next bar</div>
+    <div><span class="d ord">1 2 3</span>The order</div>
+  </div>
+  <div class="chips">
+    <span class="chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4.5v15l13-7.5z" fill="currentColor" stroke="none"/></svg>Hear it played as a guide</span>
+    <span class="chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M8 4v16M13 4v16M18 4v16"/><path d="M6.5 4h3v8h-3zM11.5 4h3v8h-3zM16.5 4h3v8h-3z" fill="currentColor"/></svg>Piano shows the keys</span>
+  </div>
+  <div class="rule"></div>
+  <div class="footer">Guitar · Ukulele · Mandolin · Bass · Piano</div>
+</div><script src="theme.js"></script></body></html>

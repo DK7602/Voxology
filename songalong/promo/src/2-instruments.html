@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="promo.css">
+<style>
+  .bg { background-image: url(../../public/bg/green.webp); background-position: 60% 50%; }
+  .shade { background:
+    linear-gradient(180deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.55) 34%, rgba(0,0,0,0.35) 100%); }
+  [data-theme="light"] .bg { background-image: url(../../public/bg/white.webp); }
+  [data-theme="light"] .shade { background: linear-gradient(180deg, rgba(255,251,242,0.75) 0%, rgba(255,251,242,0.3) 40%, rgba(250,242,222,0.35) 100%); }
+  h1 { position: absolute; left: 72px; top: 168px; font-size: 86px; }
+  .sub { position: absolute; left: 72px; top: 362px; width: 900px; }
+  .row { position: absolute; left: 0; right: 0; display: flex; justify-content: center; gap: 24px; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .label { font-family: "Playfair Display", serif; font-weight: 600; font-size: 20px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent); padding-left: 0.3em; }
+  .item img { display: block; border-radius: 17px; box-shadow: var(--card-shadow); }
+  .card img { height: 352px; }
+  .menu img { height: 352px; border-radius: 14px; }
+</style></head>
+<body><div class="canvas">
+  <div class="bg"></div><div class="shade"></div>
+  <div class="brand"><img class="em" src="emblem.png"><img class="wm" src="../../public/brand/wordmark.webp"></div>
+  <h1>Your instrument.<br><span class="gold-text">Your key.</span></h1>
+  <p class="sub">Every chord drawn the way <i>you</i> play it. Change key to suit your voice, or let SongAlong pick the capo with the easiest shapes.</p>
+  <div class="row" style="top:500px">
+    <div class="item card"><div class="label">Guitar</div><img data-shot="c-guitar.png"></div>
+    <div class="item card"><div class="label">Ukulele</div><img data-shot="c-ukulele.png"></div>
+    <div class="item card"><div class="label">Mandolin</div><img data-shot="c-mandolin.png"></div>
+    <div class="item card"><div class="label">Bass</div><img data-shot="c-bass.png"></div>
+  </div>
+  <div class="row" style="top:920px">
+    <div class="item card"><div class="label">Piano</div><img data-shot="c-piano.png"></div>
+    <div class="item menu"><div class="label">Capo</div><img data-shot="capo-menu.png"></div>
+  </div>
+</div><script src="theme.js"></script></body></html>

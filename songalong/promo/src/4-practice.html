@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="promo.css">
+<style>
+  .bg { background-image: url(../../public/bg/gold.webp); background-position: 40% 50%; }
+  .shade { background: linear-gradient(180deg, rgba(255,240,200,0.25) 0%, rgba(0,0,0,0) 40%, rgba(60,40,0,0.25) 100%); }
+  [data-theme="light"] .bg { background-image: url(../../public/bg/white.webp); background-position: 60% 50%; }
+  [data-theme="light"] .shade { background: linear-gradient(180deg, rgba(255,251,242,0.6) 0%, rgba(255,251,242,0) 45%, rgba(240,226,190,0.4) 100%); }
+  /* the dark set sits on gold: dark ink */
+  .canvas { --text: #1a1205; --text-dim: rgba(40, 28, 6, 0.8); --hl: linear-gradient(180deg, #2a1c04, #000); }
+  [data-theme="light"] .canvas { --hl: linear-gradient(180deg, #d9b04a 0%, #b88d22 45%, #7c5c0c 100%); }
+  h1 { position: absolute; left: 72px; top: 170px; font-size: 100px; }
+  .sub { position: absolute; left: 72px; top: 392px; width: 470px; font-size: 30px; }
+  .feats { position: absolute; left: 600px; top: 172px; display: flex; flex-direction: column; gap: 16px; align-items: flex-start; }
+  .chip { font-size: 25px; padding: 13px 24px; background: rgba(12, 9, 3, 0.9); color: var(--cream); border-color: rgba(241,210,122,0.75); }
+  .chip .ic { color: var(--gold-hi); }
+  [data-theme="light"] .chip { background: rgba(255,252,243,0.92); color: var(--text); border-color: rgba(160,124,29,0.55); }
+  [data-theme="light"] .chip .ic { color: var(--accent); }
+  .phone { width: 444px; }
+  .p1 { left: 70px; top: 540px; transform: rotate(-3deg); }
+  .p2 { left: 566px; top: 600px; transform: rotate(3deg); }
+</style></head>
+<body><div class="canvas">
+  <div class="bg"></div><div class="shade"></div>
+  <div class="brand pill"><img class="em" src="emblem.png"><img class="wm" src="../../public/brand/wordmark.webp"></div>
+  <h1>Practice<br><span class="gold-text">your way.</span></h1>
+  <p class="sub">Slow it down, loop the tricky part, and tune up before you start.</p>
+  <div class="feats">
+    <span class="chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 17a8.5 8.5 0 1 1 17 0"/><path d="M12 17l4.5-5.5"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/></svg>Slower, same pitch</span>
+    <span class="chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/></svg>Loop a bar, line or section</span>
+    <span class="chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l4 18H5z"/><path d="M12 16 17 6"/><path d="M7 16h10"/></svg>Count-in clicks</span>
+    <span class="chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4v4M5 12v8M12 4v10M12 18v2M19 4v2M19 10v10"/><rect x="3" y="8" width="4" height="4" rx="1"/><rect x="10" y="14" width="4" height="4" rx="1"/><rect x="17" y="6" width="4" height="4" rx="1"/></svg>Built-in tuner</span>
+  </div>
+  <div class="phone p1"><img data-shot="tuner.png"></div>
+  <div class="phone p2"><img data-shot="speed.png"></div>
+</div><script src="theme.js"></script></body></html>

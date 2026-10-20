@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="promo.css">
+<style>
+  .bg { background-image: url(../../public/bg/night.webp); background-position: 38% 50%; }
+  .shade { background:
+    radial-gradient(ellipse 60% 45% at 76% 50%, rgba(212,175,72,0.10), transparent 70%),
+    linear-gradient(90deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.55) 48%, rgba(0,0,0,0.25) 100%),
+    linear-gradient(180deg, rgba(0,0,0,0) 70%, rgba(0,0,0,0.85) 100%); }
+  [data-theme="light"] .bg { background-image: url(../../public/bg/cream.webp); background-position: 30% 50%; }
+  [data-theme="light"] .shade { background:
+    linear-gradient(90deg, rgba(255,250,238,0.78) 0%, rgba(255,250,238,0.45) 50%, rgba(255,250,238,0.1) 100%),
+    linear-gradient(180deg, rgba(255,250,238,0) 70%, rgba(250,240,215,0.9) 100%); }
+  h1 { position: absolute; left: 72px; top: 164px; font-size: 94px; z-index: 3; }
+  .phone { left: 572px; top: 186px; width: 460px; }
+  .callout { position: absolute; left: 72px; width: 492px; display: flex; align-items: center; gap: 16px; transform: translateY(-50%); z-index: 4; }
+  .callout .txt { flex: none; width: 360px; }
+  .callout b { display: block; font-family: "Playfair Display", serif; font-weight: 600; font-size: 35px; color: var(--text); line-height: 1.1; }
+  .callout span { display: block; font-size: 25px; font-style: italic; color: var(--text-dim); margin-top: 4px; }
+  .callout .line { flex: 1; height: 1.5px; background: linear-gradient(90deg, transparent, var(--rule)); }
+  .callout .dot { flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 4px rgba(212,175,72,0.25), 0 0 14px rgba(241,210,122,0.8); }
+  .footer { top: 1252px; }
+  .rule { top: 1222px; }
+</style></head>
+<body><div class="canvas">
+  <div class="bg"></div><div class="shade"></div>
+  <div class="brand"><img class="em" src="emblem.png"><img class="wm" src="../../public/brand/wordmark.webp"></div>
+  <h1>Play along<br>with <span class="gold-text">any</span><br><span class="gold-text">song.</span></h1>
+  <div class="phone"><img data-shot="song.png"></div>
+  <div class="callout" style="top:531px"><div class="txt"><b>Chords in time</b><span>The bar you're on fills as it plays</span></div><div class="line"></div><div class="dot"></div></div>
+  <div class="callout" style="top:650px"><div class="txt"><b>Lyrics that follow</b><span>Word by word, as they're sung</span></div><div class="line"></div><div class="dot"></div></div>
+  <div class="callout" style="top:838px"><div class="txt"><b>Every chord shown</b><span>How to play it, in the order it comes</span></div><div class="line"></div><div class="dot"></div></div>
+  <div class="callout" style="top:1010px"><div class="txt"><b>Your pace</b><span>Slow it down, loop it, count in</span></div><div class="line"></div><div class="dot"></div></div>
+  <div class="rule"></div>
+  <div class="footer">Guitar · Ukulele · Piano · Mandolin · Bass</div>
+</div><script src="theme.js"></script></body></html>
