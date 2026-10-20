@@ -546,6 +546,13 @@ textarea {
     padding: 10px 10px calc(84px + env(safe-area-inset-bottom));
     gap: 10px;
   }
+}
+@media (max-width: 760px) and (max-height: 500px) and (orientation: landscape) {
+  .app {
+    padding-bottom: calc(10px + env(safe-area-inset-bottom)); /* no tab bar to leave room for */
+  }
+}
+@media (max-width: 760px) {
   .page-panel {
     padding: 16px;
   }

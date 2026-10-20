@@ -34,6 +34,7 @@
   filter: drop-shadow(0 1px 1px rgba(70, 40, 0, 0.45));
 }
 .nav-search {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -116,12 +117,42 @@
     display: none;
   }
   .nav {
-    grid-template-columns: auto minmax(160px, 1fr) auto auto;
+    grid-template-columns: auto minmax(140px, 1fr) auto auto;
+  }
+}
+/* the bar always fits its window: a bar wider than the screen makes phones zoom the whole page
+   out, leaving the pages short of the edge */
+@media (max-width: 1100px) {
+  .nav {
+    gap: 12px;
+    padding-left: 18px;
+  }
+  .logo-text {
+    height: 36px;
+  }
+  .nav-links {
+    gap: 2px;
+  }
+  .nav-link {
+    padding: 8px 10px;
+  }
+  .nav-user {
+    gap: 8px;
+  }
+  .avatar {
+    width: 46px;
+    height: 46px;
+    font-size: 17px;
+  }
+}
+@media (max-width: 960px) {
+  .nav-logo .logo-text {
+    display: none;
   }
 }
 @media (max-width: 760px) {
   .nav {
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 10px;
     padding: 8px 8px 8px 12px;
     top: 6px;
@@ -183,6 +214,30 @@
 }
 @media (max-width: 420px) {
   .nav-logo .logo-text {
+    display: none;
+  }
+}
+/* phones on their side: little height, so the bar scrolls away with the page */
+@media (max-height: 500px) and (orientation: landscape) {
+  .nav {
+    position: static;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+}
+/* ...and on the smaller ones the links sit in the bar instead of a tab bar along the bottom */
+@media (max-width: 760px) and (max-height: 500px) and (orientation: landscape) {
+  .nav {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+  .nav-links {
+    display: flex;
+    gap: 0;
+  }
+  .nav-link {
+    padding: 8px;
+  }
+  .tabbar {
     display: none;
   }
 }

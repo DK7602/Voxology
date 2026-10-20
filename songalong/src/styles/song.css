@@ -1006,6 +1006,17 @@
     padding-bottom: 90px;
   }
 }
+/* phones on their side have no tab bar (app.css): the transport docks at the bottom */
+@media (max-width: 760px) and (max-height: 500px) and (orientation: landscape) {
+  .transport {
+    bottom: calc(6px + env(safe-area-inset-bottom));
+    padding: 4px 10px;
+  }
+  .play-btn {
+    width: 52px;
+    height: 52px;
+  }
+}
 
 /* ---------- lead part ---------- */
 .part-seg {
