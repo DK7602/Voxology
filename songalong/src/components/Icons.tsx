@@ -257,6 +257,17 @@ export const IconEdit = (p: P) => (
     <path d="m13.5 6.5 4 4" />
   </Svg>
 );
+/** two columns of dots: drag me */
+export const IconGrip = (p: P) => (
+  <Svg {...p}>
+    {[6, 12, 18].map((y) => (
+      <g key={y}>
+        <circle cx="9" cy={y} r="1.4" fill="currentColor" stroke="none" />
+        <circle cx="15" cy={y} r="1.4" fill="currentColor" stroke="none" />
+      </g>
+    ))}
+  </Svg>
+);
 export const IconTrash = (p: P) => (
   <Svg {...p}>
     <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />

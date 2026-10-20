@@ -113,6 +113,31 @@ describe("songs, library and playlists", () => {
     expect(recent[0].id).toBe("demo-porch-light");
   });
 
+  it("takes songs off Keep playing (until played again) and out of Discover", async () => {
+    const { env } = makeEnv();
+    const { client } = await signUp(env, "hide@example.com");
+    const ids = async (scope: string) => (await client.call("GET", `/api/songs?scope=${scope}`)).body.songs.map((s: { id: string }) => s.id);
+    const play = () => client.call("PUT", "/api/songs/demo-porch-light/progress", { played: true });
+    const tick = () => new Promise((r) => setTimeout(r, 3));
+    await play();
+    expect(await ids("recent")).toContain("demo-porch-light");
+    await tick();
+    expect((await client.call("PUT", "/api/songs/demo-porch-light/hidden/recent")).body).toEqual({ hidden: true });
+    expect(await ids("recent")).not.toContain("demo-porch-light");
+    await tick();
+    await play();
+    expect(await ids("recent")).toContain("demo-porch-light");
+
+    expect(await ids("discover")).toContain("demo-iron-sparks");
+    await client.call("PUT", "/api/songs/demo-iron-sparks/hidden/discover");
+    expect(await ids("discover")).not.toContain("demo-iron-sparks");
+    await client.call("DELETE", "/api/songs/demo-iron-sparks/hidden/discover");
+    expect(await ids("discover")).toContain("demo-iron-sparks");
+
+    expect((await client.call("PUT", "/api/songs/demo-iron-sparks/hidden/everywhere")).status).toBe(400);
+    expect((await client.call("PUT", "/api/songs/no-such-song/hidden/discover")).status).toBe(404);
+  });
+
   it("manages playlists", async () => {
     const { env } = makeEnv();
     const { client } = await signUp(env, "pl@example.com");

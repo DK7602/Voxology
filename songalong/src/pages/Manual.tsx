@@ -158,11 +158,16 @@ const TOPICS: { title: string; body: ReactNode }[] = [
           <b>My Library</b>: songs you saved with ♥ and songs you made.
         </li>
         <li>
-          <b>Playlists</b>: make one there, then add songs from a song’s <b>⋮ → Add to playlist</b>. In a playlist, ↑ and ↓ change the order and ✕
-          takes a song out.
+          <b>Playlists</b>: make one there, then add songs from a song’s <b>⋮ → Add to playlist</b> (or a long press on its card). In a
+          playlist, drag a song by its <b>⠿</b> handle to change the order (the page scrolls when you reach the top or bottom); ✕ takes a song
+          out.
         </li>
         <li>
           <b>Discover</b>: example songs and songs other players made public.
+        </li>
+        <li>
+          <b>Long-press a song card</b> (right-click on a computer) for more: take it off <b>Keep playing</b> or <b>Discover</b>, save it to
+          your library or remove it, or add it to a playlist. Changed your mind? Tap <b>Undo</b>.
         </li>
       </ul>
     ),

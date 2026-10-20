@@ -140,20 +140,31 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 
 // ---------- toasts ----------
 
+/** a button on a toast, e.g. Undo */
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
 interface Toast {
   id: number;
   text: string;
   error?: boolean;
+  action?: ToastAction;
 }
-const ToastContext = createContext<(text: string, error?: boolean) => void>(() => {});
+const ToastContext = createContext<(text: string, error?: boolean, action?: ToastAction) => void>(() => {});
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const push = useCallback((text: string, error = false) => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, text, error }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), error ? 6000 : 3200);
-  }, []);
+  const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
+  const push = useCallback(
+    (text: string, error = false, action?: ToastAction) => {
+      const id = Date.now() + Math.random();
+      setToasts((t) => [...t, { id, text, error, action }]);
+      // a toast with a button stays long enough to reach it
+      setTimeout(() => dismiss(id), error || action ? 6000 : 3200);
+    },
+    [dismiss],
+  );
   return (
     <ToastContext.Provider value={push}>
       {children}
@@ -161,6 +172,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div key={t.id} className={"toast" + (t.error ? " error" : "")}>
             {t.text}
+            {t.action && (
+              <button
+                className="toast-action"
+                onClick={() => {
+                  t.action!.run();
+                  dismiss(t.id);
+                }}
+              >
+                {t.action.label}
+              </button>
+            )}
           </div>
         ))}
       </div>

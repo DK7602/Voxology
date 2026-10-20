@@ -85,8 +85,12 @@ async function scopeSearch(db: D1Database, userId: string, rawQuery: string): Pr
 async function scopeRecent(db: D1Database, userId: string): Promise<SongSummary[]> {
   const { results } = await db
     .prepare(
-      `SELECT song_id, last_played_at FROM song_progress
-       WHERE user_id = ? AND play_count > 0 ORDER BY last_played_at DESC LIMIT 100`,
+      `SELECT song_id, last_played_at FROM song_progress p
+       WHERE user_id = ?1 AND play_count > 0
+         -- taken off the row, and not played since
+         AND NOT EXISTS (SELECT 1 FROM hidden_songs h WHERE h.user_id = ?1 AND h.song_id = p.song_id
+                         AND h.list = 'recent' AND h.hidden_at >= p.last_played_at)
+       ORDER BY last_played_at DESC LIMIT 100`,
     )
     .bind(userId)
     .all<{ song_id: string; last_played_at: number }>();
@@ -112,12 +116,14 @@ songs.get("/", async (c) => {
     case "mine":
       list = await listSongs(db, user.id, "s.owner_id = ?1", `ORDER BY s.updated_at DESC LIMIT ${LIST_LIMIT}`);
       break;
-    case "discover":
+    case "discover": {
+      const hidden = await hiddenIds(db, user.id, "discover");
       list = [
         ...(await demoSummaries(db, user.id)),
         ...(await listSongs(db, user.id, "s.is_public = 1", `ORDER BY s.updated_at DESC LIMIT ${DISCOVER_LIMIT}`)),
-      ];
+      ].filter((s) => !hidden.has(s.id));
       break;
+    }
     case "search":
       list = await scopeSearch(db, user.id, c.req.query("q") ?? "");
       break;
@@ -257,6 +263,47 @@ songs.get("/:id/similar", async (c) => {
     .slice(0, SIMILAR_LIMIT);
   const summaries = await summariesByIds(db, user.id, ranked.map((r) => r.id));
   return c.json({ songs: ranked.map((r) => summaries.get(r.id)).filter((s): s is SongSummary => !!s) });
+});
+
+/** Song ids this user took off a list. */
+async function hiddenIds(db: D1Database, userId: string, list: HideList): Promise<Set<string>> {
+  const { results } = await db
+    .prepare("SELECT song_id FROM hidden_songs WHERE user_id = ? AND list = ?")
+    .bind(userId, list)
+    .all<{ song_id: string }>();
+  return new Set(results.map((r) => r.song_id));
+}
+
+/** The lists a song can be taken off: Home's "Keep playing" row, and Discover. */
+const HIDE_LISTS = ["recent", "discover"] as const;
+type HideList = (typeof HIDE_LISTS)[number];
+
+function hideList(c: Ctx): HideList {
+  const list = c.req.param("list") as HideList;
+  if (!HIDE_LISTS.includes(list)) throw new HttpError(400, "Unknown song list");
+  return list;
+}
+
+songs.put("/:id/hidden/:list", async (c) => {
+  const user = currentUser(c);
+  const id = c.req.param("id");
+  const list = hideList(c);
+  if (!(await isVisible(c.env.DB, user.id, id))) throw notFound();
+  await c.env.DB.prepare(
+    `INSERT INTO hidden_songs (user_id, song_id, list, hidden_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT (user_id, song_id, list) DO UPDATE SET hidden_at = excluded.hidden_at`,
+  )
+    .bind(user.id, id, list, Date.now())
+    .run();
+  return c.json({ hidden: true });
+});
+
+songs.delete("/:id/hidden/:list", async (c) => {
+  const user = currentUser(c);
+  await c.env.DB.prepare("DELETE FROM hidden_songs WHERE user_id = ? AND song_id = ? AND list = ?")
+    .bind(user.id, c.req.param("id"), hideList(c))
+    .run();
+  return c.json({ hidden: false });
 });
 
 songs.put("/:id/favorite", async (c) => {

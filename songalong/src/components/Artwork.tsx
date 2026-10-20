@@ -15,11 +15,14 @@ export function Artwork({
   youtubeId,
   className,
   rounded = 14,
+  label,
 }: {
   title: string;
   youtubeId?: string;
   className?: string;
   rounded?: number;
+  /** words to show on a generated cover instead of the instrument motif (a playlist's name) */
+  label?: string;
 }) {
   if (youtubeId) {
     return (
@@ -39,8 +42,15 @@ export function Artwork({
       style={{ borderRadius: rounded, "--art-angle": `${angle}deg`, "--art-hue": hueShift } as CSSProperties}
       aria-hidden="true"
     >
-      <Icon size={44} />
-      <span className="art-initial">{(title || "♪").trim().charAt(0).toUpperCase()}</span>
+      {label ? (
+        // a long name may break after a slash ("Fun/" "Learning"), not mid-word
+        <span className="art-label">{label.replace(/\//g, "/\u200b")}</span>
+      ) : (
+        <>
+          <Icon size={44} />
+          <span className="art-initial">{(title || "♪").trim().charAt(0).toUpperCase()}</span>
+        </>
+      )}
     </div>
   );
 }
