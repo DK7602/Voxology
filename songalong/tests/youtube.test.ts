@@ -110,6 +110,14 @@ async function readEvents(res: Response): Promise<PrepareEvent[]> {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("song names from YouTube", () => {
+  it("reads an artist in brackets, and channel names written as one word", () => {
+    const meta = { title: "Mercy Road [Harbor Light Music]", channel: "HarborLightMusic" };
+    expect(nameCandidates(meta)[0]).toEqual({ artist: "Harbor Light Music", title: "Mercy Road" });
+    expect(guessSongName(meta)).toEqual({ artist: "Harbor Light Music", title: "Mercy Road" });
+    // a bracket that isn't the channel's artist stays part of the title
+    expect(guessSongName({ title: "Mercy Road (Part Two)", channel: "HarborLightMusic" })).toEqual({ artist: "Harbor Light", title: "Mercy Road (Part Two)" });
+    expect(guessSongName({ title: "Mercy Road", channel: "TestArtistVEVO" }).artist).toBe("Test Artist");
+  });
   it("cleans titles and finds artist / title", () => {
     expect(cleanTitle("Test Artist - Paper Boats (Official Video) [HD]")).toBe("Test Artist - Paper Boats");
     expect(guessSongName({ title: "Test Artist - Paper Boats (Official Video)", channel: "x" })).toEqual({ artist: "Test Artist", title: "Paper Boats" });

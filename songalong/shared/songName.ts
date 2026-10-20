@@ -20,13 +20,28 @@ export function cleanTitle(s: string): string {
   return t.replace(/\s{2,}/g, " ").trim();
 }
 
-/** "Artist - Topic", "ArtistVEVO", "Artist Official" -> "Artist" */
+/** "SovereignGraceMusic" -> "Sovereign Grace Music": channel names are often written as one word. */
+function spaceWords(s: string): string {
+  return /\s/.test(s) ? s : s.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+}
+
+/** "Artist - Topic", "ArtistVEVO", "Artist Official", "ArtistNameMusic" -> "Artist Name" */
 export function cleanChannel(s: string): string {
-  return s
-    .replace(/\s*-\s*Topic$/i, "")
-    .replace(/VEVO$/i, "")
+  return spaceWords(s.replace(/\s*-\s*Topic$/i, "").replace(/VEVO$/i, "").trim())
     .replace(/\s+(official|music|records|tv)$/i, "")
     .trim();
+}
+
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** "Song [Artist]" / "Song (Artist)" where the bracket names the channel's artist. */
+function bracketArtist(title: string, channel: string): SongName | null {
+  const m = /^(.+?)\s*[([{【]([^)\]}】]+)[)\]}】]\s*$/.exec(title);
+  if (!m) return null;
+  const inner = squash(m[2]);
+  const ch = squash(cleanChannel(channel));
+  if (!inner || !ch || !(inner.includes(ch) || ch.includes(inner))) return null;
+  return { artist: m[2].trim(), title: withoutFeatures(m[1].trim()) };
 }
 
 /** Drops "feat. X" / "ft. X" / "(with X)" for matching. */
@@ -48,7 +63,7 @@ export function guessSongName(meta: { title: string; channel: string; artist?: s
   }
   const quoted = /^(.*?)\s*["“](.+?)["”]/.exec(title);
   if (quoted && quoted[1]) return { artist: withoutFeatures(quoted[1]), title: withoutFeatures(quoted[2]) };
-  return { artist: cleanChannel(meta.channel), title: withoutFeatures(title) };
+  return bracketArtist(title, meta.channel) ?? { artist: cleanChannel(meta.channel), title: withoutFeatures(title) };
 }
 
 /** Lyrics-site names are typed in by people: "Oasis - Wonderwall" as a track name, for example. */
@@ -61,8 +76,8 @@ export function tidyTitle(title: string, artist: string): string {
 
 /**
  * The names worth looking a video's lyrics up under, most likely first. Uploads write
- * "Artist - Song", but covers often write "Song - Artist" (or "Song | Artist"), so both orders
- * are tried; yt-dlp's own artist / track tags come first when present.
+ * "Artist - Song", but covers often write "Song - Artist" (or "Song | Artist"), and some write
+ * "Song [Artist]", so all are tried; yt-dlp's own artist / track tags come first when present.
  */
 export function nameCandidates(meta: { title: string; channel: string; artist?: string; track?: string }): SongName[] {
   const out: SongName[] = [];
@@ -75,6 +90,8 @@ export function nameCandidates(meta: { title: string; channel: string; artist?: 
   };
   if (meta.artist && meta.track) add(guessSongName(meta));
   const title = cleanTitle(meta.title);
+  const bracketed = bracketArtist(title, meta.channel);
+  if (bracketed) add(bracketed);
   const parts = title
     .split(/\s+[-–—|]+\s+/)
     .map((p) => withoutFeatures(cleanTitle(p)).replace(/^["“]|["”]$/g, ""))
