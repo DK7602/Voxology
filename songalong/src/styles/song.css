@@ -634,9 +634,10 @@
   stroke: #d8f0dc;
   stroke-width: 1;
 }
+/* USyay dark: white notes with bold red numbers */
 :root[data-palette="usyay"][data-theme="dark"] .fret-diagram .dot {
-  fill: #2f66d6;
-  stroke: #dbe6ff;
+  fill: #ffffff;
+  stroke: none;
 }
 :root[data-palette="sunday"][data-theme="dark"] .fret-diagram .dot {
   fill: #3a6db0;
@@ -663,6 +664,14 @@
 .fret-diagram .dot-label {
   fill: #fff;
   font: 600 12px "EB Garamond", serif;
+}
+:root[data-palette="usyay"][data-theme="dark"] .fret-diagram .dot-label:not(.extra) {
+  fill: #c8102e;
+  font-weight: 800;
+}
+/* the bass note to play is a red dot: its name stays white */
+:root[data-palette="usyay"][data-theme="dark"] .fret-diagram .dot.root + .dot-label {
+  fill: #fff;
 }
 .fret-diagram .fret-num,
 .fret-diagram .caption,
