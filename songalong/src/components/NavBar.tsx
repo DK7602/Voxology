@@ -61,7 +61,7 @@ export function NavBar() {
     e.preventDefault();
     if (q.trim()) navigate(`/search?q=${encodeURIComponent(q.trim())}`);
   };
-  // light <-> dark, keeping the colours
+  // light <-> dark, keeping the colors
   const toggleTheme = () => updateSettings({ theme: currentTheme() === "dark" ? "light" : "dark", palette: currentPalette() });
 
   return (

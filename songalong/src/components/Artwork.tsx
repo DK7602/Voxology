@@ -1,5 +1,5 @@
 // Song artwork: the YouTube thumbnail when there is one, otherwise a generated cover in the
-// theme's colours (gold / green, or red / white / blue) with an instrument motif (deterministic
+// theme's colors (gold / green, or red / white / blue) with an instrument motif (deterministic
 // per title).
 import type { CSSProperties } from "react";
 import { IconGuitar, IconMandolin, IconNote, IconPiano } from "./Icons";
@@ -35,7 +35,7 @@ export function Artwork({
   return (
     <div
       className={"artwork generated " + (className ?? "")}
-      // each song its own angle and shade; the colours come from the theme (app.css)
+      // each song its own angle and shade; the colors come from the theme (app.css)
       style={{ borderRadius: rounded, "--art-angle": `${angle}deg`, "--art-hue": hueShift } as CSSProperties}
       aria-hidden="true"
     >

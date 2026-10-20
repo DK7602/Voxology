@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { validateUserSettings } from "../shared/validate";
 
-describe("colour schemes", () => {
-  it("saves light / dark and the colours separately", () => {
+describe("color schemes", () => {
+  it("saves light / dark and the colors separately", () => {
     for (const theme of ["light", "dark", "system"]) expect(validateUserSettings({ theme }).theme).toBe(theme);
-    for (const palette of ["gold", "usyay"]) expect(validateUserSettings({ palette }).palette).toBe(palette);
+    for (const palette of ["gold", "usyay", "sunday"]) expect(validateUserSettings({ palette }).palette).toBe(palette);
     expect(validateUserSettings({ theme: "dark", palette: "usyay" })).toEqual({ theme: "dark", palette: "usyay" });
     expect(() => validateUserSettings({ theme: "neon" })).toThrow();
     expect(() => validateUserSettings({ palette: "neon" })).toThrow();

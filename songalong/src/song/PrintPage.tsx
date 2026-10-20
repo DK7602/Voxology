@@ -29,7 +29,7 @@ export function PrintPage() {
     api.song(id).then((r) => setRecord(r.song)).catch((e) => setError(errorText(e)));
   }, [id]);
 
-  // the sheet is always printed light, in the usual colours
+  // the sheet is always printed light, in the usual colors
   useEffect(() => {
     const root = document.documentElement;
     const prev = { theme: root.dataset.theme, palette: root.dataset.palette };

@@ -182,6 +182,97 @@
   --diagram-bg: #0a1638;
 }
 
+/* Sunday: a stained-glass window behind everything; cream cathedral glass panels (light) or deep
+   wine glass (dark) with gold leading; ruby glass for the controls that are on and the play button;
+   the window's sky blue in the chord diagrams. */
+:root[data-palette="sunday"]:not([data-theme="dark"]) {
+  color-scheme: light;
+  --bg-image: url("/bg/sunday-window.webp");
+  --bg-color: #6b1a2a;
+  --panel: url("/bg/sunday-cream.webp") center / cover;
+  --panel-solid: #faf4e6;
+  --panel-border: rgba(201, 162, 75, 0.75);
+  --panel-shadow: 0 18px 40px rgba(40, 10, 10, 0.4), 0 2px 0 rgba(255, 255, 255, 0.7) inset;
+  --inset: #f6eedb;
+  --inset-border: rgba(160, 120, 50, 0.35);
+  --tile: url("/bg/sunday-cream.webp") 30% 70% / 300%;
+  --tile-border: rgba(160, 120, 50, 0.4);
+  --green-glass: url("/bg/sunday-ruby.webp") 40% 50% / 300%;
+  --play-glass: radial-gradient(circle at 35% 30%, rgba(255, 190, 170, 0.35), transparent 60%), url("/bg/sunday-ruby.webp") 50% 50% / 400%;
+  --play-shadow: 0 0 0 4px rgba(233, 199, 102, 0.3), 0 8px 20px rgba(60, 8, 16, 0.45);
+  --plain: #fdf9f0;
+  --plain-cell: #f6eedd;
+  --plain-border: rgba(160, 120, 50, 0.3);
+  --plain-active: #7d1830;
+  --ink: #2a1a14;
+  --ink-soft: #66513f;
+  --ink-faint: #a8957b;
+  --heading: #5a0f1f;
+  --accent-text: #7a1428;
+  --green: #7a1428;
+  --green-2: #2f5d9a;
+  --green-hi: #4c7bbf;
+  --green-tint: rgba(122, 20, 40, 0.1);
+  --on-green: #fff6e6;
+  --gold: #c9a24b;
+  --gold-hi: #f0d68a;
+  --gold-deep: #8a6418;
+  --chip-bg: #f5ead2;
+  --chip-ink: #7a1428;
+  --chord-red: #a3122a;
+  --now: #c8102e;
+  --danger: #a3241d;
+  --focus: 0 0 0 3px rgba(122, 20, 40, 0.3);
+  --nav-bg: linear-gradient(180deg, rgba(253, 248, 236, 0.97), rgba(244, 233, 210, 0.97));
+  --overlay: rgba(30, 10, 10, 0.5);
+  --grid-line: #1d1d1d;
+  --diagram-bg: #fbf6ea;
+}
+
+:root[data-palette="sunday"][data-theme="dark"] {
+  color-scheme: dark;
+  --bg-image: url("/bg/sunday-window.webp");
+  --bg-color: #2a0b12;
+  --panel: url("/bg/sunday-night.webp") center / cover;
+  --panel-solid: #1c0e12;
+  --panel-border: rgba(201, 162, 75, 0.7);
+  --panel-shadow: 0 18px 44px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 220, 170, 0.12) inset;
+  --inset: rgba(20, 8, 12, 0.85);
+  --inset-border: rgba(201, 162, 75, 0.35);
+  --tile: url("/bg/sunday-night.webp") 35% 60% / 300%;
+  --tile-border: rgba(201, 162, 75, 0.4);
+  --green-glass: url("/bg/sunday-ruby.webp") 40% 50% / 300%;
+  --play-glass: radial-gradient(circle at 35% 30%, rgba(255, 190, 170, 0.35), transparent 60%), url("/bg/sunday-ruby.webp") 50% 50% / 400%;
+  --play-shadow: 0 0 0 4px rgba(233, 199, 102, 0.25), 0 8px 20px rgba(0, 0, 0, 0.5);
+  --plain: #120a0c;
+  --plain-cell: #1b1013;
+  --plain-border: rgba(201, 162, 75, 0.3);
+  --plain-active: #8f1d36;
+  --ink: #f6ecdc;
+  --ink-soft: #cdb99e;
+  --ink-faint: #85725f;
+  --heading: #fff3dc;
+  --accent-text: #e8c26a;
+  --green: #7a1428;
+  --green-2: #4a7fc4;
+  --green-hi: #6d9ad6;
+  --green-tint: rgba(232, 194, 106, 0.16);
+  --on-green: #fff6e6;
+  --gold: #d4af5a;
+  --gold-hi: #f0d68a;
+  --gold-deep: #e0b65c;
+  --chip-bg: transparent;
+  --chip-ink: #e8c26a;
+  --chord-red: #ff6170;
+  --now: #ff4b5c;
+  --danger: #ff7a6b;
+  --focus: 0 0 0 3px rgba(232, 194, 106, 0.4);
+  --nav-bg: linear-gradient(180deg, rgba(34, 14, 20, 0.96), rgba(20, 8, 12, 0.96));
+  --overlay: rgba(0, 0, 0, 0.6);
+  --grid-line: #e2d6bf;
+  --diagram-bg: #1a0d11;
+}
+
 *,
 *::before,
 *::after {

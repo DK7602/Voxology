@@ -342,7 +342,7 @@
   color: var(--gold-deep);
 }
 
-/* chord type colours (dots, tags, legend) */
+/* chord type colors (dots, tags, legend) */
 .cat-triad { --cat: #2d7f4f; }
 .cat-sus { --cat: #4a8fb0; }
 .cat-added { --cat: #7a63b8; }
@@ -638,6 +638,10 @@
   fill: #2f66d6;
   stroke: #dbe6ff;
 }
+:root[data-palette="sunday"][data-theme="dark"] .fret-diagram .dot {
+  fill: #3a6db0;
+  stroke: #e6eefb;
+}
 .fret-diagram .dot.riff {
   fill: #2f5bb5;
 }
@@ -731,7 +735,7 @@
 .summary .cl-line {
   justify-content: flex-start;
 }
-/* like the printed sheet: chords in bold red over the words, which take the page's text colour */
+/* like the printed sheet: chords in bold red over the words, which take the page's text color */
 .summary .cl-chord {
   font-size: 19px;
   font-weight: 700;

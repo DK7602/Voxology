@@ -26,7 +26,7 @@ export function chordCategory(symbol: string): ChordCategory | "unknown" {
   return parseChord(symbol)?.category ?? "unknown";
 }
 
-/** Coloured tag naming the chord type (Triad, Power chord, Seventh...). */
+/** Colored tag naming the chord type (Triad, Power chord, Seventh...). */
 export function CategoryTag({ symbol }: { symbol: string }) {
   const c = parseChord(symbol);
   if (!c) return null;

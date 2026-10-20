@@ -11,7 +11,7 @@ import { useInstall } from "../install";
 import { MODES, PALETTES, lookOf, type Mode, type Palette } from "../theme";
 
 const MODE_LABEL: Record<Mode, string> = { light: "Light", dark: "Dark", system: "Device" };
-const PALETTE_LABEL: Record<Palette, string> = { gold: "Gold", usyay: "USyay" };
+const PALETTE_LABEL: Record<Palette, string> = { gold: "Gold", usyay: "USyay", sunday: "Sunday" };
 import { clampSync, savedSync, saveSync, syncLabel } from "../player/sync";
 import { Manual } from "./Manual";
 
@@ -75,10 +75,10 @@ export function SettingsPage() {
         <h2>Look</h2>
         <div className="setting-row">
           <div className="label">
-            <b>Colours</b>
-            <span>Gold glass, or USyay's red, white & blue</span>
+            <b>Colors</b>
+            <span>Gold glass, USyay's red, white & blue, or Sunday's stained glass</span>
           </div>
-          <div className="seg" role="group" aria-label="Colours">
+          <div className="seg" role="group" aria-label="Colors">
             {PALETTES.map((p) => (
               <button key={p} aria-pressed={look.palette === p} onClick={() => set({ palette: p, theme: look.mode })}>
                 {PALETTE_LABEL[p]}

@@ -39,7 +39,7 @@ export const SONG_LIMITS = {
 
 const INSTRUMENTS: readonly Instrument[] = ["guitar", "ukulele", "piano", "mandolin", "bass"];
 const THEMES = ["light", "dark", "system"] as const;
-const PALETTES = ["gold", "usyay"] as const;
+const PALETTES = ["gold", "usyay", "sunday"] as const;
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
 function fail(message: string): never {
@@ -295,7 +295,7 @@ export function validateUserSettings(input: unknown, base: UserSettings = {}): U
         out.theme = input.theme as UserSettings["theme"];
         break;
       case "palette":
-        if (!PALETTES.includes(input.palette as (typeof PALETTES)[number])) fail("Unknown colour scheme");
+        if (!PALETTES.includes(input.palette as (typeof PALETTES)[number])) fail("Unknown color scheme");
         out.palette = input.palette as UserSettings["palette"];
         break;
       case "instrument":

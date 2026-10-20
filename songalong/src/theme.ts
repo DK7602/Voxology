@@ -3,9 +3,9 @@ import type { UserSettings } from "../shared/types";
 let media: MediaQueryList | null = null;
 let listener: (() => void) | null = null;
 
-/** Light or dark (or follow the device), and the colour scheme, as stored in settings. */
+/** Light or dark (or follow the device), and the color scheme, as stored in settings. */
 export const MODES = ["light", "dark", "system"] as const;
-export const PALETTES = ["gold", "usyay"] as const;
+export const PALETTES = ["gold", "usyay", "sunday"] as const;
 export type Mode = (typeof MODES)[number];
 export type Palette = (typeof PALETTES)[number];
 export interface Look {
@@ -22,10 +22,11 @@ export function lookOf(theme: string | null | undefined, palette: string | null 
   };
 }
 
-/** the browser bar's colour for each scheme, light and dark */
+/** the browser bar's color for each scheme, light and dark */
 const BAR_COLOR: Record<Palette, { light: string; dark: string }> = {
   gold: { light: "#c9a13a", dark: "#0a2016" },
   usyay: { light: "#1a5fd0", dark: "#081433" },
+  sunday: { light: "#6b1a2a", dark: "#2a0b12" },
 };
 
 /** Sets data-theme (light / dark) and data-palette on <html>; "system" follows the device and

@@ -269,6 +269,11 @@
     radial-gradient(120% 90% at 20% 15%, hsl(calc(44 + var(--art-hue) / 4) 75% 62%), transparent 55%),
     linear-gradient(var(--art-angle), hsl(calc(150 + var(--art-hue)) 55% 16%), hsl(calc(145 + var(--art-hue)) 60% 26%) 60%, hsl(42 60% 38%));
 }
+:root[data-palette="sunday"] .artwork.generated {
+  background:
+    radial-gradient(120% 90% at 50% 10%, rgba(255, 236, 170, 0.8), transparent 50%),
+    linear-gradient(var(--art-angle), hsl(calc(345 + var(--art-hue) / 2) 70% 24%), hsl(calc(214 + var(--art-hue) / 2) 45% 46%) 58%, hsl(42 65% 52%));
+}
 :root[data-palette="usyay"] .artwork.generated {
   background:
     radial-gradient(120% 90% at 20% 15%, rgba(255, 255, 255, 0.75), transparent 50%),
