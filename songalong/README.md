@@ -28,7 +28,10 @@ Where songs come from:
   - The audio work runs in a **Cloudflare container** (`prep/`: yt-dlp + ffmpeg + the chord
     detector). YouTube sometimes refuses cloud servers; those songs go to the user's **PC helper**
     (Settings → Your PC helper), which runs the same code at home and reuses Sample Snagger's tools.
-  - Only chords, timing and lyrics are kept; the audio is deleted after analysis.
+  - It also writes a lead part (the riff, the solo, else the sung tune) from the notes Spotify's
+    Basic Pitch model hears (Apache-2.0; `prep/models`, run with ONNX Runtime's WebAssembly build
+    in the container). It works best on a clear riff or solo; strummed songs get stray notes.
+  - Only chords, timing, lyrics and the lead part are kept; the audio is deleted after analysis.
 - **Upload a recording** (MP3/WAV/M4A): the same detection runs in the browser.
 - **Paste a chord sheet** (chords over lyrics or ChordPro), with or without a YouTube video.
 

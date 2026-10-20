@@ -29,6 +29,8 @@ export interface SongSpec {
   strum?: number[];
   bass?: "beats" | "eighths" | "none";
   melody?: boolean;
+  /** a picked guitar riff in 8th notes: semitones above each chord's root (the root at C4..B4) */
+  riff?: number[];
   /** white-noise level (the mix peaks near 1) */
   noise?: number;
   seed?: number;
@@ -43,6 +45,8 @@ export interface SynthSong {
   beatTimes: number[];
   /** sounding chord on each beat */
   chordAtBeat: string[];
+  /** the melody's notes (when there is one) */
+  melodyNotes: { time: number; midi: number }[];
   duration: number;
 }
 
@@ -208,6 +212,7 @@ export function synthSong(spec: SongSpec): SynthSong {
 
   // ---- harmony ----
   const instrument = spec.instrument ?? "pad";
+  const melodyNotes: { time: number; midi: number }[] = [];
   // the chord instrument plays into its own track when it is overdriven
   const drive = spec.distortion ?? 0;
   const chordBuf = drive > 0 ? new Float32Array(buf.length) : buf;
@@ -260,6 +265,13 @@ export function synthSong(spec: SongSpec): SynthSong {
           addNote(buf, sr, start + b * spb, step * spb * 0.95, midiFreq(m, cents), 0.32, "bass", { attack: 0.005, decay: 0.5, release: 0.03 });
         }
       }
+      if (spec.riff) {
+        for (let b = i, k = 0; b < j; b += 0.5, k++) {
+          const m = 60 + chord.root + spec.riff[k % spec.riff.length];
+          addNote(buf, sr, start + b * spb, 0.5 * spb, midiFreq(m, cents), 0.1, "guitar", { attack: 0.003, decay: 0.45, release: 0.03 }, rand());
+          melodyNotes.push({ time: start + b * spb, midi: m });
+        }
+      }
       if (spec.melody) {
         // chord tones on the beats, a scale step between, sung with vibrato an octave or two up
         for (let b = i; b < j; b += 0.5) {
@@ -269,6 +281,7 @@ export function synthSong(spec: SongSpec): SynthSong {
           if (!onBeat && rand() < 0.5) m += rand() < 0.5 ? 2 : -1; // passing tone
           while (m > 81) m -= 12;
           addNote(buf, sr, start + b * spb, 0.5 * spb, midiFreq(m, cents), 0.09, "voice", { attack: 0.04, decay: Infinity, release: 0.05, vibratoCents: 25 });
+          melodyNotes.push({ time: start + b * spb, midi: m });
         }
       }
     }
@@ -291,5 +304,5 @@ export function synthSong(spec: SongSpec): SynthSong {
   for (let n = 0; n < buf.length; n++) peak = Math.max(peak, Math.abs(buf[n]));
   if (peak > 0) for (let n = 0; n < buf.length; n++) buf[n] *= 0.9 / peak;
 
-  return { samples: buf, sampleRate: sr, bpm: spec.bpm, beatsPerBar: bpb, beatTimes, chordAtBeat: seq, duration };
+  return { samples: buf, sampleRate: sr, bpm: spec.bpm, beatsPerBar: bpb, beatTimes, chordAtBeat: seq, melodyNotes, duration };
 }

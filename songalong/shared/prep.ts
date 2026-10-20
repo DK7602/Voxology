@@ -20,6 +20,9 @@ export interface PrepDetect {
   beatTimes: number[];
   key: string;
   chords: { beat: number; name: string }[];
+  /** the lead part (melody, riffs and solos) heard in the song, on the same beats; absent where
+   *  the note model isn't available (the PC helper) */
+  lead?: { beat: number; name: string }[];
   length: number;
   duration: number;
   confidence: number;
@@ -35,8 +38,8 @@ export interface PrepChunk {
 /** Version of the beat / chord detection. Bump it when detection changes, so songs made by an
  *  older version can be told apart (and redone). 1: first release; 2: bar-level tempo scoring;
  *  3: rival tempos settled by where the chords change; 4: power chords; 5: only in songs
- *  played mostly in power chords. */
-export const PREP_ENGINE = 5;
+ *  played mostly in power chords; 6: lead parts. */
+export const PREP_ENGINE = 6;
 
 export interface PrepAnalysis {
   videoId: string;

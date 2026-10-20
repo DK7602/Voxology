@@ -14,6 +14,9 @@ RUN curl -fsSL -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/release
 
 WORKDIR /app
 COPY dist/server.mjs ./server.mjs
+# lead parts: ONNX Runtime (WebAssembly) and the Basic Pitch note model (Apache-2.0)
+COPY dist/ort ./ort
+COPY dist/models ./models
 ENV PORT=8080
 EXPOSE 8080
 CMD ["node", "server.mjs"]

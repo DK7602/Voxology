@@ -32,6 +32,7 @@ export function buildSongDoc(a: PrepAnalysis, name: SongName, lyrics: AlignedLyr
     lines: [],
     length: d.length,
   };
+  if (d.lead?.length) doc.lead = d.lead;
   if (credits) doc.credits = credits;
   const tl = new Timeline(doc);
   const lines: LyricLine[] = [];
@@ -130,7 +131,8 @@ export async function lyricsFor(a: PrepAnalysis, ai: SpeechAi | undefined, progr
       : heard !== null && lyrics.timing === "synced"
         ? "timing estimated (no singing heard)"
         : "";
-  const credits = ["Chords found automatically", lyricSource && lyricSource !== "instrumental" ? `Lyrics: ${lyricSource}` : "", estimate]
+  const madeBy = a.detect.lead?.length ? "Chords and lead found automatically" : "Chords found automatically";
+  const credits = [madeBy, lyricSource && lyricSource !== "instrumental" ? `Lyrics: ${lyricSource}` : "", estimate]
     .filter(Boolean)
     .join(" · ");
   return { name, lyrics, credits };

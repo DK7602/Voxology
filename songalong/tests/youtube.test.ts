@@ -404,6 +404,21 @@ describe("preparing a song", () => {
     expect((await other.call("GET", `/api/songs/${songId}`)).status).toBe(200);
   });
 
+  it("keeps the lead part found with the chords", async () => {
+    vi.stubGlobal("fetch", fakeLrclib());
+    const lead = [{ beat: 4, name: "note:D4" }, { beat: 4.5, name: "note:D5" }, { beat: 5, name: "N.C." }];
+    const withLead = (videoId: string) => {
+      const a = analysis(videoId);
+      return { ...a, detect: { ...a.detect, lead } };
+    };
+    const { env } = makeEnv({ PREP: fakePrep((videoId) => [{ type: "result", analysis: withLead(videoId) }]), AI: chunkAwareAi() });
+    const { client } = await signUp(env, "riff@example.com");
+    const ready = (await readEvents(await client.fetch("POST", "/api/youtube/prepare", { json: { videoId: "riffsong001" } }))).at(-1)!;
+    const song = (await client.call("GET", `/api/songs/${(ready as { songId: string }).songId}`)).body.song;
+    expect(song.doc.lead).toEqual(lead);
+    expect(song.doc.credits).toBe("Chords and lead found automatically · Lyrics: LRCLIB");
+  });
+
   it("says when the lyric timing is a guess (no singing heard)", async () => {
     vi.stubGlobal("fetch", fakeLrclib());
     const { env } = makeEnv({

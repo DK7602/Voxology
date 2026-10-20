@@ -8,6 +8,10 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { detectChords } from "../src/analysis/detect";
+import { keyPrefersFlats, parseKey } from "../shared/music/notes";
+import { leadPart } from "./melody";
+import { loadNoteModel } from "./noteModel";
+import { transcribe } from "./notes";
 import {
   CHUNK_SECONDS,
   MAX_SONG_SECONDS,
@@ -148,8 +152,19 @@ export async function analyseFile(file: string, meta: PrepMeta, videoId: string,
   const samples = await decode(file, tools);
   if (samples.length < RATE * 5) throw new PrepError("unavailable", "This audio is too short to play along with.");
   const d = detectChords(samples, RATE, {
-    onProgress: (f, stage) => progress(stage === "Done" ? "Working out the chords" : stage, 0.4 + 0.45 * f),
+    onProgress: (f, stage) => progress(stage === "Done" ? "Working out the chords" : stage, 0.4 + 0.3 * f),
   });
+  // the lead part: the notes heard (RATE is the note model's rate), their top line on the beats
+  let lead: { beat: number; name: string }[] | undefined;
+  const model = await loadNoteModel();
+  if (model) {
+    try {
+      const notes = await transcribe(samples, model, (f) => progress("Listening for the lead", 0.7 + 0.17 * f));
+      lead = leadPart(notes, d.beatTimes, keyPrefersFlats(parseKey(d.key)));
+    } catch (e) {
+      console.warn("lead part failed:", (e as Error).message);
+    }
+  }
   progress("Preparing the lyrics timing", 0.88);
   const chunks = await speechChunks(file, dir, tools);
   return {
@@ -161,6 +176,7 @@ export async function analyseFile(file: string, meta: PrepMeta, videoId: string,
       beatTimes: d.beatTimes,
       key: d.key,
       chords: d.chords,
+      ...(lead?.length ? { lead } : {}),
       length: d.length,
       duration: d.duration,
       confidence: d.confidence,
