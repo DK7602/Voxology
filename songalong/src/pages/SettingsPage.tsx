@@ -8,6 +8,7 @@ import { Toggle, errorText, useToast } from "../components/ui";
 import { HelperSettings } from "./HelperSettings";
 import { InstallButton, IosInstallSteps } from "../components/InstallButton";
 import { useInstall } from "../install";
+import { clampSync, savedSync, saveSync, syncLabel } from "../player/sync";
 
 export function SettingsPage() {
   const user = useUser();
@@ -121,6 +122,7 @@ export function SettingsPage() {
             ))}
           </div>
         </div>
+        <SyncRow />
       </section>
 
       <AppSection />
@@ -183,6 +185,29 @@ export function SettingsPage() {
           <button className="btn btn-danger">Delete my account</button>
         </form>
       </section>
+    </div>
+  );
+}
+
+/** How much later words and chords are shown than the player's clock, on this device. */
+function SyncRow() {
+  const [sync, setSync] = useState(savedSync);
+  const change = (v: number) => {
+    const s = clampSync(v);
+    saveSync(s);
+    setSync(s);
+  };
+  return (
+    <div className="setting-row">
+      <div className="label">
+        <b>Sync words &amp; chords to the sound</b>
+        <span>On this device. If they run ahead of what you hear (Bluetooth adds a delay), show them later.</span>
+      </div>
+      <div className="sync-row">
+        <button className="btn btn-sm" onClick={() => change(sync - 0.05)} aria-label="Show words and chords earlier">−</button>
+        <span className="sync-val" aria-live="polite">{syncLabel(sync)}</span>
+        <button className="btn btn-sm" onClick={() => change(sync + 0.05)} aria-label="Show words and chords later">+</button>
+      </div>
     </div>
   );
 }

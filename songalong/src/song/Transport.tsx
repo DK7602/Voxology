@@ -16,6 +16,7 @@ import {
 } from "../components/Icons";
 import { Popover, Toggle } from "../components/ui";
 import { indexAt, lineEnd } from "../../shared/timeline";
+import { syncLabel } from "../player/sync";
 
 interface Props {
   hasLead?: boolean;
@@ -41,7 +42,6 @@ export function Transport({ hasLead, engine, view, settings, songKey, bestCapo, 
   const key = parseKey(songKey);
   const keyAt = (t: number) => (key ? prettyAccidentals(transposeKey(key, t).name) : "");
   const playing = st.playing || st.countIn !== null;
-  const syncLabel = Math.abs(st.sync) < 0.005 ? "As the player says" : `${Math.abs(st.sync).toFixed(2)} s ${st.sync > 0 ? "later" : "earlier"}`;
 
   const loopRange = (kind: "song" | "bar" | "line" | "section") => {
     const b = engine.beat;
@@ -100,7 +100,7 @@ export function Transport({ hasLead, engine, view, settings, songKey, bestCapo, 
               <div className="menu-label">Sync words &amp; chords to the sound</div>
               <div className="menu-item sync-row" style={{ cursor: "default" }}>
                 <button className="btn btn-sm" onClick={() => engine.setSync(st.sync - 0.05)} aria-label="Show words and chords earlier">−</button>
-                <span className="sync-val" aria-live="polite">{syncLabel}</span>
+                <span className="sync-val" aria-live="polite">{syncLabel(st.sync)}</span>
                 <button className="btn btn-sm" onClick={() => engine.setSync(st.sync + 0.05)} aria-label="Show words and chords later">+</button>
               </div>
               {Math.abs(st.sync) >= 0.005 && (

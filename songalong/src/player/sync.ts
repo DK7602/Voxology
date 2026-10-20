@@ -10,6 +10,11 @@ export function clampSync(s: number): number {
   return Math.round(Math.max(SYNC_MIN, Math.min(SYNC_MAX, s)) * 100) / 100;
 }
 
+/** "0.15 s later", for the controls. */
+export function syncLabel(s: number): string {
+  return Math.abs(s) < 0.005 ? "As the player says" : `${Math.abs(s).toFixed(2)} s ${s > 0 ? "later" : "earlier"}`;
+}
+
 export function savedSync(): number {
   try {
     const v = Number(localStorage.getItem(KEY) ?? 0);
