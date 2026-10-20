@@ -124,28 +124,37 @@ describe("lead notes with octaves", () => {
 });
 
 describe("bass", () => {
-  it("shows chords as low-to-high shapes with the bass note lowest and labelled tones", async () => {
+  it("shows one note to play per chord, with its fifth and octave as options", async () => {
     const { fretVoicings, voicingMidi } = await import("../shared/music/voicings");
-    for (const sym of ["G", "C", "A", "Em", "G7", "Cmaj7", "Bm7b5", "D/F#", "E5"]) {
+    const BASS = [28, 33, 38, 43];
+    const at = (v: { frets: (number | null)[] }, s: number) => BASS[s] + v.frets[s]!;
+    for (const sym of ["G", "C", "A", "Em", "G7", "Cmaj7", "Bm7b5", "D/F#", "E5", "Bb", "F#m"]) {
       const v = fretVoicings(sym, "bass", 3);
       expect(v.length, sym).toBeGreaterThan(0);
       for (const x of v) {
-        const m = voicingMidi(x, "bass");
-        // rising across the strings, no doubled note
-        const inOrder = x.frets.flatMap((f, i) => (f === null ? [] : [[28, 33, 38, 43][i] + f]));
-        expect(inOrder).toEqual([...m]);
-        expect(new Set(m).size).toBe(m.length);
-        expect(x.labels).toBeDefined();
+        const played = voicingMidi(x, "bass");
+        expect(played, sym).toHaveLength(1); // only the note to play sounds
+        const s = x.frets.findIndex((f, i) => f !== null && !x.extra![i]);
+        expect(played[0]).toBe(at(x, s));
+        // the options: the fifth a string up, the octave two strings up, both two frets higher
+        if (x.frets[s + 1] != null) expect([at(x, s + 1) - played[0], x.extra![s + 1]]).toEqual([7, true]);
+        if (x.frets[s + 2] != null) expect([at(x, s + 2) - played[0], x.extra![s + 2]]).toEqual([12, true]);
       }
     }
-    // the bass note is lowest: the slash note for D/F#, the root otherwise
-    expect(fretVoicings("D/F#", "bass")[0].labels!.find((l) => l !== null)).toBe("3");
-    expect(fretVoicings("G", "bass")[0].labels!.find((l) => l !== null)).toBe("R");
-    // major vs minor shows in the third; sevenths and flat fifths are in the shape
-    expect(fretVoicings("E", "bass")[0].labels).toContain("3");
-    expect(fretVoicings("Em", "bass")[0].labels).toContain("b3");
-    expect(fretVoicings("G7", "bass")[0].labels).toContain("b7");
-    expect(fretVoicings("Bm7b5", "bass")[0].labels).toContain("b5");
+    const first = (sym: string) => fretVoicings(sym, "bass")[0];
+    // where bass players play them: G on the E string's 3rd fret, open E and A, C on the A string
+    expect(first("G").frets).toEqual([3, 5, 5, null]);
+    expect(first("G").labels).toEqual(["G", "D", "G", null]);
+    expect(first("E").frets).toEqual([0, 2, 2, null]);
+    expect(first("A").frets).toEqual([null, 0, 2, 2]);
+    expect(first("C").frets).toEqual([null, 3, 5, 5]);
+    expect(first("D").frets).toEqual([null, 5, 7, 7]); // room for the octave above
+    // a slash chord plays its bass note, named the way the chord spells it
+    expect(voicingMidi(first("D/F#"), "bass")).toEqual([30]);
+    expect(first("D/F#").labels![0]).toBe("F♯");
+    expect(first("Bb").labels).toContain("B♭");
+    // minor, seventh and power chords: still the root
+    expect(voicingMidi(first("Em7"), "bass")).toEqual([28]);
   });
   it("plays a melody in the bass's own range", async () => {
     const { fretVoicings, voicingMidi } = await import("../shared/music/voicings");

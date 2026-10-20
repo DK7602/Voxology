@@ -47,23 +47,29 @@ export function FretDiagram({ voicing, strings, leftHanded, caption, size = 150 
           {base}
         </text>
       )}
-      {/* open / muted markers */}
+      {/* open / muted markers (bass shows single notes: nothing to mute) */}
       {voicing.frets.map((f, s) =>
         f === null ? (
-          <g key={"m" + s} className="mute" transform={`translate(${sx(s)} ${top - 13})`}>
-            <path d="M-5 -5 L5 5 M5 -5 L-5 5" strokeWidth={1.8} />
-          </g>
+          voicing.labels ? null : (
+            <g key={"m" + s} className="mute" transform={`translate(${sx(s)} ${top - 13})`}>
+              <path d="M-5 -5 L5 5 M5 -5 L-5 5" strokeWidth={1.8} />
+            </g>
+          )
         ) : f === 0 ? (
           voicing.labels ? (
-            <text key={"o" + s} x={sx(s)} y={top - 8} textAnchor="middle" className={"open-label" + (voicing.labels[s] === "R" ? " root" : "")}>
-              {voicing.labels[s]}
-            </text>
+            // bass: an open string to play, as a dot above the nut
+            <g key={"o" + s}>
+              <circle cx={sx(s)} cy={top - 15} r={dotR - 1} className={voicing.extra?.[s] ? "dot extra" : "dot root"} />
+              <text x={sx(s)} y={top - 15 + 4.5} textAnchor="middle" className={"dot-label" + (voicing.extra?.[s] ? " extra" : "")}>
+                {voicing.labels[s]}
+              </text>
+            </g>
           ) : (
             <circle key={"o" + s} cx={sx(s)} cy={top - 13} r={5} className="open" strokeWidth={1.6} />
           )
         ) : null,
       )}
-      {/* barres (bass shapes are played one note at a time: no barres) */}
+      {/* barres (bass shows single notes: no barres) */}
       {!voicing.labels && voicing.barres
         .filter((b) => b.to > b.from)
         .map((b, i) => {
@@ -93,12 +99,14 @@ export function FretDiagram({ voicing, strings, leftHanded, caption, size = 150 
         const inBarre = voicing.barres.some((b) => b.to > b.from && b.fret === f && s >= b.from && s <= b.to);
         if (inBarre && !isRiff && !voicing.labels) return null;
         const label = voicing.labels ? voicing.labels[s] : isRiff ? voicing.order?.[s] : voicing.fingers[s];
-        const isRoot = voicing.labels?.[s] === "R";
+        // bass: the note to play stands out; its fifth and octave are optional rings
+        const optional = !!voicing.extra?.[s];
+        const main = !!voicing.labels && !optional;
         return (
           <g key={"d" + s}>
-            <circle cx={sx(s)} cy={fy(f)} r={dotR} className={isRiff ? "dot riff" : isRoot ? "dot root" : "dot"} />
+            <circle cx={sx(s)} cy={fy(f)} r={dotR} className={isRiff ? "dot riff" : main ? "dot root" : optional ? "dot extra" : "dot"} />
             {label ? (
-              <text x={sx(s)} y={fy(f) + 4.5} textAnchor="middle" className="dot-label">{label}</text>
+              <text x={sx(s)} y={fy(f) + 4.5} textAnchor="middle" className={"dot-label" + (optional ? " extra" : "")}>{label}</text>
             ) : null}
           </g>
         );

@@ -117,6 +117,13 @@ body.print-body {
 .print-page .fret-diagram .dot.root {
   fill: #b3121b;
 }
+.print-page .fret-diagram .dot.extra {
+  fill: none;
+  stroke: #000;
+}
+.print-page .fret-diagram .dot-label.extra {
+  fill: #000;
+}
 .print-page .fret-diagram .fret-num {
   fill: #000;
 }

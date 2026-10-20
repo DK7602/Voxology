@@ -625,17 +625,20 @@
 .fret-diagram .dot.riff {
   fill: #2f5bb5;
 }
-/* bass: the root stands out from the other chord tones */
+/* bass: the note to play stands out; the fifth and octave around it are optional rings */
 .fret-diagram .dot.root,
 :root[data-theme="dark"] .fret-diagram .dot.root {
   fill: var(--now);
 }
-.fret-diagram .open-label {
-  fill: var(--green-2);
-  font: 700 13px "EB Garamond", serif;
+.fret-diagram .dot.extra,
+:root[data-theme="dark"] .fret-diagram .dot.extra {
+  fill: none;
+  stroke: var(--green-2);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 2;
 }
-.fret-diagram .open-label.root {
-  fill: var(--now);
+.fret-diagram .dot-label.extra {
+  fill: var(--ink-soft);
 }
 .fret-diagram .dot-label {
   fill: #fff;

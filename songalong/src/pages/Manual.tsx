@@ -34,7 +34,8 @@ const TOPICS: { title: string; body: ReactNode }[] = [
           “timing estimated”, the words are placed roughly.
         </li>
         <li>
-          <b>Guitar, Ukulele, Piano, Mandolin, Bass</b>: changes the chord diagrams to your instrument.
+          <b>Guitar, Ukulele, Piano, Mandolin, Bass</b>: changes the chord diagrams to your instrument. On bass, each card shows the one note to play
+          (the filled dot, named); the dashed rings are its fifth and octave, if you want to move between notes.
         </li>
         <li>
           <b>Chord cards</b>: how to play each chord, in the order they come. The speaker plays it; the <b>1/8 …</b> button shows another way to play it
