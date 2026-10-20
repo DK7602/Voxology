@@ -64,6 +64,9 @@ export function buildSongDoc(a: PrepAnalysis, name: SongName, lyrics: AlignedLyr
 
 export type Progress = (stage: string, fraction: number) => void;
 
+/** Video titles that say there is no singing. */
+const INSTRUMENTAL_VIDEO = /\b(instrumental|karaoke|backing track|minus one|no vocals?|piano (cover|version)|guitar instrumental)\b/i;
+
 /** Lyrics + timing for an analysed video. */
 export async function lyricsFor(a: PrepAnalysis, ai: SpeechAi | undefined, progress: Progress, fetcher: typeof fetch = fetch) {
   let name = guessSongName(a.meta);
@@ -116,14 +119,18 @@ export async function lyricsFor(a: PrepAnalysis, ai: SpeechAi | undefined, progr
   }
   // each word where it is sung (when the lines were found in what is heard: then it is singing)
   if (heard && lyrics.lines.length && lyrics.timing !== "synced") lyrics = { ...lyrics, lines: timeWords(lyrics.lines, heard) };
-  // listened, but no line was found in what is heard (no singing, e.g. a piano cover): the
-  // lyrics' own timing is a guess for this video, and the song says so
-  const estimated = lyricSource === "LRCLIB" && heard !== null && lyrics.lines.length > 0 && lyrics.timing === "synced";
-  const credits = [
-    "Chords found automatically",
-    lyricSource && lyricSource !== "instrumental" ? `Lyrics: ${lyricSource}` : "",
-    estimated ? "timing estimated (no singing heard)" : "",
-  ]
+  // no singing to follow, so the lyric timing is a guess for this video, and the song says so:
+  // an instrumental by its title (speech recognition can "hear" the words in a known tune), or
+  // listened to without any line being heard
+  const timedLyrics = lyricSource === "LRCLIB" && lyrics.lines.length > 0;
+  const estimate = !timedLyrics
+    ? ""
+    : INSTRUMENTAL_VIDEO.test(a.meta.title)
+      ? "timing estimated (instrumental version)"
+      : heard !== null && lyrics.timing === "synced"
+        ? "timing estimated (no singing heard)"
+        : "";
+  const credits = ["Chords found automatically", lyricSource && lyricSource !== "instrumental" ? `Lyrics: ${lyricSource}` : "", estimate]
     .filter(Boolean)
     .join(" · ");
   return { name, lyrics, credits };

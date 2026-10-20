@@ -417,6 +417,19 @@ describe("preparing a song", () => {
     expect(song.doc.credits).toBe("Chords found automatically · Lyrics: LRCLIB · timing estimated (no singing heard)");
   });
 
+  it("says when the video is an instrumental version", async () => {
+    vi.stubGlobal("fetch", fakeLrclib());
+    const piano = (videoId: string) => {
+      const a = analysis(videoId);
+      return { ...a, meta: { ...a.meta, title: "Test Artist - Paper Boats | Piano Cover" } };
+    };
+    const { env } = makeEnv({ PREP: fakePrep((videoId) => [{ type: "result", analysis: piano(videoId) }]), AI: chunkAwareAi() });
+    const { client } = await signUp(env, "pianist@example.com");
+    const ready = (await readEvents(await client.fetch("POST", "/api/youtube/prepare", { json: { videoId: "pianocover2" } }))).at(-1)!;
+    const song = (await client.call("GET", `/api/songs/${(ready as { songId: string }).songId}`)).body.song;
+    expect(song.doc.credits).toBe("Chords found automatically · Lyrics: LRCLIB · timing estimated (instrumental version)");
+  });
+
   it("blocked in the cloud -> the user's PC helper prepares it", async () => {
     vi.stubGlobal("fetch", fakeLrclib());
     const { env } = makeEnv({
