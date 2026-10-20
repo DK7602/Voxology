@@ -77,5 +77,8 @@ describe("chord detection on synthesized songs", () => {
     console.log("full:", fullNames.slice(0, 10).join(" "));
     expect(full.accuracy).toBeGreaterThanOrEqual(0.85);
     expect(fullNames.some((n) => n.endsWith("5"))).toBe(false);
+    // one power chord in a song of full chords: named as a full chord, like the rest
+    const mixed = chordAccuracy({ ...rock, chords: ["E5", "D", "A", "G"] });
+    expect(mixed.r.chords.some((c) => c.name.endsWith("5"))).toBe(false);
   });
 });

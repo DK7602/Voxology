@@ -34,8 +34,9 @@ export interface PrepChunk {
 
 /** Version of the beat / chord detection. Bump it when detection changes, so songs made by an
  *  older version can be told apart (and redone). 1: first release; 2: bar-level tempo scoring;
- *  3: rival tempos settled by where the chords change; 4: power chords. */
-export const PREP_ENGINE = 4;
+ *  3: rival tempos settled by where the chords change; 4: power chords; 5: only in songs
+ *  played mostly in power chords. */
+export const PREP_ENGINE = 5;
 
 export interface PrepAnalysis {
   videoId: string;
