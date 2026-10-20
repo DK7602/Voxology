@@ -79,52 +79,69 @@ export function parseKey(s: string): Key | null {
   return { tonic: note.pc, minor, name: note.name + (minor ? "m" : "") };
 }
 
-// Number of sharps (+) or flats (-) in each major key, by tonic spelling.
-const MAJOR_SIGNATURE: Record<string, number> = {
-  C: 0, G: 1, D: 2, A: 3, E: 4, B: 5, "F#": 6, "C#": 7,
-  F: -1, Bb: -2, Eb: -3, Ab: -4, Db: -5, Gb: -6, Cb: -7,
-};
-
-/** Key signature of a key: sharps > 0, flats < 0. Unknown spellings (e.g. "D#") return the
- *  enharmonic's. */
-export function keySignature(key: Key): number {
-  // A minor key shares the signature of the major key a minor third up.
-  const majorPc = key.minor ? mod12(key.tonic + 3) : key.tonic;
-  const majorName = key.minor ? relativeMajorName(key) : key.name;
-  if (majorName in MAJOR_SIGNATURE) return MAJOR_SIGNATURE[majorName];
-  return MAJOR_SIGNATURE[DEFAULT_MAJOR[majorPc]];
-}
-
-function relativeMajorName(key: Key): string {
-  const root = key.name.replace(/m$/, "");
-  const n = parseNote(root);
-  if (!n) return DEFAULT_MAJOR[mod12(key.tonic + 3)];
-  return spellWithLetter(mod12(key.tonic + 3), letterUp(n.letter, 2)) ?? DEFAULT_MAJOR[mod12(key.tonic + 3)];
-}
-
-/** The usual spelling of each major / minor key (fewest accidentals; F# over Gb on a tie). */
+/** The usual name of each major / minor key (fewest accidentals; F# over Gb on a tie). */
 export const DEFAULT_MAJOR = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
 export const DEFAULT_MINOR = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "G#", "A", "Bb", "B"];
 
-/** Does music in this key normally use flats for accidentals? C major / A minor lean flat
- *  (Bb, Eb and Ab chords are more common there than A#, D#, G#). */
-export function keyPrefersFlats(key: Key | null): boolean {
-  if (!key) return true;
-  const sig = keySignature(key);
-  return sig <= 0;
+/** A key by its usual name: F# rather than Gb, Db rather than C#, Ebm, G#m. */
+export function usualKey(tonic: number, minor: boolean): Key {
+  const t = mod12(tonic);
+  return { tonic: t, minor, name: (minor ? DEFAULT_MINOR : DEFAULT_MAJOR)[t] + (minor ? "m" : "") };
 }
 
-/** The key `semitones` above `key`, spelled the usual way. */
+/** The key `semitones` above `key`, by its usual name. */
 export function transposeKey(key: Key, semitones: number): Key {
   if (mod12(semitones) === 0) return key;
-  const tonic = mod12(key.tonic + semitones);
-  const root = (key.minor ? DEFAULT_MINOR : DEFAULT_MAJOR)[tonic];
-  return { tonic, minor: key.minor, name: root + (key.minor ? "m" : "") };
+  return usualKey(key.tonic + semitones, key.minor);
 }
 
-/** "Bb" -> "B♭", "F#" -> "F♯" for display. */
+// ---- naming notes in a key ----
+//
+// Every note is named the way a printed chart in the key would: notes of the scale take the key's
+// letters, and notes outside it the names players expect: flat 2nd, 3rd, 6th and 7th (Bb in G,
+// Ab in C), sharp 4th (F# in C), and in minor keys the raised 3rd, 4th, 6th and 7th (G# in A minor).
+
+/** letters above the tonic for each semitone above it */
+const STEPS = [0, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6];
+/** a note leading up a half step (a diminished chord's root) is the sharp of the note below:
+ *  C#dim, D#dim, G#dim and A#dim in C */
+const LEADING_MAJOR: Record<number, number> = { 1: 0, 3: 1, 8: 4, 10: 5 };
+const LEADING_MINOR: Record<number, number> = { 1: 0 };
+const NATURAL = new Set([0, 2, 4, 5, 7, 9, 11]);
+
+/** `name` for `pc`, unless it is one players find hard to read (Cb, Fb, E#, B#, double sharps and
+ *  flats): then the plain name, B rather than Cb, F# rather than E##. */
+export function tidyName(pc: number, name: string | null): string {
+  if (name && !/bb|##/.test(name) && !["Cb", "Fb", "E#", "B#"].includes(name)) return name;
+  const p = mod12(pc);
+  if (NATURAL.has(p)) return SHARP_NAMES[p];
+  return noteName(p, !name?.includes("#"));
+}
+
+/** Names `pc` as it is written in `key`. `leading`: it leads up a half step (the root of a
+ *  diminished chord). */
+export function spellInKey(pc: number, key: Key, leading = false): string {
+  const degree = mod12(pc - key.tonic);
+  const letter = usualKey(key.tonic, key.minor).name[0];
+  const steps = (leading ? (key.minor ? LEADING_MINOR : LEADING_MAJOR)[degree] : undefined) ?? STEPS[degree];
+  return tidyName(pc, spellWithLetter(mod12(pc), letterUp(letter, steps)));
+}
+
+/** MIDI note number -> "F#4", named for `key` (sharps when there is no key). */
+export function midiNameInKey(midi: number, key: Key | null): string {
+  return (key ? spellInKey(midi, key) : noteName(midi, false)) + (Math.floor(midi / 12) - 1);
+}
+
+/** "Bb" -> "B♭", "F#" -> "F♯", "7b9" -> "7♭9" for display. */
 export function prettyAccidentals(s: string): string {
-  return s.replace(/([A-G])bb/g, "$1𝄫").replace(/([A-G])##/g, "$1𝄪").replace(/([A-G])b/g, "$1♭").replace(/([A-G])#/g, "$1♯");
+  return s
+    .replace(/([A-G])bb/g, "$1𝄫")
+    .replace(/([A-G])##/g, "$1𝄪")
+    .replace(/([A-G])b/g, "$1♭")
+    .replace(/([A-G])#/g, "$1♯")
+    // altered extensions and degrees: m7b5, 7#9, b3
+    .replace(/(^|[^A-Za-z])b(?=\d)/g, "$1♭")
+    .replace(/(^|[^A-Za-z])#(?=\d)/g, "$1♯");
 }
 
 /** MIDI note number -> "C4" style name. */

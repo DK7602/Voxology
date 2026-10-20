@@ -10,7 +10,7 @@ export interface DemoSong {
 
 /**
  * Builds a song from compact sheet lines. Each chord is written where it falls in the words,
- * with its length in beats: "[Gb:8]Left the porch light [Db:8]burning". A line starting with
+ * with its length in beats: "[F#:8]Left the porch light [C#:8]burning". A line starting with
  * "#" names a section. A line of only chords is instrumental.
  */
 function sheet(meta: Omit<SongDoc, "v" | "chords" | "lines" | "length" | "media" | "offset" | "tuning">, text: string): SongDoc {
@@ -53,30 +53,30 @@ function sheet(meta: Omit<SongDoc, "v" | "chords" | "lines" | "length" | "media"
 
 const PORCH_CHORUS = `
 #Chorus
-[Gb:4]So come on home when the [Db:4]evening's gold
-[Bbm:4]Back to the dirt road and the [Ebm:4]stories told
-[Cb:4]I'll be the light at the [Gb:4]end of the drive
-[Db:4]Waiting on the porch till [Gb:4]you arrive`;
+[F#:4]So come on home when the [C#:4]evening's gold
+[D#m:4]Back to the dirt road and the [G#m:4]stories told
+[B:4]I'll be the light at the [F#:4]end of the drive
+[C#:4]Waiting on the porch till [F#:4]you arrive`;
 
 const porchLight = sheet(
-  { title: "Porch Light Letters", artist: "The Demo Pines", genre: "Country", key: "Gb", bpm: 111, beatsPerBar: 4, capo: 2 },
+  { title: "Porch Light Letters", artist: "The Demo Pines", genre: "Country", key: "F#", bpm: 111, beatsPerBar: 4, capo: 2 },
   `
 #Intro
-[Gb:4][Db:4][Gb:4][Db:4]
+[F#:4][C#:4][F#:4][C#:4]
 #Verse 1
-[Gb:4]Left the porch light burning [Db:4]by the old screen door
-[Bbm:4]Folded every letter in the [Bbm7:4]cedar drawer
-[Ebm:4]Summer took the long way [Cb:4]down the county line
-[Gb:4]Still I keep a candle in the [Db:4]window, just in time
+[F#:4]Left the porch light burning [C#:4]by the old screen door
+[D#m:4]Folded every letter in the [D#m7:4]cedar drawer
+[G#m:4]Summer took the long way [B:4]down the county line
+[F#:4]Still I keep a candle in the [C#:4]window, just in time
 ${PORCH_CHORUS}
 #Verse 2
-[Gb:4]Radio is humming all the [Db:4]songs we knew
-[Bbm:4]Coffee on the stove is still [Bbm7:4]enough for two
-[Ebm:4]Fireflies are writing what I [Cb:4]couldn't say
-[Gb:4]Every little spark is pointing [Db:4]out your way
+[F#:4]Radio is humming all the [C#:4]songs we knew
+[D#m:4]Coffee on the stove is still [D#m7:4]enough for two
+[G#m:4]Fireflies are writing what I [B:4]couldn't say
+[F#:4]Every little spark is pointing [C#:4]out your way
 ${PORCH_CHORUS}
 #Outro
-[Cb:4][Db:4][Gb:8]`,
+[B:4][C#:4][F#:8]`,
 );
 
 const IRON_CHORUS = `
@@ -161,9 +161,9 @@ ${SUNDAY_CHORUS}
 
 // Lead parts (original melodies and fills) for two of the examples.
 porchLight.lead = importLead(
-  `bar 1: Bb4 Db5 Bb4 Ab4 | F4:2 Ab4:2 | Gb4 Ab4 Bb4 Db5 | Ab4:3 r
-bar 13: Bb4 Bb4 Ab4 Gb4 | Ab4:2 F4:2 | Db5 Db5 Bb4 Ab4 | Bb4:2 Gb4:2
-Eb4 Gb4 Ab4 Bb4 | Bb4:2 Gb4:2 | F4 Gb4 Ab4:2 | Gb4:4`,
+  `bar 1: A#4 C#5 A#4 G#4 | F4:2 G#4:2 | F#4 G#4 A#4 C#5 | G#4:3 r
+bar 13: A#4 A#4 G#4 F#4 | G#4:2 F4:2 | C#5 C#5 A#4 G#4 | A#4:2 F#4:2
+D#4 F#4 G#4 A#4 | A#4:2 F#4:2 | F4 F#4 G#4:2 | F#4:4`,
   4,
 ).events;
 

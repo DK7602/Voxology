@@ -4,7 +4,8 @@ import type { AudioFile, SongRecord } from "../../shared/api";
 import { emptySong, type SongDoc } from "../../shared/types";
 import { exportChordPro, importChordSheet } from "../../shared/chordpro";
 import { exportLead, importLead } from "../../shared/lead";
-import { parseKey } from "../../shared/music/notes";
+import { parseKey, prettyAccidentals } from "../../shared/music/notes";
+import { keyFromChords, weightedChords } from "../../shared/music/songKey";
 import { indexAt } from "../../shared/timeline";
 import { api, audioUrl, uploadAudio } from "../api";
 import { analyseAudioFile } from "../analysis";
@@ -141,7 +142,7 @@ function Editor({ record }: { record: SongRecord | null }) {
           lines: hasLyrics ? spreadLines(d.lines, r.chords[0]?.beat ?? 0, r.length) : [],
         };
       });
-      toast(`Found ${new Set(r.chords.map((c) => c.name)).size} chords · ${r.key} · ${Math.round(r.bpm)} BPM`);
+      toast(`Found ${new Set(r.chords.map((c) => c.name)).size} chords · ${prettyAccidentals(r.key)} · ${Math.round(r.bpm)} BPM`);
     } catch (e) {
       toast(errorText(e), true);
     } finally {
@@ -158,6 +159,8 @@ function Editor({ record }: { record: SongRecord | null }) {
       if (imported.title && !d.title) next.title = imported.title;
       if (imported.artist && !d.artist) next.artist = imported.artist;
       if (/\{key:/i.test(sheet)) next.key = imported.key;
+      // no key line: the key the chords are in (not whatever the song said before)
+      else if (imported.chords.length) next.key = keyFromChords(weightedChords(imported.chords, imported.length))?.name ?? d.key;
       if (/\{(tempo|bpm):/i.test(sheet)) next.bpm = imported.bpm;
       if (/\{capo:/i.test(sheet)) next.capo = imported.capo;
       const sheetHasChords = imported.chords.length > 0;
@@ -487,7 +490,7 @@ function TimingTools({ doc, setDoc, mediaOn }: { doc: SongDoc; setDoc: (fn: (d: 
           </div>
           <button className="btn btn-primary tap-btn" onClick={tap} disabled={next >= items.length || !st.playing}>
             {next < items.length
-              ? `TAP: ${target === "lines" ? doc.lines[next]?.text || "(instrumental line)" : doc.chords[next]?.name}`
+              ? `TAP: ${target === "lines" ? doc.lines[next]?.text || "(instrumental line)" : prettyAccidentals(doc.chords[next]?.name ?? "")}`
               : "All set ✓"}
           </button>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

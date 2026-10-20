@@ -25,8 +25,8 @@ describe("demo songs", () => {
     const verse = porch.lines.findIndex((l) => l.text.startsWith("Left the porch"));
     const placed = chordsInLine(porch, verse);
     expect(placed.map((p) => [p.chord.name, porch.lines[verse].text.slice(p.col, p.col + 3)])).toEqual([
-      ["Gb", "Lef"],
-      ["Db", "by "],
+      ["F#", "Lef"],
+      ["C#", "by "],
     ]);
   });
 });
@@ -45,7 +45,7 @@ describe("timeline", () => {
   });
   it("finds the sounding chord and bars", () => {
     const doc = DEMO_SONGS[0].doc;
-    expect(doc.chords[indexAt(doc.chords, 5)].name).toBe("Db");
+    expect(doc.chords[indexAt(doc.chords, 5)].name).toBe("C#");
     const b = bars(doc, doc.length);
     expect(b.length).toBe(doc.length / 4);
     expect(b[0].changes[0].chordIndex).toBe(0);
@@ -112,7 +112,7 @@ How are you
 });
 
 describe("capo + midi", () => {
-  it("recommends a capo that turns Gb into easy shapes", () => {
+  it("recommends a capo that turns F# into easy shapes", () => {
     const doc = DEMO_SONGS[0].doc;
     const best = bestCapo(doc.chords, doc.length);
     expect(best.capo).toBeGreaterThan(0);

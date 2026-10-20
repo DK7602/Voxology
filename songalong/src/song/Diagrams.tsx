@@ -71,7 +71,8 @@ export function Diagrams({ engine, view, settings, leftHanded, choices, onChoose
         {unique.map(({ shown, original }) => {
           const choice = choices[original] ?? 0;
           const v = voicingFor(original, view, settings, choice);
-          const chord = parseChord(view.sounding(original));
+          // the notes of the chord named on the card (the shape, with a capo)
+          const chord = parseChord(shown);
           const notes = chord ? chordNoteNames(chord).map(prettyAccidentals).join(" ") : "";
           return (
             <div

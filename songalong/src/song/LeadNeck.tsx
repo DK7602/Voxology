@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { leadPositions } from "../../shared/lead";
 import { shapeFor } from "../../shared/music/capo";
 import { noteMidi, parseChord } from "../../shared/music/chords";
-import { noteName, prettyAccidentals } from "../../shared/music/notes";
+import { noteName, prettyAccidentals, spellInKey, type Key } from "../../shared/music/notes";
 import { FRETTED } from "../../shared/music/voicings";
 import { indexAt } from "../../shared/timeline";
 import type { PlayerEngine } from "../player/engine";
@@ -23,12 +23,15 @@ export function LeadNeck({ engine, view, settings, leftHanded }: { engine: Playe
   const capo = view.usesCapo ? settings.capo : 0;
   const spots = useMemo(() => {
     if (settings.instrument === "piano") return [];
-    const shapes = events.map((e) => (capo ? shapeFor(view.sounding(e.name), capo) : view.sounding(e.name)));
+    const shapes = events.map((e) => (capo ? shapeFor(view.sounding(e.name), capo, view.shapeKey) : view.sounding(e.name)));
     return leadPositions(shapes, events.map((e) => e.beat), inst.id, bpb);
   }, [events, view, capo, inst.id, bpb, settings.instrument]);
+  // dots are named like the shapes they belong to
+  const nameKey = capo ? view.shapeKey : view.soundKey;
+  const nameOf = (midi: number) => (nameKey ? spellInKey(midi, nameKey) : noteName(midi, false));
 
   if (settings.instrument === "piano") {
-    return <LeadKeys events={visible} current={current} sounding={view.sounding} barEnd={from + bpb} />;
+    return <LeadKeys events={visible} current={current} sounding={view.sounding} barEnd={from + bpb} noteKey={view.soundKey} />;
   }
 
   const strings = inst.tuning.length;
@@ -88,7 +91,7 @@ export function LeadNeck({ engine, view, settings, leftHanded }: { engine: Playe
         {placed.map((m) => (
           <g key={`${m.string}:${m.fret}`} className={"neck-note " + m.state}>
             <circle cx={noteX(m.fret)} cy={sy(m.string)} r={m.state === "now" ? 15 : 12} />
-            <text x={noteX(m.fret)} y={sy(m.string) + 4.5} textAnchor="middle">{prettyAccidentals(noteName(m.midi, view.keyName.includes("b")))}</text>
+            <text x={noteX(m.fret)} y={sy(m.string) + 4.5} textAnchor="middle">{prettyAccidentals(nameOf(m.midi))}</text>
           </g>
         ))}
         {/* the order to play this bar's notes in, over everything else */}
@@ -110,11 +113,14 @@ function LeadKeys({
   current,
   sounding,
   barEnd,
+  noteKey,
 }: {
   events: { e: { beat: number; name: string }; i: number }[];
   current: number;
   sounding: (s: string) => string;
   barEnd: number;
+  /** the key to name the notes in */
+  noteKey: Key | null;
 }) {
   const from = 48;
   const to = 83;
@@ -148,7 +154,7 @@ function LeadKeys({
         {whites.map((m) => (
           <g key={m}>
             <rect x={xw(m)} y={0} width={ww} height={120} rx={3} className={"lk white " + (lit.get(m) ?? "")} />
-            {lit.has(m) && <text x={xw(m) + ww / 2} y={110} textAnchor="middle" className="lk-label">{prettyAccidentals(noteName(m, true))}</text>}
+            {lit.has(m) && <text x={xw(m) + ww / 2} y={110} textAnchor="middle" className="lk-label">{prettyAccidentals(noteKey ? spellInKey(m, noteKey) : noteName(m, true))}</text>}
             {order.has(m) && <text x={xw(m) + ww / 2} y={95} textAnchor="middle" className="neck-order">{order.get(m)}</text>}
           </g>
         ))}

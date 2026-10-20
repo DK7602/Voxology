@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { PlaylistSummary, SongSummary } from "../../shared/api";
-import { prettyAccidentals } from "../../shared/music/notes";
+import { namedForList } from "../../shared/music/songKey";
 import { api, type SongScope } from "../api";
 import { useUser } from "../auth";
 import { Artwork } from "../components/Artwork";
@@ -20,6 +20,7 @@ import { errorText, useToast } from "../components/ui";
 import { SongSearchBox } from "./SearchPage";
 
 export function SongCard({ s }: { s: SongSummary }) {
+  const named = namedForList(s.key, s.chords);
   return (
     <Link to={`/song/${s.id}`} className="song-card">
       <Artwork title={s.title} youtubeId={s.youtubeId} rounded={10} />
@@ -36,11 +37,11 @@ export function SongCard({ s }: { s: SongSummary }) {
         <h3>{s.title || "Untitled"}</h3>
         <div className="meta">
           {s.artist || "Unknown artist"}
-          {s.key && ` · ${prettyAccidentals(s.key)}`}
+          {s.key && ` · ${named.key}`}
           {s.bpm ? ` · ${Math.round(s.bpm)} BPM` : ""}
         </div>
       </div>
-      <div className="chords-line">{s.chords.slice(0, 8).map(prettyAccidentals).join("  ")}</div>
+      <div className="chords-line">{named.chords.slice(0, 8).join("  ")}</div>
     </Link>
   );
 }
@@ -287,7 +288,7 @@ export function PlaylistPage() {
             <Link to={`/song/${s.id}`} style={{ color: "inherit", textDecoration: "none", minWidth: 0 }}>
               <div className="title">{s.title}</div>
               <div className="sub">
-                {s.artist} · {s.chords.slice(0, 6).map(prettyAccidentals).join(" ")}
+                {s.artist} · {namedForList(s.key, s.chords).chords.slice(0, 6).join(" ")}
               </div>
             </Link>
             <div style={{ display: "flex", gap: 4 }}>

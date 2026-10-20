@@ -1,4 +1,4 @@
-import { prettyAccidentals, parseKey, transposeKey } from "../../shared/music/notes";
+import { prettyAccidentals, transposeKey } from "../../shared/music/notes";
 import type { PlayerEngine } from "../player/engine";
 import { usePlayerState, type ChordView, type ViewSettings } from "../player/hooks";
 import {
@@ -23,7 +23,6 @@ interface Props {
   engine: PlayerEngine;
   view: ChordView;
   settings: ViewSettings;
-  songKey: string;
   bestCapo: number | null;
   onSettings: (patch: Partial<ViewSettings>) => void;
   onMidi: () => void;
@@ -33,14 +32,13 @@ interface Props {
 
 const SPEEDS = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.05, 1.1, 1.25, 1.5];
 
-export function Transport({ hasLead, engine, view, settings, songKey, bestCapo, onSettings, onMidi, onExport, onPrint }: Props) {
+export function Transport({ hasLead, engine, view, settings, bestCapo, onSettings, onMidi, onExport, onPrint }: Props) {
   const st = usePlayerState(engine);
   const doc = engine.timeline.doc;
   const bpm = Math.round(doc.bpm * st.speed);
   const rates = engine.media.rates();
   const speeds = rates ? SPEEDS.filter((s) => rates.some((r) => Math.abs(r - s) < 1e-6)) : SPEEDS;
-  const key = parseKey(songKey);
-  const keyAt = (t: number) => (key ? prettyAccidentals(transposeKey(key, t).name) : "");
+  const keyAt = (t: number) => (view.songKey ? prettyAccidentals(transposeKey(view.songKey, t).name) : "");
   const playing = st.playing || st.countIn !== null;
 
   const loopRange = (kind: "song" | "bar" | "line" | "section") => {

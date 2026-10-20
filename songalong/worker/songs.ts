@@ -3,6 +3,7 @@
 import { Hono } from "hono";
 import type { SongSummary } from "../shared/api";
 import { DEMO_SONGS, findDemo } from "../shared/demoSongs";
+import { enharmonicSpellings } from "../shared/music/chords";
 import type { SongDoc } from "../shared/types";
 import { distinctChords, validatePracticeSettings, validateSongDoc } from "../shared/validate";
 import { ownsAudio } from "./audio";
@@ -55,23 +56,28 @@ async function scopeSearch(db: D1Database, userId: string, rawQuery: string): Pr
   const q = rawQuery.trim().slice(0, 100);
   if (!q) throw new HttpError(400, "Enter something to search for");
   const tokens = q.split(/\s+/).slice(0, 8);
+  // each chord however a song spells it: "Bb" also finds "A#"
+  const spellings = tokens.map(enharmonicSpellings);
   // Whole-token match: " G C D " contains " C " but not " Cm ".
-  const chordMatch = tokens.map((_, i) => `(' ' || s.chords || ' ') LIKE ?${i + 3} ESCAPE '\\'`).join(" AND ");
+  let param = 3;
+  const chordMatch = spellings
+    .map((alts) => "(" + alts.map(() => `(' ' || s.chords || ' ') LIKE ?${param++} ESCAPE '\\'`).join(" OR ") + ")")
+    .join(" AND ");
   const stored = await listSongs(
     db,
     userId,
     `${VISIBLE} AND (s.title LIKE ?2 ESCAPE '\\' OR s.artist LIKE ?2 ESCAPE '\\' OR (${chordMatch}))`,
     `ORDER BY (s.owner_id = ?1) DESC, s.updated_at DESC LIMIT ${SEARCH_LIMIT}`,
     `%${likeEscape(q)}%`,
-    ...tokens.map((t) => `% ${likeEscape(t)} %`),
+    ...spellings.flat().map((t) => `% ${likeEscape(t)} %`),
   );
 
   const needle = q.toLowerCase();
-  const lowerTokens = tokens.map((t) => t.toLowerCase());
+  const lowerSpellings = spellings.map((alts) => alts.map((t) => t.toLowerCase()));
   const demos = DEMO_SONGS.filter(({ doc }) => {
     if (doc.title.toLowerCase().includes(needle) || doc.artist.toLowerCase().includes(needle)) return true;
     const chords = new Set(encodeChords(distinctChords(doc)).toLowerCase().split(" "));
-    return lowerTokens.every((t) => chords.has(t));
+    return lowerSpellings.every((alts) => alts.some((t) => chords.has(t)));
   });
   return [...stored, ...(await demoSummaries(db, userId, demos))].slice(0, SEARCH_LIMIT);
 }

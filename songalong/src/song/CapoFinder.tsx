@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { SongDoc } from "../../shared/types";
 import { capoOptions } from "../../shared/music/capo";
+import { prettyAccidentals } from "../../shared/music/notes";
 import { ChordName } from "../components/ChordName";
 import { Modal } from "../components/ui";
 import type { ChordView } from "../player/hooks";
@@ -23,14 +24,14 @@ export function CapoFinder({
 }) {
   const options = useMemo(() => {
     const sounding = doc.chords.map((c) => ({ ...c, name: view.sounding(c.name) }));
-    return capoOptions(sounding, doc.length, instrument, 9);
+    return capoOptions(sounding, doc.length, instrument, 9, view.soundKey);
   }, [doc, view, instrument]);
   const best = options.reduce((a, b) => (b.difficulty < a.difficulty ? b : a));
   return (
     <Modal title="Find the best capo" onClose={onClose} wide>
       <p className="muted" style={{ marginTop: 0 }}>
         Each row shows the shapes you would play with the capo there. Lower difficulty = easier (open chords, fewer
-        barres). The song still sounds in {view.keyName}.
+        barres). The song still sounds in {prettyAccidentals(view.keyName)}.
       </p>
       <table className="capo-table">
         <thead>

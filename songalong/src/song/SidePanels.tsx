@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { SongSummary } from "../../shared/api";
 import type { SongDoc } from "../../shared/types";
 import { prettyAccidentals } from "../../shared/music/notes";
+import { namedForList } from "../../shared/music/songKey";
 import { FRETTED } from "../../shared/music/voicings";
 import { Artwork } from "../components/Artwork";
 import { ChordName } from "../components/ChordName";
@@ -127,7 +128,7 @@ export function SimilarSongs({ songs }: { songs: SongSummary[] }) {
                   {s.title}
                 </div>
                 <div className="sub">
-                  {s.plays} jam session{s.plays === 1 ? "" : "s"} · chords: {s.chords.slice(0, 4).map(prettyAccidentals).join(" ")}
+                  {s.plays} jam session{s.plays === 1 ? "" : "s"} · chords: {namedForList(s.key, s.chords).chords.slice(0, 4).join(" ")}
                 </div>
               </div>
             </Link>

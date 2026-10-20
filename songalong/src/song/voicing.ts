@@ -32,7 +32,7 @@ export function voicingFor(symbol: string, view: ChordView, s: ViewSettings, cho
   }
   const inst = s.instrument as Exclude<Instrument, "piano">;
   const capo = view.usesCapo ? s.capo : 0;
-  const shape = capo ? shapeFor(sounding, capo) : sounding;
+  const shape = capo ? shapeFor(sounding, capo, view.shapeKey) : sounding;
   const all = fretVoicings(shape, inst, 8);
   if (!all.length) return null;
   const v = all[Math.min(choice, all.length - 1)];

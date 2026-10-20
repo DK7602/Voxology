@@ -1,6 +1,7 @@
 // "Find the best capo": for each capo position, how hard are the shapes you'd play?
 
 import { parseChord, transposeSymbol } from "./chords";
+import { transposeKey, type Key } from "./notes";
 import { fretVoicings, type FrettedInstrument } from "./voicings";
 import type { ChordEvent } from "../types";
 import { chordEnd } from "../timeline";
@@ -15,9 +16,10 @@ export interface CapoOption {
   barres: number;
 }
 
-/** Chord shape you play with a capo on `capo` to sound `symbol`. */
-export function shapeFor(symbol: string, capo: number): string {
-  return capo ? transposeSymbol(symbol, -capo, "common") : symbol;
+/** Chord shape you play with a capo on `capo` to sound `symbol`, named for the shapes' key
+ *  (`shapeKey`) when known, else the usual guitar names. */
+export function shapeFor(symbol: string, capo: number, shapeKey: Key | null = null): string {
+  return capo ? transposeSymbol(symbol, -capo, shapeKey ?? "common") : symbol;
 }
 
 export function capoOptions(
@@ -25,6 +27,8 @@ export function capoOptions(
   length: number,
   instrument: FrettedInstrument["id"] = "guitar",
   maxCapo = 7,
+  /** the key the chords sound in, to name the shapes */
+  key: Key | null = null,
 ): CapoOption[] {
   const weights = new Map<string, number>();
   chords.forEach((c, i) => {
@@ -39,7 +43,7 @@ export function capoOptions(
     let barres = 0;
     const shapes: string[] = [];
     for (const [name, w] of weights) {
-      const shape = shapeFor(name, capo);
+      const shape = shapeFor(name, capo, key && transposeKey(key, -capo));
       const v = fretVoicings(shape, instrument, 1)[0];
       if (!shapes.includes(shape)) shapes.push(shape);
       if (!v) {

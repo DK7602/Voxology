@@ -9,7 +9,6 @@
 import {
   COMMON_NAMES,
   type Key,
-  keyPrefersFlats,
   letterUp,
   mod12,
   noteName,
@@ -17,7 +16,10 @@ import {
   parseNote,
   parseNoteAt,
   prettyAccidentals,
+  spellInKey,
   spellWithLetter,
+  tidyName,
+  usualKey,
 } from "./notes";
 
 export type ChordCategory =
@@ -313,11 +315,23 @@ export function chordNoteNames(c: Chord): string[] {
   return plain;
 }
 
+/** Each note of the chord (the slash bass too) by pitch class, named as in `chordNoteNames`. */
+export function chordNoteMap(c: Chord): Map<number, string> {
+  const map = new Map<number, string>();
+  for (const name of chordNoteNames(c)) {
+    const n = parseNote(name);
+    if (n && !map.has(n.pc)) map.set(n.pc, name);
+  }
+  return map;
+}
+
 // ---- spelling / transposition ----
 
-export type Spelling = "flats" | "sharps" | "common";
+/** How to name notes: for a key (the way a chart in that key would), or one table for everything. */
+export type Spelling = "flats" | "sharps" | "common" | Key;
 
-export function spellPc(pc: number, spelling: Spelling): string {
+export function spellPc(pc: number, spelling: Spelling, leading = false): string {
+  if (typeof spelling === "object") return spellInKey(pc, spelling, leading);
   if (spelling === "common") return COMMON_NAMES[mod12(pc)];
   return noteName(pc, spelling === "flats");
 }
@@ -330,12 +344,13 @@ export function chordSymbol(c: Chord, rootName = c.rootName, bassName = c.bassNa
   return rootName + c.suffix + (c.bass !== undefined && bassName ? "/" + bassName : "");
 }
 
-/** Transposes a chord symbol by `semitones`, spelling roots for the target key.
- *  0 semitones returns the symbol unchanged (keeps the author's spelling). */
+/** Transposes a chord symbol by `semitones`. With a key, every chord is named for that key, even
+ *  at 0 semitones (Bb in G, never A#); with a table, 0 semitones keeps the symbol as written. */
 export function transposeSymbol(symbol: string, semitones: number, spelling: Spelling): string {
   const c = parseChord(symbol);
   if (!c || c.category === "none") return symbol;
-  if (semitones === 0) return symbol;
+  const inKey = typeof spelling === "object";
+  if (!inKey && semitones === 0) return symbol;
   if (c.category === "note" || c.category === "notes") {
     const seq = c.category === "notes" ? c.sequence ?? [] : [c.root];
     const moved = seq.map((pc, i) => {
@@ -349,24 +364,46 @@ export function transposeSymbol(symbol: string, semitones: number, spelling: Spe
     });
     return c.category === "note" ? "note:" + moved[0] : "notes:" + moved.join(" ");
   }
-  if (mod12(semitones) === 0) return symbol;
-  let root = spellPc(c.root + semitones, spelling);
+  if (!inKey && mod12(semitones) === 0) return symbol;
+  // a diminished chord's root leads up to the next chord: C#dim in C, not Dbdim
+  let root = spellPc(c.root + semitones, spelling, /^(dim|dim7|m7b5)$/.test(c.suffix));
   // guitarists call the minor chord on this shape G#m, not Abm
   if (spelling === "common" && root === "Ab" && c.intervals.includes(3) && !c.intervals.includes(4)) root = "G#";
-  const bass = c.bass !== undefined ? spellPc(c.bass + semitones, spelling) : undefined;
+  let bass: string | undefined;
+  if (c.bass !== undefined) bass = inKey ? bassInKey(c, root, c.bass + semitones, spelling) : spellPc(c.bass + semitones, spelling);
   return chordSymbol(c, root, bass);
 }
 
-/** Spelling to use for chords in `keyName` transposed by `semitones`. */
+/** A slash chord's bass note in a key: a chord tone is named from the root (E/G#, even in C),
+ *  a half step under the root leads up to it (Am/G#), anything else is named for the key. */
+function bassInKey(c: Chord, rootName: string, bassPc: number, key: Key): string {
+  const above = mod12(bassPc - parseNoteAt(rootName)!.pc);
+  const i = c.intervals.findIndex((iv) => mod12(iv) === above);
+  if (i >= 0) {
+    const steps = (parseInt(c.degrees[i].replace(/[b#]/g, ""), 10) - 1) % 7;
+    return tidyName(bassPc, spellWithLetter(mod12(bassPc), letterUp(rootName[0], steps)));
+  }
+  if (above === 11) return tidyName(bassPc, spellWithLetter(mod12(bassPc), letterUp(rootName[0], -1)));
+  return spellInKey(bassPc, key);
+}
+
+/** The key `semitones` above `keyName` to name chords for (no key: the usual guitar names). */
 export function spellingForKey(keyName: string, semitones: number): Spelling {
   const key = parseKey(keyName);
-  if (!key) return "common";
-  const t: Key = { tonic: mod12(key.tonic + semitones), minor: key.minor, name: "" };
-  t.name = (key.minor ? MINOR_KEY_NAMES : MAJOR_KEY_NAMES)[t.tonic];
-  return keyPrefersFlats(t) ? "flats" : "sharps";
+  return key ? usualKey(key.tonic + semitones, key.minor) : "common";
 }
-const MAJOR_KEY_NAMES = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
-const MINOR_KEY_NAMES = ["Cm", "C#m", "Dm", "Ebm", "Em", "Fm", "F#m", "Gm", "G#m", "Am", "Bbm", "Bm"];
+
+/** Every way to write a chord's root and bass, for finding it however a song spells it:
+ *  "Bb7" -> ["Bb7", "A#7"]. */
+export function enharmonicSpellings(symbol: string): string[] {
+  const c = parseChord(symbol);
+  const out = new Set([symbol.trim()]);
+  if (!c || c.category === "none" || c.category === "note" || c.category === "notes") return [...out];
+  for (const flats of [false, true]) {
+    out.add(chordSymbol(c, noteName(c.root, flats), c.bass !== undefined ? noteName(c.bass, flats) : undefined));
+  }
+  return [...out];
+}
 
 // ---- simplify ----
 
@@ -395,7 +432,10 @@ export interface ChordDisplay {
 /** Splits a chord symbol for display: root, quality, superscript extension, bass. */
 export function displayChord(symbol: string): ChordDisplay {
   const c = parseChord(symbol);
-  if (!c) return { root: symbol, quality: "", ext: "", bass: "", text: symbol };
+  if (!c) {
+    const t = prettyAccidentals(symbol);
+    return { root: t, quality: "", ext: "", bass: "", text: t };
+  }
   if (c.category === "none") return { root: "N.C.", quality: "", ext: "", bass: "", text: "N.C." };
   if (c.category === "note") {
     const r = prettyAccidentals(c.rootName);
@@ -422,6 +462,7 @@ export function displayChord(symbol: string): ChordDisplay {
     ext = c.suffix.slice(3);
   }
   if (c.suffix === "5") ext = "5";
+  ext = prettyAccidentals(ext);
   const bass = c.bassName ? "/" + prettyAccidentals(c.bassName) : "";
   return { root, quality, ext, bass, text: root + quality + ext + bass };
 }

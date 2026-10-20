@@ -6,8 +6,8 @@
 // all chord tones present, root (or slash bass) lowest, at most four fingers (a barre counts
 // as one), small stretch, low position, open strings welcome.
 
-import { type Chord, chordPitchClasses, noteMidi, parseChord } from "./chords";
-import { mod12, noteName, prettyAccidentals } from "./notes";
+import { type Chord, chordNoteMap, chordPitchClasses, noteMidi, parseChord } from "./chords";
+import { letterUp, mod12, prettyAccidentals, spellWithLetter, tidyName } from "./notes";
 import type { Instrument } from "../types";
 
 export interface FrettedInstrument {
@@ -365,8 +365,9 @@ function diverse(sorted: FretVoicing[]): FretVoicing[] {
  */
 function bassVoicings(chord: Chord, inst: FrettedInstrument): FretVoicing[] {
   const bass = chord.bass ?? chord.root;
-  const flats = /b/.test(chord.bassName ?? chord.rootName);
-  const name = (pc: number) => prettyAccidentals(noteName(pc, flats));
+  // the note as the chord names it; its fifth five letters up (the fifth of Bb is F, of F# is C#)
+  const bassName = chord.bassName ?? chord.rootName;
+  const fifthName = tidyName(bass + 7, spellWithLetter(mod12(bass + 7), letterUp(bassName[0], 4)));
   const n = inst.tuning.length;
   const spots: { s: number; f: number; difficulty: number }[] = [];
   for (let s = 0; s < Math.min(3, n); s++) {
@@ -385,12 +386,12 @@ function bassVoicings(chord: Chord, inst: FrettedInstrument): FretVoicing[] {
       const labels: (string | null)[] = new Array(n).fill(null);
       const extra: boolean[] = new Array(n).fill(false);
       frets[s] = f;
-      labels[s] = name(bass);
+      labels[s] = prettyAccidentals(bassName);
       // in fourths tuning: two frets up on the next string is the fifth, on the one after the octave
       ([[1, 7], [2, 0]] as const).forEach(([up, interval]) => {
         if (s + up >= n) return;
         frets[s + up] = f + 2;
-        labels[s + up] = name(bass + interval);
+        labels[s + up] = prettyAccidentals(interval ? fifthName : bassName);
         extra[s + up] = true;
       });
       const played = frets.filter((x): x is number => x !== null && x > 0);
@@ -486,6 +487,8 @@ export interface PianoVoicing {
   left: number | null;
   /** for riffs: order labels per MIDI note */
   order?: Map<number, number>;
+  /** each note's name by pitch class, as the chord spells it */
+  names?: Map<number, string>;
   /** keyboard range to draw (inclusive) */
   from: number;
   to: number;
@@ -511,7 +514,7 @@ export function pianoVoicing(symbol: string): PianoVoicing | null {
       right.push(m);
       prev = m;
     });
-    return { right: [...new Set(right)].sort((a, b) => a - b), left: null, order, from: 48, to: 83 };
+    return { right: [...new Set(right)].sort((a, b) => a - b), left: null, order, from: 48, to: 83, names: chordNoteMap(chord) };
   }
   const pcs = chord.intervals.map((i) => mod12(chord.root + i));
   const rootMidi = 60 + chord.root;
@@ -523,7 +526,7 @@ export function pianoVoicing(symbol: string): PianoVoicing | null {
   // keep the 3rd / 7th, drop a doubled 5th if crowded: nothing to do in a one-octave close voicing
   const bassPc = chord.bass ?? chord.root;
   void pcs;
-  return { right, left: 48 + bassPc, from: 48, to: 71 };
+  return { right, left: 48 + bassPc, from: 48, to: 71, names: chordNoteMap(chord) };
 }
 
 export function pianoMidi(v: PianoVoicing): number[] {

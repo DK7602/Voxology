@@ -124,7 +124,7 @@ export function ChordLibraryPage() {
           <span style={{ fontSize: 44 }}><ChordName symbol={symbol} /></span>
           <CategoryTag symbol={symbol} />
           <span className="muted">
-            {chord.description} · notes {chordNoteNames(chord).map(prettyAccidentals).join(" ")} · formula {chord.degrees.join(" ")}
+            {chord.description} · notes {chordNoteNames(chord).map(prettyAccidentals).join(" ")} · formula {prettyAccidentals(chord.degrees.join(" "))}
           </span>
         </div>
       )}

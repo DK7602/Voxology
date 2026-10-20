@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { FRETTED } from "../../shared/music/voicings";
-import { midiName, midiToFreq } from "../../shared/music/notes";
+import { midiName, midiToFreq, prettyAccidentals } from "../../shared/music/notes";
 import type { Instrument } from "../../shared/types";
 import { strum, unlockAudio } from "../player/synth";
 import { detectPitch } from "./pitch";
@@ -152,16 +152,16 @@ export function Tuner({ instrument = "guitar" }: { instrument?: Instrument }) {
               const ctx = await unlockAudio();
               strum([m], ctx.currentTime + 0.02, { instrument: inst.id, velocity: 0.9 });
             }}
-            title={`Play ${midiName(m)} (${midiToFreq(m).toFixed(1)} Hz)`}
+            title={`Play ${prettyAccidentals(midiName(m))} (${midiToFreq(m).toFixed(1)} Hz)`}
           >
-            {midiName(m)}
+            {prettyAccidentals(midiName(m))}
           </button>
         ))}
       </div>
       <div className={"tuner-face" + (inTune ? " in-tune" : "")}>
         <div className="tuner-note">
           <span className="flat-mark" aria-hidden="true">♭</span>
-          <b>{reading ? midiName(reading.midi) : "—"}</b>
+          <b>{reading ? prettyAccidentals(midiName(reading.midi)) : "—"}</b>
           <span className="sharp-mark" aria-hidden="true">♯</span>
         </div>
         <Strobe live={live} />

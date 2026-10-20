@@ -8,7 +8,7 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { detectChords } from "../src/analysis/detect";
-import { keyPrefersFlats, parseKey } from "../shared/music/notes";
+import { parseKey } from "../shared/music/notes";
 import { leadPart } from "./melody";
 import { loadNoteModel } from "./noteModel";
 import { transcribe } from "./notes";
@@ -160,7 +160,7 @@ export async function analyseFile(file: string, meta: PrepMeta, videoId: string,
   if (model) {
     try {
       const notes = await transcribe(samples, model, (f) => progress("Listening for the lead", 0.7 + 0.17 * f));
-      lead = leadPart(notes, d.beatTimes, keyPrefersFlats(parseKey(d.key)));
+      lead = leadPart(notes, d.beatTimes, parseKey(d.key));
     } catch (e) {
       console.warn("lead part failed:", (e as Error).message);
     }

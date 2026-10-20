@@ -47,7 +47,7 @@ describe("the lead part", () => {
   it("writes it on the beats: notes, quick runs and rests", () => {
     const slow = Array.from({ length: 16 }, (_, i) => i); // 60 BPM: a 16th is a quarter second
     const notes = [note(1, 1.5, 72), note(1.5, 2, 74), note(2, 2.05, 76), note(2.05, 2.1, 77), note(2.1, 2.4, 79), note(4, 5, 69)];
-    expect(leadPart(notes, slow, false)).toEqual([
+    expect(leadPart(notes, slow, null)).toEqual([
       { beat: 1, name: "note:C5" },
       { beat: 1.5, name: "note:D5" },
       // three notes inside one 16th: a quick run
@@ -58,7 +58,7 @@ describe("the lead part", () => {
     ]);
     // a note a little late on an 8th goes to the 8th; a real 16th stays; a repeat is one note
     const late = [note(1.14, 1.3, 72), note(1.3, 1.48, 72), note(1.75, 2, 74)];
-    expect(leadPart(late, slow, false).map((e) => [e.beat, e.name])).toEqual([
+    expect(leadPart(late, slow, null).map((e) => [e.beat, e.name])).toEqual([
       [1, "note:C5"],
       [1.5, "N.C."],
       [1.75, "note:D5"],
@@ -75,7 +75,7 @@ describe("a lead part from audio", () => {
     expect(model).not.toBeNull();
     const song = synthSong(spec);
     const notes = await transcribe(resample(song.samples, song.sampleRate, NOTES_RATE), model!);
-    const lead = leadPart(notes, song.beatTimes, false);
+    const lead = leadPart(notes, song.beatTimes, null);
     const spb = 60 / song.bpm;
     const slotOf = (t: number) => Math.round(t / spb / 0.25) * 0.25;
     const found = song.melodyNotes.filter((m) => lead.some((e) => Math.abs(e.beat - slotOf(m.time)) <= 0.25 && e.name.includes(midiName(m.midi)))).length;

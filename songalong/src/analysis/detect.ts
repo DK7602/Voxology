@@ -11,7 +11,7 @@
 //      the downbeat where chord changes land
 //   5. key (profiles + tonic chord), a key-aware second chord pass, spelling in the key
 
-import { DEFAULT_MAJOR, DEFAULT_MINOR, keyPrefersFlats, noteName, parseKey } from "../../shared/music/notes";
+import { spellInKey, usualKey } from "../../shared/music/notes";
 import { estimateTempo, mendSlips, trackBeats, type TempoEstimate } from "./beats";
 import { beatChroma, harmonicPeriodicity, semitoneSpectrogram } from "./chroma";
 import { Vocabulary, decodeChords, emissionScores, powerChords } from "./chords";
@@ -83,11 +83,12 @@ export function detectChords(samples: Float32Array, sampleRate: number, opts: De
   key = estimateKey(chroma, decoded.states, vocab);
 
   progress(0.97, "Writing the chart");
-  const keyName = (key.minor ? DEFAULT_MINOR : DEFAULT_MAJOR)[key.tonic] + (key.minor ? "m" : "");
-  const flats = keyPrefersFlats(parseKey(keyName));
+  // chords are named the way a chart in the key would (Bb in G, D/F# in C)
+  const songKey = usualKey(key.tonic, key.minor);
+  const keyName = songKey.name;
   const power = powerChords(chroma, decoded.states, vocab);
   const nameOf = (s: number, power: boolean) =>
-    s === vocab.nc ? "N.C." : noteName(vocab.roots[s], flats) + (power ? "5" : vocab.types[vocab.typeOf[s]].suffix);
+    s === vocab.nc ? "N.C." : spellInKey(vocab.roots[s], songKey) + (power ? "5" : vocab.types[vocab.typeOf[s]].suffix);
 
   // Make beat 0 a downbeat: drop leading no-chord beats before the first downbeat, or else
   // extrapolate the beats back to the bar start.

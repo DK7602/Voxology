@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { parseKey, transposeKey } from "../../shared/music/notes";
-import { simplifySymbol, spellingForKey, transposeSymbol } from "../../shared/music/chords";
+import { transposeKey, type Key } from "../../shared/music/notes";
+import { simplifySymbol, transposeSymbol } from "../../shared/music/chords";
 import { shapeFor } from "../../shared/music/capo";
+import { songKey, weightedChords } from "../../shared/music/songKey";
 import type { Instrument, SongDoc } from "../../shared/types";
 import type { PlayerEngine, PlayerState } from "./engine";
 
@@ -49,26 +50,33 @@ export interface ChordView {
   sounding: (symbol: string) => string;
   /** what to show / finger: the capo shape on fretted instruments */
   shown: (symbol: string) => string;
+  /** the song's key before transposing (what its chords are named for); null when unknown */
+  songKey: Key | null;
+  /** the key the song sounds in, after transposing */
+  soundKey: Key | null;
+  /** the key of the shapes you play with the capo (E for F# with capo 2), else null */
+  shapeKey: Key | null;
   /** the key the song sounds in */
   keyName: string;
-  /** shapes key with the capo (e.g. "E" for Gb with capo 2) */
+  /** shapes key with the capo (e.g. "E" for F# with capo 2) */
   shapeKeyName: string | null;
   fretted: boolean;
   usesCapo: boolean;
 }
 
 export function useChordView(doc: SongDoc, s: ViewSettings): ChordView {
+  // the key the chords are named for: the song's own, unless its chords say otherwise
+  const key = useMemo(() => songKey(doc.key, weightedChords(doc.chords, doc.length)), [doc.key, doc.chords, doc.length]);
   return useMemo(() => {
-    const spelling = spellingForKey(doc.key, s.transpose);
     const fretted = s.instrument !== "piano";
     // bass players don't use a capo: bass always shows the notes as they sound
     const usesCapo = fretted && s.instrument !== "bass" && s.capo > 0;
-    const sounding = (sym: string) => transposeSymbol(s.simplify ? simplifySymbol(sym) : sym, s.transpose, spelling);
-    const shown = (sym: string) => (usesCapo && s.capoShapes ? shapeFor(sounding(sym), s.capo) : sounding(sym));
-    const key = parseKey(doc.key);
-    const keyT = key ? transposeKey(key, s.transpose) : null;
-    const keyName = keyT ? (s.transpose ? keyT.name : key!.name) : doc.key;
-    const shapeKey = keyT && usesCapo ? transposeKey(keyT, -s.capo).name : null;
-    return { sounding, shown, keyName, shapeKeyName: shapeKey, fretted, usesCapo };
-  }, [doc.key, s.transpose, s.capo, s.instrument, s.simplify, s.capoShapes]);
+    const soundKey = key && transposeKey(key, s.transpose);
+    const shapeKey = soundKey && usesCapo ? transposeKey(soundKey, -s.capo) : null;
+    // every chord is named for the key it sounds in (no key: the usual guitar names)
+    const sounding = (sym: string) => transposeSymbol(s.simplify ? simplifySymbol(sym) : sym, s.transpose, soundKey ?? "common");
+    const shown = (sym: string) => (usesCapo && s.capoShapes ? shapeFor(sounding(sym), s.capo, shapeKey) : sounding(sym));
+    const keyName = soundKey ? soundKey.name : doc.key;
+    return { sounding, shown, songKey: key, soundKey, shapeKey, keyName, shapeKeyName: shapeKey?.name ?? null, fretted, usesCapo };
+  }, [key, doc.key, s.transpose, s.capo, s.instrument, s.simplify, s.capoShapes]);
 }

@@ -3,7 +3,7 @@ import {
   chordNoteNames, displayChord, parseChord, simplifySymbol, spellingForKey, transposeSymbol,
 } from "../shared/music/chords";
 import { assignFingers, fretVoicings, pianoVoicing } from "../shared/music/voicings";
-import { parseKey, keyPrefersFlats, transposeKey } from "../shared/music/notes";
+import { parseKey, transposeKey } from "../shared/music/notes";
 
 const shape = (sym: string, inst: "guitar" | "ukulele" | "mandolin" = "guitar") =>
   fretVoicings(sym, inst, 1)[0]?.frets.map((f) => (f === null ? "x" : f.toString(36))).join("");
@@ -50,10 +50,6 @@ describe("transpose", () => {
     expect(transposeSymbol("notes:E G A", 2, "sharps")).toBe("notes:F# A B");
   });
   it("keys", () => {
-    expect(keyPrefersFlats(parseKey("Gb"))).toBe(true);
-    expect(keyPrefersFlats(parseKey("E"))).toBe(false);
-    expect(keyPrefersFlats(parseKey("Em"))).toBe(false);
-    expect(keyPrefersFlats(parseKey("Dm"))).toBe(true);
     expect(transposeKey(parseKey("G")!, 1).name).toBe("Ab");
     expect(transposeKey(parseKey("Am")!, 4).name).toBe("C#m");
   });

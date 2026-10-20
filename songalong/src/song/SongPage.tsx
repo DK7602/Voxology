@@ -4,6 +4,7 @@ import type { PlaylistSummary, SongRecord, SongSummary } from "../../shared/api"
 import type { Instrument, PracticeSettings } from "../../shared/types";
 import { parseChord } from "../../shared/music/chords";
 import { bestCapo as findBestCapo } from "../../shared/music/capo";
+import { prettyAccidentals } from "../../shared/music/notes";
 import { api } from "../api";
 import { useUser } from "../auth";
 import { Artwork } from "../components/Artwork";
@@ -341,7 +342,6 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
           engine={engine}
           view={view}
           settings={settings}
-          songKey={doc.key}
           bestCapo={best}
           onSettings={patch}
           onMidi={() => downloadMidi(doc, view)}
@@ -432,7 +432,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
       )}
       {modal === "transpose" && (
         <Modal title="Transpose" onClose={() => setModal(null)}>
-          <p className="muted" style={{ marginTop: 0 }}>Move every chord up or down to suit your voice. Now in {view.keyName}.</p>
+          <p className="muted" style={{ marginTop: 0 }}>Move every chord up or down to suit your voice. Now in {prettyAccidentals(view.keyName)}.</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))", gap: 8 }}>
             {Array.from({ length: 13 }, (_, i) => i - 6).map((t) => (
               <button key={t} className={"btn" + (settings.transpose === t ? " active" : "")} onClick={() => patch({ transpose: t })}>

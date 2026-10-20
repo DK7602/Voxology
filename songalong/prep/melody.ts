@@ -2,7 +2,7 @@
 // tune), put on the beat grid the way a lead part is written (shared/lead.ts): one note per
 // 16th-note slot ("note:E4"), a quick run inside one slot ("notes:E4 G4"), rests ("N.C.").
 
-import { midiName } from "../shared/music/notes";
+import { midiNameInKey, type Key } from "../shared/music/notes";
 import type { ChordEvent } from "../shared/types";
 import type { Note } from "./notes";
 
@@ -71,7 +71,7 @@ function onGrid(beat: number): number {
 }
 
 /** The lead part as events on the beat grid. */
-export function leadPart(notes: Note[], beatTimes: number[], flats: boolean): ChordEvent[] {
+export function leadPart(notes: Note[], beatTimes: number[], key: Key | null): ChordEvent[] {
   if (beatTimes.length < 2) return [];
   // a note heard twice in a row within a 16th is one note, lasting to the end of both
   const line: Note[] = [];
@@ -98,7 +98,7 @@ export function leadPart(notes: Note[], beatTimes: number[], flats: boolean): Ch
     const s = slots.get(slot)!;
     const run = s.notes.sort((a, b) => a.start - b.start);
     const kept = run.length <= MAX_RUN ? run : Array.from({ length: MAX_RUN }, (_, k) => run[Math.round((k * (run.length - 1)) / (MAX_RUN - 1))]);
-    const names = kept.map((n) => midiName(n.pitch, flats));
+    const names = kept.map((n) => midiNameInKey(n.pitch, key));
     events.push({ beat: slot, name: names.length === 1 ? `note:${names[0]}` : `notes:${names.join(" ")}` });
     // a rest when the note ends before the next one starts
     const next = order[i + 1];

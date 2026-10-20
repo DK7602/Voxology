@@ -1,6 +1,6 @@
 // Chord boxes: fretboard diagrams for guitar / ukulele / mandolin / bass and a keyboard for piano.
 import type { FretVoicing, PianoVoicing } from "../../shared/music/voicings";
-import { noteName } from "../../shared/music/notes";
+import { noteName, prettyAccidentals } from "../../shared/music/notes";
 
 interface FretProps {
   voicing: FretVoicing;
@@ -118,7 +118,7 @@ export function FretDiagram({ voicing, strings, leftHanded, caption, size = 150 
   );
 }
 
-export function PianoDiagram({ voicing, size = 190, flats = true }: { voicing: PianoVoicing; size?: number; flats?: boolean }) {
+export function PianoDiagram({ voicing, size = 190 }: { voicing: PianoVoicing; size?: number }) {
   const whites: number[] = [];
   for (let m = voicing.from; m <= voicing.to; m++) if (![1, 3, 6, 8, 10].includes(m % 12)) whites.push(m);
   const ww = 14;
@@ -130,12 +130,14 @@ export function PianoDiagram({ voicing, size = 190, flats = true }: { voicing: P
   const right = new Set(voicing.right);
   const keyClass = (m: number) =>
     m === voicing.left ? "key bass" : right.has(m) ? "key on" : "key";
-  const label = (m: number) => (voicing.order ? String(voicing.order.get(m) ?? "") : noteName(m, flats));
+  // each key named as the chord spells it
+  const nameOf = (m: number) => prettyAccidentals(voicing.names?.get(m % 12) ?? noteName(m, true));
+  const label = (m: number) => (voicing.order ? String(voicing.order.get(m) ?? "") : nameOf(m));
   const blacks: number[] = [];
   for (let m = voicing.from; m <= voicing.to; m++) if ([1, 3, 6, 8, 10].includes(m % 12)) blacks.push(m);
   return (
     <svg viewBox={`-1 -1 ${w + 2} ${wh + 26}`} width={size} height={(size * (wh + 26)) / (w + 2)} className="piano-diagram" role="img"
-      aria-label={"Keys: " + [voicing.left, ...voicing.right].filter((m) => m !== null).map((m) => noteName(m!, flats)).join(" ")}>
+      aria-label={"Keys: " + [voicing.left, ...voicing.right].filter((m) => m !== null).map((m) => nameOf(m!)).join(" ")}>
       {whites.map((m) => (
         <g key={m}>
           <rect x={xOfWhite(m)} y={0} width={ww} height={wh} rx={2} className={"white " + keyClass(m)} />
