@@ -707,7 +707,9 @@
   margin: 14px 0 4px;
   font-family: "Playfair Display", serif;
   font-weight: 700;
-  font-size: 17px;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--accent-text);
 }
 .summary .sheet-line {
@@ -725,11 +727,15 @@
 .summary .cl-line {
   justify-content: flex-start;
 }
+/* like the printed sheet: chords in bold red over the words, which take the page's text colour */
 .summary .cl-chord {
   font-size: 19px;
+  font-weight: 700;
+  color: var(--chord-red);
 }
 .summary .cl-words {
   font-size: 19px;
+  color: var(--ink);
 }
 
 /* ---------- sidebar ---------- */

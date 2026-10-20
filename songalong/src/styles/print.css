@@ -30,7 +30,7 @@ body.print-body {
 .print-toolbar .btn {
   margin-left: auto;
 }
-.sheet-head {
+.print-page .sheet-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -38,17 +38,17 @@ body.print-body {
   border-bottom: 2px solid #000;
   padding-bottom: 8px;
 }
-.sheet-head h1 {
+.print-page .sheet-head h1 {
   font-family: "Playfair Display", Georgia, serif;
   font-size: 34px;
   line-height: 1.1;
   color: #000;
 }
-.sheet-artist {
+.print-page .sheet-artist {
   font-size: 20px;
   margin-top: 2px;
 }
-.sheet-brand {
+.print-page .sheet-brand {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -56,18 +56,18 @@ body.print-body {
   font-size: 14px;
   color: #555;
 }
-.sheet-meta {
+.print-page .sheet-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 22px;
   margin: 10px 0 16px;
   font-size: 17px;
 }
-.sheet-meta b {
+.print-page .sheet-meta b {
   font-weight: 700;
   margin-right: 4px;
 }
-.sheet-legend h2 {
+.print-page .sheet-legend h2 {
   font-size: 16px;
   font-family: "EB Garamond", serif;
   text-transform: uppercase;
@@ -75,7 +75,7 @@ body.print-body {
   color: #333;
   margin-bottom: 6px;
 }
-.legend-grid {
+.print-page .legend-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: 8px;
@@ -83,23 +83,23 @@ body.print-body {
   border-radius: 10px;
   padding: 10px;
 }
-.legend-item {
+.print-page .legend-item {
   display: grid;
   justify-items: center;
   gap: 2px;
   break-inside: avoid;
 }
-.legend-item.piano {
+.print-page .legend-item.piano {
   grid-column: span 2;
 }
-.legend-name {
+.print-page .legend-name {
   font-size: 20px;
 }
-.legend-name .chord-name {
+.print-page .legend-name .chord-name {
   color: var(--chord-red);
   font-weight: 700;
 }
-.legend-item .cat-tag {
+.print-page .legend-item .cat-tag {
   font-size: 9px;
 }
 .print-page .fret-diagram .grid,
@@ -127,45 +127,45 @@ body.print-body {
 .print-page .fret-diagram .fret-num {
   fill: #000;
 }
-.sheet-body {
+.print-page .sheet-body {
   margin-top: 18px;
 }
-.sheet-body.two-col {
+.print-page .sheet-body.two-col {
   columns: 2;
   column-gap: 32px;
 }
-.sheet-block {
+.print-page .sheet-block {
   break-inside: avoid;
   margin-bottom: 14px;
 }
-.sheet-section {
+.print-page .sheet-section {
   font-weight: 700;
   font-size: 16px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 2px;
 }
-.sheet-line {
+.print-page .sheet-line {
   margin: 0 0 4px;
 }
-.sheet-line .cl-line {
+.print-page .sheet-line .cl-line {
   justify-content: flex-start;
 }
-.sheet-line .cl-chord {
+.print-page .sheet-line .cl-chord {
   color: var(--chord-red);
   font-weight: 700;
   font-size: 17px;
   min-height: 1.25em;
 }
-.sheet-line .cl-chord .chord-name {
+.print-page .sheet-line .cl-chord .chord-name {
   font-family: "EB Garamond", Georgia, serif;
   font-weight: 700;
 }
-.sheet-line .cl-words {
+.print-page .sheet-line .cl-words {
   color: #000;
   font-size: 17px;
 }
-.sheet-foot {
+.print-page .sheet-foot {
   margin-top: 22px;
   padding-top: 6px;
   border-top: 1px solid #bbb;
@@ -203,16 +203,16 @@ body.print-body {
     margin: -8px -4px 16px;
   }
 }
-.sheet-lead {
+.print-page .sheet-lead {
   break-inside: avoid;
   margin-top: 6px;
 }
-.sheet-lead-note {
+.print-page .sheet-lead-note {
   margin: 0 0 4px;
   font-size: 13px;
   color: #555;
 }
-.sheet-lead pre {
+.print-page .sheet-lead pre {
   margin: 0;
   font-family: "EB Garamond", Georgia, serif;
   font-size: 16px;
