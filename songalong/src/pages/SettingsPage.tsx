@@ -237,6 +237,18 @@ function AppSection() {
         {state === "prompt" && <InstallButton className="btn btn-primary" />}
       </div>
       {state === "ios" && <IosInstallSteps />}
+      <div className="setting-row">
+        <div className="label">
+          <b>Instrument sounds</b>
+          <span>
+            Recorded instruments: the steel-string guitar (also used for the mandolin) is from the Musyng Kite soundfont (CC BY-SA 3.0); the
+            ukulele and bass are from FreePats (public domain).{" "}
+            <a href="/samples/CREDITS.txt" target="_blank" rel="noreferrer">
+              Details
+            </a>
+          </span>
+        </div>
+      </div>
     </section>
   );
 }

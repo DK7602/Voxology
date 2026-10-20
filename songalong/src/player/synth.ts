@@ -1,7 +1,10 @@
-// Sounds: plucked strings (Karplus–Strong), a soft piano, and a metronome click.
-// Notes are rendered once into AudioBuffers and cached, so strumming costs almost nothing.
+// Sounds: recorded guitar, ukulele and bass notes (public/samples; the mandolin plays the guitar's
+// with its doubled strings), a soft piano, and a metronome click. Until an instrument's recordings
+// have loaded, and if they can't, plucked strings are synthesized (Karplus–Strong) instead.
+// Synthesized notes are rendered once into AudioBuffers and cached, so strumming costs little.
 import type { Instrument } from "../../shared/types";
 import { midiToFreq } from "../../shared/music/notes";
+import { SAMPLES } from "./sampleMap";
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -114,6 +117,115 @@ function playBuffer(buf: AudioBuffer, when: number, gain: number, stopAt?: numbe
   }
 }
 
+// ---- recorded notes ----
+
+type Bank = keyof typeof SAMPLES;
+const BANK_OF: Partial<Record<Instrument, Bank>> = { guitar: "guitar", mandolin: "guitar", ukulele: "ukulele", bass: "bass" };
+
+interface Recorded {
+  /** the pitch it sounds at (MIDI, with its tuning correction) */
+  pitch: number;
+  buf: AudioBuffer;
+  /** seconds of silence before the attack (decoders may add a little) */
+  start: number;
+}
+const banks = new Map<Bank, Recorded[]>();
+const loading = new Map<Bank, Promise<void>>();
+
+/** Where a decoded note starts sounding. */
+function attackAt(buf: AudioBuffer): number {
+  const d = buf.getChannelData(0);
+  let peak = 0;
+  for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+  let i = 0;
+  while (i < d.length && Math.abs(d[i]) < 0.02 * peak) i++;
+  return Math.max(0, i - 0.002 * buf.sampleRate) / buf.sampleRate;
+}
+
+/** Loads an instrument's recorded notes (once; a failed load is tried again next time). */
+export function loadInstrument(instrument: Instrument): Promise<void> {
+  const bank = BANK_OF[instrument];
+  if (!bank) return Promise.resolve();
+  let p = loading.get(bank);
+  if (!p) {
+    const c = audioContext();
+    p = Promise.all(
+      SAMPLES[bank].map(async (n) => {
+        const res = await fetch(`/samples/${bank}/${n.file}`);
+        if (!res.ok) throw new Error(`${n.file}: ${res.status}`);
+        const buf = await c.decodeAudioData(await res.arrayBuffer());
+        return { pitch: n.midi + n.cents / 100, buf, start: attackAt(buf) };
+      }),
+    ).then(
+      (notes) => void banks.set(bank, notes),
+      () => void loading.delete(bank),
+    );
+    loading.set(bank, p);
+  }
+  return p;
+}
+
+interface Voice {
+  when: number;
+  gain: number;
+  /** lowpass cutoff (Hz): a softer stroke sounds darker, not just quieter */
+  tone: number;
+  stopAt?: number;
+  /** let it ring at most this long */
+  ring?: number;
+  /** cents above the note (a mandolin's second string) */
+  detune?: number;
+}
+
+function playRecorded(notes: Recorded[], midi: number, v: Voice) {
+  const c = audioContext();
+  let n = notes[0];
+  for (const x of notes) if (Math.abs(x.pitch - midi) < Math.abs(n.pitch - midi)) n = x;
+  const src = c.createBufferSource();
+  src.buffer = n.buf;
+  src.playbackRate.value = 2 ** ((midi - n.pitch + (v.detune ?? 0) / 100) / 12);
+  const lp = c.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = v.tone;
+  lp.Q.value = 0.4;
+  const g = c.createGain();
+  src.connect(lp).connect(g).connect(out());
+  const at = Math.max(v.when, c.currentTime);
+  g.gain.setValueAtTime(v.gain, at);
+  src.start(at, n.start);
+  const end = Math.min(v.stopAt ?? Infinity, v.ring !== undefined ? at + v.ring : Infinity);
+  if (end < Infinity) {
+    // a hand coming down on the strings: quick, but not a click
+    g.gain.setValueAtTime(v.gain, Math.max(at, end - 0.07));
+    g.gain.exponentialRampToValueAtTime(0.0005, end);
+    src.stop(end + 0.02);
+  }
+}
+
+/** A little human unevenness, so repeated strums don't sound like a machine. */
+const jitter = (x: number, by: number) => x * (1 + (Math.random() * 2 - 1) * by);
+
+/** One plucked string of a fretted instrument, starting at `when`. */
+function pluck(instrument: Instrument, midi: number, when: number, vel: number, stopAt?: number) {
+  const bank = BANK_OF[instrument];
+  const notes = bank && banks.get(bank);
+  if (!notes) {
+    void loadInstrument(instrument);
+    playBuffer(pluckBuffer(midi, instrument), when, vel * 0.75, stopAt);
+    return;
+  }
+  const v = jitter(vel, 0.08);
+  if (instrument === "mandolin") {
+    // two steel strings per course, a hair apart in time and tune; it doesn't ring for long
+    const tone = 3500 + 9000 * v * v;
+    playRecorded(notes, midi, { when, gain: 0.62 * v, tone, stopAt, ring: 1.8 });
+    playRecorded(notes, midi, { when: when + 0.007, gain: 0.5 * v, tone, stopAt, ring: 1.8, detune: 6 });
+    return;
+  }
+  const tone = instrument === "bass" ? 700 + 3000 * v * v : instrument === "ukulele" ? 2500 + 9000 * v * v : 1800 + 10000 * v * v;
+  playRecorded(notes, midi, { when, gain: (instrument === "bass" ? 1.1 : 0.9) * v, tone, stopAt });
+}
+
 export interface StrumOptions {
   instrument: Instrument;
   /** seconds between strings (guitar strum) */
@@ -134,16 +246,23 @@ export function strum(midis: number[], when: number, o: StrumOptions) {
     return;
   }
   const spread = o.spread ?? 0.018;
-  const order = o.down === false ? [...midis].reverse() : midis;
+  const down = o.down !== false;
+  const order = down ? midis : [...midis].reverse();
   const g = vel / Math.sqrt(midis.length);
-  order.forEach((m, i) => playBuffer(pluckBuffer(m, o.instrument), when + i * spread, g, o.until));
+  order.forEach((m, i) => {
+    // the pick meets the first strings hardest; an up-stroke barely catches the low ones
+    const fall = order.length > 1 ? i / (order.length - 1) : 0;
+    const accent = down ? 1 - 0.18 * fall : 0.8 + 0.2 * fall;
+    pluck(o.instrument, m, when + jitter(i * spread, 0.15), g * accent, o.until);
+  });
 }
 
 /** Plays notes one after another (single notes / riffs). */
 export function arpeggio(midis: number[], when: number, step: number, instrument: Instrument) {
   midis.forEach((m, i) => {
-    const buf = instrument === "piano" ? pianoBuffer(m) : pluckBuffer(m, instrument);
-    playBuffer(buf, when + i * step, 0.75, when + (i + 1) * step + 0.4);
+    const stop = when + (i + 1) * step + 0.4;
+    if (instrument === "piano") playBuffer(pianoBuffer(m), when + i * step, 0.75, stop);
+    else pluck(instrument, m, when + i * step, 0.8, stop);
   });
 }
 
@@ -163,5 +282,6 @@ export function click(when: number, accent: boolean, volume = 0.6) {
 
 /** Pre-renders the buffers a song needs so the first strum isn't late. */
 export function warmUp(midis: number[], instrument: Instrument) {
-  for (const m of midis) (instrument === "piano" ? pianoBuffer : (x: number) => pluckBuffer(x, instrument))(m);
+  if (instrument === "piano") for (const m of midis) pianoBuffer(m);
+  else void loadInstrument(instrument);
 }

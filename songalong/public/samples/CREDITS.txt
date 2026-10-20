@@ -1,0 +1,21 @@
+SongAlong instrument sounds
+===========================
+
+The notes in these folders were trimmed to their attack, cut to a few seconds with a fade-out,
+level-matched, measured for tuning and re-encoded as mono MP3 by scripts/make-samples.py.
+
+guitar/  (also played, doubled, as the mandolin)
+  Steel-string acoustic guitar from the Musyng Kite soundfont, as rendered note by note in
+  gleitz/midi-js-soundfonts (https://github.com/gleitz/midi-js-soundfonts).
+  Licensed under Creative Commons Attribution-ShareAlike 3.0:
+  https://creativecommons.org/licenses/by-sa/3.0/
+  These modified notes are shared under the same license.
+
+ukulele/
+  Ukulele by Mateusz Dąbrowski for FreePats (https://freepats.zenvoid.org/GuitarFamily/ukulele.html).
+  Creative Commons CC0 1.0 (public domain dedication).
+
+bass/
+  Finger Bass YR (Yamaha RBX bass) by Andrea Biasior for FreePats
+  (https://freepats.zenvoid.org/ElectricGuitar/clean-electric-bass.html).
+  Creative Commons CC0 1.0 (public domain dedication).
