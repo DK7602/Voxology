@@ -155,7 +155,9 @@ const TOPICS: { title: string; body: ReactNode }[] = [
     body: (
       <ul>
         <li>
-          <b>My Library</b>: songs you saved with ♥ and songs you made.
+          <b>My Library</b>: songs you saved with ♥ and songs you made. Press and hold a card to pick it up, then drag it to a new place
+          (on a computer, just drag it). Let go without moving for its menu: <b>Remove from library</b> hides the song from your library
+          (nothing is deleted; save it with ♥ to bring it back) or <b>Add to playlist</b>.
         </li>
         <li>
           <b>Playlists</b>: make one there, then add songs from a song’s <b>⋮ → Add to playlist</b> (or a long press on its card). In a
@@ -166,8 +168,9 @@ const TOPICS: { title: string; body: ReactNode }[] = [
           <b>Discover</b>: example songs and songs other players made public.
         </li>
         <li>
-          <b>Long-press a song card</b> (right-click on a computer) for more: take it off <b>Keep playing</b> or <b>Discover</b>, save it to
-          your library or remove it, or add it to a playlist. Changed your mind? Tap <b>Undo</b>.
+          <b>Long-press a song card</b> on Home or Discover (right-click on a computer) for more: take it off <b>Keep playing</b> or{" "}
+          <b>Discover</b> (it's only hidden for you), save it to your library or remove it, or add it to a playlist. Changed your mind?
+          Tap <b>Undo</b>.
         </li>
       </ul>
     ),

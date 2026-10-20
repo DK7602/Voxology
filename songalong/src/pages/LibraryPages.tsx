@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } fr
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { PlaylistSummary, SongSummary } from "../../shared/api";
 import { namedForList } from "../../shared/music/songKey";
+import { mergeOrder } from "../../shared/order";
 import { api, type SongScope } from "../api";
 import { useUser } from "../auth";
 import { Artwork } from "../components/Artwork";
@@ -18,17 +19,32 @@ import {
   IconYoutube,
 } from "../components/Icons";
 import { InstallButton } from "../components/InstallButton";
+import { useGridReorder } from "../components/gridReorder";
 import { useLongPress } from "../components/longPress";
 import { SongMenu, type SongChange, type SongList } from "../components/SongMenu";
 import { errorText, useToast } from "../components/ui";
 import { SongSearchBox } from "./SearchPage";
 
-/** A song in a grid. With `onMenu`, a long-press (or right-click) opens the song's menu. */
-export function SongCard({ s, onMenu }: { s: SongSummary; onMenu?: () => void }) {
+/** A song in a grid. With `onMenu`, a long-press (or right-click) opens the song's menu; with
+ *  `reorder`, the grid's pick-up-and-drag handlers take over (they open the menu themselves). */
+export function SongCard({
+  s,
+  onMenu,
+  reorder,
+}: {
+  s: SongSummary;
+  onMenu?: () => void;
+  reorder?: { handlers: Record<string, unknown>; ref: (el: HTMLElement | null) => void; style: React.CSSProperties; lifted: boolean };
+}) {
   const named = namedForList(s.key, s.chords);
   const press = useLongPress(() => onMenu?.());
+  const extra = reorder
+    ? { ...reorder.handlers, ref: reorder.ref, style: reorder.style, draggable: false }
+    : onMenu
+      ? press
+      : {};
   return (
-    <Link to={`/song/${s.id}`} className="song-card" {...(onMenu ? press : {})}>
+    <Link to={`/song/${s.id}`} className={"song-card" + (reorder?.lifted ? " lifted" : "")} {...extra}>
       <Artwork title={s.title} youtubeId={s.youtubeId} rounded={10} />
       <div className="card-badges">
         {s.isDemo && <span className="badge">Example</span>}
@@ -74,7 +90,14 @@ function useSongs(scope: SongScope, q?: string) {
       list && (c.removed ? list.filter((s) => s.id !== id) : list.map((s) => (s.id === id && c.favorite !== undefined ? { ...s, favorite: c.favorite } : s))),
     );
   };
-  return { songs, error, change };
+  /** put these songs (all, or a filtered view of them) in this order, the rest staying put */
+  const arrange = (ids: string[]) =>
+    setSongs((list) => {
+      if (!list) return list;
+      const byId = new Map(list.map((s) => [s.id, s]));
+      return mergeOrder(list.map((s) => s.id), ids).map((id) => byId.get(id)!);
+    });
+  return { songs, error, change, arrange };
 }
 
 function SongGrid({
@@ -83,6 +106,7 @@ function SongGrid({
   empty,
   list,
   onChange,
+  onReorder,
 }: {
   songs: SongSummary[] | null;
   error: string | null;
@@ -90,15 +114,27 @@ function SongGrid({
   /** which list the cards are in, for their long-press menu */
   list: SongList;
   onChange: (id: string, c: SongChange) => void;
+  /** cards can be picked up and moved (My Library) */
+  onReorder?: (from: number, to: number) => void;
 }) {
   const [menu, setMenu] = useState<SongSummary | null>(null);
+  const grid = useGridReorder(
+    songs?.length ?? 0,
+    (from, to) => onReorder?.(from, to),
+    (i) => songs && setMenu(songs[i]),
+  );
   if (error) return <div className="notice error">{error}</div>;
   if (!songs) return <div className="empty">Loading…</div>;
   if (!songs.length) return <div className="empty">{empty}</div>;
   return (
     <div className="grid-cards">
-      {songs.map((s) => (
-        <SongCard key={s.id} s={s} onMenu={() => setMenu(s)} />
+      {songs.map((s, i) => (
+        <SongCard
+          key={s.id}
+          s={s}
+          onMenu={() => setMenu(s)}
+          reorder={onReorder ? { handlers: grid.handlers(i), ref: grid.ref(i), style: grid.style(i), lifted: grid.lifted === i } : undefined}
+        />
       ))}
       {menu && <SongMenu song={menu} list={list} onClose={() => setMenu(null)} onChange={(c) => onChange(menu.id, c)} />}
     </div>
@@ -184,9 +220,17 @@ export function DiscoverPage() {
 
 export function LibraryPage() {
   const [filter, setFilter] = useState<"library" | "mine">("library");
-  const { songs, error, change } = useSongs(filter);
+  const { songs, error, change, arrange } = useSongs(filter);
   const [onlySaved, setOnlySaved] = useState(false);
+  const toast = useToast();
   const shown = songs && onlySaved ? songs.filter((s) => s.favorite) : songs;
+  const reorder = (from: number, to: number) => {
+    if (!shown) return;
+    const ids = shown.map((s) => s.id);
+    ids.splice(to, 0, ...ids.splice(from, 1));
+    arrange(ids);
+    api.reorderLibrary(ids).catch((e) => toast(errorText(e), true));
+  };
   return (
     <div className="panel page-panel">
       <div className="page-head">
@@ -207,6 +251,7 @@ export function LibraryPage() {
         error={error}
         list="library"
         onChange={change}
+        onReorder={reorder}
         empty={
           <>
             Songs you add or save (♥) show up here. <Link to="/discover">Find something to play</Link> or{" "}

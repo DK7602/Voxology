@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { SongSummary } from "../../shared/api";
 import { api } from "../api";
 import { AddToPlaylist } from "./AddToPlaylist";
-import { IconClose, IconHeart, IconList, IconTrash } from "./Icons";
+import { IconClose, IconHeart, IconList } from "./Icons";
 import { Modal, errorText, useToast } from "./ui";
 
 /** where the card is: Home's "Keep playing" row, Discover, My Library, or elsewhere */
@@ -49,27 +49,32 @@ export function SongMenu({
         run: () => void api.hideSong(song.id, where, false).then(() => onChange({ removed: false }), (e) => toast(errorText(e), true)),
       });
     });
-  const setSaved = (on: boolean, removes: boolean) =>
+  const setSaved = (on: boolean) =>
     run(async () => {
       await api.favorite(song.id, on);
-      onChange(removes ? { removed: true, favorite: on } : { favorite: on });
+      onChange({ favorite: on });
       toast(on ? "Saved to your library" : "Removed from your library", false, {
         label: "Undo",
-        run: () =>
-          void api.favorite(song.id, !on).then(
-            () => onChange(removes ? { removed: false, favorite: !on } : { favorite: !on }),
-            (e) => toast(errorText(e), true),
-          ),
+        run: () => void api.favorite(song.id, !on).then(() => onChange({ favorite: !on }), (e) => toast(errorText(e), true)),
       });
     });
-  const deleteSong = () => {
-    if (!confirm(`Delete "${song.title || "Untitled"}"? This can't be undone.`)) return;
-    void run(async () => {
-      await api.deleteSong(song.id);
+  /** off the library, nothing deleted: a song you made is hidden from it, a saved song unsaved
+   *  (saving it again brings it back) */
+  const removeFromLibrary = () =>
+    run(async () => {
+      if (song.mine) await api.hideSong(song.id, "library");
+      if (song.favorite) await api.favorite(song.id, false);
       onChange({ removed: true });
-      toast("Song deleted");
+      toast("Removed from your library", false, {
+        label: "Undo",
+        run: () =>
+          void (async () => {
+            if (song.mine) await api.hideSong(song.id, "library", false);
+            if (song.favorite) await api.favorite(song.id, true);
+            onChange({ removed: false });
+          })().catch((e) => toast(errorText(e), true)),
+      });
     });
-  };
 
   return (
     <Modal title={song.title || "Untitled"} onClose={onClose}>
@@ -85,18 +90,13 @@ export function SongMenu({
             <IconClose size={20} /> Remove from Discover
           </button>
         )}
-        {list === "library" &&
-          (song.mine ? (
-            <button className="menu-item danger" onClick={deleteSong}>
-              <IconTrash size={20} /> Delete song
-            </button>
-          ) : (
-            <button className="menu-item" onClick={() => setSaved(false, true)}>
-              <IconClose size={20} /> Remove from library
-            </button>
-          ))}
+        {list === "library" && (
+          <button className="menu-item" onClick={removeFromLibrary}>
+            <IconClose size={20} /> Remove from library
+          </button>
+        )}
         {list !== "library" && (
-          <button className="menu-item" onClick={() => setSaved(!song.favorite, false)}>
+          <button className="menu-item" onClick={() => setSaved(!song.favorite)}>
             <IconHeart size={20} filled={song.favorite} /> {song.favorite ? "Remove from library" : "Save to library"}
           </button>
         )}

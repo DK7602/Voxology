@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import type { SongSummary } from "../shared/api";
 import { DEMO_SONGS, findDemo } from "../shared/demoSongs";
 import { enharmonicSpellings } from "../shared/music/chords";
+import { inOrder, mergeOrder } from "../shared/order";
 import type { SongDoc } from "../shared/types";
 import { distinctChords, validatePracticeSettings, validateSongDoc } from "../shared/validate";
 import { ownsAudio } from "./audio";
@@ -49,7 +50,26 @@ async function scopeLibrary(db: D1Database, userId: string): Promise<SongSummary
     `ORDER BY s.updated_at DESC LIMIT ${LIST_LIMIT}`,
   );
   const demos = (await demoSummaries(db, userId)).filter((s) => s.favorite);
-  return [...stored, ...demos];
+  return arrangeLibrary(db, userId, [...stored, ...demos]);
+}
+
+/** A library list as the player arranged it, without the songs they removed from it. */
+async function arrangeLibrary(db: D1Database, userId: string, list: SongSummary[]): Promise<SongSummary[]> {
+  const [hidden, order] = await Promise.all([hiddenIds(db, userId, "library"), libraryOrder(db, userId)]);
+  return inOrder(
+    list.filter((s) => !hidden.has(s.id)),
+    order,
+  );
+}
+
+async function libraryOrder(db: D1Database, userId: string): Promise<string[]> {
+  const row = await db.prepare("SELECT song_ids FROM library_order WHERE user_id = ?").bind(userId).first<{ song_ids: string }>();
+  try {
+    const ids = row ? JSON.parse(row.song_ids) : [];
+    return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 async function scopeSearch(db: D1Database, userId: string, rawQuery: string): Promise<SongSummary[]> {
@@ -114,7 +134,7 @@ songs.get("/", async (c) => {
       list = await scopeLibrary(db, user.id);
       break;
     case "mine":
-      list = await listSongs(db, user.id, "s.owner_id = ?1", `ORDER BY s.updated_at DESC LIMIT ${LIST_LIMIT}`);
+      list = await arrangeLibrary(db, user.id, await listSongs(db, user.id, "s.owner_id = ?1", `ORDER BY s.updated_at DESC LIMIT ${LIST_LIMIT}`));
       break;
     case "discover": {
       const hidden = await hiddenIds(db, user.id, "discover");
@@ -178,6 +198,27 @@ songs.post("/", async (c) => {
     .bind(id, user.id, doc.title, doc.artist, doc.genre, doc.key, doc.bpm, encodeChords(distinctChords(doc)), isPublic ? 1 : 0, JSON.stringify(doc), now, now)
     .run();
   return respondWithSong(c, user.id, id);
+});
+
+/** The library's new order, from any of its views: the songs given take the places they held. */
+songs.put("/library/order", async (c) => {
+  const user = currentUser(c);
+  const body = await readJsonObject(c);
+  const ids = body.songIds;
+  if (!Array.isArray(ids) || ids.length > 2 * LIST_LIMIT || ids.some((x) => typeof x !== "string" || x.length > 100)) {
+    throw new HttpError(400, "songIds must be a list of song ids");
+  }
+  const db = c.env.DB;
+  const full = (await scopeLibrary(db, user.id)).map((s) => s.id);
+  const order = mergeOrder(full, ids as string[]);
+  await db
+    .prepare(
+      `INSERT INTO library_order (user_id, song_ids, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT (user_id) DO UPDATE SET song_ids = excluded.song_ids, updated_at = excluded.updated_at`,
+    )
+    .bind(user.id, JSON.stringify(order), Date.now())
+    .run();
+  return c.json({ ok: true });
 });
 
 songs.get("/:id", async (c) => respondWithSong(c, currentUser(c).id, c.req.param("id")));
@@ -274,8 +315,9 @@ async function hiddenIds(db: D1Database, userId: string, list: HideList): Promis
   return new Set(results.map((r) => r.song_id));
 }
 
-/** The lists a song can be taken off: Home's "Keep playing" row, and Discover. */
-const HIDE_LISTS = ["recent", "discover"] as const;
+/** The lists a song can be taken off: Home's "Keep playing" row, Discover, and My Library (for a
+ *  song you made; saved songs are simply unsaved). Hiding never deletes anything. */
+const HIDE_LISTS = ["recent", "discover", "library"] as const;
 type HideList = (typeof HIDE_LISTS)[number];
 
 function hideList(c: Ctx): HideList {
@@ -310,9 +352,11 @@ songs.put("/:id/favorite", async (c) => {
   const user = currentUser(c);
   const id = c.req.param("id");
   if (!(await isVisible(c.env.DB, user.id, id))) throw notFound();
-  await c.env.DB.prepare("INSERT OR IGNORE INTO favorites (user_id, song_id, created_at) VALUES (?, ?, ?)")
-    .bind(user.id, id, Date.now())
-    .run();
+  // saving a song puts it back in the library if it had been removed from there
+  await c.env.DB.batch([
+    c.env.DB.prepare("INSERT OR IGNORE INTO favorites (user_id, song_id, created_at) VALUES (?, ?, ?)").bind(user.id, id, Date.now()),
+    c.env.DB.prepare("DELETE FROM hidden_songs WHERE user_id = ? AND song_id = ? AND list = 'library'").bind(user.id, id),
+  ]);
   return c.json({ favorite: true });
 });
 

@@ -79,8 +79,10 @@ export const api = {
   deleteSong: (id: string) => request<{ ok: true }>("DELETE", `/songs/${encodeURIComponent(id)}`),
   similar: (id: string) => request<{ songs: SongSummary[] }>("GET", `/songs/${encodeURIComponent(id)}/similar`),
   /** take a song off Home's "Keep playing" row or Discover (on = false puts it back) */
-  hideSong: (id: string, list: "recent" | "discover", on = true) =>
+  hideSong: (id: string, list: "recent" | "discover" | "library", on = true) =>
     request<{ hidden: boolean }>(on ? "PUT" : "DELETE", `/songs/${encodeURIComponent(id)}/hidden/${list}`),
+  /** the library's new order (from any of its views: these songs take the places they held) */
+  reorderLibrary: (songIds: string[]) => request<{ ok: true }>("PUT", "/songs/library/order", { songIds }),
   favorite: (id: string, on: boolean) =>
     request<{ favorite: boolean }>(on ? "PUT" : "DELETE", `/songs/${encodeURIComponent(id)}/favorite`),
   progress: (id: string) =>

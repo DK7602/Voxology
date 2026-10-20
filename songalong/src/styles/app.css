@@ -411,6 +411,10 @@
   -webkit-user-select: none;
   user-select: none;
 }
+/* My Library: a card picked up to move */
+.song-card.lifted {
+  cursor: grabbing;
+}
 .song-menu {
   display: grid;
   gap: 4px;

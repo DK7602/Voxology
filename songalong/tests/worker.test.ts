@@ -138,6 +138,35 @@ describe("songs, library and playlists", () => {
     expect((await client.call("PUT", "/api/songs/no-such-song/hidden/discover")).status).toBe(404);
   });
 
+  it("keeps the library in the player's order and hides (never deletes) a removed song", async () => {
+    const { env } = makeEnv();
+    const { client } = await signUp(env, "order@example.com");
+    const make = async (t: string) => (await client.call("POST", "/api/songs", { doc: song(t) })).body.song.id as string;
+    const a = await make("A");
+    const b = await make("B");
+    const cc = await make("C");
+    await client.call("PUT", "/api/songs/demo-porch-light/favorite");
+    const titles = async (scope: string) => (await client.call("GET", `/api/songs?scope=${scope}`)).body.songs.map((s: { title: string }) => s.title);
+    const first = await titles("library");
+    expect(first).toHaveLength(4);
+    // from the Made by me view: A before C; B and the saved demo keep their places
+    expect((await client.call("PUT", "/api/songs/library/order", { songIds: [a, cc] })).status).toBe(200);
+    const slots = first.map((t: string) => (t === "A" || t === "C" ? "*" : t));
+    const now = await titles("library");
+    expect(now.map((t: string) => (t === "A" || t === "C" ? "*" : t))).toEqual(slots);
+    expect(now.indexOf("A")).toBeLessThan(now.indexOf("C"));
+    expect(await titles("mine")).toEqual(now.filter((t: string) => t !== "Porch Light Letters"));
+    // removing B from the library hides it; the song itself stays
+    await client.call("PUT", `/api/songs/${b}/hidden/library`);
+    expect(await titles("library")).not.toContain("B");
+    expect(await titles("mine")).not.toContain("B");
+    expect((await client.call("GET", `/api/songs/${b}`)).status).toBe(200);
+    // saving it puts it back
+    await client.call("PUT", `/api/songs/${b}/favorite`);
+    expect(await titles("library")).toContain("B");
+    expect((await client.call("PUT", "/api/songs/library/order", { songIds: "nope" })).status).toBe(400);
+  });
+
   it("manages playlists", async () => {
     const { env } = makeEnv();
     const { client } = await signUp(env, "pl@example.com");
