@@ -28,14 +28,14 @@ function Loading() {
   );
 }
 
-/** "SongAlong has been updated": shown once a newer version is live than the one running. */
+/** "A new version is ready": shown once a newer version is live than the one running. */
 function UpdateBanner() {
   const ready = useNewVersion();
   const [later, setLater] = useState(false);
   if (!ready || later) return null;
   return (
     <div className="update-banner" role="status">
-      <span>SongAlong has been updated.</span>
+      <span>A new version is ready.</span>
       <button className="btn btn-sm btn-primary" onClick={() => location.reload()}>Reload</button>
       <button className="btn btn-sm" onClick={() => setLater(true)}>Later</button>
     </div>
