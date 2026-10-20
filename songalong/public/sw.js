@@ -45,8 +45,9 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-  // never: the API, the PC helper download, the service worker itself
-  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/helper/") || url.pathname === "/sw.js") return;
+  // never: the API, the PC helper download, the service worker itself, or a look at what is live
+  // (the app checking for a new version asks for no-store)
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/helper/") || url.pathname === "/sw.js" || req.cache === "no-store") return;
 
   // pages: the network first (new releases show at once), the saved copy when offline
   if (req.mode === "navigate") {

@@ -468,6 +468,27 @@ textarea {
 .toast.error {
   background: #6e1611;
 }
+.update-banner {
+  position: fixed;
+  z-index: 210;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--panel-solid);
+  color: var(--ink);
+  border: 1px solid var(--gold);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  font-size: 16px;
+}
 
 /* ---------- app shell ---------- */
 

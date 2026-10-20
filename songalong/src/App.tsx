@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -17,11 +18,26 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { ChordLibraryPage, ToolsPage, TunerPage } from "./pages/ToolsPages";
 import { PrintPage } from "./song/PrintPage";
 import { SongPage } from "./song/SongPage";
+import { useNewVersion } from "./update";
 
 function Loading() {
   return (
     <div className="boot" aria-busy="true">
       <img src="/brand/emblem.webp" alt="Loading SongAlong" width={110} height={110} />
+    </div>
+  );
+}
+
+/** "SongAlong has been updated": shown once a newer version is live than the one running. */
+function UpdateBanner() {
+  const ready = useNewVersion();
+  const [later, setLater] = useState(false);
+  if (!ready || later) return null;
+  return (
+    <div className="update-banner" role="status">
+      <span>SongAlong has been updated.</span>
+      <button className="btn btn-sm btn-primary" onClick={() => location.reload()}>Reload</button>
+      <button className="btn btn-sm" onClick={() => setLater(true)}>Later</button>
     </div>
   );
 }
@@ -36,6 +52,7 @@ function RequireUser({ shell = true }: { shell?: boolean }) {
   return (
     <div className="app">
       <NavBar />
+      <UpdateBanner />
       <main className="page">
         <ErrorBoundary resetKey={location.pathname}>
           <Outlet />
