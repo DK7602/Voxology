@@ -24,6 +24,30 @@
   .chips { position: absolute; left: 0; right: 0; top: 1130px; display: flex; justify-content: center; gap: 18px; }
   .footer { top: 1262px; }
   .rule { top: 1234px; }
+
+  /* square: everything a little smaller, no footer */
+  [data-format="square"] h1 { top: 128px; font-size: 76px; }
+  [data-format="square"] .sub { top: 296px; font-size: 27px; width: 780px; }
+  [data-format="square"] .strip { top: 392px; height: 86px; }
+  [data-format="square"] .strip img { height: 86px; left: -218px; }
+  [data-format="square"] .neck { top: 500px; height: 300px; }
+  [data-format="square"] .neck img { height: 348px; top: -48px; left: -271px; }
+  [data-format="square"] .legend { top: 836px; font-size: 25px; }
+  [data-format="square"] .chips { top: 912px; }
+  [data-format="square"] .footer, [data-format="square"] .rule { display: none; }
+
+  /* story: a bigger neck */
+  [data-format="story"] h1 { top: 360px; font-size: 100px; }
+  [data-format="story"] .sub { top: 590px; font-size: 33px; width: 936px; }
+  [data-format="story"] .strip { top: 760px; height: 125px; }
+  [data-format="story"] .strip img { height: 125px; left: -317px; }
+  [data-format="story"] .neck { top: 930px; height: 440px; }
+  [data-format="story"] .neck img { height: 509px; top: -70px; left: -396px; }
+  [data-format="story"] .legend { top: 1420px; font-size: 31px; }
+  [data-format="story"] .chips { top: 1500px; }
+  [data-format="story"] .chip { font-size: 30px; }
+  [data-format="story"] .rule { top: 1600px; }
+  [data-format="story"] .footer { top: 1626px; }
 </style></head>
 <body><div class="canvas">
   <div class="bg"></div><div class="shade"></div>

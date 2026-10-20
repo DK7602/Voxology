@@ -41,12 +41,16 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; width: 1080px; height: 1350px; overflow: hidden; background: #000; }
+/* post 1080 x 1350, square 1080 x 1080, story 1080 x 1920 */
+:root { --h: 1350px; }
+:root[data-format="square"] { --h: 1080px; }
+:root[data-format="story"] { --h: 1920px; }
+html, body { margin: 0; width: 1080px; height: var(--h); overflow: hidden; background: #000; }
 
 .canvas {
   position: relative;
   width: 1080px;
-  height: 1350px;
+  height: var(--h);
   overflow: hidden;
   font-family: "EB Garamond", Georgia, serif;
   color: var(--text);
@@ -115,3 +119,11 @@ h1 {
 
 :root[data-theme="light"] .brand .wm { filter: drop-shadow(0 1px 1px rgba(90, 60, 0, 0.45)); }
 :root[data-theme="light"] .brand .em { filter: drop-shadow(0 6px 12px rgba(90, 60, 0, 0.3)); }
+
+/* the logo sits lower in a story, below the app's own bar across the top */
+[data-format="square"] .brand { top: 48px; }
+[data-format="story"] .brand { top: 250px; }
+/* line breaks that only some shapes use */
+:root:not([data-format="story"]) .br-story { display: none; }
+[data-format="story"] .br-post { display: none; }
+[data-format="square"] .br-wide { display: none; }
