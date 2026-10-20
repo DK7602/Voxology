@@ -158,6 +158,7 @@ export class PlayerEngine {
       // start on a whole beat so the count lines up with the music
       const start = Math.floor(this.lastBeat + 1e-6);
       this.seekBeat(start);
+      this.media.prepare?.();
       const beats = bars * (this.timeline.doc.beatsPerBar || 4);
       const spb = this.timeline.secondsPerBeat(Math.max(0, start)) / this.state.speed;
       const ctx = audioContext();

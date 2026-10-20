@@ -33,24 +33,39 @@ export interface SpeechAi {
 
 const MODEL = "@cf/openai/whisper-large-v3-turbo";
 
-type WhisperResult = {
-  segments?: { start: number; end: number; text: string; words?: { word: string; start: number; end: number }[] }[];
-  text?: string;
+type WhisperSegment = {
+  start: number;
+  end: number;
+  text: string;
+  words?: { word: string; start: number; end: number }[];
+  no_speech_prob?: number;
+  avg_logprob?: number;
+  compression_ratio?: number;
 };
+type WhisperResult = { segments?: WhisperSegment[]; text?: string };
 
-/** Speech recognition for one piece of the song. The voice filter (VAD) keeps the model from
- *  inventing words in instrumental parts, but it is made for speech and can drop singing over
- *  instruments; when it leaves nothing, the piece is heard again without it. */
+/** A phrase the model most likely made up over the music: it thinks there was no speech and isn't
+ *  sure of the words, or the words keep repeating themselves. */
+function madeUp(s: WhisperSegment): boolean {
+  if ((s.compression_ratio ?? 0) > 2.4) return true;
+  return (s.no_speech_prob ?? 0) > 0.6 && (s.avg_logprob ?? 0) < -1;
+}
+
+/** Speech recognition for one piece of the song. The model's voice filter (VAD) is left off: it
+ *  is made for speech and drops most singing over instruments. What the model makes up over the
+ *  music instead is left out by its own confidence. */
 export async function transcribe(ai: SpeechAi, chunk: PrepChunk): Promise<Segment[]> {
-  const run = async (vad: boolean): Promise<Segment[]> => {
+  try {
     const res = (await ai.run(MODEL, {
       audio: chunk.mp3,
       task: "transcribe",
-      vad_filter: vad,
+      vad_filter: false,
       condition_on_previous_text: false,
     })) as WhisperResult;
-    const segs = (res.segments ?? [])
-      .filter((s) => typeof s.text === "string" && s.text.trim())
+    // no segment timing but some words: one segment for the piece
+    if (!res.segments?.length) return res.text?.trim() ? [{ start: chunk.start, end: chunk.start + 30, text: res.text.trim() }] : [];
+    return res.segments
+      .filter((s) => typeof s.text === "string" && s.text.trim() && !madeUp(s))
       .map((s) => {
         const seg: Segment = { start: chunk.start + s.start, end: chunk.start + s.end, text: s.text.trim() };
         const timed = (s.words ?? []).filter((w) => typeof w.word === "string" && Number.isFinite(w.start));
@@ -63,13 +78,6 @@ export async function transcribe(ai: SpeechAi, chunk: PrepChunk): Promise<Segmen
         }
         return seg;
       });
-    // no segment timing but some words: one segment for the piece
-    if (!segs.length && res.text?.trim()) return [{ start: chunk.start, end: chunk.start + 30, text: res.text.trim() }];
-    return segs;
-  };
-  try {
-    const heard = await run(true);
-    return heard.length ? heard : await run(false);
   } catch (e) {
     console.warn("speech recognition failed for a chunk", (e as Error).message);
     return [];

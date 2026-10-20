@@ -199,16 +199,24 @@ describe("lyrics timing", () => {
     expect(out.map((l) => l.text.split(" ")[1])).toEqual(["0", "1", "6", "7"]);
     expect(out.map((l) => l.time)).toEqual([5, 9, 11, 15]);
   });
-  it("hears singing the voice filter drops", async () => {
-    const calls: boolean[] = [];
+  it("listens without the voice filter, leaving out what the model makes up", async () => {
+    const calls: unknown[] = [];
     const ai = {
       async run(_m: string, input: Record<string, unknown>) {
-        calls.push(input.vad_filter as boolean);
-        return input.vad_filter ? { segments: [] } : { segments: [{ start: 1, end: 3, text: LINES[0] }] };
+        calls.push(input.vad_filter);
+        return {
+          segments: [
+            { start: 1, end: 3, text: LINES[0], no_speech_prob: 0.2, avg_logprob: -0.4, compression_ratio: 1.3 },
+            // over the music: "no speech" and unsure
+            { start: 5, end: 8, text: "Thanks for watching", no_speech_prob: 0.8, avg_logprob: -1.3, compression_ratio: 1.1 },
+            // a loop of the same words
+            { start: 9, end: 20, text: "la la la la la la la la la la la la", no_speech_prob: 0.1, avg_logprob: -0.3, compression_ratio: 3.1 },
+          ],
+        };
       },
     };
     const segs = await transcribe(ai, { start: 30, mp3: "AAAA" });
-    expect(calls).toEqual([true, false]);
+    expect(calls).toEqual([false]);
     expect(segs).toEqual([{ start: 31, end: 33, text: LINES[0] }]);
   });
   it("tries LRCLIB again when it is busy", async () => {

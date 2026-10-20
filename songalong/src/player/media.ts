@@ -13,6 +13,8 @@ export interface MediaAdapter {
   duration(): number | null;
   /** speeds this source supports (null = any 0.5..1.5) */
   rates(): number[] | null;
+  /** about to play (the count-in has started): load what is needed to start at once */
+  prepare?(): void;
   destroy(): void;
   onEnded?: () => void;
   /** the source started / stopped on its own (e.g. the YouTube player's own controls) */
@@ -157,6 +159,8 @@ interface YTPlayer {
   getPlayerState(): number;
   setPlaybackRate(r: number): void;
   getAvailablePlaybackRates(): number[];
+  mute(): void;
+  unMute(): void;
   destroy(): void;
 }
 declare global {
@@ -186,6 +190,8 @@ function loadYouTubeApi(): Promise<void> {
 }
 
 export class YouTubeMedia implements MediaAdapter {
+  /** how long to wait for silent playing to start before giving up on it */
+  static primeWaitMs = 3000;
   readonly kind = "youtube" as const;
   /** set only once YouTube says the player is ready: before that its methods don't exist yet */
   private player: YTPlayer | null = null;
@@ -197,6 +203,10 @@ export class YouTubeMedia implements MediaAdapter {
   /** YouTube starts a video that hasn't played yet when it is seeked, so until then a seek is
    *  only remembered, and made when playing starts */
   private pendingSeek: number | null = null;
+  /** playing silently once to load the video (see prime) */
+  private priming = false;
+  private primeAt = 0;
+  private primeTimer: ReturnType<typeof setTimeout> | undefined;
   readonly ready: Promise<void>;
   onEnded?: () => void;
   onExternalPlayState?: (playing: boolean) => void;
@@ -226,10 +236,21 @@ export class YouTubeMedia implements MediaAdapter {
                 }
                 this.player = p;
                 if (this.rate !== 1) p.setPlaybackRate(this.rate);
+                this.prime(p);
                 resolve();
               },
               onStateChange: (e: { data: number }) => {
                 if (this.destroyed) return;
+                if (this.priming) {
+                  // loaded: wait, paused, at the app's spot
+                  if (e.data === 1 && !this.wantPlay) {
+                    this.endPrime();
+                    safely(() => p.pauseVideo());
+                    if (this.pendingSeek === this.primeAt) this.pendingSeek = null;
+                    else this.seekPending();
+                  }
+                  return;
+                }
                 // 1 playing, 2 paused, 0 ended
                 if (e.data === 0) this.onEnded?.();
                 // started from the video itself: go to where the app is
@@ -245,6 +266,39 @@ export class YouTubeMedia implements MediaAdapter {
         }),
     );
     this.ready.catch((e) => this.onError?.(String(e?.message ?? e)));
+  }
+  /**
+   * YouTube loads a video only once it plays, and a video that hasn't played yet starts when it
+   * is moved. So it is started silently at the app's spot and paused straight away: from then on
+   * it waits there, loaded, and starts the moment it is asked to (no wait after the count-in).
+   * Done when the song opens, and again when Play is pressed (the count-in gives it time) in
+   * case the browser didn't allow it unasked. Until it has played, the spot is kept for Play.
+   */
+  private prime(p: YTPlayer) {
+    if (this.wantPlay || this.priming) return;
+    const state = p.getPlayerState();
+    if (state === 1 || state === 2 || state === 3) return; // already loaded
+    this.priming = true;
+    this.primeAt = Math.max(0, this.pendingSeek ?? 0);
+    this.pendingSeek = this.primeAt;
+    safely(() => {
+      p.mute();
+      p.seekTo(this.primeAt, true); // starts it, there
+    });
+    this.primeTimer = setTimeout(() => {
+      if (!this.priming) return;
+      this.endPrime();
+      if (!this.wantPlay) safely(() => p.pauseVideo());
+    }, YouTubeMedia.primeWaitMs);
+  }
+  prepare() {
+    if (this.player && !this.destroyed) this.prime(this.player);
+  }
+  private endPrime() {
+    if (!this.priming) return;
+    this.priming = false;
+    clearTimeout(this.primeTimer);
+    safely(() => this.player?.unMute());
   }
   private playing() {
     return this.player?.getPlayerState() === 1;
@@ -264,6 +318,7 @@ export class YouTubeMedia implements MediaAdapter {
     this.wantPlay = true;
     await this.ready;
     if (this.destroyed || !this.wantPlay) return;
+    this.endPrime();
     this.seekPending();
     this.player?.playVideo();
   }
@@ -302,6 +357,7 @@ export class YouTubeMedia implements MediaAdapter {
   destroy() {
     this.destroyed = true;
     this.wantPlay = false;
+    clearTimeout(this.primeTimer);
     const p = this.player;
     this.player = null;
     if (p) {
