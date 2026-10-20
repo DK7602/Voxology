@@ -775,6 +775,61 @@
   color: var(--on-green);
 }
 
+/* ---------- manual (settings) ---------- */
+.manual-topic {
+  border-top: 1px solid var(--inset-border);
+}
+.manual-topic:last-child {
+  border-bottom: 1px solid var(--inset-border);
+}
+.manual-topic summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 2px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 18px;
+}
+.manual-topic summary::-webkit-details-marker {
+  display: none;
+}
+.manual-topic summary::after {
+  content: "+";
+  font-size: 22px;
+  line-height: 1;
+  color: var(--accent-text);
+}
+.manual-topic[open] summary::after {
+  content: "−";
+}
+.manual-body {
+  padding: 0 2px 14px;
+  line-height: 1.5;
+}
+.manual-body p + p,
+.manual-body ul + p,
+.manual-body p + ul {
+  margin-top: 8px;
+}
+.manual-body ul {
+  margin: 0;
+  padding-left: 20px;
+}
+.manual-body li + li {
+  margin-top: 6px;
+}
+.manual-body b {
+  font-weight: 600;
+}
+@media (max-width: 560px) {
+  .setting-row {
+    flex-wrap: wrap;
+  }
+}
+
 /* ---------- search any song ---------- */
 .song-search {
   display: flex;

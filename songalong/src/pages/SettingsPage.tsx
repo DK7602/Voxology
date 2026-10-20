@@ -9,6 +9,7 @@ import { HelperSettings } from "./HelperSettings";
 import { InstallButton, IosInstallSteps } from "../components/InstallButton";
 import { useInstall } from "../install";
 import { clampSync, savedSync, saveSync, syncLabel } from "../player/sync";
+import { Manual } from "./Manual";
 
 export function SettingsPage() {
   const user = useUser();
@@ -62,6 +63,8 @@ export function SettingsPage() {
       <div className="page-head">
         <h1>Settings</h1>
       </div>
+
+      <Manual />
 
       <section className="settings-section">
         <h2>Look</h2>
