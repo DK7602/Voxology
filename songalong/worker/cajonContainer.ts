@@ -32,6 +32,7 @@ export class CajonContainer extends Container<Env> {
     const db = this.env.DB;
     const job = await nextCajonJob(db);
     if (job) {
+      // (when the service is down, runCajonJob moves the whole queue on, and the plan below follows)
       await runCajonJob(db, job, (videoId) =>
         this.containerFetch("http://cajon/cajon", {
           method: "POST",

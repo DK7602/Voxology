@@ -3,7 +3,7 @@ import { PREP_ENGINE, type PrepAnalysis, type PrepEvent, type PrepareEvent } fro
 import { cleanTitle, guessSongName, nameCandidates, tidyTitle } from "../shared/songName";
 import { alignVersion, anchorChain, estimateOffset, matchInOrder, oneOffsetFits, steadyChain, timeWords, transcribe, versionLines, warp, type Segment } from "../worker/align";
 import { believableTiming, findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
-import { nextCajonJob, nextCajonTime, retryDelay, runCajonJob } from "../worker/cajon";
+import { nextCajonJob, nextCajonTime, retryDelay, runCajonJob, SERVICE_WAIT_MS } from "../worker/cajon";
 import { isoDuration } from "../worker/youtube";
 import { Client, makeEnv, signUp } from "./helpers/workerEnv";
 
@@ -501,10 +501,14 @@ describe("preparing a song", () => {
     expect(await nextCajonTime(env.DB)).toBe(now + retryDelay(1));
     const again = (await nextCajonJob(env.DB, now + retryDelay(1)))!;
     expect(again.tries).toBe(1);
-    // a container that falls over counts as a failure, and so is tried again too
-    expect(await runCajonJob(env.DB, again, async () => new Response("no", { status: 500 }), () => now)).toBe("waiting");
+    // a service that doesn't answer (starting up, rolling out) is no song's fault: no try used,
+    // and the whole queue waits a while
+    expect(await runCajonJob(env.DB, again, async () => new Response("Container not ready", { status: 500 }), () => now)).toBe("down");
+    const row = await env.DB.prepare("SELECT cajon, cajon_tries, cajon_error, cajon_at FROM yt_songs WHERE video_id = 'drumsong002'").first();
+    expect(row).toMatchObject({ cajon: "queued", cajon_tries: 1, cajon_error: "the cajon service answered 500: Container not ready", cajon_at: now + SERVICE_WAIT_MS });
+    expect(await nextCajonJob(env.DB, now + SERVICE_WAIT_MS - 1)).toBeNull();
     // a video that can't be used is given up on at once
-    const last = (await nextCajonJob(env.DB, now + retryDelay(3)))!;
+    const last = (await nextCajonJob(env.DB, now + SERVICE_WAIT_MS))!;
     expect(await runCajonJob(env.DB, last, async () => ndjsonResponse([{ type: "error", code: "unavailable", message: "Removed" }]))).toBe("failed");
     expect(await nextCajonTime(env.DB)).toBeNull();
   });

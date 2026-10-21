@@ -17,7 +17,10 @@ export type CajonStatus = "queued" | "working" | "waiting" | "ready" | "failed";
 const STUCK_MS = 20 * 60_000;
 /** How many times YouTube may refuse before a song is given up on (spread over about 4 days). */
 const MAX_BLOCKED = 8;
-const MAX_FAILED = 3;
+const MAX_FAILED = 4;
+/** When the cajon service itself doesn't answer (starting up, or a new version rolling out), the
+ *  whole queue waits this long; that is no song's fault, so it costs no tries. */
+export const SERVICE_WAIT_MS = 10 * 60_000;
 
 /** Waits before trying again: 15 min, 30 min, 1 h ... up to 12 h. */
 export function retryDelay(tries: number): number {
@@ -119,17 +122,39 @@ function validOnsets(o: unknown): o is { kick: number[]; snare: number[]; hat: n
 
 /**
  * Does one job: asks the container for the song's drums (`call` sends the request) and keeps
- * them with the song. A refusal by YouTube, or a failure, is tried again later.
+ * them with the song. A refusal by YouTube, or a failure, is tried again later. "down": the
+ * service didn't answer at all, and the queue waits a while.
  */
-export async function runCajonJob(db: D1Database, job: Job, call: (videoId: string) => Promise<Response>, now = () => Date.now()): Promise<CajonStatus> {
+export async function runCajonJob(
+  db: D1Database,
+  job: Job,
+  call: (videoId: string) => Promise<Response>,
+  now = () => Date.now(),
+): Promise<CajonStatus | "down"> {
   await db.prepare("UPDATE yt_songs SET cajon = 'working', cajon_at = ? WHERE video_id = ?").bind(now(), job.videoId).run();
   let result: CajonEvent | null = null;
+  let answered = false;
   try {
     const res = await call(job.videoId);
-    if (!res.ok || !res.body) throw new Error(`the cajon service answered ${res.status}`);
-    for await (const e of lines(res.body)) if (e.type !== "progress") result = e;
+    if (!res.ok || !res.body) {
+      const detail = (await res.text().catch(() => "")).replace(/\s+/g, " ").trim().slice(0, 200);
+      throw new Error(`the cajon service answered ${res.status}${detail ? `: ${detail}` : ""}`);
+    }
+    for await (const e of lines(res.body)) {
+      answered = true;
+      if (e.type !== "progress") result = e;
+    }
   } catch (e) {
     result = { type: "error", code: "failed", message: (e as Error).message.slice(0, 300) };
+  }
+  if (!answered) {
+    // back in the queue, and the whole queue waits
+    const at = now() + SERVICE_WAIT_MS;
+    await db.batch([
+      db.prepare("UPDATE yt_songs SET cajon = 'queued', cajon_error = ?, cajon_at = ? WHERE video_id = ?").bind(result?.type === "error" ? result.message : "", at, job.videoId),
+      db.prepare("UPDATE yt_songs SET cajon_at = ? WHERE cajon IN ('queued', 'waiting') AND cajon_at < ?").bind(at, at),
+    ]);
+    return "down";
   }
 
   if (result?.type === "result" && validOnsets(result.onsets)) {
