@@ -152,6 +152,12 @@ const TOPICS: { title: string; body: ReactNode }[] = [
             bass). Every bar of that groove changes. Your fixes are kept for you on that song, Easy and Groove apart; <b>Back to the groove as found</b> undoes them.
           </li>
           <li>
+            <b>One bar only</b>: hold a beat on the strip (or double-click it on a computer), or press <b>Fix this bar</b> on the cajon. The song pauses
+            on that bar and it opens to fix: changes go to <b>just this bar</b> unless you pick every bar of its groove, and the arrows step to the bars
+            either side. You can add strokes where the drums rest too. A bar you changed has a gold dot on the strip; <b>Back to groove A</b> puts it
+            back.
+          </li>
+          <li>
             Where the drums stop, the strip says <b>no drums</b>: rest.
           </li>
         </ul>

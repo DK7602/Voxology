@@ -88,6 +88,8 @@ export interface PracticeSettings {
   cajonLevel?: "easy" | "groove";
   /** the player's fixes to the song's cajon grooves, by level (see shared/music/cajon.ts) */
   cajonFixes?: { easy?: Record<string, string>; groove?: Record<string, string> };
+  /** the player's changes to single bars of the cajon part, by level and bar */
+  cajonBarFixes?: { easy?: Record<string, { found: string; bar: string }>; groove?: Record<string, { found: string; bar: string }> };
   transpose?: number;
   capo?: number;
   instrument?: Instrument;

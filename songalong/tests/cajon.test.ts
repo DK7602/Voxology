@@ -9,6 +9,7 @@ import {
   hands,
   noDrums,
   onTheBeats,
+  setBarFix,
   setFix,
   tapStroke,
   validDrums,
@@ -120,6 +121,40 @@ describe("drums on the beat grid", () => {
     // kept with the player's settings
     const fixes = { groove: { [found.join("")]: fixed.join("") } };
     expect(validatePracticeSettings({ cajonFixes: fixes })).toEqual({ cajonFixes: fixes });
+  });
+
+  it("changes just one bar when the player fixes a bar, on top of their groove fixes", () => {
+    // a phrase of rest (4 bars), then groove A for 4 bars
+    const part = cajonPart(song("0".repeat(64) + ROCK.repeat(4), 8), "groove");
+    expect(part.barGroove.map((g) => part.grooves[g].name).join(" ")).toBe("Rest Rest Rest Rest A A A A");
+    const a = part.grooves.find((g) => g.name === "A")!;
+    // a double hit on the 1 of bar 5 only
+    const bar5 = [...a.bar] as Stroke[];
+    bar5[0] = "X";
+    let bars = setBarFix(undefined, 4, a.bar, a.bar, bar5);
+    // and strokes in the second rest bar
+    const rest = part.grooves[part.barGroove[1]];
+    bars = setBarFix(bars, 1, rest.bar, rest.bar, [..."........B.......".slice(0, 16)] as Stroke[]);
+    const mine = withFixes(part, undefined, bars);
+    const playing = mine.barGroove.map((g) => mine.grooves[g].bar.join(""));
+    expect(playing[4]).toBe("X.t.S.t.B.B.S.t.");
+    expect(playing[5]).toBe("B.t.S.t.B.B.S.t.");
+    expect(playing[1]).toBe("........B.......");
+    expect(mine.grooves[mine.barGroove[4]].barOf).toBe(part.barGroove[4]);
+    expect(mine.grooves[mine.barGroove[1]].rest).toBe(false);
+    // the groove fixed everywhere still leaves bar 5 its own change
+    const fixed = [...a.bar] as Stroke[];
+    fixed[14] = "S";
+    const both = withFixes(part, setFix(undefined, a.bar, fixed), bars);
+    expect(both.barGroove.map((g) => both.grooves[g].bar.join(""))[5]).toBe("B.t.S.t.B.B.S.S.");
+    expect(both.barGroove.map((g) => both.grooves[g].bar.join(""))[4]).toBe("X.t.S.t.B.B.S.t.");
+    // back to its groove: the change goes
+    expect(setBarFix(bars, 4, a.bar, a.bar, a.bar)).not.toHaveProperty("4");
+    // a change made when the bar played another groove does nothing
+    expect(withFixes(part, undefined, { 4: { found: "S...............", bar: "X..............." } })).toEqual({ ...part, grooves: part.grooves });
+    // kept with the player's settings
+    expect(validatePracticeSettings({ cajonBarFixes: { groove: bars } })).toEqual({ cajonBarFixes: { groove: bars } });
+    expect(validatePracticeSettings({ cajonBarFixes: { groove: { x: { found: "B", bar: "S" }, 3: { found: "B.", bar: "S" } } } })).toEqual({});
   });
 
   it("keeps the level the player picked and their fixes, and lets go of the old saved level", () => {

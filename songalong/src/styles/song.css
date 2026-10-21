@@ -1196,6 +1196,7 @@
 }
 /* the groove strip: a column per beat (all the same width, so it moves at the song's pace) */
 .gs-beat {
+  -webkit-touch-callout: none;
   flex: none;
   height: 70px;
   display: grid;
@@ -1423,6 +1424,27 @@
 .step-grid.editing .sg-cell:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 1px;
+}
+.fixer-scope {
+  margin-bottom: 4px;
+}
+.lead-head .fix-bar {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* a bar the player changed */
+.gs-bar.own::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  pointer-events: none;
 }
 .fixer-foot {
   display: flex;

@@ -5,7 +5,7 @@ import type { Instrument, PracticeSettings } from "../../shared/types";
 import { parseChord } from "../../shared/music/chords";
 import { bestCapo as findBestCapo } from "../../shared/music/capo";
 import { isFretted } from "../../shared/music/voicings";
-import { cajonStrokes, DEFAULT_LEVEL, setFix, type CajonLevel, type Stroke } from "../../shared/music/cajon";
+import { cajonStrokes, DEFAULT_LEVEL, setBarFix, setFix, type CajonLevel, type Stroke } from "../../shared/music/cajon";
 import { prettyAccidentals } from "../../shared/music/notes";
 import { api } from "../api";
 import { useUser } from "../auth";
@@ -42,7 +42,7 @@ import { SummaryView } from "./SummaryView";
 import { Transport } from "./Transport";
 import { voicingFor } from "./voicing";
 import { LeadNeck } from "./LeadNeck";
-import { CajonPanel, GrooveCards, GrooveStrip, useCajonPart } from "./Cajon";
+import { BarFixer, CajonPanel, GrooveCards, GrooveStrip, useCajonPart } from "./Cajon";
 import { noteMidi } from "../../shared/music/chords";
 import type { Part } from "../player/engine";
 
@@ -127,7 +127,24 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
     (found: readonly Stroke[], bar: readonly Stroke[]) => setCajonFixes((f) => ({ ...f, [cajonLevel]: setFix(f[cajonLevel], found, bar) })),
     [cajonLevel],
   );
-  const cajon = useCajonPart(doc, cajonLevel, cajonFixes[cajonLevel]);
+  // and to single bars
+  const [cajonBarFixes, setCajonBarFixes] = useState<NonNullable<PracticeSettings["cajonBarFixes"]>>(() => saved.cajonBarFixes ?? {});
+  const fixBar = useCallback(
+    (bar: number, found: readonly Stroke[], base: readonly Stroke[], next: readonly Stroke[]) =>
+      setCajonBarFixes((f) => ({ ...f, [cajonLevel]: setBarFix(f[cajonLevel], bar, found, base, next) })),
+    [cajonLevel],
+  );
+  const cajon = useCajonPart(doc, cajonLevel, cajonFixes[cajonLevel], cajonBarFixes[cajonLevel]);
+  // the bar being fixed (the song waits there meanwhile)
+  const [fixingBar, setFixingBar] = useState<number | null>(null);
+  const openBarFixer = useCallback(
+    (bar: number) => {
+      engine.pause();
+      engine.seekBeat(bar * cajon.beatsPerBar);
+      setFixingBar(bar);
+    },
+    [engine, cajon.beatsPerBar],
+  );
   useEffect(() => engine.setCajon(cajonStrokes(cajon)), [engine, cajon]);
 
   // a song whose cajon part is still being worked out: look again now and then
@@ -190,6 +207,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
               part,
               cajonLevel: cajonPick,
               cajonFixes,
+              cajonBarFixes,
               transpose: settings.transpose,
               capo: settings.capo,
               instrument: settings.instrument,
@@ -202,9 +220,9 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
           .catch(() => {});
       }, played ? 0 : 1200);
     },
-    [engine, record.id, settings, part, cajonPick, cajonFixes],
+    [engine, record.id, settings, part, cajonPick, cajonFixes, cajonBarFixes],
   );
-  useEffect(() => persist(), [settings, part, cajonPick, cajonFixes, persist]);
+  useEffect(() => persist(), [settings, part, cajonPick, cajonFixes, cajonBarFixes, persist]);
   useEffect(
     () =>
       engine.subscribe(() => {
@@ -390,7 +408,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
 
         {mode === "animated" ? (
           <>
-            {isCajon ? <GrooveStrip engine={engine} part={cajon} /> : <ChordStrip key={part} engine={engine} view={view} lead={part === "lead"} />}
+            {isCajon ? <GrooveStrip engine={engine} part={cajon} onFixBar={openBarFixer} /> : <ChordStrip key={part} engine={engine} view={view} lead={part === "lead"} />}
             <LyricsLane engine={engine} />
           </>
         ) : (
@@ -427,7 +445,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
 
         {isCajon ? (
           <>
-            <CajonPanel engine={engine} part={cajon} status={record.cajon} />
+            <CajonPanel engine={engine} part={cajon} status={record.cajon} onFixBar={openBarFixer} />
             <GrooveCards engine={engine} part={cajon} bpm={doc.bpm} onFix={fixGroove} />
           </>
         ) : part === "lead" ? (
@@ -493,6 +511,17 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
         </Modal>
       )}
       {modal === "playlist" && <AddToPlaylist songId={record.id} onClose={() => setModal(null)} />}
+      {isCajon && fixingBar !== null && fixingBar < cajon.barGroove.length && (
+        <BarFixer
+          part={cajon}
+          bar={fixingBar}
+          bpm={doc.bpm}
+          onFixGroove={fixGroove}
+          onFixBar={fixBar}
+          onBar={openBarFixer}
+          onClose={() => setFixingBar(null)}
+        />
+      )}
     </div>
   );
 }

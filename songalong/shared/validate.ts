@@ -11,7 +11,7 @@ import type {
   SongDoc,
   UserSettings,
 } from "./types";
-import { validDrums, validFixes } from "./music/cajon";
+import { validBarFixes, validDrums, validFixes } from "./music/cajon";
 import { wordStarts } from "./timeline";
 
 export class ValidationError extends Error {
@@ -262,6 +262,8 @@ export function validatePracticeSettings(input: unknown): PracticeSettings {
   if (input.cajonLevel === "easy" || input.cajonLevel === "groove") out.cajonLevel = input.cajonLevel;
   const fixes = validFixes(input.cajonFixes);
   if (fixes) out.cajonFixes = fixes;
+  const barFixes = validBarFixes(input.cajonBarFixes);
+  if (barFixes) out.cajonBarFixes = barFixes;
   if (input.transpose != null) out.transpose = optNumber(input, "transpose", "Transpose", 0, -12, 12, true);
   if (input.capo != null) out.capo = optNumber(input, "capo", "Capo", 0, 0, 12, true);
   const instrument = optInstrument(input, "instrument");

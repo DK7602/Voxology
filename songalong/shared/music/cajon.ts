@@ -153,6 +153,8 @@ export interface Groove {
   rest: boolean;
   /** the bar as found, when the player has fixed it (see withFixes) */
   found?: Stroke[];
+  /** a single bar the player changed: the index of the groove it changes (see withFixes) */
+  barOf?: number;
 }
 
 export interface CajonPart {
@@ -297,14 +299,48 @@ export const DEFAULT_LEVEL: CajonLevel = "easy";
  *  the groove to play instead, wherever it comes in the song. */
 export type CajonFixes = Record<string, string>;
 
-/** The part with the player's fixes in place (a fix whose groove is no longer found does nothing). */
-export function withFixes(part: CajonPart, fixes: CajonFixes | undefined): CajonPart {
-  if (!fixes || !Object.keys(fixes).length) return part;
+/** A player's changes to single bars at one level, by bar (from 0): what the bar's groove was as
+ *  found (so a change can't land on another bar if the song's beats are ever found again) and the
+ *  bar to play. */
+export type CajonBarFixes = Record<string, { found: string; bar: string }>;
+
+/**
+ * The part with the player's fixes in place: their grooves wherever those come, then their single
+ * bars, each a groove of its own that knows the groove it changes (`barOf`). A fix whose groove
+ * is no longer found there does nothing.
+ */
+export function withFixes(part: CajonPart, fixes: CajonFixes | undefined, barFixes?: CajonBarFixes): CajonPart {
+  const hasFixes = !!fixes && Object.keys(fixes).length > 0;
+  const hasBars = !!barFixes && Object.keys(barFixes).length > 0;
+  if (!hasFixes && !hasBars) return part;
   const grooves = part.grooves.map((g) => {
-    const fix = g.rest ? undefined : fixes[g.bar.join("")];
+    const fix = g.rest || !fixes ? undefined : fixes[g.bar.join("")];
     return fix && fix.length === g.bar.length ? { ...g, bar: [...fix] as Stroke[], found: g.bar } : g;
   });
-  return { ...part, grooves };
+  const barGroove = [...part.barGroove];
+  for (const [key, { found, bar }] of Object.entries(barFixes ?? {})) {
+    const b = Number(key);
+    const of = barGroove[b];
+    const g = grooves[of];
+    if (!g || g.barOf !== undefined || (g.found ?? g.bar).join("") !== found || bar.length !== g.bar.length) continue;
+    barGroove[b] = grooves.push({ name: g.name, bar: [...bar] as Stroke[], rest: false, barOf: of }) - 1;
+  }
+  return { ...part, grooves, barGroove };
+}
+
+/** The bar fixes after the player changes bar `bar` (its groove `base`, as found `found`) to
+ *  `next`; back to its groove, the change goes. */
+export function setBarFix(
+  fixes: CajonBarFixes | undefined,
+  bar: number,
+  found: readonly Stroke[],
+  base: readonly Stroke[],
+  next: readonly Stroke[],
+): CajonBarFixes {
+  const out = { ...fixes };
+  if (next.join("") === base.join("")) delete out[bar];
+  else out[bar] = { found: found.join(""), bar: next.join("") };
+  return out;
 }
 
 /** The fixes after the player changes a groove (`found` as found) to `bar`; back to how it was
@@ -317,9 +353,12 @@ export function setFix(fixes: CajonFixes | undefined, found: readonly Stroke[], 
   return out;
 }
 
-/** The most fixes kept per level, and the longest bar (12 beats of 16ths). */
+/** The most fixes kept per level (grooves, and single bars), and the longest bar (12 beats of 16ths). */
 export const MAX_FIXES = 64;
+/** (150 a level keeps saved settings well under the 64 KB a request may be, even in 12/8) */
+export const MAX_BAR_FIXES = 150;
 const MAX_BAR = 48;
+const BAR = new RegExp(`^[BStX.]{1,${MAX_BAR}}$`);
 
 /** Checks a player's fixes from their saved settings: strokes only, a bar for a bar. */
 export function validFixes(input: unknown): Partial<Record<CajonLevel, CajonFixes>> | undefined {
@@ -330,8 +369,27 @@ export function validFixes(input: unknown): Partial<Record<CajonLevel, CajonFixe
     if (!fixes || typeof fixes !== "object") continue;
     const kept: CajonFixes = {};
     for (const [k, v] of Object.entries(fixes).slice(0, MAX_FIXES)) {
-      const bar = new RegExp(`^[BStX.]{1,${MAX_BAR}}$`);
-      if (typeof v === "string" && bar.test(k) && bar.test(v) && k.length === v.length) kept[k] = v;
+      if (typeof v === "string" && BAR.test(k) && BAR.test(v) && k.length === v.length) kept[k] = v;
+    }
+    if (Object.keys(kept).length) out[level] = kept;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Checks a player's single-bar changes from their saved settings. */
+export function validBarFixes(input: unknown): Partial<Record<CajonLevel, CajonBarFixes>> | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const out: Partial<Record<CajonLevel, CajonBarFixes>> = {};
+  for (const level of ["easy", "groove"] as const) {
+    const fixes = (input as Record<string, unknown>)[level];
+    if (!fixes || typeof fixes !== "object") continue;
+    const kept: CajonBarFixes = {};
+    for (const [k, v] of Object.entries(fixes).slice(0, MAX_BAR_FIXES)) {
+      if (!/^\d{1,5}$/.test(k) || !v || typeof v !== "object") continue;
+      const { found, bar } = v as Record<string, unknown>;
+      if (typeof found === "string" && typeof bar === "string" && BAR.test(found) && BAR.test(bar) && found.length === bar.length) {
+        kept[k] = { found, bar };
+      }
     }
     if (Object.keys(kept).length) out[level] = kept;
   }
