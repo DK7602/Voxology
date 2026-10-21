@@ -35,6 +35,13 @@ async function playBar(bar: readonly Stroke[], bpm: number) {
 
 const barCount = (part: CajonPart) => part.barGroove.length;
 const grooveAt = (part: CajonPart, bar: number): Groove => part.grooves[part.barGroove[Math.max(0, Math.min(barCount(part) - 1, bar))]];
+const restsAt = (part: CajonPart, bar: number) => bar < barCount(part) && part.grooves[part.barGroove[bar]].rest;
+
+/** The first bar after `bar` where the drums play (-1: none to the end). */
+function nextDrumBar(part: CajonPart, bar: number): number {
+  for (let b = bar + 1; b < barCount(part); b++) if (!restsAt(part, b)) return b;
+  return -1;
+}
 
 /** The strokes by bar: a column per beat, its two 8th notes in it; the now line stays put. */
 export function GrooveStrip({ engine, part }: { engine: PlayerEngine; part: CajonPart }) {
@@ -91,9 +98,16 @@ export function GrooveStrip({ engine, part }: { engine: PlayerEngine; part: Cajo
         <div className="strip-pad" style={{ width: `${PLAYHEAD * 100}%` }} aria-hidden="true" />
         {part.barGroove.map((g, b) => {
           const groove = part.grooves[g];
+          // the last bar of a rest says the drums come in next
+          const cue = groove.rest && b + 1 < barCount(part) && !restsAt(part, b + 1);
           return (
-            <div key={b} className={"bar gs-bar" + (b % 4 === 0 ? " phrase" : "") + (groove.rest ? " rest" : "")} role="listitem" aria-label={`Bar ${b + 1}: ${groove.rest ? "rest" : "groove " + groove.name}`}>
-              {groove.rest && <span className="gs-rest">no drums</span>}
+            <div
+              key={b}
+              className={"bar gs-bar" + (b % 4 === 0 ? " phrase" : "") + (groove.rest ? " rest" : "")}
+              role="listitem"
+              aria-label={`Bar ${b + 1}: ${groove.rest ? (cue ? "rest, drums next bar" : "rest") : "groove " + groove.name}`}
+            >
+              {groove.rest && <span className={"gs-rest" + (cue ? " cue" : "")}>{cue ? "Next Bar" : "no drums"}</span>}
               {Array.from({ length: bpb }, (_, k) => {
                 const beat = b * bpb + k;
                 const inLoop = loopFrom !== null && loopTo !== null && beat >= loopFrom - 1e-6 && beat + 1 <= loopTo + 1e-6;
@@ -247,6 +261,7 @@ export function CajonPanel({ engine, part, status }: { engine: PlayerEngine; par
   const col = slot - bar * slotsPerBar;
   const groove = grooveAt(part, bar);
   const next = grooveAt(part, bar + 1);
+  const comeIn = groove.rest ? nextDrumBar(part, bar) : -1;
   const hand = hands(groove.bar, part.level);
   const nextHand = hands(next.bar, part.level);
 
@@ -263,6 +278,7 @@ export function CajonPanel({ engine, part, status }: { engine: PlayerEngine; par
         <span>
           Bar {bar + 1} · {groove.rest ? "no drums here: rest" : part.source === "suggested" ? "suggested groove" : `groove ${groove.name}`}
         </span>
+        {comeIn >= 0 && <span className={"cajon-next" + (comeIn === bar + 1 ? " soon" : "")}>Next beat on Bar {comeIn + 1}</span>}
         <span className="faint">gold = now, green = this bar, dashed = next bar</span>
       </div>
       <div className="cajon-body">

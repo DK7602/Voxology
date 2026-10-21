@@ -1241,6 +1241,28 @@
   pointer-events: none;
   z-index: 1;
 }
+.gs-rest.cue {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--accent-text);
+}
+.cajon-next {
+  font-weight: 700;
+  color: var(--accent-text);
+}
+.cajon-next.soon {
+  animation: cajon-cue 1s ease-in-out infinite alternate;
+}
+@keyframes cajon-cue {
+  to {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cajon-next.soon {
+    animation: none;
+  }
+}
 .gs-hit {
   width: 24px;
   height: 24px;
