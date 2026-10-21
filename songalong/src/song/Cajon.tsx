@@ -158,7 +158,9 @@ type Zone = "SL" | "SR" | "B" | "tL" | "tR";
 type ZoneState = "now" | "bar" | "next" | "";
 const zoneOf = (x: Hit, hand: string): Zone => (x === "B" ? "B" : (x === "S" ? "S" : "t") + (hand === "L" ? "L" : "R")) as Zone;
 
-/** The front of the cajon: where each stroke is played, lit like the lead neck. */
+/** The front of the cajon: where each stroke is played, lit like the lead neck. It is drawn as the
+ *  player sees it sitting on the cajon and looking down at the front: their right hand plays the
+ *  side on the left of the picture, the left hand the side on the right. */
 function CajonFace({ zones, hand }: { zones: Record<Zone, ZoneState>; hand: string }) {
   const z = (k: Zone) => "cz " + zones[k];
   return (
@@ -178,18 +180,18 @@ function CajonFace({ zones, hand }: { zones: Record<Zone, ZoneState>; hand: stri
       {[[26, 32], [184, 32], [26, 252], [184, 252]].map(([x, y]) => (
         <circle key={`${x}${y}`} cx={x} cy={y} r="3" fill="#4a2a10" />
       ))}
-      <path d="M28 28 h56 v40 q-28 8 -56 0z" className={z("SL")} />
+      <path d="M28 28 h56 v40 q-28 8 -56 0z" className={z("SR")} />
       <text x="56" y="56" className="cz-label">S</text>
-      <path d="M126 28 h56 v40 q-28 8 -56 0z" className={z("SR")} />
+      <path d="M126 28 h56 v40 q-28 8 -56 0z" className={z("SL")} />
       <text x="154" y="56" className="cz-label">S</text>
-      <circle cx="74" cy="92" r="10" className={z("tL")} />
-      <circle cx="136" cy="92" r="10" className={z("tR")} />
+      <circle cx="74" cy="92" r="10" className={z("tR")} />
+      <circle cx="136" cy="92" r="10" className={z("tL")} />
       <circle cx="105" cy="168" r="52" className={z("B")} />
       <text x="105" y="176" className="cz-label big">B</text>
       {(["L", "R"] as const).map((h) => (
         <g key={h} className={"cz-hand" + (hand === h ? " on" : "")}>
-          <circle cx={h === "L" ? 30 : 180} cy="104" r="11" />
-          <text x={h === "L" ? 30 : 180} y="108.5">{h}</text>
+          <circle cx={h === "R" ? 30 : 180} cy="104" r="11" />
+          <text x={h === "R" ? 30 : 180} y="108.5">{h}</text>
         </g>
       ))}
     </svg>
