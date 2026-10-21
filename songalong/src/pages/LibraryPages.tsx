@@ -453,6 +453,8 @@ function useDragReorder(count: number, onMove: (from: number, to: number) => voi
     };
     g.current.raf = requestAnimationFrame(scroll);
     const move = (ev: globalThis.PointerEvent) => {
+      // the button is up but no release arrived (let go outside the window): drop it here
+      if (ev.pointerType === "mouse" && !(ev.buttons & 1)) return end();
       g.current.clientY = ev.clientY;
       update();
     };

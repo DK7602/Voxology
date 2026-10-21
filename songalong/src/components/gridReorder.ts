@@ -4,6 +4,13 @@
 // bottom of the screen.
 import { useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type PointerEvent } from "react";
 
+interface PressListeners {
+  move: (e: globalThis.PointerEvent) => void;
+  up: (e: globalThis.PointerEvent) => void;
+  cancel: (e: globalThis.PointerEvent) => void;
+  blur: () => void;
+}
+
 const HOLD_MS = 450;
 /** moving further than this (px) is a drag (or, before a card is picked up by touch, a scroll) */
 const SLOP = 8;
@@ -44,6 +51,9 @@ export function useGridReorder(count: number, onMove: (from: number, to: number)
   const cards = useRef<(HTMLElement | null)[]>([]);
   const [drag, setDrag] = useState<Drag | null>(null);
   const s = useRef({
+    /** a press is under way: from the button or finger going down until it comes up */
+    active: false,
+    listeners: null as PressListeners | null,
     index: -1,
     pointerId: -1,
     type: "",
@@ -108,7 +118,17 @@ export function useGridReorder(count: number, onMove: (from: number, to: number)
 
   const finish = (drop: boolean) => {
     const g = s.current;
+    if (!g.active) return;
+    g.active = false;
     window.clearTimeout(g.timer);
+    const l = g.listeners;
+    if (l) {
+      window.removeEventListener("pointermove", l.move, true);
+      window.removeEventListener("pointerup", l.up, true);
+      window.removeEventListener("pointercancel", l.cancel, true);
+      window.removeEventListener("blur", l.blur);
+    }
+    g.listeners = null;
     if (!g.lifted) return;
     cancelAnimationFrame(g.raf);
     window.removeEventListener("touchmove", noScroll);
@@ -126,7 +146,9 @@ export function useGridReorder(count: number, onMove: (from: number, to: number)
       const g = s.current;
       g.type = e.pointerType; // a right-click is a mouse, even right after a touch
       if (e.button !== 0) return;
+      finish(false); // a second finger: drop whatever the first was doing
       Object.assign(g, {
+        active: true,
         index,
         pointerId: e.pointerId,
         clientX: e.clientX,
@@ -136,25 +158,35 @@ export function useGridReorder(count: number, onMove: (from: number, to: number)
         lifted: false,
         moved: false,
       });
+      // the rest of this press is followed on the whole window, so letting go anywhere (off the
+      // card, outside the browser) ends it; a mouse moving with no button down never starts one
+      const l: PressListeners = {
+        move: (ev) => {
+          if (ev.pointerId !== g.pointerId) return;
+          // the button is up but no release arrived: let go now
+          if (ev.pointerType === "mouse" && !(ev.buttons & 1)) return finish(true);
+          g.clientX = ev.clientX;
+          g.clientY = ev.clientY;
+          if (g.lifted) return update();
+          if (Math.hypot(ev.clientX + window.scrollX - g.startPageX, ev.clientY + window.scrollY - g.startPageY) <= SLOP) return;
+          if (g.type === "mouse") {
+            // a mouse drags straight away
+            lift();
+            update();
+          } else window.clearTimeout(g.timer); // a finger moving before the hold is a scroll
+        },
+        up: (ev) => ev.pointerId === g.pointerId && finish(true),
+        cancel: (ev) => ev.pointerId === g.pointerId && finish(false),
+        blur: () => finish(false),
+      };
+      g.listeners = l;
+      window.addEventListener("pointermove", l.move, true);
+      window.addEventListener("pointerup", l.up, true);
+      window.addEventListener("pointercancel", l.cancel, true);
+      window.addEventListener("blur", l.blur);
       window.clearTimeout(g.timer);
       g.timer = window.setTimeout(lift, HOLD_MS);
     },
-    onPointerMove: (e: PointerEvent) => {
-      const g = s.current;
-      if (e.pointerId !== g.pointerId) return;
-      g.clientX = e.clientX;
-      g.clientY = e.clientY;
-      if (g.lifted) return update();
-      if (Math.hypot(e.clientX + window.scrollX - g.startPageX, e.clientY + window.scrollY - g.startPageY) <= SLOP) return;
-      if (g.type === "mouse") {
-        // a mouse drags straight away
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        lift();
-        update();
-      } else window.clearTimeout(g.timer); // a finger moving before the hold is a scroll
-    },
-    onPointerUp: (e: PointerEvent) => e.pointerId === s.current.pointerId && finish(true),
-    onPointerCancel: (e: PointerEvent) => e.pointerId === s.current.pointerId && finish(false),
     onContextMenu: (e: MouseEvent) => {
       // never the browser's own menu; a touch hold is handled by the timer, right-click opens ours
       e.preventDefault();
