@@ -1,4 +1,7 @@
-# Pulls the drums out of a song for its cajon part, with Demucs (htdemucs, MIT licence) on the CPU.
+# Pulls the drums out of a song for its cajon part, with Demucs (MIT licence) on the CPU: the
+# drums model of htdemucs_ft (f7e0c4bc), fine-tuned on drums. htdemucs_ft is four such models,
+# one per part, and only this one makes its drums, so the drums are the same as htdemucs_ft's
+# in a quarter of the time (as fast as plain htdemucs).
 #   python separate.py song.wav drums.wav
 # Reads a 44.1 kHz WAV; writes the drums alone as mono 22.05 kHz (what cajon/drums.ts reads), and
 # drums.wav.json: {"level": how loud the drums are against the whole song, in dB}. Real drums
@@ -16,7 +19,7 @@ from scipy.signal import resample_poly
 
 src, out = sys.argv[1:3]
 torch.set_num_threads(int(os.environ.get("THREADS", "4")))
-model = get_model("htdemucs")
+model = get_model("f7e0c4bc")
 model.eval()
 x, sr = sf.read(src, dtype="float32", always_2d=True)
 if sr != 44100:
