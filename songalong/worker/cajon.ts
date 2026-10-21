@@ -47,15 +47,16 @@ export async function kickCajon(env: Env): Promise<void> {
   }
 }
 
-/** A song's cajon state, asking for its part if no one has yet (songs made before cajon). A
- *  part still to come nudges the queue, so it never sits still for long. */
+/** A song's cajon state, asking for its part if no one has yet (songs made before cajon), or
+ *  again when it came from an older drum finder. A part still to come nudges the queue, so it
+ *  never sits still for long. */
 export async function cajonStatus(env: Env, videoId: string, songId: string): Promise<CajonStatus | null> {
   const row = await env.DB
-    .prepare("SELECT status, song_id, cajon FROM yt_songs WHERE video_id = ?")
+    .prepare("SELECT status, song_id, cajon, cajon_engine FROM yt_songs WHERE video_id = ?")
     .bind(videoId)
-    .first<{ status: string; song_id: string | null; cajon: CajonStatus | null }>();
+    .first<{ status: string; song_id: string | null; cajon: CajonStatus | null; cajon_engine: number }>();
   if (!row || row.status !== "ready" || row.song_id !== songId) return null;
-  if (row.cajon === null && env.CAJON) {
+  if ((row.cajon === null || (row.cajon === "ready" && row.cajon_engine < CAJON_ENGINE)) && env.CAJON) {
     await queueCajon(env, videoId);
     return "queued";
   }
@@ -164,6 +165,7 @@ export async function runCajonJob(
     const doc = JSON.parse(row.data) as SongDoc;
     if (!doc.beatTimes?.length) return settle(db, job.videoId, "failed", "The song has no beat grid", 0);
     doc.drums = { v: 1, hits: drumHits(result.onsets, doc.beatTimes) };
+    if (typeof result.level === "number" && Number.isFinite(result.level)) doc.drums.level = Math.round(result.level * 10) / 10;
     await db.batch([
       db.prepare("UPDATE songs SET data = ? WHERE id = ?").bind(JSON.stringify(validateSongDoc(doc)), job.songId),
       db

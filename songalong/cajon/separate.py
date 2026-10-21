@@ -1,6 +1,9 @@
 # Pulls the drums out of a song for its cajon part, with Demucs (htdemucs, MIT licence) on the CPU.
 #   python separate.py song.wav drums.wav
-# Reads a 44.1 kHz WAV; writes the drums alone as mono 22.05 kHz (what cajon/drums.ts reads).
+# Reads a 44.1 kHz WAV; writes the drums alone as mono 22.05 kHz (what cajon/drums.ts reads), and
+# drums.wav.json: {"level": how loud the drums are against the whole song, in dB}. Real drums
+# come out at -13 to -1 dB; in songs without drums, what Demucs still calls drums is far quieter.
+import json
 import os
 import sys
 
@@ -26,5 +29,9 @@ mean, std = ref.mean(), ref.std() + 1e-8
 with torch.no_grad():
     # overlap 0.1 (not 0.25) is a fifth faster and hears the drums as well
     sources = apply_model(model, ((wav - mean) / std)[None], device="cpu", progress=False, overlap=0.1)[0] * std + mean
-drums = sources[model.sources.index("drums")].mean(0).numpy()
-sf.write(out, resample_poly(drums, 1, 2).astype(np.float32), 22050, subtype="FLOAT")
+drums = sources[model.sources.index("drums")]
+rms = lambda a: float(np.sqrt(np.mean(np.square(a))) + 1e-9)
+level = 20 * np.log10(rms(drums.numpy()) / rms(x[:, :2].T))
+sf.write(out, resample_poly(drums.mean(0).numpy(), 1, 2).astype(np.float32), 22050, subtype="FLOAT")
+with open(out + ".json", "w") as f:
+    json.dump({"level": round(float(level), 1)}, f)

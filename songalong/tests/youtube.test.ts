@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PREP_ENGINE, type PrepAnalysis, type PrepEvent, type PrepareEvent } from "../shared/prep";
+import { CAJON_ENGINE, PREP_ENGINE, type PrepAnalysis, type PrepEvent, type PrepareEvent } from "../shared/prep";
 import { cleanTitle, guessSongName, nameCandidates, tidyTitle } from "../shared/songName";
 import { alignVersion, anchorChain, estimateOffset, matchInOrder, oneOffsetFits, steadyChain, timeWords, transcribe, versionLines, warp, type Segment } from "../worker/align";
 import { believableTiming, findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
@@ -468,13 +468,13 @@ describe("preparing a song", () => {
     const done = await runCajonJob(env.DB, job, async () =>
       ndjsonResponse([
         { type: "progress", stage: "Listening for the drums" },
-        { type: "result", onsets: { kick: [2, 3], snare: [2.5, 3.5], hat: [2.25] } },
+        { type: "result", onsets: { kick: [2, 3], snare: [2.5, 3.5], hat: [2.25] }, level: -6.43 },
       ] as never),
     );
     expect(done).toBe("ready");
     const song = (await client.call("GET", `/api/songs/${songId}`)).body.song;
     expect(song.cajon).toBe("ready");
-    expect(song.doc.drums).toEqual({ v: 1, hits: "1040200010002" });
+    expect(song.doc.drums).toEqual({ v: 1, hits: "1040200010002", level: -6.4 });
     expect(await nextCajonJob(env.DB)).toBeNull();
     expect(await nextCajonTime(env.DB)).toBeNull();
 
@@ -486,6 +486,10 @@ describe("preparing a song", () => {
     await env.DB.prepare("UPDATE yt_songs SET cajon = 'ready'").run();
     await client.call("GET", `/api/songs/${songId}`);
     expect(kicks).toBe(3);
+    // unless its part came from an older drum finder: then it is done again
+    await env.DB.prepare("UPDATE yt_songs SET cajon_engine = ?").bind(CAJON_ENGINE - 1).run();
+    expect((await client.call("GET", `/api/songs/${songId}`)).body.song.cajon).toBe("queued");
+    expect(kicks).toBe(4);
   });
 
   it("tries the cajon part again later when YouTube refuses the cloud", async () => {

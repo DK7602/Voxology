@@ -18,6 +18,8 @@ export interface DrumPart {
   /** one character per 16th note from beat 0 (4 per beat): a digit whose bits say which drums
    *  play there, 1 kick, 2 snare, 4 hi-hat ("0" = none) */
   hits: string;
+  /** how loud the drums Demucs pulled out are against the whole song (dB) */
+  level?: number;
 }
 
 export interface DrumOnsets {
@@ -146,11 +148,15 @@ export interface SongShape {
   drums?: DrumPart;
 }
 
-/** In real drumming the kick and snare seldom land together (6% of strokes is typical, a third at
- *  most); guitar strums heard in an acoustic song's "drums" set both off at once. */
+/** Real drums come out of a song at -13 to -1 dB against the whole of it; what Demucs still calls
+ *  drums in a song without them is far quieter (-53 to -24 dB, mostly). */
+export const DRUMS_LEVEL = -18;
+
+/** For drums found before their level was kept: in real drumming the kick and snare seldom land
+ *  together (6% of strokes is typical), while an acoustic song's strums set off both at once. */
 const STRUM_SHARE = 0.45;
 
-/** True when the drums found are too few to play along with, or are an acoustic song's strums. */
+/** True when the drums found are too few, or too quiet, to play along with (an acoustic song). */
 export function noDrums(drums: DrumPart | undefined, beats: number): boolean {
   if (!drums?.hits) return true;
   let strokes = 0;
@@ -160,8 +166,9 @@ export function noDrums(drums: DrumPart | undefined, beats: number): boolean {
     if (b) strokes++;
     if (b === 3) both++;
   }
-  // fewer than one kick or snare a bar on average, or mostly kick and snare at once
-  return strokes < Math.max(8, beats / 4) || both > STRUM_SHARE * strokes;
+  // fewer than one kick or snare a bar on average
+  if (strokes < Math.max(8, beats / 4)) return true;
+  return drums.level !== undefined ? drums.level < DRUMS_LEVEL : both > STRUM_SHARE * strokes;
 }
 
 /** How far apart two grooves are: a stroke that differs counts 1, a tap or not 0.5. */
@@ -272,5 +279,6 @@ export function validDrums(input: unknown): DrumPart | undefined {
   if (!input || typeof input !== "object") return undefined;
   const d = input as Record<string, unknown>;
   if (d.v !== 1 || typeof d.hits !== "string" || d.hits.length > 200_000 || !/^[0-7]*$/.test(d.hits)) return undefined;
-  return { v: 1, hits: d.hits };
+  const level = typeof d.level === "number" && Number.isFinite(d.level) ? Math.max(-120, Math.min(20, d.level)) : undefined;
+  return level === undefined ? { v: 1, hits: d.hits } : { v: 1, hits: d.hits, level };
 }

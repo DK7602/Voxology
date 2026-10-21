@@ -74,11 +74,12 @@ export type PrepareEvent =
 /** What the cajon container (cajon/server.ts) streams back for one song, one per line. */
 export type CajonEvent =
   | { type: "progress"; stage: string }
-  | { type: "result"; onsets: import("./music/cajon").DrumOnsets }
+  | { type: "result"; onsets: import("./music/cajon").DrumOnsets; level?: number }
   | { type: "error"; code: PrepErrorCode; message: string };
 
-/** The version of the drum finding; songs whose drums came from an older one are done again. */
-export const CAJON_ENGINE = 1;
+/** The version of the drum finding; songs whose drums came from an older one are done again.
+ *  2: cymbals no longer pass for snares; how loud the drums are tells songs without them. */
+export const CAJON_ENGINE = 2;
 
 export const MAX_SONG_SECONDS = 15 * 60;
 export const CHUNK_SECONDS = 30;

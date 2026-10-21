@@ -86,6 +86,18 @@ describe("drums on the beat grid", () => {
     expect(part.grooves[0].bar.join("")).toBe("B.t.S.t.B.B.S.t.");
   });
 
+  it("tells songs without drums by how loud the drums Demucs found are", () => {
+    // a big worship mix: kick and snare often together (crashes, a wall of sound), but loud: drums
+    const busy = ("7040604070506040" + ROCK.repeat(3)).repeat(4);
+    expect(noDrums({ v: 1, hits: "3030303030303030".repeat(16), level: -7 }, 64)).toBe(false);
+    expect(noDrums({ v: 1, hits: busy, level: -6 }, 64)).toBe(false);
+    // an acoustic song: what Demucs calls drums is quiet
+    expect(noDrums({ v: 1, hits: ROCK.repeat(16), level: -27 }, 64)).toBe(true);
+    expect(cajonPart(song(undefined, 16), "groove").source).toBe("suggested");
+    expect(validDrums({ v: 1, hits: "1", level: -6.4 })).toEqual({ v: 1, hits: "1", level: -6.4 });
+    expect(validDrums({ v: 1, hits: "1", level: "loud" })).toEqual({ v: 1, hits: "1" });
+  });
+
   it("an acoustic song's strums heard as drums (kick and snare at once) get the suggested groove", () => {
     const strums = "3030303030303030".repeat(16);
     expect(noDrums({ v: 1, hits: strums }, 64)).toBe(true);
@@ -171,6 +183,29 @@ function syntheticDrums() {
 }
 
 describe("finding drum hits", () => {
+  it("a crash cymbal on the kick isn't taken for a snare", () => {
+    const { x, truth } = syntheticDrums();
+    // a crash on every other kick: noise from 600 Hz up, ringing for over a second
+    let seed = 7;
+    const noise = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 31 - 1);
+    let prev = 0;
+    const crashes = truth.kick.filter((_, i) => i % 2 === 0);
+    for (const t of crashes) {
+      const at = Math.round(t * RATE);
+      for (let i = 0; i < RATE * 1.4 && at + i < x.length; i++) {
+        const n = noise();
+        const v = n - 0.6 * prev;
+        prev = n;
+        x[at + i] += 0.5 * v * Math.min(1, i / (RATE * 0.002)) * Math.exp(-i / RATE / 0.7);
+      }
+    }
+    const found = drumOnsets(x);
+    const crashSnares = crashes.filter((t) => found.snare.some((s) => Math.abs(s - t) <= 0.05)).length;
+    expect(crashSnares).toBe(0);
+    const snaresFound = truth.snare.filter((t) => found.snare.some((s) => Math.abs(s - t) <= 0.05)).length;
+    expect(snaresFound / truth.snare.length).toBeGreaterThanOrEqual(0.8);
+  });
+
   it("finds the kick, snare and hi-hat of a drum track", () => {
     const { x, truth } = syntheticDrums();
     const found = drumOnsets(x);

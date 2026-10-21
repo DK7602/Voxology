@@ -5,7 +5,7 @@
 // snare and hi-hat hits (drums.ts). The audio never leaves the container and is deleted after.
 
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -58,7 +58,8 @@ async function cajon(videoId: string, send: (e: CajonEvent) => void) {
     send({ type: "progress", stage: "Listening for the drums" });
     await run(PYTHON, [SEPARATE, song, drums], SEPARATE_LIMIT_MS);
     send({ type: "progress", stage: "Finding the hits" });
-    send({ type: "result", onsets: drumOnsets(await decode(drums, tools)) });
+    const { level } = JSON.parse(await readFile(drums + ".json", "utf8")) as { level: number };
+    send({ type: "result", onsets: drumOnsets(await decode(drums, tools)), level });
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }

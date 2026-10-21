@@ -1,9 +1,11 @@
 // Kick, snare and hi-hat hits from a drums-only track (the drums Demucs pulled out of a song).
-// The sound, as a log-frequency spectrogram, is explained as three spectral shapes switched on
-// and off over time (NMF): a low thump, a mid crack, a high hiss. Each shape starts from a
-// typical drum and adapts to this kit; where its level jumps, that drum was hit.
-// Checked against hand-labelled drum loops (IDMT-SMT-Drums): kick 97%, snare 87%, hi-hat 95%;
-// on 50 real songs after Demucs: kick 91%, snare 72%, hi-hat 90% (F-measure, ±50 ms).
+// The sound, as a log-frequency spectrogram, is explained as a few spectral shapes switched on
+// and off over time (NMF): a low thump, a mid crack, a high hiss, and for songs with crash or
+// ride cymbals a fourth shape that rings on (else a crash passes for a snare). Each shape starts
+// from a typical drum and adapts to this kit; where its level jumps, that drum was hit.
+// Checked against hand-labelled drum loops (IDMT-SMT-Drums): kick 96%, snare 87%, hi-hat 95%;
+// the same loops with crashes added: 95%, 85%, 88% (three shapes alone: 93%, 71%, 84%); on 50
+// real songs after Demucs: kick 91%, snare 70%, hi-hat 88% (F-measure, ±50 ms).
 
 import { RealFFT, hann } from "../src/analysis/fft";
 import type { DrumOnsets } from "../shared/music/cajon";
@@ -68,7 +70,7 @@ function normalized(w: Float32Array): Float32Array {
 }
 
 /** Starting shapes: a low thump (with a little beater click), a mid crack with wire noise, a
- *  high hiss (bumps on the log-frequency axis). */
+ *  high hiss, and a cymbal's broad shimmer (bumps on the log-frequency axis). */
 function startingShapes(): Float32Array[] {
   const bump = (hz: number, octaves: number) => bandHz.map((f) => Math.exp(-0.5 * Math.pow(Math.log2(f / hz) / octaves, 2)));
   const shape = (...parts: [number[], number][]) => {
@@ -80,6 +82,7 @@ function startingShapes(): Float32Array[] {
     shape([bump(65, 0.6), 1], [bump(3000, 1), 0.08]),
     shape([bump(200, 0.5), 1], [bump(3000, 1.3), 0.6]),
     shape([bump(9000, 0.6), 1], [bump(4000, 0.8), 0.2]),
+    shape([bump(5000, 1.0), 1], [bump(1500, 1.0), 0.3]),
   ];
 }
 
@@ -179,24 +182,66 @@ function hits(h: Float32Array, delta: number): [number, number][] {
 }
 
 /** Thresholds, tuned on the hand-labelled loops: how far a rise must stand out. A snare that
- *  starts with a kick or hi-hat must rise much more (part of their sound passes for a snare). */
+ *  starts with a kick, hi-hat or cymbal must rise much more (part of their sound passes for a
+ *  snare). */
 const KICK = 0.3;
 const HAT = 0.2;
 const SNARE_ALONE = 0.25;
 const SNARE_TOGETHER = 1.1;
 
+/** How long a shape rings: its level a quarter second after its strong rises, against the rise
+ *  (a cymbal about 1, a hi-hat or drum under 0.2). */
+function ring(h: Float32Array): number {
+  const f = new Float32Array(h.length);
+  for (let t = 1; t < h.length; t++) f[t] = Math.max(0, h[t] - h[t - 1]);
+  const strong = percentile(f, 0.98);
+  let sum = 0;
+  let n = 0;
+  for (let t = 1; t + 22 < h.length; t++) {
+    if (f[t] >= strong && h[t] > 0) {
+      sum += h[t + 22] / h[t];
+      n++;
+    }
+  }
+  return n ? sum / n : 0;
+}
+
+/** Below this, the fourth shape found no cymbal (it only split a drum): three shapes it is. */
+const CYMBAL_RING = 0.8;
+
+interface Reading {
+  kick: Float32Array;
+  snare: Float32Array;
+  hat: Float32Array;
+  cymbal: Float32Array | null;
+}
+
+/** The drums' levels over time with three shapes, or four with a cymbal (null when the fourth
+ *  shape doesn't ring like one). */
+function read(V: Float32Array, T: number, cymbal: boolean): Reading | null {
+  const start = startingShapes();
+  const { W, H } = factorize(V, T, cymbal ? start : start.slice(0, 3));
+  // name the shapes by where they sit, low to high, whatever they adapted into; with four, the
+  // higher two are the hi-hat and the cymbal, told apart by how long they ring
+  const order = W.map((w, i) => ({ c: centroid(w), i })).sort((a, b) => a.c - b.c).map((x) => x.i);
+  if (!cymbal) return { kick: H[order[0]], snare: H[order[1]], hat: H[order[2]], cymbal: null };
+  const [a, b] = [order[2], order[3]];
+  const [hat, cym] = ring(H[a]) <= ring(H[b]) ? [a, b] : [b, a];
+  if (ring(H[cym]) < CYMBAL_RING) return null;
+  return { kick: H[order[0]], snare: H[order[1]], hat: H[hat], cymbal: H[cym] };
+}
+
 /** The kick, snare and hi-hat onsets (seconds, to the hundredth) in a drums-only track. */
 export function drumOnsets(drums: Float32Array): DrumOnsets {
   const { V, T } = logSpectrogram(drums);
-  const { W, H } = factorize(V, T, startingShapes());
-  // name the shapes low to high, whatever they adapted into
-  const c = W.map(centroid);
-  const [kickH, snareH, hatH] = [0, 1, 2].sort((a, b) => c[a] - c[b]).map((k) => H[k]);
-  const kick = hits(kickH, KICK).map(([t]) => t);
-  const hat = hits(hatH, HAT).map(([t]) => t);
+  const r = read(V, T, true) ?? read(V, T, false)!;
+  const kick = hits(r.kick, KICK).map(([t]) => t);
+  const hat = hits(r.hat, HAT).map(([t]) => t);
+  const cymbal = r.cymbal ? hits(r.cymbal, HAT).map(([t]) => t) : [];
   const near = (list: number[], t: number) => list.some((x) => Math.abs(x - t) <= 0.03);
-  const snare = hits(snareH, SNARE_ALONE)
-    .filter(([t, height]) => !(near(kick, t) || near(hat, t)) || height >= SNARE_TOGETHER)
+  // a snare that starts with a kick, hi-hat or cymbal must rise much more to count
+  const snare = hits(r.snare, SNARE_ALONE)
+    .filter(([t, height]) => !(near(kick, t) || near(hat, t) || near(cymbal, t)) || height >= SNARE_TOGETHER)
     .map(([t]) => t);
   const round = (list: number[]) => list.map((t) => Math.round(t * 100) / 100);
   return { kick: round(kick), snare: round(snare), hat: round(hat) };
