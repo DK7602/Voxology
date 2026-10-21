@@ -1,5 +1,5 @@
 // Sounds: recorded guitar, ukulele and bass notes (public/samples; the mandolin plays the guitar's
-// with its doubled strings), a soft piano, and a metronome click. Until an instrument's recordings
+// with its doubled strings), a soft piano, cajon strokes, and a metronome click. Until an instrument's recordings
 // have loaded, and if they can't, plucked strings are synthesized (Karplus–Strong) instead.
 // Synthesized notes are rendered once into AudioBuffers and cached, so strumming costs little.
 import type { Instrument } from "../../shared/types";
@@ -280,8 +280,102 @@ export function click(when: number, accent: boolean, volume = 0.6) {
   osc.stop(when + 0.08);
 }
 
+// ---- cajon ----
+
+export type CajonStroke = "B" | "S" | "t";
+
+/** Seeded noise, so each stroke renders the same every time. */
+function noise(seed: number) {
+  let s = seed >>> 0;
+  return () => ((s = (s * 1103515245 + 12345) >>> 0) / 2 ** 31 - 1);
+}
+
+/** A two-pole band-pass (RBJ) for shaping noise. */
+function bandPass(sr: number, lo: number, hi: number) {
+  const hz = Math.sqrt(lo * hi);
+  const w = (2 * Math.PI * hz) / sr;
+  const alpha = Math.sin(w) / (2 * (hz / (hi - lo)));
+  const a0 = 1 + alpha;
+  const a1 = -2 * Math.cos(w);
+  const a2 = 1 - alpha;
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  return (x: number) => {
+    const y = (alpha * x - alpha * x2 - a1 * y1 - a2 * y2) / a0;
+    x2 = x1;
+    x1 = x;
+    y2 = y1;
+    y1 = y;
+    return y;
+  };
+}
+
+/**
+ * A cajon stroke, rendered once: the Bass is a deep thump with the box's wood ringing; the Slap a
+ * sharp crack with the snare wires' buzz; the tap a light ghost note. Two takes of each, so a run
+ * of strokes doesn't sound copied.
+ */
+function cajonBuffer(stroke: CajonStroke, take: number): AudioBuffer {
+  const key = `cajon:${stroke}${take}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const c = audioContext();
+  const sr = c.sampleRate;
+  const dur = stroke === "B" ? 0.45 : stroke === "S" ? 0.32 : 0.14;
+  const buf = c.createBuffer(1, Math.floor(sr * dur), sr);
+  const data = buf.getChannelData(0);
+  const rnd = noise(17 + take * 101 + stroke.charCodeAt(0));
+  const tune = 1 + (take ? 0.03 : 0);
+  if (stroke === "B") {
+    const low = bandPass(sr, 40, 400);
+    let phase = 0;
+    for (let i = 0; i < data.length; i++) {
+      const t = i / sr;
+      phase += (2 * Math.PI * (52 + 75 * Math.exp(-t / 0.022)) * tune) / sr;
+      const body = Math.sin(phase) * Math.exp(-t / 0.12);
+      const wood = 0.18 * Math.sin(2 * Math.PI * 175 * tune * t) * Math.exp(-t / 0.035);
+      const thump = 0.9 * low(rnd()) * Math.exp(-t / 0.008);
+      data[i] = body + wood + thump;
+    }
+  } else if (stroke === "S") {
+    const crack = bandPass(sr, 1500, 7000);
+    const wires = bandPass(sr, 2500, 9000);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / sr;
+      const body = 0.35 * Math.sin(2 * Math.PI * 330 * tune * t) * Math.exp(-t / 0.03) + 0.25 * Math.sin(2 * Math.PI * 215 * tune * t) * Math.exp(-t / 0.05);
+      data[i] = 2.2 * crack(rnd()) * Math.exp(-t / 0.022) + 0.7 * wires(rnd()) * Math.exp(-t / 0.075) + body;
+    }
+  } else {
+    const click = bandPass(sr, 900, 4000);
+    const wires = bandPass(sr, 3000, 9000);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / sr;
+      data[i] = click(rnd()) * Math.exp(-t / 0.01) + 0.25 * wires(rnd()) * Math.exp(-t / 0.03);
+    }
+  }
+  // a 1 ms attack (no click), the level set per stroke, a short fade at the end
+  let peak = 1e-9;
+  for (const v of data) peak = Math.max(peak, Math.abs(v));
+  const level = { B: 0.95, S: 0.8, t: 0.3 }[stroke] / peak;
+  const attack = Math.floor(sr * 0.001);
+  const fade = Math.floor(sr * 0.02);
+  for (let i = 0; i < data.length; i++) {
+    data[i] *= level * Math.min(1, i / attack) * Math.min(1, (data.length - 1 - i) / fade);
+  }
+  cache.set(key, buf);
+  return buf;
+}
+
+/** Plays a cajon stroke. */
+export function cajonHit(stroke: CajonStroke, when: number, velocity = 0.9) {
+  playBuffer(cajonBuffer(stroke, Math.random() < 0.5 ? 0 : 1), when, velocity);
+}
+
 /** Pre-renders the buffers a song needs so the first strum isn't late. */
 export function warmUp(midis: number[], instrument: Instrument) {
+  if (instrument === "cajon") {
+    for (const s of ["B", "S", "t"] as const) for (const take of [0, 1]) cajonBuffer(s, take);
+    return;
+  }
   if (instrument === "piano") for (const m of midis) pianoBuffer(m);
   else void loadInstrument(instrument);
 }

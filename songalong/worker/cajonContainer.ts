@@ -11,9 +11,10 @@ export class CajonContainer extends Container<Env> {
   sleepAfter = "2m";
   enableInternet = true;
 
-  /** Makes sure the queue is being worked through. */
+  /** Makes sure the queue is being worked through: a run is planned for the next job due. */
   async kick(): Promise<void> {
-    await this.plan(Date.now());
+    const due = await nextCajonTime(this.env.DB);
+    if (due !== null) await this.plan(due);
   }
 
   /** Plans a run at `at`, unless one is planned by then already. */

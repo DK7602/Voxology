@@ -5,6 +5,7 @@ import type { Instrument, PracticeSettings } from "../../shared/types";
 import { parseChord } from "../../shared/music/chords";
 import { bestCapo as findBestCapo } from "../../shared/music/capo";
 import { isFretted } from "../../shared/music/voicings";
+import { cajonStrokes, defaultLevel, type CajonLevel } from "../../shared/music/cajon";
 import { prettyAccidentals } from "../../shared/music/notes";
 import { api } from "../api";
 import { useUser } from "../auth";
@@ -16,6 +17,7 @@ import {
   IconList,
   IconMandolin,
   IconBass,
+  IconCajon,
   IconMore,
   IconPiano,
   IconPlayCircle,
@@ -40,6 +42,7 @@ import { SummaryView } from "./SummaryView";
 import { Transport } from "./Transport";
 import { voicingFor } from "./voicing";
 import { LeadNeck } from "./LeadNeck";
+import { CajonPanel, GrooveCards, GrooveStrip, useCajonPart } from "./Cajon";
 import { noteMidi } from "../../shared/music/chords";
 import type { Part } from "../player/engine";
 
@@ -83,7 +86,11 @@ const INSTRUMENTS: { id: Instrument; label: string; icon: typeof IconGuitar }[] 
   { id: "piano", label: "Piano", icon: IconPiano },
   { id: "mandolin", label: "Mandolin", icon: IconMandolin },
   { id: "bass", label: "Bass", icon: IconBass },
+  { id: "cajon", label: "Cajon", icon: IconCajon },
 ];
+
+/** While a song's cajon part is being worked out, the page asks again this often. */
+const CAJON_POLL_MS = 45_000;
 
 function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: PracticeSettings; onChanged: (r: SongRecord) => void }) {
   const user = useUser();
@@ -110,6 +117,26 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
     simplify: saved.simplify ?? false,
     capoShapes: user.settings.capoShapes ?? true,
   }));
+  const isCajon = settings.instrument === "cajon";
+  // the cajon part's level: Groove, unless the song's groove is busy (then Easy)
+  const [cajonLevel, setCajonLevel] = useState<CajonLevel>(() => saved.cajon ?? defaultLevel(doc));
+  const cajon = useCajonPart(doc, cajonLevel);
+  useEffect(() => engine.setCajon(cajonStrokes(cajon)), [engine, cajon]);
+
+  // a song whose cajon part is still being worked out: look again now and then
+  useEffect(() => {
+    if (!isCajon || !(record.cajon === "queued" || record.cajon === "working" || record.cajon === "waiting")) return;
+    const timer = window.setInterval(() => {
+      api
+        .song(record.id)
+        .then((r) => {
+          if (r.song.cajon !== record.cajon || !!r.song.doc.drums !== !!doc.drums) onChanged(r.song);
+        })
+        .catch(() => {});
+    }, CAJON_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [isCajon, record, doc.drums, onChanged]);
+
   const [choices, setChoices] = useState<Record<string, number>>({});
   const [mode, setMode] = useState<"animated" | "summary">("animated");
   const [favorite, setFavorite] = useState(record.favorite);
@@ -154,6 +181,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
             record.id,
             {
               part,
+              cajon: cajonLevel,
               transpose: settings.transpose,
               capo: settings.capo,
               instrument: settings.instrument,
@@ -166,9 +194,9 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
           .catch(() => {});
       }, played ? 0 : 1200);
     },
-    [engine, record.id, settings, part],
+    [engine, record.id, settings, part, cajonLevel],
   );
-  useEffect(() => persist(), [settings, part, persist]);
+  useEffect(() => persist(), [settings, part, cajonLevel, persist]);
   useEffect(
     () =>
       engine.subscribe(() => {
@@ -281,7 +309,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
 
   return (
     <div className="song-page song-layout">
-      <section className={"panel song-main" + (part === "lead" ? " lead-mode" : "")} aria-label="Play along">
+      <section className={"panel song-main" + (part === "lead" && !isCajon ? " lead-mode" : "") + (isCajon ? " cajon-mode" : "")} aria-label="Play along">
         <header className="song-head">
           <Artwork title={doc.title} youtubeId={record.youtubeId} />
           <div style={{ minWidth: 0 }}>
@@ -341,6 +369,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
 
         <Transport
           hasLead={hasLead}
+          cajon={isCajon}
           engine={engine}
           view={view}
           settings={settings}
@@ -353,7 +382,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
 
         {mode === "animated" ? (
           <>
-            <ChordStrip key={part} engine={engine} view={view} lead={part === "lead"} />
+            {isCajon ? <GrooveStrip engine={engine} part={cajon} /> : <ChordStrip key={part} engine={engine} view={view} lead={part === "lead"} />}
             <LyricsLane engine={engine} />
           </>
         ) : (
@@ -361,7 +390,12 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
         )}
 
         <div className="inst-row">
-          {hasLead && (
+          {isCajon ? (
+            <div className="seg part-seg" role="group" aria-label="Cajon level">
+              <button aria-pressed={cajonLevel === "easy"} onClick={() => setCajonLevel("easy")} title="Bass and Slap on the beats">Easy</button>
+              <button aria-pressed={cajonLevel === "groove"} onClick={() => setCajonLevel("groove")} title="The song's groove on 8th notes, with light taps">Groove</button>
+            </div>
+          ) : hasLead && (
             <div className="seg part-seg" role="group" aria-label="Part">
               <button aria-pressed={part === "rhythm"} onClick={() => setPart("rhythm")} title="Chords and strumming">Rhythm</button>
               <button aria-pressed={part === "lead"} onClick={() => setPart("lead")} title="Melody, riffs and fills">Lead</button>
@@ -383,7 +417,12 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
           </div>
         </div>
 
-        {part === "lead" ? (
+        {isCajon ? (
+          <>
+            <CajonPanel engine={engine} part={cajon} status={record.cajon} />
+            <GrooveCards engine={engine} part={cajon} bpm={doc.bpm} />
+          </>
+        ) : part === "lead" ? (
           <LeadNeck engine={engine} view={view} settings={settings} leftHanded={!!user.settings.leftHanded} />
         ) : (
           <Diagrams
@@ -404,7 +443,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
           simplify={settings.simplify}
           onTranspose={() => setModal("transpose")}
           onCapo={() =>
-            settings.instrument === "piano" || settings.instrument === "bass" ? toast("Capo is for guitar, ukulele and mandolin.") : setModal("capo")
+            !isFretted(settings.instrument) || settings.instrument === "bass" ? toast("Capo is for guitar, ukulele and mandolin.") : setModal("capo")
           }
           onTuner={() => setModal("tuner")}
           onMidi={() => downloadMidi(doc, view)}

@@ -8,7 +8,7 @@ import { PLAYHEAD } from "./LyricsLane";
 import { stripSize } from "./stripScale";
 
 /** Phone-sized screens (the strip's chord names are smaller there). */
-function useNarrow(): boolean {
+export function useNarrow(): boolean {
   const query = "(max-width: 760px)";
   const [narrow, setNarrow] = useState(() => window.matchMedia(query).matches);
   useEffect(() => {

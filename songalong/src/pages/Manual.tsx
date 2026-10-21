@@ -35,7 +35,8 @@ const TOPICS: { title: string; body: ReactNode }[] = [
         </li>
         <li>
           <b>Guitar, Ukulele, Piano, Mandolin, Bass</b>: changes the chord diagrams to your instrument. On bass, each card shows the one note to play
-          (the filled dot, named); the dashed rings are its fifth and octave, if you want to move between notes.
+          (the filled dot, named); the dashed rings are its fifth and octave, if you want to move between notes. <b>Cajon</b> shows the song’s drums
+          as cajon strokes instead (see Cajon below).
         </li>
         <li>
           <b>Chord cards</b>: how to play each chord, in the order they come. The speaker plays it; the <b>1/8 …</b> button shows another way to play it
@@ -121,6 +122,37 @@ const TOPICS: { title: string; body: ReactNode }[] = [
           </li>
         </ul>
         <p>Lead parts found from the recording can have the odd wrong or late note.</p>
+      </>
+    ),
+  },
+  {
+    title: "Cajon",
+    body: (
+      <>
+        <p>
+          Pick <b>Cajon</b> with the instruments to play along on a cajon. The song’s drums become cajon strokes: the kick drum is the <b>Bass</b>{" "}
+          (palm in the middle of the front), the snare the <b>Slap</b> (fingers at the top edge) and the hi-hat a light <b>tap</b>.
+        </p>
+        <ul>
+          <li>
+            <b>Easy / Groove</b>: Easy plays Bass and Slap on the beats; Groove plays the song’s beat on 8th notes, with taps. A busy song opens on Easy.
+          </li>
+          <li>
+            The <b>strip</b> at the top shows every stroke, bar by bar, and scrolls with the song. The <b>cajon</b> below lights where to hit:{" "}
+            <b>gold</b> now, <b>green</b> the rest of this bar, <b>dashed</b> the next bar. R and L say which hand.
+          </li>
+          <li>
+            The <b>groove cards</b> show each of the song’s grooves; the speaker plays one bar. Turn on <b>Play the cajon part</b> in the BPM button to hear
+            it with the song.
+          </li>
+          <li>
+            Where the drums stop, the strip says <b>no drums</b>: rest.
+          </li>
+        </ul>
+        <p>
+          The drums are found in the background after a song is prepared, which takes a few minutes. Until then, and for songs without drums, you get a
+          suggested groove for the song’s tempo, and the cajon says so. Drums found from a recording can miss the odd snare or add one.
+        </p>
       </>
     ),
   },

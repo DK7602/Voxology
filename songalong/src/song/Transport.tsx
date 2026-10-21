@@ -20,6 +20,8 @@ import { syncLabel } from "../player/sync";
 
 interface Props {
   hasLead?: boolean;
+  /** playing the cajon: no capo or transpose, and the backing plays the cajon part */
+  cajon?: boolean;
   engine: PlayerEngine;
   view: ChordView;
   settings: ViewSettings;
@@ -32,7 +34,7 @@ interface Props {
 
 const SPEEDS = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.05, 1.1, 1.25, 1.5];
 
-export function Transport({ hasLead, engine, view, settings, bestCapo, onSettings, onMidi, onExport, onPrint }: Props) {
+export function Transport({ hasLead, cajon, engine, view, settings, bestCapo, onSettings, onMidi, onExport, onPrint }: Props) {
   const st = usePlayerState(engine);
   const doc = engine.timeline.doc;
   const bpm = Math.round(doc.bpm * st.speed);
@@ -190,10 +192,10 @@ export function Transport({ hasLead, engine, view, settings, bestCapo, onSetting
                 <Toggle checked={st.metronome} onChange={(v) => engine.setMetronome(v)} label="Metronome" />
               </div>
               <div className="menu-item" style={{ justifyContent: "space-between" }}>
-                Play the chords (rhythm)
-                <Toggle checked={st.backing} onChange={(v) => engine.setBacking(v)} label="Backing chords" />
+                {cajon ? "Play the cajon part" : "Play the chords (rhythm)"}
+                <Toggle checked={st.backing} onChange={(v) => engine.setBacking(v)} label={cajon ? "Cajon part" : "Backing chords"} />
               </div>
-              {hasLead && (
+              {hasLead && !cajon && (
                 <div className="menu-item" style={{ justifyContent: "space-between" }}>
                   Play the lead (guide)
                   <Toggle checked={st.leadGuide} onChange={(v) => engine.setLeadGuide(v)} label="Lead guide" />
@@ -205,86 +207,90 @@ export function Transport({ hasLead, engine, view, settings, bestCapo, onSetting
         </Popover>
       </div>
 
-      <div className="t-group">
-        <Popover
-          width={300}
-          trigger={(p) => (
-            <button className="t-drop" {...p} ref={p.ref} aria-label="Capo">
-              <IconCapo size={30} />
-              <span className="t-label">
-                Capo
-                <span className="val">{settings.capo || "None"} <IconChevronDown size={16} /></span>
-              </span>
-            </button>
-          )}
-        >
-          {(close) => (
-            <>
-              <div className="menu-label">Capo (guitar, ukulele, mandolin)</div>
-              {bestCapo !== null && (
-                <button className="menu-item" onClick={() => { onSettings({ capo: bestCapo }); close(); }}>
-                  ★ Easiest shapes: {bestCapo ? `capo ${bestCapo}` : "no capo"}
-                </button>
-              )}
-              {doc.capo > 0 && (
-                <button className="menu-item" onClick={() => { onSettings({ capo: doc.capo }); close(); }}>
-                  Song's capo: {doc.capo}
-                </button>
-              )}
-              <div className="menu-sep" />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4, padding: 4 }}>
-                {Array.from({ length: 10 }, (_, n) => (
-                  <button key={n} className={"btn btn-sm" + (settings.capo === n ? " active" : "")} onClick={() => { onSettings({ capo: n }); close(); }}>
-                    {n}
+      {!cajon && (
+        <>
+        <div className="t-group">
+          <Popover
+            width={300}
+            trigger={(p) => (
+              <button className="t-drop" {...p} ref={p.ref} aria-label="Capo">
+                <IconCapo size={30} />
+                <span className="t-label">
+                  Capo
+                  <span className="val">{settings.capo || "None"} <IconChevronDown size={16} /></span>
+                </span>
+              </button>
+            )}
+          >
+            {(close) => (
+              <>
+                <div className="menu-label">Capo (guitar, ukulele, mandolin)</div>
+                {bestCapo !== null && (
+                  <button className="menu-item" onClick={() => { onSettings({ capo: bestCapo }); close(); }}>
+                    ★ Easiest shapes: {bestCapo ? `capo ${bestCapo}` : "no capo"}
+                  </button>
+                )}
+                {doc.capo > 0 && (
+                  <button className="menu-item" onClick={() => { onSettings({ capo: doc.capo }); close(); }}>
+                    Song's capo: {doc.capo}
+                  </button>
+                )}
+                <div className="menu-sep" />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4, padding: 4 }}>
+                  {Array.from({ length: 10 }, (_, n) => (
+                    <button key={n} className={"btn btn-sm" + (settings.capo === n ? " active" : "")} onClick={() => { onSettings({ capo: n }); close(); }}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <div className="menu-item" style={{ justifyContent: "space-between" }}>
+                  Show shapes (not sounding chords)
+                  <Toggle checked={settings.capoShapes} onChange={(v) => onSettings({ capoShapes: v })} label="Show capo shapes" />
+                </div>
+                {view.shapeKeyName && (
+                  <div className="menu-item faint" style={{ cursor: "default", fontSize: 14 }}>
+                    Sounds in {prettyAccidentals(view.keyName)}; you play {prettyAccidentals(view.shapeKeyName)} shapes.
+                  </div>
+                )}
+              </>
+            )}
+          </Popover>
+        </div>
+
+        <div className="t-group">
+          <Popover
+            width={230}
+            trigger={(p) => (
+              <button className="t-drop" {...p} ref={p.ref} aria-label="Transpose">
+                <IconTranspose size={28} />
+                <span className="t-label">
+                  Transpose
+                  <span className="val">
+                    {settings.transpose > 0 ? "+" : ""}
+                    {settings.transpose} ({prettyAccidentals(view.keyName)}) <IconChevronDown size={16} />
+                  </span>
+                </span>
+              </button>
+            )}
+          >
+            {(close) => (
+              <>
+                <div className="menu-label">Transpose (semitones)</div>
+                {Array.from({ length: 13 }, (_, i) => 6 - i).map((t) => (
+                  <button key={t} className={"menu-item" + (settings.transpose === t ? " selected" : "")} onClick={() => { onSettings({ transpose: t }); close(); }}>
+                    {t > 0 ? "+" : ""}
+                    {t} <span className="faint" style={{ marginLeft: "auto" }}>{keyAt(t)}</span>
                   </button>
                 ))}
-              </div>
-              <div className="menu-item" style={{ justifyContent: "space-between" }}>
-                Show shapes (not sounding chords)
-                <Toggle checked={settings.capoShapes} onChange={(v) => onSettings({ capoShapes: v })} label="Show capo shapes" />
-              </div>
-              {view.shapeKeyName && (
-                <div className="menu-item faint" style={{ cursor: "default", fontSize: 14 }}>
-                  Sounds in {prettyAccidentals(view.keyName)}; you play {prettyAccidentals(view.shapeKeyName)} shapes.
-                </div>
-              )}
-            </>
-          )}
-        </Popover>
-      </div>
-
-      <div className="t-group">
-        <Popover
-          width={230}
-          trigger={(p) => (
-            <button className="t-drop" {...p} ref={p.ref} aria-label="Transpose">
-              <IconTranspose size={28} />
-              <span className="t-label">
-                Transpose
-                <span className="val">
-                  {settings.transpose > 0 ? "+" : ""}
-                  {settings.transpose} ({prettyAccidentals(view.keyName)}) <IconChevronDown size={16} />
-                </span>
-              </span>
-            </button>
-          )}
-        >
-          {(close) => (
-            <>
-              <div className="menu-label">Transpose (semitones)</div>
-              {Array.from({ length: 13 }, (_, i) => 6 - i).map((t) => (
-                <button key={t} className={"menu-item" + (settings.transpose === t ? " selected" : "")} onClick={() => { onSettings({ transpose: t }); close(); }}>
-                  {t > 0 ? "+" : ""}
-                  {t} <span className="faint" style={{ marginLeft: "auto" }}>{keyAt(t)}</span>
-                </button>
-              ))}
-              {doc.media.kind !== "none" && (
-                <div className="menu-item faint" style={{ cursor: "default", fontSize: 14 }}>The recording stays in its key; the chords move.</div>
-              )}
-            </>
-          )}
-        </Popover>
-      </div>
+                {doc.media.kind !== "none" && (
+                  <div className="menu-item faint" style={{ cursor: "default", fontSize: 14 }}>The recording stays in its key; the chords move.</div>
+                )}
+              </>
+            )}
+          </Popover>
+        </div>
+        </>
+      )}
 
       <div className="t-group">
         <button className="t-tool" onClick={onMidi} title="Download a MIDI file of the chords">

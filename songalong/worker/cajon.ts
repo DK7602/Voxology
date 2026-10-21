@@ -44,7 +44,8 @@ export async function kickCajon(env: Env): Promise<void> {
   }
 }
 
-/** A song's cajon state, asking for its part if no one has yet (songs made before cajon). */
+/** A song's cajon state, asking for its part if no one has yet (songs made before cajon). A
+ *  part still to come nudges the queue, so it never sits still for long. */
 export async function cajonStatus(env: Env, videoId: string, songId: string): Promise<CajonStatus | null> {
   const row = await env.DB
     .prepare("SELECT status, song_id, cajon FROM yt_songs WHERE video_id = ?")
@@ -55,6 +56,7 @@ export async function cajonStatus(env: Env, videoId: string, songId: string): Pr
     await queueCajon(env, videoId);
     return "queued";
   }
+  if (row.cajon === "queued" || row.cajon === "waiting" || row.cajon === "working") await kickCajon(env);
   return row.cajon;
 }
 

@@ -4,7 +4,7 @@ import type { ChordEvent, SongDoc } from "../../shared/types";
 import { Timeline, chordEnd, indexAt } from "../../shared/timeline";
 import { ClockMedia, type MediaAdapter } from "./media";
 import { clampSync, savedSync, saveSync } from "./sync";
-import { arpeggio, audioContext, click, strum, unlockAudio } from "./synth";
+import { arpeggio, audioContext, cajonHit, click, strum, unlockAudio, type CajonStroke } from "./synth";
 import type { Instrument } from "../../shared/types";
 
 export interface LoopRange {
@@ -20,7 +20,7 @@ export interface PlayerState {
   countIn: number | null;
   speed: number;
   loop: LoopRange;
-  /** play the rhythm part (chords) with the built-in instrument */
+  /** play the rhythm part (chords, or the cajon part on the cajon) with the built-in instrument */
   backing: boolean;
   /** play the lead part as a guide */
   leadGuide: boolean;
@@ -55,6 +55,9 @@ export class PlayerEngine {
   private scheduler = 0;
   private scheduledUpTo = -Infinity; // beat index already scheduled
   private leadScheduledUpTo = -Infinity; // beat position of the last lead event scheduled
+  /** the cajon part, in beat order: what the backing plays on the cajon */
+  private cajon: { beat: number; stroke: CajonStroke }[] = [];
+  private cajonScheduledUpTo = -Infinity; // beat position of the last cajon stroke scheduled
   private countTimers: number[] = [];
   private lastBeat = 0;
   /** where playing started (or was moved to): what is shown waits there for the sound */
@@ -149,9 +152,16 @@ export class PlayerEngine {
     this.lead = lead;
   }
 
+  /** The cajon part (strokes in beat order), played instead of the chords on the cajon. */
+  setCajon(strokes: { beat: number; stroke: CajonStroke }[]) {
+    this.cajon = strokes;
+    this.cajonScheduledUpTo = this.lastBeat - 1e-6;
+  }
+
   private resetSchedule() {
     this.scheduledUpTo = Math.ceil(this.lastBeat - 1e-6) - 1;
     this.leadScheduledUpTo = this.lastBeat - 1e-6;
+    this.cajonScheduledUpTo = this.lastBeat - 1e-6;
   }
 
   // ---- transport ----
@@ -352,7 +362,7 @@ export class PlayerEngine {
       if (when < ctx.currentTime - 0.03) continue;
       const posInBar = ((b % bpb) + bpb) % bpb;
       if (this.state.metronome) click(when, posInBar === 0, 0.5);
-      if (!this.state.backing) continue;
+      if (!this.state.backing || this.instrument === "cajon") continue;
       const rhythm = this.rhythm;
       const ci = indexAt(rhythm, b + 1e-6);
       if (ci < 0) continue;
@@ -393,6 +403,31 @@ export class PlayerEngine {
       strum(v.midis, when, { instrument: this.instrument, velocity: vel, down: !up, spread: up ? 0.012 : 0.02, until: end <= b + 1 ? until : undefined });
     }
     if (this.state.leadGuide) this.scheduleLead(now, horizonBeat, loopTo, rate);
+    if (this.state.backing && this.instrument === "cajon") this.scheduleCajon(now, horizonBeat, loopTo, rate);
+  }
+
+  /** Cajon strokes fall on 16th notes, so they are scheduled by their own positions. */
+  private scheduleCajon(now: number, horizonBeat: number, loopTo: number, rate: number) {
+    const ctx = audioContext();
+    const strokes = this.cajon;
+    // the first stroke after the last one scheduled
+    let lo = 0;
+    let hi = strokes.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (strokes[mid].beat <= this.cajonScheduledUpTo) lo = mid + 1;
+      else hi = mid;
+    }
+    for (let i = lo; i < strokes.length && strokes[i].beat <= horizonBeat; i++) {
+      const s = strokes[i];
+      this.cajonScheduledUpTo = s.beat;
+      if (s.beat >= loopTo || s.beat >= this.timeline.lengthBeats || s.beat < this.lastBeat - 0.1) continue;
+      const when = ctx.currentTime + (this.timeline.beatToTime(s.beat) - now) / rate;
+      if (when < ctx.currentTime - 0.03) continue;
+      // the beats a little stronger than what falls between them
+      const onBeat = Math.abs(s.beat - Math.round(s.beat)) < 1e-6;
+      cajonHit(s.stroke, when, s.stroke === "t" ? 0.6 : onBeat ? 0.95 : 0.8);
+    }
   }
 
   /** Lead notes fall between beats too, so they are scheduled by their own positions. */

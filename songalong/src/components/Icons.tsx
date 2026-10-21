@@ -208,6 +208,14 @@ export const IconBass = (p: P) => (
     <path d="m5.6 18.4 2.6-2.6" />
   </Svg>
 );
+/** a cajon: a box with its top plate and sound hole */
+export const IconCajon = (p: P) => (
+  <Svg {...p}>
+    <rect x="5" y="3" width="14" height="18" rx="2" fill="currentColor" fillOpacity={0.15} />
+    <path d="M5 6.5h14" />
+    <circle cx="12" cy="14.5" r="3" />
+  </Svg>
+);
 export const IconList = (p: P) => (
   <Svg {...p}>
     <path d="M9 6h11M9 12h11M9 18h11" />

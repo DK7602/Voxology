@@ -458,7 +458,9 @@ describe("preparing a song", () => {
     const ready = (await readEvents(await client.fetch("POST", "/api/youtube/prepare", { json: { videoId: "drumsong001" } }))).at(-1)!;
     const songId = (ready as { songId: string }).songId;
     expect(kicks).toBe(1);
+    // opening a song whose part is still to come nudges the queue
     expect((await client.call("GET", `/api/songs/${songId}`)).body.song.cajon).toBe("queued");
+    expect(kicks).toBe(2);
 
     // the container's turn: it hears a kick on beat 0 and a snare on beat 1 (beats are 0.5 s apart from 2 s)
     const job = (await nextCajonJob(env.DB))!;
@@ -479,7 +481,11 @@ describe("preparing a song", () => {
     // a song from before cajon parts is asked for when it is opened
     await env.DB.prepare("UPDATE yt_songs SET cajon = NULL").run();
     expect((await client.call("GET", `/api/songs/${songId}`)).body.song.cajon).toBe("queued");
-    expect(kicks).toBe(2);
+    expect(kicks).toBe(3);
+    // a song whose part is ready leaves the queue alone
+    await env.DB.prepare("UPDATE yt_songs SET cajon = 'ready'").run();
+    await client.call("GET", `/api/songs/${songId}`);
+    expect(kicks).toBe(3);
   });
 
   it("tries the cajon part again later when YouTube refuses the cloud", async () => {

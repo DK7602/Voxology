@@ -1183,3 +1183,264 @@
   max-width: 100%;
   height: auto;
 }
+
+/* ---------- cajon ---------- */
+/* Bass in the wood's brown, Slap in the chord red, taps small and faint */
+:root {
+  --cajon-bass: #7b4321;
+  --cajon-slap: var(--chord-red);
+}
+:root[data-theme="dark"] {
+  --cajon-bass: #d8a066;
+  --cajon-slap: #ff5d66;
+}
+/* the groove strip: a column per beat (all the same width, so it moves at the song's pace) */
+.gs-beat {
+  flex: none;
+  height: 70px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: center;
+  padding: 16px 2px 6px;
+  position: relative;
+  background: var(--plain-cell);
+  border-right: 1px solid var(--plain-border);
+  cursor: pointer;
+  user-select: none;
+}
+.gs-beat.now {
+  background: color-mix(in srgb, var(--plain-active) 18%, var(--plain-cell));
+}
+.gs-beat.in-loop {
+  box-shadow: inset 0 -4px 0 var(--gold);
+}
+.gs-num {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ink-faint);
+}
+.gs-beat:first-child .gs-num {
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+.gs-bar.rest .gs-beat {
+  background: color-mix(in srgb, var(--plain-cell) 55%, transparent);
+}
+.gs-rest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  text-align: center;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--ink-faint);
+  pointer-events: none;
+  z-index: 1;
+}
+.gs-hit {
+  width: 15px;
+  height: 15px;
+  margin: 0 auto;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font: 700 10px "EB Garamond", serif;
+  font-style: normal;
+  color: #fff;
+  transition: box-shadow 0.06s ease;
+}
+.gs-hit.B {
+  width: 18px;
+  height: 18px;
+  background: var(--cajon-bass);
+}
+.gs-hit.S {
+  background: var(--cajon-slap);
+}
+.gs-hit.t {
+  width: 8px;
+  height: 8px;
+  background: var(--ink-faint);
+}
+.gs-hit.now {
+  box-shadow: 0 0 0 3px var(--gold), 0 0 12px var(--gold);
+}
+/* the panel: the cajon's front, and this bar as a step grid */
+.cajon-panel {
+  padding: 10px 12px 12px;
+}
+.cajon-body {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.cajon-face {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.cz {
+  fill: rgba(255, 255, 255, 0.12);
+  stroke: rgba(60, 30, 10, 0.45);
+  stroke-width: 1.5;
+}
+.cz.next {
+  fill: rgba(255, 255, 255, 0.3);
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+}
+.cz.bar {
+  fill: rgba(19, 122, 69, 0.6);
+  stroke: #137a45;
+  stroke-width: 2;
+}
+.cz.now {
+  fill: rgba(241, 210, 122, 0.92);
+  stroke: #f1d27a;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px rgba(241, 210, 122, 0.9));
+}
+.cz-label {
+  text-anchor: middle;
+  font: 700 18px "Playfair Display", serif;
+  fill: #2a1406;
+  pointer-events: none;
+}
+.cz-label.big {
+  font-size: 26px;
+}
+.cz-hand circle {
+  fill: #fff;
+  stroke: #2a1406;
+  stroke-width: 1.5;
+}
+.cz-hand text {
+  text-anchor: middle;
+  font: 700 13px "EB Garamond", serif;
+  fill: #2a1406;
+}
+.cz-hand.on circle {
+  fill: var(--gold-hi);
+}
+.cajon-side {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.step-grid {
+  display: grid;
+  gap: 3px;
+  align-items: center;
+}
+.sg-count {
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.sg-count.beat {
+  color: var(--ink);
+  font-weight: 700;
+}
+.sg-row {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.sg-cell {
+  height: 28px;
+  border-radius: 6px;
+  background: var(--plain-cell);
+  border: 1px solid var(--plain-border);
+  display: grid;
+  place-items: center;
+  font: 700 12px "EB Garamond", serif;
+  color: #fff;
+}
+.sg-cell.on {
+  border-color: transparent;
+}
+.sg-cell.on.B {
+  background: var(--cajon-bass);
+}
+.sg-cell.on.S {
+  background: var(--cajon-slap);
+}
+.sg-cell.on.t {
+  background: var(--ink-faint);
+}
+.sg-cell.col-now {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.step-grid.small {
+  width: 100%;
+  gap: 2px;
+}
+.step-grid.small .sg-cell {
+  height: 14px;
+  border-radius: 3px;
+}
+.step-grid.small .sg-row {
+  font-size: 11px;
+}
+.cajon-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.cajon-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cajon-legend .gs-hit {
+  margin: 0;
+}
+.cajon-source {
+  font-size: 14px;
+}
+.groove-card {
+  width: 200px;
+}
+.groove-card .chord-name {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 22px;
+}
+.groove-card .cat-tag {
+  --cat: var(--accent-text);
+}
+@media (max-width: 760px) {
+  .cajon-body {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  .cajon-face {
+    max-width: 180px;
+  }
+  .cajon-side {
+    width: 100%;
+  }
+  .gs-beat {
+    padding: 15px 1px 6px;
+  }
+  .gs-hit {
+    width: 12px;
+    height: 12px;
+    font-size: 8px;
+  }
+  .gs-hit.B {
+    width: 15px;
+    height: 15px;
+  }
+  .gs-hit.t {
+    width: 6px;
+    height: 6px;
+  }
+}
