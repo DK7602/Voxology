@@ -3,7 +3,7 @@ import { leadPositions } from "../../shared/lead";
 import { shapeFor } from "../../shared/music/capo";
 import { noteMidi, parseChord } from "../../shared/music/chords";
 import { noteName, prettyAccidentals, spellInKey, type Key } from "../../shared/music/notes";
-import { FRETTED } from "../../shared/music/voicings";
+import { frettedOf } from "../../shared/music/voicings";
 import { indexAt } from "../../shared/timeline";
 import type { PlayerEngine } from "../player/engine";
 import { useBeatSelect, type ChordView, type ViewSettings } from "../player/hooks";
@@ -19,7 +19,7 @@ export function LeadNeck({ engine, view, settings, leftHanded }: { engine: Playe
   const to = from + 2 * bpb;
   const visible = events.map((e, i) => ({ e, i })).filter(({ e }) => e.beat >= from - 1e-6 && e.beat < to - 1e-6);
 
-  const inst = FRETTED[settings.instrument === "piano" ? "guitar" : settings.instrument];
+  const inst = frettedOf(settings.instrument);
   const capo = view.usesCapo ? settings.capo : 0;
   const spots = useMemo(() => {
     if (settings.instrument === "piano") return [];

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { chordNoteNames, parseChord } from "../../shared/music/chords";
-import { FRETTED, fretVoicings, pianoMidi, pianoVoicing, voicingMidi } from "../../shared/music/voicings";
+import { FRETTED, fretVoicings, isFretted, pianoMidi, pianoVoicing, voicingMidi, type FrettedId } from "../../shared/music/voicings";
 import { prettyAccidentals } from "../../shared/music/notes";
 import type { Instrument } from "../../shared/types";
 import { useUser } from "../auth";
@@ -40,8 +40,8 @@ export function ToolsPage() {
 
 export function TunerPage() {
   const user = useUser();
-  const [inst, setInst] = useState<Exclude<Instrument, "piano">>(
-    user.settings.instrument && user.settings.instrument !== "piano" ? user.settings.instrument : "guitar",
+  const [inst, setInst] = useState<FrettedId>(
+    user.settings.instrument && isFretted(user.settings.instrument) ? user.settings.instrument : "guitar",
   );
   return (
     <div className="panel page-panel" style={{ maxWidth: 720, margin: "0 auto" }}>
@@ -72,7 +72,10 @@ export function ChordLibraryPage() {
   const [root, setRoot] = useState("C");
   const [type, setType] = useState<string>("");
   const [bass, setBass] = useState("");
-  const [inst, setInst] = useState<Instrument>(user.settings.instrument ?? "guitar");
+  // the cajon has no chords: the library opens on the guitar
+  const [inst, setInst] = useState<Exclude<Instrument, "cajon">>(
+    user.settings.instrument && user.settings.instrument !== "cajon" ? user.settings.instrument : "guitar",
+  );
   const symbol = root + type + (bass && bass !== root ? "/" + bass : "");
   const chord = parseChord(symbol);
 
@@ -86,7 +89,7 @@ export function ChordLibraryPage() {
       <div className="page-head">
         <h1>Chord library</h1>
         <div className="seg" role="group" aria-label="Instrument">
-          {(["guitar", "ukulele", "piano", "mandolin", "bass"] as Instrument[]).map((i) => (
+          {(["guitar", "ukulele", "piano", "mandolin", "bass"] as const).map((i) => (
             <button key={i} aria-pressed={inst === i} onClick={() => setInst(i)}>
               {i[0].toUpperCase() + i.slice(1)}
             </button>

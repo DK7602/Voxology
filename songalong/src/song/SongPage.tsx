@@ -4,6 +4,7 @@ import type { SongRecord, SongSummary } from "../../shared/api";
 import type { Instrument, PracticeSettings } from "../../shared/types";
 import { parseChord } from "../../shared/music/chords";
 import { bestCapo as findBestCapo } from "../../shared/music/capo";
+import { isFretted } from "../../shared/music/voicings";
 import { prettyAccidentals } from "../../shared/music/notes";
 import { api } from "../api";
 import { useUser } from "../auth";
@@ -210,7 +211,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
   }, [doc.chords, view]);
 
   const best = useMemo(() => {
-    if (settings.instrument === "piano") return null;
+    if (!isFretted(settings.instrument)) return null;
     const sounding = doc.chords.map((c) => ({ ...c, name: view.sounding(c.name) }));
     return findBestCapo(sounding, doc.length, settings.instrument).capo;
   }, [doc, view, settings.instrument]);
@@ -413,7 +414,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
         <SimilarSongs songs={similar} />
       </aside>
 
-      {modal === "capo" && settings.instrument !== "piano" && settings.instrument !== "bass" && (
+      {modal === "capo" && isFretted(settings.instrument) && settings.instrument !== "bass" && (
         <CapoFinder
           doc={doc}
           view={view}

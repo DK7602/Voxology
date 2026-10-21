@@ -11,6 +11,7 @@ import {
   type PrepStatus,
   type YouTubeResult,
 } from "../shared/prep";
+import { queueCajon } from "./cajon";
 import { finishPrep } from "./catalog";
 import type { AppEnv, Env } from "./env";
 import { HttpError, readJsonObject } from "./http";
@@ -254,6 +255,7 @@ export async function runPrepare(
   if (!analysis) return toWaitingPc(env, userId, videoId, "The cloud song-prep didn't finish.", emit);
   const songId = await finishPrep(db, env.AI, analysis, progress);
   emit({ type: "ready", songId });
+  await queueCajon(env, videoId);
 }
 
 youtube.post("/prepare", async (c) => {

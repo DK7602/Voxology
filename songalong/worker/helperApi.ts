@@ -4,6 +4,7 @@
 
 import { Hono, type MiddlewareHandler } from "hono";
 import { isVideoId, PREP_ENGINE, type PrepAnalysis } from "../shared/prep";
+import { queueCajon } from "./cajon";
 import { finishPrep } from "./catalog";
 import { randomToken, sha256Hex } from "./crypto";
 import type { AppEnv } from "./env";
@@ -140,5 +141,6 @@ helper.post("/jobs/:videoId/result", helperAuth, async (c) => {
   const body = await readJsonObject(c, RESULT_LIMIT);
   const analysis = checkAnalysis(body.analysis, videoId);
   const songId = await finishPrep(c.env.DB, c.env.AI, analysis, (stage, fraction) => void setStage(c.env.DB, videoId, stage, fraction).catch(() => {}));
+  await queueCajon(c.env, videoId);
   return c.json({ songId });
 });

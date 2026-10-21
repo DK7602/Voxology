@@ -1,13 +1,14 @@
 // /api/songs/*: song documents, favorites, practice progress, search and "similar".
 
 import { Hono } from "hono";
-import type { SongSummary } from "../shared/api";
+import type { SongRecord, SongSummary } from "../shared/api";
 import { DEMO_SONGS, findDemo } from "../shared/demoSongs";
 import { enharmonicSpellings } from "../shared/music/chords";
 import { inOrder, mergeOrder } from "../shared/order";
 import type { SongDoc } from "../shared/types";
 import { distinctChords, validatePracticeSettings, validateSongDoc } from "../shared/validate";
 import { ownsAudio } from "./audio";
+import { cajonStatus } from "./cajon";
 import type { AppEnv } from "./env";
 import { HttpError, readJsonObject, type Ctx } from "./http";
 import { currentUser, requireAuth } from "./session";
@@ -181,8 +182,9 @@ async function requireOwnSong(db: D1Database, userId: string, id: string): Promi
 }
 
 async function respondWithSong(c: Ctx, userId: string, id: string) {
-  const song = await visibleSongRecord(c.env.DB, userId, id);
+  const song: SongRecord | null = await visibleSongRecord(c.env.DB, userId, id);
   if (!song) throw notFound();
+  if (song.doc.media.kind === "youtube") song.cajon = await cajonStatus(c.env, song.doc.media.videoId, id);
   return c.json({ song });
 }
 

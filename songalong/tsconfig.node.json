@@ -11,7 +11,7 @@
     "noEmit": true,
     "types": ["node", "@cloudflare/workers-types"]
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "tests", "scripts"],
+  "include": ["vite.config.ts", "vitest.config.ts", "tests", "scripts", "cajon"],
   // tests of browser code; checked with the app's settings
   "exclude": ["tests/dom"]
 }

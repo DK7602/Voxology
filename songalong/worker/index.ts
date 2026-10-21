@@ -17,6 +17,7 @@ import { youtube } from "./youtube";
 
 export type { Env } from "./env";
 export { PrepContainer } from "./prepContainer";
+export { CajonContainer } from "./cajonContainer";
 
 const securityHeaders: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();

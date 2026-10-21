@@ -2,6 +2,8 @@
 // Stored as JSON in D1 (songs.data). Time is measured in beats; `offset` / `beatTimes`
 // tie beats to seconds in the media.
 
+import type { DrumPart } from "./music/cajon";
+
 export type Media =
   | { kind: "none" }
   | { kind: "youtube"; videoId: string }
@@ -61,9 +63,11 @@ export interface SongDoc {
   length: number;
   /** where the chords / lyrics came from, shown small under the title */
   credits?: string;
+  /** the drums heard in the recording, for the cajon part (found after the song is prepared) */
+  drums?: DrumPart;
 }
 
-export type Instrument = "guitar" | "ukulele" | "piano" | "mandolin" | "bass";
+export type Instrument = "guitar" | "ukulele" | "piano" | "mandolin" | "bass" | "cajon";
 
 export interface UserSettings {
   /** light or dark, or follow the device ("usyay" is an older way of saying USyay in light) */
@@ -80,6 +84,8 @@ export interface UserSettings {
 /** What the player remembers per user and song. */
 export interface PracticeSettings {
   part?: "rhythm" | "lead";
+  /** the cajon part's level */
+  cajon?: "easy" | "groove";
   transpose?: number;
   capo?: number;
   instrument?: Instrument;

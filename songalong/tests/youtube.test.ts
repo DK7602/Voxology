@@ -3,6 +3,7 @@ import { PREP_ENGINE, type PrepAnalysis, type PrepEvent, type PrepareEvent } fro
 import { cleanTitle, guessSongName, nameCandidates, tidyTitle } from "../shared/songName";
 import { alignVersion, anchorChain, estimateOffset, matchInOrder, oneOffsetFits, steadyChain, timeWords, transcribe, versionLines, warp, type Segment } from "../worker/align";
 import { believableTiming, findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
+import { nextCajonJob, nextCajonTime, retryDelay, runCajonJob } from "../worker/cajon";
 import { isoDuration } from "../worker/youtube";
 import { Client, makeEnv, signUp } from "./helpers/workerEnv";
 
@@ -446,6 +447,68 @@ describe("preparing a song", () => {
     // another user sees it too
     const { client: other } = await signUp(env, "other@example.com");
     expect((await other.call("GET", `/api/songs/${songId}`)).status).toBe(200);
+  });
+
+  it("asks for the cajon part once a song is ready, and keeps the drums found", async () => {
+    vi.stubGlobal("fetch", fakeLrclib());
+    let kicks = 0;
+    const CAJON = { idFromName: (n: string) => n, get: () => ({ kick: async () => void kicks++ }) };
+    const { env } = makeEnv({ PREP: fakePrep((videoId) => [{ type: "result", analysis: analysis(videoId) }]), AI: chunkAwareAi(), CAJON });
+    const { client } = await signUp(env, "cajon@example.com");
+    const ready = (await readEvents(await client.fetch("POST", "/api/youtube/prepare", { json: { videoId: "drumsong001" } }))).at(-1)!;
+    const songId = (ready as { songId: string }).songId;
+    expect(kicks).toBe(1);
+    expect((await client.call("GET", `/api/songs/${songId}`)).body.song.cajon).toBe("queued");
+
+    // the container's turn: it hears a kick on beat 0 and a snare on beat 1 (beats are 0.5 s apart from 2 s)
+    const job = (await nextCajonJob(env.DB))!;
+    expect(job).toEqual({ videoId: "drumsong001", songId, tries: 0 });
+    const done = await runCajonJob(env.DB, job, async () =>
+      ndjsonResponse([
+        { type: "progress", stage: "Listening for the drums" },
+        { type: "result", onsets: { kick: [2, 3], snare: [2.5, 3.5], hat: [2.25] } },
+      ] as never),
+    );
+    expect(done).toBe("ready");
+    const song = (await client.call("GET", `/api/songs/${songId}`)).body.song;
+    expect(song.cajon).toBe("ready");
+    expect(song.doc.drums).toEqual({ v: 1, hits: "1040200010002" });
+    expect(await nextCajonJob(env.DB)).toBeNull();
+    expect(await nextCajonTime(env.DB)).toBeNull();
+
+    // a song from before cajon parts is asked for when it is opened
+    await env.DB.prepare("UPDATE yt_songs SET cajon = NULL").run();
+    expect((await client.call("GET", `/api/songs/${songId}`)).body.song.cajon).toBe("queued");
+    expect(kicks).toBe(2);
+  });
+
+  it("tries the cajon part again later when YouTube refuses the cloud", async () => {
+    vi.stubGlobal("fetch", fakeLrclib());
+    const CAJON = { idFromName: (n: string) => n, get: () => ({ kick: async () => {} }) };
+    const { env } = makeEnv({ PREP: fakePrep((videoId) => [{ type: "result", analysis: analysis(videoId) }]), AI: chunkAwareAi(), CAJON });
+    const { client } = await signUp(env, "later@example.com");
+    await readEvents(await client.fetch("POST", "/api/youtube/prepare", { json: { videoId: "drumsong002" } }));
+    const now = Date.now();
+    const refuse = async () => ndjsonResponse([{ type: "error", code: "blocked", message: "YouTube refused this computer for now." }]);
+    expect(await runCajonJob(env.DB, (await nextCajonJob(env.DB, now))!, refuse, () => now)).toBe("waiting");
+    expect(await nextCajonJob(env.DB, now + 60_000)).toBeNull();
+    expect(await nextCajonTime(env.DB)).toBe(now + retryDelay(1));
+    const again = (await nextCajonJob(env.DB, now + retryDelay(1)))!;
+    expect(again.tries).toBe(1);
+    // a container that falls over counts as a failure, and so is tried again too
+    expect(await runCajonJob(env.DB, again, async () => new Response("no", { status: 500 }), () => now)).toBe("waiting");
+    // a video that can't be used is given up on at once
+    const last = (await nextCajonJob(env.DB, now + retryDelay(3)))!;
+    expect(await runCajonJob(env.DB, last, async () => ndjsonResponse([{ type: "error", code: "unavailable", message: "Removed" }]))).toBe("failed");
+    expect(await nextCajonTime(env.DB)).toBeNull();
+  });
+
+  it("without the cajon container, songs simply have no cajon state", async () => {
+    vi.stubGlobal("fetch", fakeLrclib());
+    const { env } = makeEnv({ PREP: fakePrep((videoId) => [{ type: "result", analysis: analysis(videoId) }]), AI: chunkAwareAi() });
+    const { client } = await signUp(env, "nocajon@example.com");
+    const ready = (await readEvents(await client.fetch("POST", "/api/youtube/prepare", { json: { videoId: "drumsong003" } }))).at(-1)!;
+    expect((await client.call("GET", `/api/songs/${(ready as { songId: string }).songId}`)).body.song.cajon).toBeNull();
   });
 
   it("keeps the lead part found with the chords", async () => {

@@ -4,13 +4,13 @@ import { parseChord } from "../../shared/music/chords";
 import {
   FRETTED,
   fretVoicings,
+  isFretted,
   pianoMidi,
   pianoVoicing,
   voicingMidi,
   type FretVoicing,
   type PianoVoicing,
 } from "../../shared/music/voicings";
-import type { Instrument } from "../../shared/types";
 import type { ChordView, ViewSettings } from "../player/hooks";
 
 export type ShownVoicing =
@@ -30,7 +30,8 @@ export function voicingFor(symbol: string, view: ChordView, s: ViewSettings, cho
     const midis = riff && v.order ? [...v.order.entries()].sort((a, b) => a[1] - b[1]).map(([m]) => m) : pianoMidi(v);
     return { kind: "piano", voicing: v, count: 1, midis, riff };
   }
-  const inst = s.instrument as Exclude<Instrument, "piano">;
+  if (!isFretted(s.instrument)) return null;
+  const inst = s.instrument;
   const capo = view.usesCapo ? s.capo : 0;
   const shape = capo ? shapeFor(sounding, capo, view.shapeKey) : sounding;
   const all = fretVoicings(shape, inst, 8);

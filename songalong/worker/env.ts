@@ -17,6 +17,9 @@ export interface Env {
   /** Song-prep container (yt-dlp + ffmpeg + chord detection). Optional: without it, songs go
    *  straight to the user's PC helper. */
   PREP?: DurableObjectNamespace<import("./prepContainer").PrepContainer>;
+  /** Cajon container (Demucs + the drum finder, 4 cores): finds each prepared song's drums in
+   *  the background. Optional: without it songs get a suggested cajon groove. */
+  CAJON?: DurableObjectNamespace<import("./cajonContainer").CajonContainer>;
   /** Workers AI, for speech recognition when lining lyrics up with a video. */
   AI?: import("./align").SpeechAi;
   /** YouTube Data API key for search (optional; without it the prep container searches). */

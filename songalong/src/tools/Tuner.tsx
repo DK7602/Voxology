@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { FRETTED } from "../../shared/music/voicings";
+import { frettedOf } from "../../shared/music/voicings";
 import { midiName, midiToFreq, prettyAccidentals } from "../../shared/music/notes";
 import type { Instrument } from "../../shared/types";
 import { strum, unlockAudio } from "../player/synth";
@@ -74,7 +74,7 @@ function Strobe({ live }: { live: React.MutableRefObject<{ cents: number | null;
 }
 
 export function Tuner({ instrument = "guitar" }: { instrument?: Instrument }) {
-  const inst = instrument === "piano" ? FRETTED.guitar : FRETTED[instrument];
+  const inst = frettedOf(instrument);
   const [on, setOn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reading, setReading] = useState<{ freq: number; midi: number; cents: number } | null>(null);

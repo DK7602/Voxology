@@ -11,6 +11,7 @@ import type {
   SongDoc,
   UserSettings,
 } from "./types";
+import { validDrums } from "./music/cajon";
 import { wordStarts } from "./timeline";
 
 export class ValidationError extends Error {
@@ -37,7 +38,7 @@ export const SONG_LIMITS = {
   minBeat: -16,
 } as const;
 
-const INSTRUMENTS: readonly Instrument[] = ["guitar", "ukulele", "piano", "mandolin", "bass"];
+const INSTRUMENTS: readonly Instrument[] = ["guitar", "ukulele", "piano", "mandolin", "bass", "cajon"];
 const THEMES = ["light", "dark", "system"] as const;
 const PALETTES = ["gold", "usyay", "sunday"] as const;
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
@@ -234,6 +235,8 @@ export function validateSongDoc(input: unknown): SongDoc {
   if (typeof input.credits === "string" && input.credits.trim()) doc.credits = cleanLine(input.credits, 200);
   const beatTimes = validateBeatTimes(input.beatTimes);
   if (beatTimes) doc.beatTimes = beatTimes;
+  const drums = validDrums(input.drums);
+  if (drums) doc.drums = drums;
   return doc;
 }
 
@@ -255,6 +258,7 @@ export function validatePracticeSettings(input: unknown): PracticeSettings {
   if (!isObject(input)) fail("Settings must be an object");
   const out: PracticeSettings = {};
   if (input.part === "rhythm" || input.part === "lead") out.part = input.part;
+  if (input.cajon === "easy" || input.cajon === "groove") out.cajon = input.cajon;
   if (input.transpose != null) out.transpose = optNumber(input, "transpose", "Transpose", 0, -12, 12, true);
   if (input.capo != null) out.capo = optNumber(input, "capo", "Capo", 0, 0, 12, true);
   const instrument = optInstrument(input, "instrument");

@@ -4,7 +4,7 @@ import type { SongRecord } from "../../shared/api";
 import type { Instrument } from "../../shared/types";
 import { parseChord } from "../../shared/music/chords";
 import { prettyAccidentals } from "../../shared/music/notes";
-import { FRETTED } from "../../shared/music/voicings";
+import { FRETTED, isFretted } from "../../shared/music/voicings";
 import { chordsInLine, gapAfterLine } from "../../shared/timeline";
 import { exportLead } from "../../shared/lead";
 import { api } from "../api";
@@ -107,7 +107,7 @@ function Sheet({
 
   const firstLine = doc.lines[0]?.beat ?? Infinity;
   const intro = doc.chords.map((c, i) => ({ c, i })).filter(({ c }) => c.beat < firstLine);
-  const instName = settings.instrument === "piano" ? "Piano" : FRETTED[settings.instrument].name;
+  const instName = settings.instrument === "piano" ? "Piano" : settings.instrument === "cajon" ? "Cajon" : FRETTED[settings.instrument].name;
 
   return (
     <div className="print-page">
@@ -148,7 +148,7 @@ function Sheet({
         </span>
         <span><b>BPM</b> {Math.round(doc.bpm)}</span>
         <span><b>Time</b> {doc.beatsPerBar}/4</span>
-        {settings.instrument !== "piano" && <span><b>Tuning</b> {FRETTED[settings.instrument].tuningNames.join(" ")}</span>}
+        {isFretted(settings.instrument) && <span><b>Tuning</b> {FRETTED[settings.instrument].tuningNames.join(" ")}</span>}
         {settings.transpose !== 0 && <span><b>Transposed</b> {settings.transpose > 0 ? "+" : ""}{settings.transpose}</span>}
       </div>
 

@@ -24,11 +24,22 @@
   "ai": { "binding": "AI" },
   // Song prep in the cloud: yt-dlp + ffmpeg + chord detection (prep/Dockerfile). Needs Workers
   // Paid. Songs YouTube refuses here go to the user's PC helper instead.
+  // Cajon parts: after a song is ready, a 4-core container pulls its drums out (Demucs) and
+  // finds the hits, one song at a time in the background (cajon/Dockerfile, worker/cajon.ts).
   "containers": [
-    { "class_name": "PrepContainer", "image": "./prep/Dockerfile", "max_instances": 3, "instance_type": "standard-1" }
+    { "class_name": "PrepContainer", "image": "./prep/Dockerfile", "max_instances": 3, "instance_type": "standard-1" },
+    { "class_name": "CajonContainer", "image": "./cajon/Dockerfile", "max_instances": 1, "instance_type": "standard-4" }
   ],
-  "durable_objects": { "bindings": [{ "name": "PREP", "class_name": "PrepContainer" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PrepContainer"] }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "PREP", "class_name": "PrepContainer" },
+      { "name": "CAJON", "class_name": "CajonContainer" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["PrepContainer"] },
+    { "tag": "v2", "new_sqlite_classes": ["CajonContainer"] }
+  ],
   // Optional secret: YOUTUBE_API_KEY (`wrangler secret put YOUTUBE_API_KEY`) makes search use
   // YouTube's official search; without it the prep container searches.
   "vars": {

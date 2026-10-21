@@ -41,6 +41,8 @@ export interface SongSummary {
 
 export interface SongRecord extends SongSummary {
   doc: SongDoc;
+  /** for prepared YouTube songs: where finding the drums for the cajon part is (absent otherwise) */
+  cajon?: "queued" | "working" | "waiting" | "ready" | "failed" | null;
 }
 
 export interface PlaylistSummary {

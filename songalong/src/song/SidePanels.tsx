@@ -3,7 +3,7 @@ import type { SongSummary } from "../../shared/api";
 import type { SongDoc } from "../../shared/types";
 import { prettyAccidentals } from "../../shared/music/notes";
 import { namedForList } from "../../shared/music/songKey";
-import { FRETTED } from "../../shared/music/voicings";
+import { FRETTED, isFretted } from "../../shared/music/voicings";
 import { Artwork } from "../components/Artwork";
 import { ChordName } from "../components/ChordName";
 import {
@@ -22,10 +22,7 @@ import { Popover } from "../components/ui";
 import type { ChordView, ViewSettings } from "../player/hooks";
 
 export function SongDetails({ doc, view, settings, chords }: { doc: SongDoc; view: ChordView; settings: ViewSettings; chords: string[] }) {
-  const tuning =
-    settings.instrument === "piano"
-      ? "—"
-      : `Standard (${FRETTED[settings.instrument].tuningNames.join(" ")})`;
+  const tuning = isFretted(settings.instrument) ? `Standard (${FRETTED[settings.instrument].tuningNames.join(" ")})` : "—";
   return (
     <div className="panel side-panel">
       <div className="panel-title">

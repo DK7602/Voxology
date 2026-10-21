@@ -71,6 +71,15 @@ export type PrepareEvent =
   | { type: "waiting_pc"; message: string }
   | { type: "error"; message: string };
 
+/** What the cajon container (cajon/server.ts) streams back for one song, one per line. */
+export type CajonEvent =
+  | { type: "progress"; stage: string }
+  | { type: "result"; onsets: import("./music/cajon").DrumOnsets }
+  | { type: "error"; code: PrepErrorCode; message: string };
+
+/** The version of the drum finding; songs whose drums came from an older one are done again. */
+export const CAJON_ENGINE = 1;
+
 export const MAX_SONG_SECONDS = 15 * 60;
 export const CHUNK_SECONDS = 30;
 

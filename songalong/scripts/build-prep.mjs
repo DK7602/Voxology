@@ -1,11 +1,13 @@
-// Bundles the song-prep code for its two homes:
+// Bundles the song-prep code for its homes:
 //   prep/dist/server.mjs            -> the Cloudflare container (see prep/Dockerfile)
 //   public/helper/songalong-helper.mjs -> the PC helper, downloadable from the site
+//   cajon/dist/server.mjs           -> the cajon container (see cajon/Dockerfile)
 import { copyFile, mkdir } from "node:fs/promises";
 import { build } from "esbuild";
 
 const common = { bundle: true, platform: "node", format: "esm", target: "node20", logLevel: "warning" };
 await build({ ...common, entryPoints: ["prep/server.ts"], outfile: "prep/dist/server.mjs" });
+await build({ ...common, entryPoints: ["cajon/server.ts"], outfile: "cajon/dist/server.mjs" });
 await build({
   ...common,
   entryPoints: ["prep/helper.ts"],

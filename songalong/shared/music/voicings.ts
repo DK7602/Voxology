@@ -11,7 +11,7 @@ import { letterUp, mod12, prettyAccidentals, spellWithLetter, tidyName } from ".
 import type { Instrument } from "../types";
 
 export interface FrettedInstrument {
-  id: Exclude<Instrument, "piano">;
+  id: Exclude<Instrument, "piano" | "cajon">;
   name: string;
   /** open-string MIDI notes, in diagram order (lowest string first) */
   tuning: number[];
@@ -44,6 +44,11 @@ export const BASS: FrettedInstrument = {
 export const FRETTED: Record<FrettedInstrument["id"], FrettedInstrument> = {
   guitar: GUITAR, ukulele: UKULELE, mandolin: MANDOLIN, bass: BASS,
 };
+export type FrettedId = FrettedInstrument["id"];
+/** Instruments with strings and frets (not the piano or the cajon). */
+export const isFretted = (i: Instrument): i is FrettedId => i !== "piano" && i !== "cajon";
+/** The fretted instrument for a setting: itself, else the guitar. */
+export const frettedOf = (i: Instrument): FrettedInstrument => (isFretted(i) ? FRETTED[i] : GUITAR);
 
 export interface Barre {
   fret: number;

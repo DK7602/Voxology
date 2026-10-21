@@ -4,4 +4,5 @@ dist/
 .dev.vars
 *.local
 prep/dist/
+cajon/dist/
 public/helper/
