@@ -33,13 +33,18 @@ export class CajonContainer extends Container<Env> {
     const job = await nextCajonJob(db);
     if (job) {
       // (when the service is down, runCajonJob moves the whole queue on, and the plan below follows)
-      await runCajonJob(db, job, (videoId) =>
-        this.containerFetch("http://cajon/cajon", {
+      await runCajonJob(db, job, async (videoId) => {
+        // a first start pulls a large image (PyTorch and the model): longer than the usual 8 s
+        await this.startAndWaitForPorts({
+          ports: this.defaultPort,
+          cancellationOptions: { instanceGetTimeoutMS: 5 * 60_000, portReadyTimeoutMS: 3 * 60_000, waitInterval: 1_000 },
+        });
+        return this.containerFetch("http://cajon/cajon", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ videoId }),
-        }),
-      );
+        });
+      });
     }
     const due = await nextCajonTime(db);
     if (due !== null) await this.plan(due);
