@@ -517,6 +517,23 @@ describe("preparing a song", () => {
     expect(await nextCajonTime(env.DB)).toBeNull();
   });
 
+  it("does a cajon job that was cut off again, at once when no job is running", async () => {
+    vi.stubGlobal("fetch", fakeLrclib());
+    const CAJON = { idFromName: (n: string) => n, get: () => ({ kick: async () => {} }) };
+    const { env } = makeEnv({ PREP: fakePrep((videoId) => [{ type: "result", analysis: analysis(videoId) }]), AI: chunkAwareAi(), CAJON });
+    const { client } = await signUp(env, "cutoff@example.com");
+    await readEvents(await client.fetch("POST", "/api/youtube/prepare", { json: { videoId: "drumsong004" } }));
+    const now = Date.now();
+    // a deploy restarted the container's object mid-job: the song stays "working"
+    await env.DB.prepare("UPDATE yt_songs SET cajon = 'working', cajon_at = ?").bind(now).run();
+    // to anyone who can't tell whether the job still runs, it is due once it is long overdue
+    expect(await nextCajonJob(env.DB, now + 60_000)).toBeNull();
+    expect(await nextCajonTime(env.DB)).toBe(now + 20 * 60_000);
+    // the object knows no job runs: due now
+    expect(await nextCajonJob(env.DB, now + 60_000, 0)).toMatchObject({ videoId: "drumsong004" });
+    expect(await nextCajonTime(env.DB, 0)).toBe(now);
+  });
+
   it("without the cajon container, songs simply have no cajon state", async () => {
     vi.stubGlobal("fetch", fakeLrclib());
     const { env } = makeEnv({ PREP: fakePrep((videoId) => [{ type: "result", analysis: analysis(videoId) }]), AI: chunkAwareAi() });

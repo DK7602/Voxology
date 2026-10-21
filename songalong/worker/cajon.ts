@@ -13,7 +13,8 @@ import type { Env } from "./env";
 
 export type CajonStatus = "queued" | "working" | "waiting" | "ready" | "failed";
 
-/** A job that started this long ago and never finished (the machine went away) is due again. */
+/** A job that started this long ago and never finished (the machine went away) is due again;
+ *  sooner (`stuckMs`) when the queue knows no job is running. */
 const STUCK_MS = 20 * 60_000;
 /** How many times YouTube may refuse before a song is given up on (spread over about 4 days). */
 const MAX_BLOCKED = 8;
@@ -71,7 +72,7 @@ interface Job {
 }
 
 /** The job to do now, if any: the longest-waiting one that is due. */
-export async function nextCajonJob(db: D1Database, now = Date.now()): Promise<Job | null> {
+export async function nextCajonJob(db: D1Database, now = Date.now(), stuckMs = STUCK_MS): Promise<Job | null> {
   const row = await db
     .prepare(
       `SELECT video_id, song_id, cajon_tries FROM yt_songs
@@ -79,19 +80,19 @@ export async function nextCajonJob(db: D1Database, now = Date.now()): Promise<Jo
          AND ((cajon IN ('queued', 'waiting') AND cajon_at <= ?1) OR (cajon = 'working' AND cajon_at <= ?2))
        ORDER BY cajon_at LIMIT 1`,
     )
-    .bind(now, now - STUCK_MS)
+    .bind(now, now - stuckMs)
     .first<{ video_id: string; song_id: string; cajon_tries: number }>();
   return row ? { videoId: row.video_id, songId: row.song_id, tries: row.cajon_tries } : null;
 }
 
 /** When the next job falls due (ms), or null with nothing left to do. */
-export async function nextCajonTime(db: D1Database): Promise<number | null> {
+export async function nextCajonTime(db: D1Database, stuckMs = STUCK_MS): Promise<number | null> {
   const row = await db
     .prepare(
       `SELECT MIN(CASE WHEN cajon = 'working' THEN cajon_at + ?1 ELSE cajon_at END) AS due FROM yt_songs
        WHERE status = 'ready' AND song_id IS NOT NULL AND cajon IN ('queued', 'waiting', 'working')`,
     )
-    .bind(STUCK_MS)
+    .bind(stuckMs)
     .first<{ due: number | null }>();
   return row?.due ?? null;
 }
