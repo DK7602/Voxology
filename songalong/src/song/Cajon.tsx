@@ -25,7 +25,7 @@ export function useCajonPart(doc: SongDoc, level: CajonLevel): CajonPart {
 const barCount = (part: CajonPart) => part.barGroove.length;
 const grooveAt = (part: CajonPart, bar: number): Groove => part.grooves[part.barGroove[Math.max(0, Math.min(barCount(part) - 1, bar))]];
 
-/** The strokes by bar: a column per beat, its four 16th notes in it; the now line stays put. */
+/** The strokes by bar: a column per beat, its two 8th notes in it; the now line stays put. */
 export function GrooveStrip({ engine, part }: { engine: PlayerEngine; part: CajonPart }) {
   const bpb = part.beatsPerBar;
   const narrow = useNarrow();
@@ -98,7 +98,8 @@ export function GrooveStrip({ engine, part }: { engine: PlayerEngine; part: Cajo
                     title={`Bar ${b + 1}, beat ${k + 1}: click to jump, shift-click to loop bars`}
                   >
                     <span className="gs-num">{k === 0 ? b + 1 : k + 1}</span>
-                    {Array.from({ length: SUBS }, (_, s) => {
+                    {/* the parts use 8th notes only: the beat and its "and", room for big dots */}
+                    {[0, SUBS / 2].map((s) => {
                       const x = groove.bar[k * SUBS + s];
                       if (x === ".") return <span key={s} />;
                       const slot = beat * SUBS + s;
