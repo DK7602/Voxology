@@ -72,6 +72,26 @@ describe("drums on the beat grid", () => {
     expect(defaultLevel(song(ROCK.repeat(16)))).toBe("groove");
     // Bass or Slap on every 8th note
     expect(defaultLevel(song("1020102010201020".repeat(16)))).toBe("easy");
+    // four quite different grooves, none played most of the time
+    const grooves = ["1000200010002000", "2000100020001000", "1010101010101010", "2020202020202020"];
+    expect(defaultLevel(song(grooves.map((g) => g.repeat(4)).join(""), 16))).toBe("easy");
+  });
+
+  it("phrases that differ by a stroke or two play one groove (the most common)", () => {
+    const main = ROCK.repeat(4);
+    const missedSnare = "5040604050506040".repeat(3) + "5040404050506040"; // one bar lost a snare: still the same groove
+    const extraKick = "5040604050506050".repeat(4); // a kick on the last "and"
+    const part = cajonPart(song(main + main + missedSnare + extraKick + main, 20), "groove");
+    expect(part.grooves).toHaveLength(1);
+    expect(part.grooves[0].bar.join("")).toBe("B.t.S.t.B.B.S.t.");
+  });
+
+  it("an acoustic song's strums heard as drums (kick and snare at once) get the suggested groove", () => {
+    const strums = "3030303030303030".repeat(16);
+    expect(noDrums({ v: 1, hits: strums }, 64)).toBe(true);
+    expect(cajonPart(song(strums), "groove").source).toBe("suggested");
+    // a real beat with the odd kick and crash together is still drums
+    expect(noDrums({ v: 1, hits: ("3040604050506040" + ROCK.repeat(3)).repeat(4) }, 64)).toBe(false);
   });
 
   it("songs without drums get a suggested groove for their tempo", () => {
@@ -160,5 +180,13 @@ describe("finding drum hits", () => {
       expect(hit / truth[drum].length, `${drum} found`).toBeGreaterThanOrEqual(0.9);
       expect(extra, `${drum} extras`).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+describe("YouTube's refusals", () => {
+  it("a 403 while downloading is YouTube refusing this computer (tried again later)", async () => {
+    const { classifyYtDlpError } = await import("../prep/core");
+    expect(classifyYtDlpError("ERROR: unable to download video data: HTTP Error 403: Forbidden").code).toBe("blocked");
+    expect(classifyYtDlpError("ERROR: [youtube] x: Video unavailable").code).toBe("unavailable");
   });
 });

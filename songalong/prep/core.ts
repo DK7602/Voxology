@@ -63,7 +63,7 @@ function run(cmd: string, args: string[], tools: Tools): Promise<{ out: Buffer; 
 
 /** Turns yt-dlp's complaint into a code the Worker can act on. */
 export function classifyYtDlpError(stderr: string): { code: PrepErrorCode; message: string } {
-  if (/confirm you.?re not a bot|sign in to confirm|HTTP Error 429|too many requests|blocked|captcha/i.test(stderr)) {
+  if (/confirm you.?re not a bot|sign in to confirm|HTTP Error 429|HTTP Error 403|too many requests|blocked|captcha/i.test(stderr)) {
     return { code: "blocked", message: "YouTube refused this computer for now." };
   }
   if (/private video|video unavailable|has been removed|not available in your country|members-only|age-restricted|premieres in|live event will begin/i.test(stderr)) {

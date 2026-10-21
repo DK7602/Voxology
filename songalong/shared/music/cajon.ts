@@ -146,19 +146,39 @@ export interface SongShape {
   drums?: DrumPart;
 }
 
-/** True when the drums found are too few to play along with (an acoustic song). */
+/** In real drumming the kick and snare seldom land together (6% of strokes is typical, a third at
+ *  most); guitar strums heard in an acoustic song's "drums" set both off at once. */
+const STRUM_SHARE = 0.45;
+
+/** True when the drums found are too few to play along with, or are an acoustic song's strums. */
 export function noDrums(drums: DrumPart | undefined, beats: number): boolean {
   if (!drums?.hits) return true;
   let strokes = 0;
-  for (let i = 0; i < drums.hits.length; i++) if ((drums.hits.charCodeAt(i) - 48) & 3) strokes++;
-  // fewer than one kick or snare a bar on average
-  return strokes < Math.max(8, beats / 4);
+  let both = 0;
+  for (let i = 0; i < drums.hits.length; i++) {
+    const b = (drums.hits.charCodeAt(i) - 48) & 3;
+    if (b) strokes++;
+    if (b === 3) both++;
+  }
+  // fewer than one kick or snare a bar on average, or mostly kick and snare at once
+  return strokes < Math.max(8, beats / 4) || both > STRUM_SHARE * strokes;
+}
+
+/** How far apart two grooves are: a stroke that differs counts 1, a tap or not 0.5. */
+function distance(a: readonly Stroke[], b: readonly Stroke[]): number {
+  let d = 0;
+  for (let s = 0; s < a.length; s++) {
+    if (a[s] === b[s]) continue;
+    d += isHit(a[s]) || isHit(b[s]) ? 1 : 0.5;
+  }
+  return d;
 }
 
 /**
  * The cajon part of a song at a level: each 4-bar phrase plays the groove most of its bars
- * share; stretches without drums rest. Without drums (or before they are found), the whole
- * song gets the suggested groove for its tempo.
+ * share; phrases whose grooves differ by a stroke or two (the drummer's variations, or a missed
+ * hit) play the most common of them; stretches without drums rest. Without drums (or before
+ * they are found), the whole song gets the suggested groove for its tempo.
  */
 export function cajonPart(song: SongShape, level: CajonLevel): CajonPart {
   const bpb = Math.max(1, Math.round(song.beatsPerBar) || 4);
@@ -175,37 +195,56 @@ export function cajonPart(song: SongShape, level: CajonLevel): CajonPart {
   const strokes: Stroke[] = [];
   for (let j = 0; j < bars * slots; j++) strokes.push(strokeAt(hits, j));
 
-  const grooves: Groove[] = [];
-  const barGroove: number[] = [];
-  const keyOf = (g: Groove) => (g.rest ? "rest" : g.bar.join(""));
-  let changes = 0;
-  let total = 0;
-  let phrases = 0;
+  // each phrase's own groove (null: the drums are out)
+  const phrases: { bars: number; bar: Stroke[] | null }[] = [];
   for (let b = 0; b < bars; b += PHRASE_BARS) {
     const n = Math.min(PHRASE_BARS, bars - b);
-    const raw = commonBar(strokes, slots, b, n);
     const played = strokes.slice(b * slots, (b + n) * slots).filter(isHit).length;
-    const bar = shape(raw);
-    // a phrase with less than a stroke or two a bar: the drums are out here
-    const rest = played < 2 * n || hitCount(bar) === 0;
-    const key = rest ? "rest" : bar.join("");
-    let index = grooves.findIndex((g) => keyOf(g) === key);
+    const bar = shape(commonBar(strokes, slots, b, n));
+    // a phrase with less than a stroke or two a bar: rest
+    phrases.push({ bars: n, bar: played < 2 * n || hitCount(bar) === 0 ? null : bar });
+  }
+  // grooves that differ by a stroke or two are one groove: the most common of them
+  const counts = new Map<string, { bar: Stroke[]; bars: number }>();
+  for (const p of phrases) {
+    if (!p.bar) continue;
+    const key = p.bar.join("");
+    const c = counts.get(key) ?? { bar: p.bar, bars: 0 };
+    c.bars += p.bars;
+    counts.set(key, c);
+  }
+  const near = level === "easy" ? 1 : 2;
+  const reps: Stroke[][] = [];
+  const repOf = new Map<string, Stroke[]>();
+  for (const [key, { bar }] of [...counts].sort((x, y) => y[1].bars - x[1].bars)) {
+    const rep = reps.find((r) => distance(r, bar) <= near) ?? (reps.push(bar), bar);
+    repOf.set(key, rep);
+  }
+
+  const grooves: Groove[] = [];
+  const barGroove: number[] = [];
+  let total = 0;
+  let played = 0;
+  for (const p of phrases) {
+    const rep = p.bar ? repOf.get(p.bar.join(""))! : null;
+    let index = grooves.findIndex((g) => (rep ? !g.rest && g.bar === rep : g.rest));
     if (index < 0) {
       index = grooves.length;
-      grooves.push({ name: "", bar: rest ? bar.map(() => ".") : bar, rest });
+      grooves.push({ name: "", bar: rep ?? new Array<Stroke>(slots).fill("."), rest: !rep });
     }
-    if (barGroove.length && barGroove.at(-1) !== index) changes++;
-    for (let i = 0; i < n; i++) barGroove.push(index);
-    if (!rest) {
-      total += hitCount(bar);
-      phrases++;
+    for (let i = 0; i < p.bars; i++) barGroove.push(index);
+    if (rep) {
+      total += hitCount(rep);
+      played++;
     }
   }
   let letter = 0;
   for (const g of grooves) g.name = g.rest ? "Rest" : String.fromCharCode(65 + letter++);
-  // a groove with many strokes, or one that changes at most phrase ends
-  const perBar = phrases ? total / phrases : 0;
-  const busy = level === "groove" && (perBar > bpb * 1.5 || (phrases >= 4 && changes > 0.6 * Math.ceil(bars / PHRASE_BARS)));
+  // busy: many strokes a bar, or no one groove that most of the song plays (it keeps changing)
+  const perBar = played ? total / played : 0;
+  const drummed = barGroove.filter((g) => !grooves[g].rest).length;
+  const main = Math.max(0, ...grooves.map((g, i) => (g.rest ? 0 : barGroove.filter((x) => x === i).length)));
+  const busy = level === "groove" && (perBar > bpb * 1.5 || (drummed >= 16 && main < 0.4 * drummed));
   return { level, source: "drums", beatsPerBar: bpb, grooves, barGroove, busy };
 }
 
