@@ -9,11 +9,10 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # PyTorch's CPU build first (the default one carries GPU libraries, gigabytes of them), then
-# Demucs and the model itself (the drums model of htdemucs_ft, 80 MB), so nothing is downloaded
-# when a song is worked on
+# Demucs and the model itself (81 MB), so nothing is downloaded when a song is worked on
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 torchaudio==2.11.0 \
   && pip install --no-cache-dir demucs==4.0.1 soundfile==0.14.0 scipy==1.18.1 \
-  && python -c "from demucs.pretrained import get_model; get_model('f7e0c4bc')"
+  && python -c "from demucs.pretrained import get_model; get_model('htdemucs')"
 
 # Node runs the service; yt-dlp (with deno, which it needs for YouTube) gets the audio
 COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
