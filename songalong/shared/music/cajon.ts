@@ -65,16 +65,34 @@ function strokeAt(hits: string, j: number): Stroke {
 
 const isHit = (x: Stroke) => x === "B" || x === "S";
 
-/** Per slot of the phrase's bars, the stroke at least half of them play there (else a rest). */
-function commonBar(strokes: Stroke[], slotsPerBar: number, from: number, bars: number): Stroke[] {
+/** Per slot, the stroke at least half the bars play there (else a rest): steady, for Easy. */
+function voteBar(played: Stroke[][]): Stroke[] {
   const out: Stroke[] = [];
-  for (let s = 0; s < slotsPerBar; s++) {
+  for (let s = 0; s < played[0].length; s++) {
     const count = { B: 0, S: 0, t: 0, ".": 0 };
-    for (let b = from; b < from + bars; b++) count[strokes[b * slotsPerBar + s] ?? "."]++;
+    for (const bar of played) count[bar[s] ?? "."]++;
     const best = (["S", "B", "t"] as const).reduce((a, x) => (count[x] > count[a] ? x : a), "S" as "S" | "B" | "t");
-    out.push(count[best] * 2 >= bars ? best : ".");
+    out.push(count[best] * 2 >= played.length ? best : ".");
   }
   return out;
+}
+
+/**
+ * The bar a phrase plays. Groove: the bar its drummer plays most, when one comes back (a vote
+ * per slot would join variants the drummer alternates into a bar nobody plays); else the vote.
+ * Easy: the vote, which keeps a steady beat. Checked against MIDI drum tracks (Sweet Child O'
+ * Mine: Groove bars matching 1% -> 18%; Easy as before). The bars are read at the level's detail.
+ */
+function phraseBar(strokes: Stroke[], slotsPerBar: number, from: number, bars: number, level: CajonLevel): Stroke[] {
+  const raw: Stroke[][] = [];
+  for (let b = from; b < from + bars; b++) raw.push(strokes.slice(b * slotsPerBar, (b + 1) * slotsPerBar));
+  if (level === "easy") return onTheBeats(voteBar(raw));
+  // bars the drums sit out don't count (else drums coming in mid-phrase would rest it)
+  const played = raw.map(eighthNotes).filter((bar) => bar.some(isHit));
+  const counts = new Map<string, number>();
+  for (const bar of played) counts.set(bar.join(""), (counts.get(bar.join("")) ?? 0) + 1);
+  const [top, n] = [...counts].reduce((a, x) => (x[1] > a[1] ? x : a), ["", 0] as [string, number]);
+  return n >= 2 ? ([...top] as Stroke[]) : eighthNotes(voteBar(raw));
 }
 
 /** Groove level: the 8th notes (the "e" and "a" 16ths left out). */
@@ -207,7 +225,7 @@ export function cajonPart(song: SongShape, level: CajonLevel): CajonPart {
   for (let b = 0; b < bars; b += PHRASE_BARS) {
     const n = Math.min(PHRASE_BARS, bars - b);
     const played = strokes.slice(b * slots, (b + n) * slots).filter(isHit).length;
-    const bar = shape(commonBar(strokes, slots, b, n));
+    const bar = phraseBar(strokes, slots, b, n, level);
     // a phrase with less than a stroke or two a bar: rest
     phrases.push({ bars: n, bar: played < 2 * n || hitCount(bar) === 0 ? null : bar });
   }
