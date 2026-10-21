@@ -57,9 +57,34 @@ export function drumHits(on: DrumOnsets, beatTimes: readonly number[]): string {
   return Array.from(bits, (b) => String(b)).join("").replace(/0+$/, "");
 }
 
-/** The stroke a 16th note gets: the snare wins, then the kick, then the hi-hat. */
-function strokeAt(hits: string, j: number): Stroke {
+/** A backbeat needs this many snares heard without a kick on its beats, and this many times as
+ *  many as on the other beats. */
+const BACKBEAT_MIN = 8;
+const BACKBEAT_RATIO = 4;
+
+/**
+ * A song's backbeat: the beats, every other one (0: from the first, 1: from the second), that
+ * its snares heard without a kick fall on; null when they don't clearly (jazz, few snares, or an
+ * odd number of beats to the bar).
+ */
+function backbeat(hits: string, beatsPerBar: number): 0 | 1 | null {
+  if (beatsPerBar % 2) return null;
+  const lone = [0, 0];
+  for (let j = 0; j < hits.length; j += SUBS) if (((hits.charCodeAt(j) - 48) & 3) === 2) lone[(j / SUBS) % 2]++;
+  for (const p of [0, 1] as const) if (lone[p] >= BACKBEAT_MIN && lone[p] >= BACKBEAT_RATIO * lone[1 - p]) return p;
+  return null;
+}
+
+/**
+ * The stroke a 16th note gets: the snare wins, then the kick, then the hi-hat. But a kick and
+ * snare heard together on a beat off the backbeat play the kick: there the "snare" is mostly the
+ * kick leaking into it (Thunderstruck read S on every beat, against its MIDI drum track 30% of
+ * strokes right; this way 63%). On 23 hand-labelled songs (MDB-Drums) the snares this drops were
+ * not played 35 times in 44, and none got worse.
+ */
+function strokeAt(hits: string, j: number, back: 0 | 1 | null): Stroke {
   const b = j < hits.length ? hits.charCodeAt(j) - 48 : 0;
+  if ((b & 3) === 3 && back !== null && j % SUBS === 0 && (j / SUBS) % 2 !== back) return "B";
   return b & 2 ? "S" : b & 1 ? "B" : b & 4 ? "t" : ".";
 }
 
@@ -218,7 +243,8 @@ export function cajonPart(song: SongShape, level: CajonLevel): CajonPart {
 
   const hits = song.drums!.hits;
   const strokes: Stroke[] = [];
-  for (let j = 0; j < bars * slots; j++) strokes.push(strokeAt(hits, j));
+  const back = backbeat(hits, bpb);
+  for (let j = 0; j < bars * slots; j++) strokes.push(strokeAt(hits, j, back));
 
   // each phrase's own groove (null: the drums are out)
   const phrases: { bars: number; bar: Stroke[] | null }[] = [];

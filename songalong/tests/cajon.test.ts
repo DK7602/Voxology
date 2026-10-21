@@ -106,6 +106,24 @@ describe("drums on the beat grid", () => {
     expect(noDrums({ v: 1, hits: ("3040604050506040" + ROCK.repeat(3)).repeat(4) }, 64)).toBe(false);
   });
 
+  it("a kick that leaks into the snare off the backbeat plays as the kick", () => {
+    // Thunderstruck's trouble: kick on 1 and 3 heard with a snare too, snare alone on 2 and 4
+    const leaky = { v: 1 as const, hits: "3000200030002000".repeat(16), level: -8 };
+    expect(cajonPart({ ...song(), drums: leaky }, "groove").grooves.map((g) => g.bar.join(""))).toEqual(["B...S...B...S..."]);
+    // the backbeat comes from the lone snares, wherever the bar starts
+    const shifted = { ...leaky, hits: "2000300020003000".repeat(16) };
+    expect(cajonPart({ ...song(), drums: shifted }, "groove").grooves.map((g) => g.bar.join(""))).toEqual(["S...B...S...B..."]);
+    // a kick on every beat with the snare on 2 and 4 has no lone snares: the snare stays
+    const fourOnTheFloor = { v: 1 as const, hits: "1000300010003000".repeat(16), level: -8 };
+    expect(cajonPart({ ...song(), drums: fourOnTheFloor }, "groove").grooves.map((g) => g.bar.join(""))).toEqual(["B...S...B...S..."]);
+    // no clear backbeat (lone snares on any beat): the snare wins as before
+    const loose = { v: 1 as const, hits: "3000200020003000".repeat(16), level: -8 };
+    expect(cajonPart({ ...song(), drums: loose }, "groove").grooves.map((g) => g.bar.join(""))).toEqual(["S...S...S...S..."]);
+    // nor in 3/4
+    const waltz = { beatsPerBar: 3, bpm: 120, length: 48, drums: { v: 1 as const, hits: "300020002000".repeat(16), level: -8 } };
+    expect(cajonPart(waltz, "groove").grooves.map((g) => g.bar.join(""))).toEqual(["S...S...S..."]);
+  });
+
   it("songs without drums get a suggested groove for their tempo", () => {
     expect(noDrums(undefined, 64)).toBe(true);
     expect(noDrums({ v: 1, hits: "4040404040404040".repeat(16) }, 64)).toBe(true); // hi-hat only
