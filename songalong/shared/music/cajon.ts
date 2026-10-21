@@ -150,6 +150,8 @@ export interface Groove {
   bar: Stroke[];
   /** true for the stretches where the drums don't play */
   rest: boolean;
+  /** the bar as found, when the player has fixed it (see withFixes) */
+  found?: Stroke[];
 }
 
 export interface CajonPart {
@@ -161,8 +163,6 @@ export interface CajonPart {
   grooves: Groove[];
   /** the groove of each bar (index into `grooves`) */
   barGroove: number[];
-  /** lots of strokes or a groove that keeps changing: Easy is the better start */
-  busy: boolean;
 }
 
 /** Suggested grooves by tempo (one 4/4 bar, 16ths), for songs whose drums aren't known. */
@@ -180,7 +180,7 @@ function suggestedBar(bpm: number, beatsPerBar: number): Stroke[] {
   return bar;
 }
 
-/** Strokes in a part's bars (Bass and Slap) for judging how busy it is. */
+/** The Bass and Slap strokes in a bar. */
 const hitCount = (bar: readonly Stroke[]) => bar.filter(isHit).length;
 
 export interface SongShape {
@@ -238,7 +238,7 @@ export function cajonPart(song: SongShape, level: CajonLevel): CajonPart {
 
   if (noDrums(song.drums, song.length)) {
     const bar = shape(suggestedBar(song.bpm, bpb));
-    return { level, source: "suggested", beatsPerBar: bpb, grooves: [{ name: "A", bar, rest: false }], barGroove: new Array(bars).fill(0), busy: false };
+    return { level, source: "suggested", beatsPerBar: bpb, grooves: [{ name: "A", bar, rest: false }], barGroove: new Array(bars).fill(0) };
   }
 
   const hits = song.drums!.hits;
@@ -274,8 +274,6 @@ export function cajonPart(song: SongShape, level: CajonLevel): CajonPart {
 
   const grooves: Groove[] = [];
   const barGroove: number[] = [];
-  let total = 0;
-  let played = 0;
   for (const p of phrases) {
     const rep = p.bar ? repOf.get(p.bar.join(""))! : null;
     let index = grooves.findIndex((g) => (rep ? !g.rest && g.bar === rep : g.rest));
@@ -284,24 +282,59 @@ export function cajonPart(song: SongShape, level: CajonLevel): CajonPart {
       grooves.push({ name: "", bar: rep ?? new Array<Stroke>(slots).fill("."), rest: !rep });
     }
     for (let i = 0; i < p.bars; i++) barGroove.push(index);
-    if (rep) {
-      total += hitCount(rep);
-      played++;
-    }
   }
   let letter = 0;
   for (const g of grooves) g.name = g.rest ? "Rest" : String.fromCharCode(65 + letter++);
-  // busy: many strokes a bar, or no one groove that most of the song plays (it keeps changing)
-  const perBar = played ? total / played : 0;
-  const drummed = barGroove.filter((g) => !grooves[g].rest).length;
-  const main = Math.max(0, ...grooves.map((g, i) => (g.rest ? 0 : barGroove.filter((x) => x === i).length)));
-  const busy = level === "groove" && (perBar > bpb * 1.5 || (drummed >= 16 && main < 0.4 * drummed));
-  return { level, source: "drums", beatsPerBar: bpb, grooves, barGroove, busy };
+  return { level, source: "drums", beatsPerBar: bpb, grooves, barGroove };
 }
 
-/** The level a song opens on: Groove, unless its groove is busy (then Easy). */
-export function defaultLevel(song: SongShape): CajonLevel {
-  return cajonPart(song, "groove").busy ? "easy" : "groove";
+/** A song opens on Easy unless the player picked Groove: checked against MIDI drum tracks, Easy
+ *  matched 62-99% of strokes, Groove 63-82%. */
+export const DEFAULT_LEVEL: CajonLevel = "easy";
+
+/** A player's fixes to a part at one level: each groove as found (its strokes as a string) ->
+ *  the groove to play instead, wherever it comes in the song. */
+export type CajonFixes = Record<string, string>;
+
+/** The part with the player's fixes in place (a fix whose groove is no longer found does nothing). */
+export function withFixes(part: CajonPart, fixes: CajonFixes | undefined): CajonPart {
+  if (!fixes || !Object.keys(fixes).length) return part;
+  const grooves = part.grooves.map((g) => {
+    const fix = g.rest ? undefined : fixes[g.bar.join("")];
+    return fix && fix.length === g.bar.length ? { ...g, bar: [...fix] as Stroke[], found: g.bar } : g;
+  });
+  return { ...part, grooves };
+}
+
+/** The fixes after the player changes a groove (`found` as found) to `bar`; back to how it was
+ *  found, the fix goes. */
+export function setFix(fixes: CajonFixes | undefined, found: readonly Stroke[], bar: readonly Stroke[]): CajonFixes {
+  const out = { ...fixes };
+  const key = found.join("");
+  if (bar.join("") === key) delete out[key];
+  else out[key] = bar.join("");
+  return out;
+}
+
+/** The most fixes kept per level, and the longest bar (12 beats of 16ths). */
+export const MAX_FIXES = 64;
+const MAX_BAR = 48;
+
+/** Checks a player's fixes from their saved settings: strokes only, a bar for a bar. */
+export function validFixes(input: unknown): Partial<Record<CajonLevel, CajonFixes>> | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const out: Partial<Record<CajonLevel, CajonFixes>> = {};
+  for (const level of ["easy", "groove"] as const) {
+    const fixes = (input as Record<string, unknown>)[level];
+    if (!fixes || typeof fixes !== "object") continue;
+    const kept: CajonFixes = {};
+    for (const [k, v] of Object.entries(fixes).slice(0, MAX_FIXES)) {
+      const bar = new RegExp(`^[BSt.]{1,${MAX_BAR}}$`);
+      if (typeof v === "string" && bar.test(k) && bar.test(v) && k.length === v.length) kept[k] = v;
+    }
+    if (Object.keys(kept).length) out[level] = kept;
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** Every stroke of the part with its beat (from beat 0), for drawing and playing it. */

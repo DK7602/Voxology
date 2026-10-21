@@ -135,7 +135,8 @@ const TOPICS: { title: string; body: ReactNode }[] = [
         </p>
         <ul>
           <li>
-            <b>Easy / Groove</b>: Easy plays Bass and Slap on the beats; Groove plays the song’s beat on 8th notes, with taps. A busy song opens on Easy.
+            <b>Easy / Groove</b>: Easy plays Bass and Slap on the beats; Groove plays the song’s beat on 8th notes, with taps. Songs open on Easy; the
+            level you pick is remembered for the song.
           </li>
           <li>
             The <b>strip</b> at the top shows every stroke, bar by bar, and scrolls with the song. The <b>cajon</b> below lights where to hit:{" "}
@@ -146,12 +147,17 @@ const TOPICS: { title: string; body: ReactNode }[] = [
             it with the song.
           </li>
           <li>
+            <b>Fix</b> on a groove card opens the groove to correct: tap a square to play that stroke there, tap a colored one to take it away. Every
+            bar of that groove changes. Your fixes are kept for you on that song, Easy and Groove apart; <b>Back to the groove as found</b> undoes them.
+          </li>
+          <li>
             Where the drums stop, the strip says <b>no drums</b>: rest.
           </li>
         </ul>
         <p>
           The drums are found in the background after a song is prepared, which takes a few minutes. Until then, and for songs without drums, you get a
-          suggested groove for the song’s tempo, and the cajon says so. Drums found from a recording can miss the odd snare or add one.
+          suggested groove for the song’s tempo, and the cajon says so. Drums found from a recording can miss the odd snare or add one: that is what
+          Fix is for.
         </p>
       </>
     ),

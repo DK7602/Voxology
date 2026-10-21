@@ -1,11 +1,13 @@
 // The cajon: the song's cajon part (shared/music/cajon.ts) as a strip of strokes that scrolls
-// with the song, the front of a cajon showing where to hit, and a card for each groove.
+// with the song, the front of a cajon showing where to hit, and a card for each groove, which the
+// player can fix by tapping its steps.
 
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { SongRecord } from "../../shared/api";
-import { cajonPart, hands, SUBS, type CajonLevel, type CajonPart, type Groove, type Stroke } from "../../shared/music/cajon";
+import { cajonPart, hands, SUBS, withFixes, type CajonFixes, type CajonLevel, type CajonPart, type Groove, type Stroke } from "../../shared/music/cajon";
 import type { SongDoc } from "../../shared/types";
-import { IconChevronLeft, IconChevronRight, IconSpeaker } from "../components/Icons";
+import { IconChevronLeft, IconChevronRight, IconEdit, IconSpeaker } from "../components/Icons";
+import { Modal } from "../components/ui";
 import type { PlayerEngine } from "../player/engine";
 import { useBeatSelect, usePlayerState, useTick } from "../player/hooks";
 import { cajonHit, unlockAudio } from "../player/synth";
@@ -15,11 +17,20 @@ import { PLAYHEAD } from "./LyricsLane";
 type Hit = Exclude<Stroke, ".">;
 const NAMES: Record<Hit, string> = { B: "Bass", S: "Slap", t: "tap" };
 
-export function useCajonPart(doc: SongDoc, level: CajonLevel): CajonPart {
-  return useMemo(
+export function useCajonPart(doc: SongDoc, level: CajonLevel, fixes?: CajonFixes): CajonPart {
+  const found = useMemo(
     () => cajonPart({ beatsPerBar: doc.beatsPerBar, bpm: doc.bpm, length: doc.length, drums: doc.drums }, level),
     [doc, level],
   );
+  return useMemo(() => withFixes(found, fixes), [found, fixes]);
+}
+
+/** Plays one bar of strokes now (the groove cards' speaker). */
+async function playBar(bar: readonly Stroke[], bpm: number) {
+  const ctx = await unlockAudio();
+  const spb = 60 / (bpm || 100);
+  const t0 = ctx.currentTime + 0.05;
+  bar.forEach((x, s) => x !== "." && cajonHit(x, t0 + (s / SUBS) * spb, x === "t" ? 0.6 : s % SUBS ? 0.8 : 0.95));
 }
 
 const barCount = (part: CajonPart) => part.barGroove.length;
@@ -171,24 +182,46 @@ function CajonFace({ zones, hand }: { zones: Record<Zone, ZoneState>; hand: stri
   );
 }
 
-/** A groove as a step grid: Slap, Bass and tap rows, a column per 8th note. */
-function StepGrid({ groove, level, now = -1, small = false }: { groove: Groove; level: CajonLevel; now?: number; small?: boolean }) {
+/** A groove as a step grid: Slap, Bass and tap rows, a column per 8th note. With `onTap`, each
+ *  step is a button (the stroke there, or the row's stroke put there). */
+function StepGrid({
+  groove,
+  level,
+  now = -1,
+  small = false,
+  onTap,
+}: {
+  groove: Groove;
+  level: CajonLevel;
+  now?: number;
+  small?: boolean;
+  onTap?: (slot: number, stroke: Hit) => void;
+}) {
   const hand = hands(groove.bar, level);
   const cols = groove.bar.length / 2;
   const counts = Array.from({ length: cols }, (_, i) => (i % 2 ? "&" : String(i / 2 + 1)));
   const rows: [Hit, string][] = [["S", "Slap"], ["B", "Bass"], ["t", "Tap"]];
   return (
-    <div className={"step-grid" + (small ? " small" : "")} style={{ gridTemplateColumns: `${small ? 18 : 46}px repeat(${cols}, minmax(0, 1fr))` }}>
+    <div
+      className={"step-grid" + (small ? " small" : "") + (onTap ? " editing" : "")}
+      style={{ gridTemplateColumns: `${small ? 18 : 46}px repeat(${cols}, minmax(0, 1fr))` }}
+    >
       {!small && <span />}
       {!small && counts.map((c, i) => <span key={i} className={"sg-count" + (i % 2 ? "" : " beat")}>{c}</span>)}
       {rows.map(([k, name]) => [
         <span key={k} className="sg-row">{small ? k : name}</span>,
-        ...counts.map((_, i) => {
+        ...counts.map((c, i) => {
           const s = i * 2;
           const on = groove.bar[s] === k;
-          return (
-            <span key={`${k}${i}`} className={"sg-cell" + (on ? " on " + k : "") + (Math.floor(now / 2) === i ? " col-now" : "")}>
-              {on && !small ? hand[s] : ""}
+          const className = "sg-cell" + (on ? " on " + k : "") + (Math.floor(now / 2) === i ? " col-now" : "");
+          const label = on && !small ? hand[s] : "";
+          return onTap ? (
+            <button key={`${k}${i}`} className={className} aria-pressed={on} aria-label={`${name} on ${c === "&" ? `the and of ${i / 2 + 0.5}` : c}`} onClick={() => onTap(s, k)}>
+              {label}
+            </button>
+          ) : (
+            <span key={`${k}${i}`} className={className}>
+              {label}
             </span>
           );
         }),
@@ -248,21 +281,27 @@ export function CajonPanel({ engine, part, status }: { engine: PlayerEngine; par
   );
 }
 
-/** One card per groove (in order of first use), with the current one raised; the speaker plays a bar. */
-export function GrooveCards({ engine, part, bpm }: { engine: PlayerEngine; part: CajonPart; bpm: number }) {
+/** One card per groove (in order of first use), with the current one raised; the speaker plays a
+ *  bar, the pencil opens it for fixing. */
+export function GrooveCards({
+  engine,
+  part,
+  bpm,
+  onFix,
+}: {
+  engine: PlayerEngine;
+  part: CajonPart;
+  bpm: number;
+  onFix: (found: readonly Stroke[], bar: readonly Stroke[]) => void;
+}) {
   const bpb = part.beatsPerBar;
   const current = useBeatSelect(engine, (beat) => part.barGroove[Math.max(0, Math.min(barCount(part) - 1, Math.floor(beat / bpb)))]);
   const track = useRef<HTMLDivElement>(null);
+  const [fixing, setFixing] = useState<number | null>(null);
   const cards = part.grooves
     .map((g, i) => ({ g, i, bars: part.barGroove.filter((x) => x === i).length }))
     .filter(({ g }) => !g.rest);
-
-  const play = async (g: Groove) => {
-    const ctx = await unlockAudio();
-    const spb = 60 / (bpm || 100);
-    const t0 = ctx.currentTime + 0.05;
-    g.bar.forEach((x, s) => x !== "." && cajonHit(x, t0 + (s / SUBS) * spb, x === "t" ? 0.6 : s % SUBS ? 0.8 : 0.95));
-  };
+  const name = (g: Groove) => (part.source === "suggested" ? "Suggested" : `Groove ${g.name}`);
   const scrollBy = (dir: number) => track.current?.scrollBy({ left: dir * track.current.clientWidth * 0.8 });
 
   return (
@@ -273,15 +312,20 @@ export function GrooveCards({ engine, part, bpm }: { engine: PlayerEngine; part:
       <div className="diagram-track" ref={track}>
         {cards.map(({ g, i, bars }) => (
           <div key={i} className={"diagram-card groove-card" + (i === current ? " current" : "")}>
-            <span className="chord-name">{part.source === "suggested" ? "Suggested" : `Groove ${g.name}`}</span>
+            <span className="chord-name">{name(g)}</span>
             <span className="cat-tag">{part.level === "easy" ? "Easy" : "Groove"}</span>
             <StepGrid groove={g} level={part.level} small />
-            <div className="notes">{part.source === "suggested" ? "for the song's tempo" : `${bars} bar${bars === 1 ? "" : "s"}`}</div>
+            <div className="notes">
+              {part.source === "suggested" ? "for the song's tempo" : `${bars} bar${bars === 1 ? "" : "s"}`}
+              {g.found && " · your fix"}
+            </div>
             <div className="card-foot">
-              <button onClick={() => play(g)} aria-label={`Play groove ${g.name}`}>
+              <button onClick={() => playBar(g.bar, bpm)} aria-label={`Play ${name(g)}`}>
                 <IconSpeaker size={20} />
               </button>
-              <span />
+              <button onClick={() => setFixing(i)} aria-label={`Fix ${name(g)}`}>
+                <IconEdit size={18} /> Fix
+              </button>
             </div>
           </div>
         ))}
@@ -289,6 +333,63 @@ export function GrooveCards({ engine, part, bpm }: { engine: PlayerEngine; part:
       <button className="icon-btn scroll-arrow right" onClick={() => scrollBy(1)} aria-label="More grooves">
         <IconChevronRight size={20} />
       </button>
+      {fixing !== null && part.grooves[fixing] && (
+        <GrooveFixer
+          groove={part.grooves[fixing]}
+          title={part.source === "suggested" ? "Fix the suggested groove" : `Fix groove ${part.grooves[fixing].name}`}
+          level={part.level}
+          bpm={bpm}
+          onFix={onFix}
+          onClose={() => setFixing(null)}
+        />
+      )}
     </div>
+  );
+}
+
+/** A groove to fix: tap a step to put the row's stroke there, or a stroke to take it away. The
+ *  fix goes for every bar that plays the groove, and is kept for this player and song. */
+function GrooveFixer({
+  groove,
+  title,
+  level,
+  bpm,
+  onFix,
+  onClose,
+}: {
+  groove: Groove;
+  title: string;
+  level: CajonLevel;
+  bpm: number;
+  onFix: (found: readonly Stroke[], bar: readonly Stroke[]) => void;
+  onClose: () => void;
+}) {
+  const found = groove.found ?? groove.bar;
+  const tap = (s: number, k: Hit) => {
+    const bar = [...groove.bar];
+    bar[s] = bar[s] === k ? "." : k;
+    onFix(found, bar);
+  };
+  return (
+    <Modal title={title} onClose={onClose}>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Tap a square to play that stroke there; tap a colored one to take it away. Every bar of this groove changes, and your fix is
+        kept for you on this song.
+      </p>
+      <StepGrid groove={groove} level={level} onTap={tap} />
+      <div className="fixer-foot">
+        <button className="btn" onClick={() => playBar(groove.bar, bpm)}>
+          <IconSpeaker size={18} /> Play
+        </button>
+        {groove.found && (
+          <button className="btn" onClick={() => onFix(found, found)}>
+            Back to the groove as found
+          </button>
+        )}
+        <button className="btn btn-primary" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </Modal>
   );
 }

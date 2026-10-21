@@ -84,8 +84,10 @@ export interface UserSettings {
 /** What the player remembers per user and song. */
 export interface PracticeSettings {
   part?: "rhythm" | "lead";
-  /** the cajon part's level */
-  cajon?: "easy" | "groove";
+  /** the cajon part's level, once the player picks one (until then Easy) */
+  cajonLevel?: "easy" | "groove";
+  /** the player's fixes to the song's cajon grooves, by level (see shared/music/cajon.ts) */
+  cajonFixes?: { easy?: Record<string, string>; groove?: Record<string, string> };
   transpose?: number;
   capo?: number;
   instrument?: Instrument;

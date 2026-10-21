@@ -3,15 +3,18 @@ import { drumOnsets, RATE } from "../cajon/drums";
 import {
   cajonPart,
   cajonStrokes,
-  defaultLevel,
+  DEFAULT_LEVEL,
   drumHits,
   eighthNotes,
   hands,
   noDrums,
   onTheBeats,
+  setFix,
   validDrums,
+  withFixes,
   type Stroke,
 } from "../shared/music/cajon";
+import { validatePracticeSettings } from "../shared/validate";
 
 /** 16ths of a rock beat: kick on 1 and the "and" of 3, snare on 2 and 4, 8th-note hi-hat. */
 const ROCK = "5040604050506040";
@@ -33,7 +36,6 @@ describe("drums on the beat grid", () => {
     expect(part.source).toBe("drums");
     expect(part.grooves.map((g) => g.bar.join(""))).toEqual(["B.t.S.t.B.B.S.t."]);
     expect(part.barGroove).toHaveLength(16);
-    expect(part.busy).toBe(false);
   });
 
   it("Easy keeps Bass and Slap on the beats", () => {
@@ -68,13 +70,40 @@ describe("drums on the beat grid", () => {
     expect(part.grooves[0].bar.join("")).toBe("B.t.S.t.B.B.S.t.");
   });
 
-  it("opens busy songs on Easy, steady ones on Groove", () => {
-    expect(defaultLevel(song(ROCK.repeat(16)))).toBe("groove");
-    // Bass or Slap on every 8th note
-    expect(defaultLevel(song("1020102010201020".repeat(16)))).toBe("easy");
-    // four quite different grooves, none played most of the time
-    const grooves = ["1000200010002000", "2000100020001000", "1010101010101010", "2020202020202020"];
-    expect(defaultLevel(song(grooves.map((g) => g.repeat(4)).join(""), 16))).toBe("easy");
+  it("opens songs on Easy", () => {
+    expect(DEFAULT_LEVEL).toBe("easy");
+  });
+
+  it("plays the player's fix wherever its groove comes, and drops it when put back", () => {
+    // groove A for 8 bars, then groove B for 8
+    const part = cajonPart(song(ROCK.repeat(8) + "1000200010002000".repeat(8)), "groove");
+    const [a, b] = part.grooves;
+    expect([a.bar.join(""), b.bar.join("")]).toEqual(["B.t.S.t.B.B.S.t.", "B...S...B...S..."]);
+    // the player hears a Slap on the "and" of 4 in groove B
+    const fixed = [...b.bar] as Stroke[];
+    fixed[14] = "S";
+    const fixes = setFix(undefined, b.bar, fixed);
+    expect(fixes).toEqual({ "B...S...B...S...": "B...S...B...S.S." });
+    const mine = withFixes(part, fixes);
+    expect(mine.grooves.map((g) => g.bar.join(""))).toEqual(["B.t.S.t.B.B.S.t.", "B...S...B...S.S."]);
+    expect(mine.grooves[1].found?.join("")).toBe("B...S...B...S...");
+    expect(mine.grooves[0].found).toBeUndefined();
+    expect(cajonStrokes(mine).filter((x) => x.beat === 8 * 4 + 3.5)).toEqual([{ beat: 35.5, stroke: "S", hand: "L" }]);
+    // back as found: no fix left
+    expect(setFix(fixes, b.bar, b.bar)).toEqual({});
+    // a fix for a groove no longer found does nothing
+    expect(withFixes(part, { "S...............": "B..............." })).toEqual(part);
+  });
+
+  it("keeps the level the player picked and their fixes, and lets go of the old saved level", () => {
+    const fixes = { groove: { "B...S...B...S...": "B...S...B...S.S." }, easy: { "B...S...": "B...SS.." } };
+    expect(validatePracticeSettings({ cajonLevel: "groove", cajonFixes: fixes })).toEqual({ cajonLevel: "groove", cajonFixes: fixes });
+    // the level kept before Easy was the default was mostly the old default
+    expect(validatePracticeSettings({ cajon: "groove" })).toEqual({});
+    // strokes only, a bar for a bar
+    const bad = { groove: { "B...S...": "B...S", "B.x.": "B...", "S...": "S..." } };
+    expect(validatePracticeSettings({ cajonFixes: bad })).toEqual({ cajonFixes: { groove: { "S...": "S..." } } });
+    expect(validatePracticeSettings({ cajonFixes: "B" })).toEqual({});
   });
 
   it("phrases that differ by a stroke or two play one groove (the most common)", () => {

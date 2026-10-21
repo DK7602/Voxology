@@ -1381,6 +1381,31 @@
   width: 100%;
   gap: 2px;
 }
+.step-grid.editing .sg-cell {
+  height: 44px;
+  padding: 0;
+  cursor: pointer;
+  font-size: 14px;
+}
+.step-grid.editing .sg-cell:not(.on):hover {
+  background: var(--green-tint);
+}
+.step-grid.editing .sg-cell:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.fixer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.fixer-foot .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .step-grid.small .sg-cell {
   height: 14px;
   border-radius: 3px;

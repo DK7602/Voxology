@@ -11,7 +11,7 @@ import type {
   SongDoc,
   UserSettings,
 } from "./types";
-import { validDrums } from "./music/cajon";
+import { validDrums, validFixes } from "./music/cajon";
 import { wordStarts } from "./timeline";
 
 export class ValidationError extends Error {
@@ -258,7 +258,10 @@ export function validatePracticeSettings(input: unknown): PracticeSettings {
   if (!isObject(input)) fail("Settings must be an object");
   const out: PracticeSettings = {};
   if (input.part === "rhythm" || input.part === "lead") out.part = input.part;
-  if (input.cajon === "easy" || input.cajon === "groove") out.cajon = input.cajon;
+  // (the level kept as "cajon" before Easy was the default was mostly the old default: let go)
+  if (input.cajonLevel === "easy" || input.cajonLevel === "groove") out.cajonLevel = input.cajonLevel;
+  const fixes = validFixes(input.cajonFixes);
+  if (fixes) out.cajonFixes = fixes;
   if (input.transpose != null) out.transpose = optNumber(input, "transpose", "Transpose", 0, -12, 12, true);
   if (input.capo != null) out.capo = optNumber(input, "capo", "Capo", 0, 0, 12, true);
   const instrument = optInstrument(input, "instrument");

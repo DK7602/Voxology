@@ -5,7 +5,7 @@ import type { Instrument, PracticeSettings } from "../../shared/types";
 import { parseChord } from "../../shared/music/chords";
 import { bestCapo as findBestCapo } from "../../shared/music/capo";
 import { isFretted } from "../../shared/music/voicings";
-import { cajonStrokes, defaultLevel, type CajonLevel } from "../../shared/music/cajon";
+import { cajonStrokes, DEFAULT_LEVEL, setFix, type CajonLevel, type Stroke } from "../../shared/music/cajon";
 import { prettyAccidentals } from "../../shared/music/notes";
 import { api } from "../api";
 import { useUser } from "../auth";
@@ -118,9 +118,16 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
     capoShapes: user.settings.capoShapes ?? true,
   }));
   const isCajon = settings.instrument === "cajon";
-  // the cajon part's level: Groove, unless the song's groove is busy (then Easy)
-  const [cajonLevel, setCajonLevel] = useState<CajonLevel>(() => saved.cajon ?? defaultLevel(doc));
-  const cajon = useCajonPart(doc, cajonLevel);
+  // the cajon part's level: Easy until the player picks one (only a pick is remembered)
+  const [cajonPick, setCajonPick] = useState<CajonLevel | undefined>(saved.cajonLevel);
+  const cajonLevel = cajonPick ?? DEFAULT_LEVEL;
+  // the player's fixes to the grooves, by level
+  const [cajonFixes, setCajonFixes] = useState<NonNullable<PracticeSettings["cajonFixes"]>>(() => saved.cajonFixes ?? {});
+  const fixGroove = useCallback(
+    (found: readonly Stroke[], bar: readonly Stroke[]) => setCajonFixes((f) => ({ ...f, [cajonLevel]: setFix(f[cajonLevel], found, bar) })),
+    [cajonLevel],
+  );
+  const cajon = useCajonPart(doc, cajonLevel, cajonFixes[cajonLevel]);
   useEffect(() => engine.setCajon(cajonStrokes(cajon)), [engine, cajon]);
 
   // a song whose cajon part is still being worked out: look again now and then
@@ -181,7 +188,8 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
             record.id,
             {
               part,
-              cajon: cajonLevel,
+              cajonLevel: cajonPick,
+              cajonFixes,
               transpose: settings.transpose,
               capo: settings.capo,
               instrument: settings.instrument,
@@ -194,9 +202,9 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
           .catch(() => {});
       }, played ? 0 : 1200);
     },
-    [engine, record.id, settings, part, cajonLevel],
+    [engine, record.id, settings, part, cajonPick, cajonFixes],
   );
-  useEffect(() => persist(), [settings, part, cajonLevel, persist]);
+  useEffect(() => persist(), [settings, part, cajonPick, cajonFixes, persist]);
   useEffect(
     () =>
       engine.subscribe(() => {
@@ -392,8 +400,8 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
         <div className="inst-row">
           {isCajon ? (
             <div className="seg part-seg" role="group" aria-label="Cajon level">
-              <button aria-pressed={cajonLevel === "easy"} onClick={() => setCajonLevel("easy")} title="Bass and Slap on the beats">Easy</button>
-              <button aria-pressed={cajonLevel === "groove"} onClick={() => setCajonLevel("groove")} title="The song's groove on 8th notes, with light taps">Groove</button>
+              <button aria-pressed={cajonLevel === "easy"} onClick={() => setCajonPick("easy")} title="Bass and Slap on the beats">Easy</button>
+              <button aria-pressed={cajonLevel === "groove"} onClick={() => setCajonPick("groove")} title="The song's groove on 8th notes, with light taps">Groove</button>
             </div>
           ) : hasLead && (
             <div className="seg part-seg" role="group" aria-label="Part">
@@ -420,7 +428,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
         {isCajon ? (
           <>
             <CajonPanel engine={engine} part={cajon} status={record.cajon} />
-            <GrooveCards engine={engine} part={cajon} bpm={doc.bpm} />
+            <GrooveCards engine={engine} part={cajon} bpm={doc.bpm} onFix={fixGroove} />
           </>
         ) : part === "lead" ? (
           <LeadNeck engine={engine} view={view} settings={settings} leftHanded={!!user.settings.leftHanded} />
