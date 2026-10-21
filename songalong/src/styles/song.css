@@ -1288,6 +1288,14 @@
   height: 11px;
   background: var(--ink-faint);
 }
+/* a double hit: Bass and Slap at once */
+.gs-hit.X {
+  width: 27px;
+  height: 27px;
+  font-size: 11px;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--cajon-bass) 50%, var(--cajon-slap) 50%);
+}
 .gs-hit.now {
   box-shadow: 0 0 0 3px var(--gold), 0 0 12px var(--gold);
 }
@@ -1461,6 +1469,11 @@
   width: 9px;
   height: 9px;
 }
+.cajon-legend .gs-hit.X {
+  width: 20px;
+  height: 20px;
+  font-size: 9px;
+}
 .cajon-source {
   font-size: 14px;
 }
@@ -1493,7 +1506,8 @@
     height: 20px;
     font-size: 12px;
   }
-  .gs-hit.B {
+  .gs-hit.B,
+  .gs-hit.X {
     width: 22px;
     height: 22px;
   }

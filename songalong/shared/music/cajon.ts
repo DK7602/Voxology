@@ -4,7 +4,8 @@
 // From them come two parts to play: Groove (the section's repeating beat on 8th notes) and Easy
 // (Bass and Slap on the beats). Songs without drums get a suggested groove instead.
 
-export type Stroke = "B" | "S" | "t" | ".";
+/** Bass, Slap, tap, rest, or X: Bass and Slap at once with both hands (only in a player's fix) */
+export type Stroke = "B" | "S" | "t" | "." | "X";
 export type CajonLevel = "easy" | "groove";
 
 /** 16th notes per beat */
@@ -88,13 +89,13 @@ function strokeAt(hits: string, j: number, back: 0 | 1 | null): Stroke {
   return b & 2 ? "S" : b & 1 ? "B" : b & 4 ? "t" : ".";
 }
 
-const isHit = (x: Stroke) => x === "B" || x === "S";
+const isHit = (x: Stroke) => x === "B" || x === "S" || x === "X";
 
 /** Per slot, the stroke at least half the bars play there (else a rest): steady, for Easy. */
 function voteBar(played: Stroke[][]): Stroke[] {
   const out: Stroke[] = [];
   for (let s = 0; s < played[0].length; s++) {
-    const count = { B: 0, S: 0, t: 0, ".": 0 };
+    const count = { B: 0, S: 0, t: 0, X: 0, ".": 0 };
     for (const bar of played) count[bar[s] ?? "."]++;
     const best = (["S", "B", "t"] as const).reduce((a, x) => (count[x] > count[a] ? x : a), "S" as "S" | "B" | "t");
     out.push(count[best] * 2 >= played.length ? best : ".");
@@ -329,7 +330,7 @@ export function validFixes(input: unknown): Partial<Record<CajonLevel, CajonFixe
     if (!fixes || typeof fixes !== "object") continue;
     const kept: CajonFixes = {};
     for (const [k, v] of Object.entries(fixes).slice(0, MAX_FIXES)) {
-      const bar = new RegExp(`^[BSt.]{1,${MAX_BAR}}$`);
+      const bar = new RegExp(`^[BStX.]{1,${MAX_BAR}}$`);
       if (typeof v === "string" && bar.test(k) && bar.test(v) && k.length === v.length) kept[k] = v;
     }
     if (Object.keys(kept).length) out[level] = kept;
@@ -338,17 +339,39 @@ export function validFixes(input: unknown): Partial<Record<CajonLevel, CajonFixe
 }
 
 /** Every stroke of the part with its beat (from beat 0), for drawing and playing it. */
-export function cajonStrokes(part: CajonPart): { beat: number; stroke: Exclude<Stroke, ".">; hand: "R" | "L" | "" }[] {
-  const out: { beat: number; stroke: Exclude<Stroke, ".">; hand: "R" | "L" | "" }[] = [];
+/** The two hands of a double hit: the hand whose turn it is slaps, the other plays the bass. */
+export function doubleHit(hand: "R" | "L" | ""): { S: "R" | "L"; B: "R" | "L" } {
+  return hand === "L" ? { S: "L", B: "R" } : { S: "R", B: "L" };
+}
+
+/** Every stroke of the part with its beat (from beat 0), for drawing and playing it; a double
+ *  hit is its Bass and its Slap, each with its hand. */
+export function cajonStrokes(part: CajonPart): { beat: number; stroke: "B" | "S" | "t"; hand: "R" | "L" | "" }[] {
+  const out: { beat: number; stroke: "B" | "S" | "t"; hand: "R" | "L" | "" }[] = [];
   const slots = part.beatsPerBar * SUBS;
   part.barGroove.forEach((g, b) => {
     const bar = part.grooves[g].bar;
     const hand = hands(bar, part.level);
     bar.forEach((x, s) => {
-      if (x !== ".") out.push({ beat: (b * slots + s) / SUBS, stroke: x, hand: hand[s] });
+      const beat = (b * slots + s) / SUBS;
+      if (x === "X") {
+        const both = doubleHit(hand[s]);
+        out.push({ beat, stroke: "B", hand: both.B }, { beat, stroke: "S", hand: both.S });
+      } else if (x !== ".") out.push({ beat, stroke: x, hand: hand[s] });
     });
   });
   return out;
+}
+
+/** A step of the Fix grid tapped in a row: the row's stroke goes there, or goes if it is there;
+ *  Bass and Slap together make a double hit. */
+export function tapStroke(current: Stroke, row: "B" | "S" | "t"): Stroke {
+  if (row === "t") return current === "t" ? "." : "t";
+  const other = row === "B" ? "S" : "B";
+  if (current === row) return ".";
+  if (current === "X") return other;
+  if (current === other) return "X";
+  return row;
 }
 
 /** Checks a drum part from a song document (light: it is ours, but songs can be edited). */

@@ -10,6 +10,7 @@ import {
   noDrums,
   onTheBeats,
   setFix,
+  tapStroke,
   validDrums,
   withFixes,
   type Stroke,
@@ -93,6 +94,32 @@ describe("drums on the beat grid", () => {
     expect(setFix(fixes, b.bar, b.bar)).toEqual({});
     // a fix for a groove no longer found does nothing
     expect(withFixes(part, { "S...............": "B..............." })).toEqual(part);
+  });
+
+  it("a double hit: Bass and Slap tapped in one column, both hands at once", () => {
+    // tapping in the Fix grid
+    expect(tapStroke(".", "B")).toBe("B");
+    expect(tapStroke("B", "S")).toBe("X");
+    expect(tapStroke("S", "B")).toBe("X");
+    expect(tapStroke("X", "S")).toBe("B");
+    expect(tapStroke("X", "B")).toBe("S");
+    expect(tapStroke("B", "B")).toBe(".");
+    expect(tapStroke("X", "t")).toBe("t");
+    expect(tapStroke("t", "t")).toBe(".");
+    // a double hit on the 1 of groove A's bars: the right hand's turn, so it slaps and the left plays the bass
+    const part = cajonPart(song(ROCK.repeat(4)), "groove");
+    const found = part.grooves[0].bar;
+    const fixed = [...found] as Stroke[];
+    fixed[0] = tapStroke(fixed[0], "S");
+    expect(fixed.join("")).toBe("X.t.S.t.B.B.S.t.");
+    const mine = withFixes(part, setFix(undefined, found, fixed));
+    expect(cajonStrokes(mine).filter((x) => x.beat === 4)).toEqual([
+      { beat: 4, stroke: "B", hand: "L" },
+      { beat: 4, stroke: "S", hand: "R" },
+    ]);
+    // kept with the player's settings
+    const fixes = { groove: { [found.join("")]: fixed.join("") } };
+    expect(validatePracticeSettings({ cajonFixes: fixes })).toEqual({ cajonFixes: fixes });
   });
 
   it("keeps the level the player picked and their fixes, and lets go of the old saved level", () => {

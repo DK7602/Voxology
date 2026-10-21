@@ -4,7 +4,19 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { SongRecord } from "../../shared/api";
-import { cajonPart, hands, SUBS, withFixes, type CajonFixes, type CajonLevel, type CajonPart, type Groove, type Stroke } from "../../shared/music/cajon";
+import {
+  cajonPart,
+  doubleHit,
+  hands,
+  SUBS,
+  tapStroke,
+  withFixes,
+  type CajonFixes,
+  type CajonLevel,
+  type CajonPart,
+  type Groove,
+  type Stroke,
+} from "../../shared/music/cajon";
 import type { SongDoc } from "../../shared/types";
 import { IconChevronLeft, IconChevronRight, IconEdit, IconSpeaker } from "../components/Icons";
 import { Modal } from "../components/ui";
@@ -15,7 +27,7 @@ import { useNarrow } from "./ChordStrip";
 import { PLAYHEAD } from "./LyricsLane";
 
 type Hit = Exclude<Stroke, ".">;
-const NAMES: Record<Hit, string> = { B: "Bass", S: "Slap", t: "tap" };
+const NAMES: Record<Hit, string> = { B: "Bass", S: "Slap", t: "tap", X: "Bass and Slap together" };
 
 export function useCajonPart(doc: SongDoc, level: CajonLevel, fixes?: CajonFixes): CajonPart {
   const found = useMemo(
@@ -30,7 +42,10 @@ async function playBar(bar: readonly Stroke[], bpm: number) {
   const ctx = await unlockAudio();
   const spb = 60 / (bpm || 100);
   const t0 = ctx.currentTime + 0.05;
-  bar.forEach((x, s) => x !== "." && cajonHit(x, t0 + (s / SUBS) * spb, x === "t" ? 0.6 : s % SUBS ? 0.8 : 0.95));
+  bar.forEach((x, s) => {
+    const when = t0 + (s / SUBS) * spb;
+    for (const one of x === "X" ? (["B", "S"] as const) : x === "." ? [] : [x]) cajonHit(one, when, one === "t" ? 0.6 : s % SUBS ? 0.8 : 0.95);
+  });
 }
 
 const barCount = (part: CajonPart) => part.barGroove.length;
@@ -137,7 +152,7 @@ export function GrooveStrip({ engine, part }: { engine: PlayerEngine; part: Cajo
                           className={"gs-hit " + x}
                           aria-label={NAMES[x]}
                         >
-                          {x === "t" ? "" : x}
+                          {x === "t" ? "" : x === "X" ? "BS" : x}
                         </span>
                       );
                     })}
@@ -156,9 +171,14 @@ export function GrooveStrip({ engine, part }: { engine: PlayerEngine; part: Cajo
 
 type Zone = "SL" | "SR" | "B" | "tL" | "tR";
 type ZoneState = "now" | "bar" | "next" | "";
-const zoneOf = (x: Hit, hand: string): Zone => (x === "B" ? "B" : (x === "S" ? "S" : "t") + (hand === "L" ? "L" : "R")) as Zone;
+/** Where a stroke is played (a double hit: the bass, and the slap of the hand whose turn it is). */
+const zonesOf = (x: Hit, hand: string): Zone[] =>
+  x === "X" ? ["B", `S${doubleHit(hand as "R" | "L" | "").S}` as Zone] : [(x === "B" ? "B" : (x === "S" ? "S" : "t") + (hand === "L" ? "L" : "R")) as Zone];
+/** The hands that play a stroke ("RL" for a double hit). */
+const handsOf = (x: Stroke | undefined, hand: string) => (x === "X" ? "RL" : x && x !== "." ? hand : "");
 
-/** The front of the cajon: where each stroke is played, lit like the lead neck. It is drawn as the
+/** The front of the cajon: where each stroke is played, lit like the lead neck (`hand`: the hands
+ *  playing now, "R", "L" or "RL"). It is drawn as the
  *  player sees it sitting on the cajon and looking down at the front: their right hand plays the
  *  side on the left of the picture, the left hand the side on the right. */
 function CajonFace({ zones, hand }: { zones: Record<Zone, ZoneState>; hand: string }) {
@@ -189,7 +209,7 @@ function CajonFace({ zones, hand }: { zones: Record<Zone, ZoneState>; hand: stri
       <circle cx="105" cy="168" r="52" className={z("B")} />
       <text x="105" y="176" className="cz-label big">B</text>
       {(["L", "R"] as const).map((h) => (
-        <g key={h} className={"cz-hand" + (hand === h ? " on" : "")}>
+        <g key={h} className={"cz-hand" + (hand.includes(h) ? " on" : "")}>
           <circle cx={h === "R" ? 30 : 180} cy="104" r="11" />
           <text x={h === "R" ? 30 : 180} y="108.5">{h}</text>
         </g>
@@ -228,9 +248,11 @@ function StepGrid({
         <span key={k} className="sg-row">{small ? k : name}</span>,
         ...counts.map((c, i) => {
           const s = i * 2;
-          const on = groove.bar[s] === k;
+          const x = groove.bar[s];
+          const on = x === k || (x === "X" && k !== "t");
           const className = "sg-cell" + (on ? " on " + k : "") + (Math.floor(now / 2) === i ? " col-now" : "");
-          const label = on && !small ? hand[s] : "";
+          // a double hit: the hand whose turn it is slaps, the other plays the bass
+          const label = !on || small ? "" : x === "X" ? doubleHit(hand[s])[k as "B" | "S"] : hand[s];
           return onTap ? (
             <button key={`${k}${i}`} className={className} aria-pressed={on} aria-label={`${name} on ${c === "&" ? `the and of ${i / 2 + 0.5}` : c}`} onClick={() => onTap(s, k)}>
               {label}
@@ -268,10 +290,12 @@ export function CajonPanel({ engine, part, status }: { engine: PlayerEngine; par
   const nextHand = hands(next.bar, part.level);
 
   const zones: Record<Zone, ZoneState> = { SL: "", SR: "", B: "", tL: "", tR: "" };
-  next.bar.forEach((x, s) => x !== "." && (zones[zoneOf(x, nextHand[s])] = "next"));
-  groove.bar.forEach((x, s) => x !== "." && (zones[zoneOf(x, hand[s])] = "bar"));
+  const light = (x: Stroke | undefined, h: string, state: ZoneState) => x && x !== "." && zonesOf(x, h).forEach((z) => (zones[z] = state));
+  next.bar.forEach((x, s) => light(x, nextHand[s], "next"));
+  groove.bar.forEach((x, s) => light(x, hand[s], "bar"));
   const nowStroke = groove.bar[col];
-  if (nowStroke && nowStroke !== ".") zones[zoneOf(nowStroke, hand[col])] = "now";
+  light(nowStroke, hand[col], "now");
+  const doubles = part.grooves.some((g) => g.bar.includes("X"));
 
   return (
     <div className="cajon-panel inset">
@@ -284,13 +308,14 @@ export function CajonPanel({ engine, part, status }: { engine: PlayerEngine; par
         <span className="faint">gold = now, green = this bar, dashed = next bar</span>
       </div>
       <div className="cajon-body">
-        <CajonFace zones={zones} hand={nowStroke && nowStroke !== "." ? hand[col] : ""} />
+        <CajonFace zones={zones} hand={handsOf(nowStroke, hand[col])} />
         <div className="cajon-side">
           <StepGrid groove={groove} level={part.level} now={col} />
           <div className="cajon-legend">
             <span><i className="gs-hit B">B</i>Bass: palm in the middle</span>
             <span><i className="gs-hit S">S</i>Slap: fingers at the top edge</span>
             <span><i className="gs-hit t" />Tap: a light touch</span>
+            {doubles && <span><i className="gs-hit X">BS</i>Bass and Slap at once, both hands</span>}
           </div>
           <div className="faint cajon-source">{sourceNote(part, status)}</div>
         </div>
@@ -385,14 +410,14 @@ function GrooveFixer({
   const found = groove.found ?? groove.bar;
   const tap = (s: number, k: Hit) => {
     const bar = [...groove.bar];
-    bar[s] = bar[s] === k ? "." : k;
+    bar[s] = tapStroke(bar[s], k as "B" | "S" | "t");
     onFix(found, bar);
   };
   return (
     <Modal title={title} onClose={onClose}>
       <p className="muted" style={{ marginTop: 0 }}>
-        Tap a square to play that stroke there; tap a colored one to take it away. Every bar of this groove changes, and your fix is
-        kept for you on this song.
+        Tap a square to play that stroke there; tap a colored one to take it away. Bass and Slap in the same column make a double hit,
+        both hands at once. Every bar of this groove changes, and your fix is kept for you on this song.
       </p>
       <StepGrid groove={groove} level={level} onTap={tap} />
       <div className="fixer-foot">

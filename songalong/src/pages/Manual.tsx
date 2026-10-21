@@ -147,8 +147,9 @@ const TOPICS: { title: string; body: ReactNode }[] = [
             it with the song.
           </li>
           <li>
-            <b>Fix</b> on a groove card opens the groove to correct: tap a square to play that stroke there, tap a colored one to take it away. Every
-            bar of that groove changes. Your fixes are kept for you on that song, Easy and Groove apart; <b>Back to the groove as found</b> undoes them.
+            <b>Fix</b> on a groove card opens the groove to correct: tap a square to play that stroke there, tap a colored one to take it away.
+            Bass and Slap in the same column make a <b>double hit</b> (both hands at once: the hand whose turn it is slaps, the other plays the
+            bass). Every bar of that groove changes. Your fixes are kept for you on that song, Easy and Groove apart; <b>Back to the groove as found</b> undoes them.
           </li>
           <li>
             Where the drums stop, the strip says <b>no drums</b>: rest.
