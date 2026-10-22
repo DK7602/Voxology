@@ -43,6 +43,7 @@ import { Transport } from "./Transport";
 import { voicingFor } from "./voicing";
 import { LeadNeck } from "./LeadNeck";
 import { BarFixer, CajonPanel, GrooveCards, GrooveStrip, useCajonPart } from "./Cajon";
+import { ChordStylePicker } from "./ChordStylePicker";
 import { noteMidi } from "../../shared/music/chords";
 import type { Part } from "../player/engine";
 
@@ -115,6 +116,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
     capo: saved.capo ?? doc.capo ?? 0,
     instrument: saved.instrument ?? user.settings.instrument ?? "guitar",
     simplify: saved.simplify ?? false,
+    chordStyle: saved.chordStyle ?? "recorded",
     capoShapes: user.settings.capoShapes ?? true,
   }));
   const isCajon = settings.instrument === "cajon";
@@ -164,7 +166,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
   const [choices, setChoices] = useState<Record<string, number>>({});
   const [mode, setMode] = useState<"animated" | "summary">("animated");
   const [favorite, setFavorite] = useState(record.favorite);
-  const [modal, setModal] = useState<null | "capo" | "tuner" | "transpose" | "playlist">(null);
+  const [modal, setModal] = useState<null | "capo" | "tuner" | "transpose" | "playlist" | "style">(null);
   const [similar, setSimilar] = useState<SongSummary[]>([]);
   const view = useChordView(doc, settings);
 
@@ -212,6 +214,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
               capo: settings.capo,
               instrument: settings.instrument,
               simplify: settings.simplify,
+              chordStyle: settings.chordStyle === "recorded" ? undefined : settings.chordStyle,
               speed: st.speed,
               loop: st.loop,
             },
@@ -467,6 +470,8 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
         <SongDetails doc={doc} view={view} settings={settings} chords={chordsShown} />
         <ToolsPanel
           simplify={settings.simplify}
+          chordStyle={settings.chordStyle}
+          onChordStyle={() => setModal("style")}
           onTranspose={() => setModal("transpose")}
           onCapo={() =>
             !isFretted(settings.instrument) || settings.instrument === "bass" ? toast("Capo is for guitar, ukulele and mandolin.") : setModal("capo")
@@ -511,6 +516,9 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
         </Modal>
       )}
       {modal === "playlist" && <AddToPlaylist songId={record.id} onClose={() => setModal(null)} />}
+      {modal === "style" && (
+        <ChordStylePicker style={settings.chordStyle} view={view} onStyle={(chordStyle) => patch({ chordStyle })} onClose={() => setModal(null)} />
+      )}
       {isCajon && fixingBar !== null && fixingBar < cajon.barGroove.length && (
         <BarFixer
           part={cajon}

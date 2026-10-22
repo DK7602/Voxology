@@ -101,6 +101,11 @@ const TOPICS: { title: string; body: ReactNode }[] = [
         <li>
           <b>Simplify Chords</b> (Tools &amp; Features): easier versions, like G for G7.
         </li>
+        <li>
+          <b>Chord Style</b> (Tools &amp; Features): <b>As recorded</b>; <b>Full chords</b>, to play a rock song on an acoustic (each power
+          chord becomes major or minor, by the melody heard over it, or by the key when the melody doesn’t say; the chord card says “filled
+          in”); or <b>Power chords</b>, to play any song on a distorted electric (every chord as its root and fifth). Kept for each song.
+        </li>
       </ul>
     ),
   },

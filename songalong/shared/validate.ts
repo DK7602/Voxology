@@ -271,6 +271,7 @@ export function validatePracticeSettings(input: unknown): PracticeSettings {
   if (input.speed != null) out.speed = optNumber(input, "speed", "Speed", 1, 0.5, 1.5);
   const simplify = optBoolean(input, "simplify", "Simplify");
   if (simplify !== undefined) out.simplify = simplify;
+  if (input.chordStyle === "full" || input.chordStyle === "power") out.chordStyle = input.chordStyle;
   if (input.loop != null) {
     if (!isObject(input.loop)) fail("Loop must be an object");
     const loop: NonNullable<PracticeSettings["loop"]> = { on: optBoolean(input.loop, "on", "Loop") ?? false };

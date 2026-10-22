@@ -95,6 +95,8 @@ export interface PracticeSettings {
   instrument?: Instrument;
   speed?: number; // 0.5 .. 1.5
   simplify?: boolean;
+  /** the chords as recorded, as full chords, or as power chords (shared/music/chordStyle.ts) */
+  chordStyle?: "recorded" | "full" | "power";
   loop?: { on: boolean; from?: number; to?: number }; // beats
 }
 

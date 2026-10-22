@@ -26,14 +26,21 @@ export function chordCategory(symbol: string): ChordCategory | "unknown" {
   return parseChord(symbol)?.category ?? "unknown";
 }
 
-/** Colored tag naming the chord type (Triad, Power chord, Seventh...). */
-export function CategoryTag({ symbol }: { symbol: string }) {
+/** Colored tag naming the chord type (Triad, Power chord, Seventh...); a power chord the player
+ *  had filled in as a full chord says how its third was found. */
+export function CategoryTag({ symbol, filledBy }: { symbol: string; filledBy?: "melody" | "key" | null }) {
   const c = parseChord(symbol);
   if (!c) return null;
   let label = CATEGORY_LABEL[c.category];
   if (c.category === "triad") label = c.suffix === "m" ? "Minor triad" : c.suffix === "" ? "Major triad" : c.suffix === "dim" ? "Diminished" : "Augmented";
   if (c.bass !== undefined) label += " · slash";
-  return <span className={"cat-tag cat-" + c.category}>{label}</span>;
+  const title = filledBy === "melody" ? "A power chord in the recording: major or minor from the melody" : filledBy === "key" ? "A power chord in the recording: major or minor from the key" : undefined;
+  if (filledBy) label += " · filled in";
+  return (
+    <span className={"cat-tag cat-" + c.category} title={title}>
+      {label}
+    </span>
+  );
 }
 
 export const CATEGORY_ORDER: ChordCategory[] = ["triad", "sus", "added", "seventh", "extended", "power", "note", "notes"];

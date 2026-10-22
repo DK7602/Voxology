@@ -1538,3 +1538,34 @@
     height: 9px;
   }
 }
+
+/* the chord style window */
+.style-choices {
+  display: grid;
+  gap: 8px;
+}
+.style-choice {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  justify-content: start;
+  justify-items: start;
+  height: auto;
+  padding: 10px 14px;
+  white-space: normal;
+}
+.style-choice span {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.style-choice.active span {
+  color: inherit;
+}
+.style-filled ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 18px;
+}

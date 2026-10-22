@@ -84,7 +84,7 @@ export function Diagrams({ engine, view, settings, leftHanded, choices, onChoose
               className={"diagram-card" + (v?.kind === "piano" ? " piano" : "") + (shown === currentShown ? " current" : "")}
             >
               <ChordName symbol={shown} />
-              <CategoryTag symbol={view.sounding(original)} />
+              <CategoryTag symbol={view.sounding(original)} filledBy={view.filledBy(original)} />
               {v?.kind === "fret" && (
                 <FretDiagram
                   voicing={v.voicing}

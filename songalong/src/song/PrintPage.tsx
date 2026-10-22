@@ -48,6 +48,7 @@ export function PrintPage() {
     capo: parseInt(params.get("c") ?? "0", 10) || 0,
     instrument: (["guitar", "ukulele", "piano", "mandolin", "bass"].includes(params.get("i") ?? "") ? params.get("i") : "guitar") as Instrument,
     simplify: params.get("s") === "1",
+    chordStyle: params.get("cs") === "full" || params.get("cs") === "power" ? (params.get("cs") as "full" | "power") : "recorded",
     capoShapes: params.get("sh") !== "0",
   };
   const columns = params.get("cols") === "2";
@@ -160,7 +161,7 @@ function Sheet({
             return (
               <div key={shown} className={"legend-item" + (v?.kind === "piano" ? " piano" : "")}>
                 <div className="legend-name"><ChordName symbol={shown} /></div>
-                <CategoryTag symbol={view.sounding(original)} />
+                <CategoryTag symbol={view.sounding(original)} filledBy={view.filledBy(original)} />
                 {v?.kind === "fret" && <FretDiagram voicing={v.voicing} strings={v.strings} size={v.strings > 4 ? 96 : 84} />}
                 {v?.kind === "piano" && <PianoDiagram voicing={v.voicing} size={150} />}
               </div>

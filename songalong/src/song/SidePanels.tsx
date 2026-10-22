@@ -1,14 +1,17 @@
 import { Link } from "react-router-dom";
 import type { SongSummary } from "../../shared/api";
 import type { SongDoc } from "../../shared/types";
+import type { ChordStyle } from "../../shared/music/chordStyle";
 import { prettyAccidentals } from "../../shared/music/notes";
 import { namedForList } from "../../shared/music/songKey";
 import { FRETTED, isFretted } from "../../shared/music/voicings";
 import { Artwork } from "../components/Artwork";
 import { ChordName } from "../components/ChordName";
+import { STYLE_NAMES } from "./ChordStylePicker";
 import {
   IconArrowRight,
   IconCapo,
+  IconGuitar,
   IconHeadphones,
   IconMore,
   IconNote,
@@ -61,6 +64,8 @@ export function SongDetails({ doc, view, settings, chords }: { doc: SongDoc; vie
 
 export function ToolsPanel({
   simplify,
+  chordStyle,
+  onChordStyle,
   onTranspose,
   onCapo,
   onTuner,
@@ -69,6 +74,8 @@ export function ToolsPanel({
   onSimplify,
 }: {
   simplify: boolean;
+  chordStyle: ChordStyle;
+  onChordStyle: () => void;
   onTranspose: () => void;
   onCapo: () => void;
   onTuner: () => void;
@@ -83,6 +90,7 @@ export function ToolsPanel({
     { icon: IconPiano, title: "MIDI Export", sub: "Export to MIDI file", on: false, act: onMidi },
     { icon: IconPrinter, title: "Print Chords", sub: "Get a clean sheet", on: false, act: onPrint },
     { icon: IconNote, title: "Simplify Chords", sub: simplify ? "On: easier versions" : "Easier versions", on: simplify, act: onSimplify },
+    { icon: IconGuitar, title: "Chord Style", sub: STYLE_NAMES[chordStyle], on: chordStyle !== "recorded", act: onChordStyle },
   ];
   return (
     <div className="panel side-panel">

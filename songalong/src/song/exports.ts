@@ -65,6 +65,7 @@ export function printUrl(id: string, s: ViewSettings, auto = false): string {
     c: String(s.capo),
     i: s.instrument,
     s: s.simplify ? "1" : "0",
+    cs: s.chordStyle,
     sh: s.capoShapes ? "1" : "0",
   });
   if (auto) p.set("print", "1");
