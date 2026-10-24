@@ -50,9 +50,13 @@ export function MediaPanel({ engine, doc, title }: { engine: PlayerEngine; doc: 
   const playing = st.playing || st.countIn !== null;
   return (
     <div className="panel media-panel">
-      <div className="media-box">
+      <div className={"media-box" + (st.needsTap ? " tap-here" : "")}>
         {media.kind === "youtube" ? (
-          <div ref={host} />
+          <>
+            <div ref={host} />
+            {/* the tap goes through to the video */}
+            {st.needsTap && <span className="tap-label">Tap the video to start</span>}
+          </>
         ) : (
           <>
             <Artwork title={title} rounded={0} />
@@ -80,6 +84,32 @@ export function MediaPanel({ engine, doc, title }: { engine: PlayerEngine; doc: 
       <div className="faint" style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
         <span ref={timeLabel} />
         {st.error && <span className="error-text">{st.error}</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Play didn't start the video: an iPhone starts a YouTube video only from a tap on the video
+ * itself. Says so above the play bar, with a way to the video (below on a phone).
+ */
+export function TapNote({ engine }: { engine: PlayerEngine }) {
+  const st = usePlayerState(engine);
+  if (!st.needsTap) return null;
+  const show = () => document.querySelector(".media-box")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  return (
+    <div className="tap-note panel" role="alert">
+      <p>
+        <b>Tap the video to start it.</b> On an iPhone a video can only start from a tap on the video itself; after that, Play works as
+        usual.
+      </p>
+      <div className="tap-note-actions">
+        <button className="btn btn-sm btn-primary" onClick={show}>
+          Show the video
+        </button>
+        <button className="btn btn-sm" onClick={() => engine.dismissTapNote()}>
+          OK
+        </button>
       </div>
     </div>
   );

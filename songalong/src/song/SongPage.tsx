@@ -36,7 +36,7 @@ import { ChordStrip } from "./ChordStrip";
 import { Diagrams } from "./Diagrams";
 import { downloadChordPro, downloadMidi, downloadText, printUrl } from "./exports";
 import { LyricsLane } from "./LyricsLane";
-import { MediaPanel } from "./MediaPanel";
+import { MediaPanel, TapNote } from "./MediaPanel";
 import { SimilarSongs, SongDetails, ToolsPanel } from "./SidePanels";
 import { SummaryView } from "./SummaryView";
 import { Transport } from "./Transport";
@@ -396,6 +396,7 @@ function SongPlayer({ record, saved, onChanged }: { record: SongRecord; saved: P
           </div>
         </header>
 
+        <TapNote engine={engine} />
         <Transport
           hasLead={hasLead}
           cajon={isCajon}

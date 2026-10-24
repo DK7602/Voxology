@@ -9,6 +9,10 @@ interface Events {
 const players: FakePlayer[] = [];
 /** whether the browser lets a muted video play without a tap */
 let silentPlayAllowed = true;
+/** whether the browser lets a video play with sound when asked by the page (an iPhone: only once
+ *  the video itself has been tapped), and what the player does when it isn't */
+let soundPlayAllowed = true;
+let refusedState: number | null = null;
 
 /** Behaves like YouTube's player: seeking a video that hasn't played yet (or has ended) starts it. */
 class FakePlayer {
@@ -17,6 +21,7 @@ class FakePlayer {
   seeks: number[] = [];
   plays = 0;
   muted = false;
+  tapped = false;
   readonly events: Events;
   constructor(_mount: unknown, opts: { events: Events }) {
     this.events = opts.events;
@@ -28,6 +33,16 @@ class FakePlayer {
   }
   playVideo() {
     if (this.muted && !silentPlayAllowed && this.state !== 2) return;
+    if (!this.muted && !soundPlayAllowed && !this.tapped) {
+      if (refusedState !== null) this.setState(refusedState);
+      return;
+    }
+    this.plays++;
+    this.setState(1);
+  }
+  /** a tap on the video itself */
+  tap() {
+    this.tapped = true;
     this.plays++;
     this.setState(1);
   }
@@ -69,7 +84,10 @@ const element = () => ({ style: { cssText: "" }, appendChild() {}, remove() {} }
 beforeEach(() => {
   players.length = 0;
   silentPlayAllowed = true;
+  soundPlayAllowed = true;
+  refusedState = null;
   YouTubeMedia.primeWaitMs = 3000;
+  YouTubeMedia.startWaitMs = 2500;
   vi.stubGlobal("window", { YT: { Player: FakePlayer, PlayerState: {} } });
   vi.stubGlobal("document", { createElement: element, head: { appendChild() {} } });
   vi.stubGlobal("location", { origin: "https://songalong.test" });
@@ -203,5 +221,60 @@ describe("YouTube video where silent playing isn't allowed", () => {
     expect(player.seeks.at(-1)).toBe(30);
     expect(player.time).toBe(30);
     expect(external).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("YouTube video on a phone that starts a video only from a tap on it (an iPhone)", () => {
+  beforeEach(() => {
+    soundPlayAllowed = false;
+    YouTubeMedia.startWaitMs = 5;
+  });
+  const settle = () => new Promise((r) => setTimeout(r, 30));
+
+  for (const [how, state] of [["stays as it was", null], ["pauses itself", 2]] as const) {
+    it(`says Play was refused when the video ${how}, and follows a tap on the video`, async () => {
+      refusedState = state;
+      const { media, player, external } = await open(12);
+      const blocked = vi.fn();
+      media.onBlocked = blocked;
+      await media.play(); // the count-in is over
+      await settle();
+      expect(blocked).toHaveBeenCalledTimes(1);
+      expect(external).not.toHaveBeenCalled(); // not taken for the player pausing it
+      expect(media.isPlaying()).toBe(false);
+      // the player taps the video: it starts, at the app's spot, and the app follows
+      player.tap();
+      expect(external).toHaveBeenCalledWith(true);
+      expect(player.state).toBe(1);
+      // from then on Play works
+      media.pause();
+      await media.play();
+      await settle();
+      expect(player.state).toBe(1);
+      expect(blocked).toHaveBeenCalledTimes(1);
+    });
+  }
+
+  it("doesn't say so where Play starts the video, or while it is still loading", async () => {
+    soundPlayAllowed = true;
+    const { media, player } = await open();
+    const blocked = vi.fn();
+    media.onBlocked = blocked;
+    await media.play();
+    await settle();
+    expect(blocked).not.toHaveBeenCalled();
+    // a slow connection: loading (3) for a while, then playing
+    media.pause();
+    player.playVideo = function () {
+      this.state = 3;
+      this.events.onStateChange({ data: 3 });
+    };
+    await media.play();
+    await settle();
+    expect(blocked).not.toHaveBeenCalled();
+    player.state = 1;
+    player.events.onStateChange({ data: 1 });
+    await settle();
+    expect(blocked).not.toHaveBeenCalled();
   });
 });

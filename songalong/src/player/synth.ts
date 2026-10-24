@@ -12,6 +12,10 @@ const cache = new Map<string, AudioBuffer>();
 
 export function audioContext(): AudioContext {
   if (!ctx) {
+    // an iPhone plays the app's sounds through its ring/silent switch, as it does a music app's
+    // (Safari 17), instead of muting them
+    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (session) session.type = "playback";
     ctx = new AudioContext({ latencyHint: "interactive" });
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14;

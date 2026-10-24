@@ -29,7 +29,13 @@ export class FakeMedia implements MediaAdapter {
   rates() {
     return null;
   }
+  unlocked = 0;
+  unlock() {
+    this.unlocked++;
+  }
   destroy() {}
   onEnded?: () => void;
+  onExternalPlayState?: (playing: boolean) => void;
+  onBlocked?: () => void;
 }
 

@@ -772,6 +772,54 @@
   height: 100%;
   border: 0;
 }
+/* Play didn't start the video (an iPhone): the video itself is to be tapped */
+.media-box.tap-here {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+  animation: tap-here 1.2s ease-in-out infinite alternate;
+}
+@keyframes tap-here {
+  to {
+    outline-color: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .media-box.tap-here {
+    animation: none;
+  }
+}
+.tap-label {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 15px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tap-note {
+  position: fixed;
+  z-index: 60;
+  right: 24px;
+  bottom: 24px;
+  max-width: 380px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+.tap-note p {
+  margin: 0;
+  font-size: 15px;
+}
+.tap-note-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
 .media-box .artwork {
   width: 100%;
   height: 100%;
@@ -1039,6 +1087,12 @@
   }
   .song-page {
     padding-bottom: 90px;
+  }
+  .tap-note {
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    bottom: calc(164px + env(safe-area-inset-bottom));
   }
 }
 /* phones on their side have no tab bar (app.css): the transport docks at the bottom */

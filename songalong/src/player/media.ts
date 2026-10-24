@@ -15,10 +15,16 @@ export interface MediaAdapter {
   rates(): number[] | null;
   /** about to play (the count-in has started): load what is needed to start at once */
   prepare?(): void;
+  /** called in the tap that presses Play, before the count-in: a phone lets a recording start
+   *  by itself later only once a tap has started it */
+  unlock?(): void;
   destroy(): void;
   onEnded?: () => void;
   /** the source started / stopped on its own (e.g. the YouTube player's own controls) */
   onExternalPlayState?: (playing: boolean) => void;
+  /** asked to play, the source didn't start: the browser lets it start only from a tap on it
+   *  (YouTube on an iPhone) */
+  onBlocked?: () => void;
   onError?: (message: string) => void;
 }
 
@@ -98,6 +104,7 @@ export class AudioMedia implements MediaAdapter {
   readonly kind = "audio" as const;
   readonly el: HTMLAudioElement;
   private smooth = new Smoother();
+  private unlocked = false;
   onEnded?: () => void;
   onExternalPlayState?: (playing: boolean) => void;
   onError?: (message: string) => void;
@@ -112,6 +119,15 @@ export class AudioMedia implements MediaAdapter {
   }
   time() {
     return this.smooth.read(this.el.currentTime, !this.el.paused, this.el.playbackRate);
+  }
+  /** Started and stopped at once in the tap on Play: from then on an iPhone lets it start by
+   *  itself, when the count-in ends. */
+  unlock() {
+    if (this.unlocked || !this.el.paused) return;
+    this.unlocked = true;
+    const started = this.el.play();
+    this.el.pause();
+    started?.catch(() => {});
   }
   async play() {
     try {
@@ -192,6 +208,10 @@ function loadYouTubeApi(): Promise<void> {
 export class YouTubeMedia implements MediaAdapter {
   /** how long to wait for silent playing to start before giving up on it */
   static primeWaitMs = 3000;
+  /** how long Play may take to start the video before it counts as refused (an iPhone starts a
+   *  YouTube video only from a tap on the video), and how long while it is still loading */
+  static startWaitMs = 2500;
+  static loadWaitMs = 15000;
   readonly kind = "youtube" as const;
   /** set only once YouTube says the player is ready: before that its methods don't exist yet */
   private player: YTPlayer | null = null;
@@ -207,9 +227,13 @@ export class YouTubeMedia implements MediaAdapter {
   private priming = false;
   private primeAt = 0;
   private primeTimer: ReturnType<typeof setTimeout> | undefined;
+  /** the video has played since Play last asked it to (else Play may have been refused) */
+  private startedSinceAsk = true;
+  private askTimer: ReturnType<typeof setTimeout> | undefined;
   readonly ready: Promise<void>;
   onEnded?: () => void;
   onExternalPlayState?: (playing: boolean) => void;
+  onBlocked?: () => void;
   onError?: (message: string) => void;
 
   constructor(host: HTMLElement, videoId: string) {
@@ -255,7 +279,10 @@ export class YouTubeMedia implements MediaAdapter {
                 if (e.data === 0) this.onEnded?.();
                 // started from the video itself: go to where the app is
                 if (e.data === 1) this.seekPending();
+                if (e.data === 1) this.startedSinceAsk = true;
                 if (e.data === 1 && !this.wantPlay) this.onExternalPlayState?.(true);
+                // paused before it ever started: not the player pausing it (see watchStart)
+                if (e.data === 2 && this.wantPlay && !this.startedSinceAsk) return;
                 if (e.data === 2 && this.wantPlay) this.onExternalPlayState?.(false);
                 if (e.data === 1) this.wantPlay = true;
                 if (e.data === 2) this.wantPlay = false;
@@ -320,10 +347,27 @@ export class YouTubeMedia implements MediaAdapter {
     if (this.destroyed || !this.wantPlay) return;
     this.endPrime();
     this.seekPending();
+    this.startedSinceAsk = false;
     this.player?.playVideo();
+    this.watchStart(Date.now());
+  }
+  /** Play may be refused without a word (an iPhone starts a YouTube video only from a tap on the
+   *  video): a video that isn't playing, or loading, soon after is taken as refused. */
+  private watchStart(askedAt: number) {
+    clearTimeout(this.askTimer);
+    this.askTimer = setTimeout(() => {
+      if (this.destroyed || !this.wantPlay || this.startedSinceAsk) return;
+      const state = this.player?.getPlayerState();
+      if (state === 1) return;
+      if (state === 3 && Date.now() - askedAt < YouTubeMedia.loadWaitMs) return this.watchStart(askedAt);
+      this.wantPlay = false;
+      safely(() => this.player?.pauseVideo());
+      this.onBlocked?.();
+    }, YouTubeMedia.startWaitMs);
   }
   pause() {
     this.wantPlay = false;
+    clearTimeout(this.askTimer);
     this.player?.pauseVideo();
   }
   seek(t: number) {
@@ -358,6 +402,7 @@ export class YouTubeMedia implements MediaAdapter {
     this.destroyed = true;
     this.wantPlay = false;
     clearTimeout(this.primeTimer);
+    clearTimeout(this.askTimer);
     const p = this.player;
     this.player = null;
     if (p) {

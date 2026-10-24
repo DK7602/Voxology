@@ -30,6 +30,9 @@ export interface PlayerState {
   /** seconds later than the media clock that words and chords are shown (sync.ts) */
   sync: number;
   error: string | null;
+  /** Play didn't start the video: the browser starts it only from a tap on the video itself
+   *  (YouTube on an iPhone); after that, Play works */
+  needsTap: boolean;
   mediaKind: MediaAdapter["kind"];
 }
 
@@ -79,6 +82,7 @@ export class PlayerEngine {
       countInBars: 1,
       sync: savedSync(),
       error: null,
+      needsTap: false,
       mediaKind: "none",
     };
     this.wire(this.media);
@@ -120,7 +124,7 @@ export class PlayerEngine {
     this.wire(media);
     media.setRate(this.state.speed);
     media.seek(wasAt);
-    this.set({ mediaKind: media.kind, error: null, backing: media.kind === "none" });
+    this.set({ mediaKind: media.kind, error: null, needsTap: false, backing: media.kind === "none" });
     this.emitTick();
   }
   private wire(m: MediaAdapter) {
@@ -136,7 +140,16 @@ export class PlayerEngine {
       if (playing && !this.state.playing) this.startRunning();
       if (!playing && this.state.playing) this.pause();
     };
+    m.onBlocked = () => {
+      this.pause();
+      this.set({ needsTap: true });
+    };
     m.onError = (message) => this.set({ error: message, playing: false });
+  }
+
+  /** The player read the note about tapping the video. */
+  dismissTapNote() {
+    this.set({ needsTap: false });
   }
 
   /** The document to show (its `chords` may be the lead part). */
@@ -171,6 +184,8 @@ export class PlayerEngine {
 
   async play() {
     if (this.state.playing || this.state.countIn !== null) return;
+    // in the tap itself, before anything waits: phones allow sound only from a tap
+    this.media.unlock?.();
     await unlockAudio();
     this.set({ error: null });
     const bars = this.state.countInBars;
@@ -204,7 +219,7 @@ export class PlayerEngine {
   private startRunning(startMedia = false) {
     this.shownFrom = this.media.time();
     this.resetSchedule();
-    this.set({ playing: true });
+    this.set({ playing: true, needsTap: false });
     if (startMedia) {
       this.media.play().catch(() => this.set({ playing: false }));
     }

@@ -50,3 +50,29 @@ describe("the end of a recording", () => {
     expect(engine.getState().playing).toBe(true);
   });
 });
+
+describe("a video the phone starts only from a tap on it", () => {
+  it("unlocks the recording in the tap on Play, before the count-in", async () => {
+    const { media } = await playingFrom(10);
+    expect(media.unlocked).toBe(1);
+  });
+
+  it("stops and says to tap the video when Play didn't start it; the tap starts the song", async () => {
+    const { engine, media } = await playingFrom(10);
+    media.onBlocked!();
+    expect(engine.getState().playing).toBe(false);
+    expect(engine.getState().needsTap).toBe(true);
+    // the player taps the video: it plays, and the app goes with it
+    media.playing = true;
+    media.onExternalPlayState!(true);
+    expect(engine.getState().playing).toBe(true);
+    expect(engine.getState().needsTap).toBe(false);
+  });
+
+  it("puts the note away when the player has read it", async () => {
+    const { engine, media } = await playingFrom(10);
+    media.onBlocked!();
+    engine.dismissTapNote();
+    expect(engine.getState().needsTap).toBe(false);
+  });
+});
