@@ -18,6 +18,9 @@ export interface MediaAdapter {
   /** called in the tap that presses Play, before the count-in: a phone lets a recording start
    *  by itself later only once a tap has started it */
   unlock?(): void;
+  /** true when this source starts only in the tap that asks it to (YouTube on an iPhone): then
+   *  Play starts it at once, and counts in over the bar before (see PlayerEngine.playInTap) */
+  startsOnlyInTap?(): boolean;
   destroy(): void;
   onEnded?: () => void;
   /** the source started / stopped on its own (e.g. the YouTube player's own controls) */
@@ -187,6 +190,20 @@ declare global {
 }
 
 let ytApi: Promise<void> | null = null;
+/** Kept once a browser has refused to start a video from Play: it starts one only in the tap. */
+const TAP_ONLY_KEY = "songalong.videoStartsInTap";
+
+/** Browsers that start a YouTube video only in a tap: an iPhone's (Safari, and Chrome, which is
+ *  Safari underneath), and any that has refused before. */
+function videoStartsOnlyInTap(): boolean {
+  try {
+    if (localStorage.getItem(TAP_ONLY_KEY) === "1") return true;
+  } catch {
+    /* storage off: go by the device */
+  }
+  return typeof navigator !== "undefined" && /iPhone|iPod/.test(navigator.userAgent);
+}
+
 function loadYouTubeApi(): Promise<void> {
   if (window.YT?.Player) return Promise.resolve();
   if (!ytApi) {
@@ -341,9 +358,13 @@ export class YouTubeMedia implements MediaAdapter {
     if (!this.player || this.pendingSeek !== null) return this.pendingSeek ?? 0;
     return this.smooth.read(this.player.getCurrentTime() ?? 0, this.playing(), this.rate);
   }
+  startsOnlyInTap() {
+    return !!this.player && videoStartsOnlyInTap();
+  }
   async play() {
     this.wantPlay = true;
-    await this.ready;
+    // a ready player is asked at once, in the tap that pressed Play when there is one
+    if (!this.player) await this.ready;
     if (this.destroyed || !this.wantPlay) return;
     this.endPrime();
     this.seekPending();
@@ -362,6 +383,11 @@ export class YouTubeMedia implements MediaAdapter {
       if (state === 3 && Date.now() - askedAt < YouTubeMedia.loadWaitMs) return this.watchStart(askedAt);
       this.wantPlay = false;
       safely(() => this.player?.pauseVideo());
+      try {
+        localStorage.setItem(TAP_ONLY_KEY, "1");
+      } catch {
+        /* storage off */
+      }
       this.onBlocked?.();
     }, YouTubeMedia.startWaitMs);
   }

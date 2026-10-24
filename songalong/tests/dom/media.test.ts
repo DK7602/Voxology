@@ -278,3 +278,33 @@ describe("YouTube video on a phone that starts a video only from a tap on it (an
     expect(blocked).not.toHaveBeenCalled();
   });
 });
+
+describe("YouTube video on an iPhone: Play starts it in the tap itself", () => {
+  const store = new Map<string, string>();
+  beforeEach(() => {
+    store.clear();
+    vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) });
+  });
+
+  it("asks a ready player before anything waits", async () => {
+    const { media, player } = await open(12);
+    void media.play(); // not awaited: still inside the tap
+    expect(player.state).toBe(1);
+  });
+
+  it("starts in the tap on an iPhone, and anywhere that has refused once", async () => {
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140" });
+    const { media, player } = await open();
+    expect(media.startsOnlyInTap()).toBe(false);
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) CriOS/140 Mobile/15E148 Safari/604.1" });
+    expect(media.startsOnlyInTap()).toBe(true);
+    // a computer that refused once: from then on, in the tap too
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140" });
+    soundPlayAllowed = false;
+    YouTubeMedia.startWaitMs = 5;
+    await media.play();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(player.state).not.toBe(1);
+    expect(media.startsOnlyInTap()).toBe(true);
+  });
+});

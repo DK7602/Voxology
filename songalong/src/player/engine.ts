@@ -62,6 +62,8 @@ export class PlayerEngine {
   private cajon: { beat: number; stroke: CajonStroke }[] = [];
   private cajonScheduledUpTo = -Infinity; // beat position of the last cajon stroke scheduled
   private countTimers: number[] = [];
+  /** the beat a count-in over the video's own bars ends on (playInTap), else null */
+  private countTo: number | null = null;
   private lastBeat = 0;
   /** where playing started (or was moved to): what is shown waits there for the sound */
   private shownFrom = 0;
@@ -184,6 +186,7 @@ export class PlayerEngine {
 
   async play() {
     if (this.state.playing || this.state.countIn !== null) return;
+    if (this.media.startsOnlyInTap?.()) return this.playInTap();
     // in the tap itself, before anything waits: phones allow sound only from a tap
     this.media.unlock?.();
     await unlockAudio();
@@ -216,6 +219,24 @@ export class PlayerEngine {
     this.startRunning(true);
   }
 
+  /**
+   * For a video that starts only in the tap (YouTube on an iPhone): it starts now, before anything
+   * waits. Where there is room it starts the count-in's bars early, and the clicks count over them
+   * on the video's own clock (see schedule); at the very start of a song it starts right there.
+   */
+  private playInTap() {
+    void unlockAudio();
+    this.set({ error: null });
+    const beats = this.state.countInBars * (this.timeline.doc.beatsPerBar || 4);
+    const start = Math.floor(this.lastBeat + 1e-6);
+    if (beats > 0 && this.timeline.beatToTime(start - beats) >= this.startTime() - 1e-6) {
+      this.seekBeat(start - beats);
+      this.countTo = start;
+      this.set({ countIn: beats });
+    } else this.seekBeat(Math.max(start, this.timeline.timeToBeat(this.startTime())));
+    this.startRunning(true);
+  }
+
   private startRunning(startMedia = false) {
     this.shownFrom = this.media.time();
     this.resetSchedule();
@@ -234,6 +255,7 @@ export class PlayerEngine {
     this.countTimers = [];
     window.clearInterval(this.scheduler);
     this.media.pause();
+    this.countTo = null;
     this.set({ playing: false, countIn: null });
     this.emitTick();
   }
@@ -370,12 +392,25 @@ export class PlayerEngine {
     const doc = this.timeline.doc;
     const bpb = doc.beatsPerBar || 4;
     const loopTo = this.state.loop.on ? this.state.loop.to ?? this.timeline.lengthBeats : Infinity;
+    // counting in while the video plays the bars before the spot (playInTap)
+    if (this.countTo !== null) {
+      const left = Math.ceil(this.countTo - nowBeat - 1e-6);
+      if (left <= 0) {
+        this.countTo = null;
+        this.set({ countIn: null });
+      } else if (left !== this.state.countIn) this.set({ countIn: left });
+    }
     for (let b = Math.max(this.scheduledUpTo + 1, Math.ceil(nowBeat - 0.02)); b <= horizonBeat; b++) {
       this.scheduledUpTo = b;
-      if (b >= loopTo || b < 0 || b >= this.timeline.lengthBeats) continue;
       const when = ctx.currentTime + (this.timeline.beatToTime(b) - now) / rate;
-      if (when < ctx.currentTime - 0.03) continue;
       const posInBar = ((b % bpb) + bpb) % bpb;
+      // the count-in's clicks, before the music too, and nothing else
+      if (this.countTo !== null && b < this.countTo) {
+        if (when >= ctx.currentTime - 0.03) click(when, posInBar === 0, 0.75);
+        continue;
+      }
+      if (b >= loopTo || b < 0 || b >= this.timeline.lengthBeats) continue;
+      if (when < ctx.currentTime - 0.03) continue;
       if (this.state.metronome) click(when, posInBar === 0, 0.5);
       if (!this.state.backing || this.instrument === "cajon") continue;
       const rhythm = this.rhythm;

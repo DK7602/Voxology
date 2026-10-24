@@ -59,9 +59,10 @@ const TOPICS: { title: string; body: ReactNode }[] = [
           <b>Play</b> starts after a count-in of clicks. Change it with the timer button next to Play (off, 1 bar or 2 bars), or in Settings below.
         </li>
         <li>
-          <b>On an iPhone</b>, a YouTube video can only start from a tap on the video itself. If Play counts in and the video doesn’t start,
-          the app says so: tap the video once (<b>Show the video</b> takes you to it) and the song plays; after that, Play works as usual.
-          The app’s own sounds play even with the ring/silent switch on silent.
+          <b>On an iPhone</b>, a YouTube video starts only in a tap, so Play starts it at once: the count-in clicks over the bar before your
+          spot while the video plays it (at the very start of a song, it simply starts). If the phone still won’t start it, the app says so:
+          tap the video once (<b>Show the video</b> takes you to it) and the song plays. The app’s own sounds play even with the ring/silent
+          switch on silent.
         </li>
         <li>
           <b>⏮</b> goes back to the start of the bar, or to the bar before if you are already at the start.
