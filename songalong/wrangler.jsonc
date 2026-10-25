@@ -40,8 +40,13 @@
     { "tag": "v1", "new_sqlite_classes": ["PrepContainer"] },
     { "tag": "v2", "new_sqlite_classes": ["CajonContainer"] }
   ],
-  // Optional secret: YOUTUBE_API_KEY (`wrangler secret put YOUTUBE_API_KEY`) makes search use
-  // YouTube's official search; without it the prep container searches.
+  // Containers are billed for their full memory every second they run, busy or idle, so they
+  // stop soon after their work (sleepAfter in worker/prepContainer.ts; the cajon queue stops its
+  // machine itself). Cajon stays on 4 cores: memory comes with each core, so a smaller machine
+  // costs the same per song, only slower (a 15-minute song would pass its 12-minute limit).
+  //
+  // Recommended secret: YOUTUBE_API_KEY (`wrangler secret put YOUTUBE_API_KEY`) makes search use
+  // YouTube's official search (free); without it every search starts a 4 GiB prep container.
   "vars": {
     "APP_NAME": "SongAlong",
     // Sender for password-reset mail. With Gmail only the name is used (mail comes from

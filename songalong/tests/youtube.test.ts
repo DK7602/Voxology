@@ -3,7 +3,7 @@ import { CAJON_ENGINE, PREP_ENGINE, type PrepAnalysis, type PrepEvent, type Prep
 import { cleanTitle, guessSongName, nameCandidates, tidyTitle } from "../shared/songName";
 import { alignVersion, anchorChain, estimateOffset, matchInOrder, oneOffsetFits, steadyChain, timeWords, transcribe, versionLines, warp, type Segment } from "../worker/align";
 import { believableTiming, findLyrics, parseLrc, retryDelays } from "../worker/lyrics";
-import { nextCajonJob, nextCajonTime, retryDelay, runCajonJob, SERVICE_WAIT_MS } from "../worker/cajon";
+import { MAX_DOWNS, nextCajonJob, nextCajonTime, retryDelay, runCajonJob, SERVICE_WAIT_MS, serviceWait } from "../worker/cajon";
 import { isoDuration } from "../worker/youtube";
 import { Client, makeEnv, signUp } from "./helpers/workerEnv";
 
@@ -515,6 +515,27 @@ describe("preparing a song", () => {
     const last = (await nextCajonJob(env.DB, now + SERVICE_WAIT_MS))!;
     expect(await runCajonJob(env.DB, last, async () => ndjsonResponse([{ type: "error", code: "unavailable", message: "Removed" }]))).toBe("failed");
     expect(await nextCajonTime(env.DB)).toBeNull();
+  });
+
+  it("waits longer each time the cajon service stays down, so a broken machine isn't booted all day", async () => {
+    expect(serviceWait(0)).toBe(SERVICE_WAIT_MS);
+    expect(serviceWait(1)).toBe(2 * SERVICE_WAIT_MS);
+    expect(serviceWait(3)).toBe(8 * SERVICE_WAIT_MS);
+    expect(serviceWait(20)).toBe(6 * 60 * 60_000);
+    // the tries before the queue rests come to a few hours, not days of 10-minute boots
+    let total = 0;
+    for (let d = 0; d < MAX_DOWNS; d++) total += serviceWait(d);
+    expect(total).toBeLessThan(12 * 60 * 60_000);
+
+    vi.stubGlobal("fetch", fakeLrclib());
+    const CAJON = { idFromName: (n: string) => n, get: () => ({ kick: async () => {} }) };
+    const { env } = makeEnv({ PREP: fakePrep((videoId) => [{ type: "result", analysis: analysis(videoId) }]), AI: chunkAwareAi(), CAJON });
+    const { client } = await signUp(env, "backoff@example.com");
+    await readEvents(await client.fetch("POST", "/api/youtube/prepare", { json: { videoId: "drumsong005" } }));
+    const now = Date.now();
+    const down = async () => new Response("Container not ready", { status: 500 });
+    expect(await runCajonJob(env.DB, (await nextCajonJob(env.DB, now))!, down, () => now, serviceWait(2))).toBe("down");
+    expect(await nextCajonTime(env.DB)).toBe(now + serviceWait(2));
   });
 
   it("does a cajon job that was cut off again, at once when no job is running", async () => {

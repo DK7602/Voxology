@@ -22,6 +22,16 @@ const MAX_FAILED = 4;
 /** When the cajon service itself doesn't answer (starting up, or a new version rolling out), the
  *  whole queue waits this long; that is no song's fault, so it costs no tries. */
 export const SERVICE_WAIT_MS = 10 * 60_000;
+/** Each try boots a 12 GiB machine (billed while it runs), so a service that stays down is tried
+ *  less and less often, and after this many downs in a row the queue rests until a new song is
+ *  queued. (Before, it tried every 10 minutes for as long as it was down: days, on the bill.) */
+export const MAX_DOWNS = 5;
+
+/** How long the queue waits after the service didn't answer, `downs` times before in a row:
+ *  10 min, 20 min, 40 min ... up to 6 h. */
+export function serviceWait(downs: number): number {
+  return Math.min(6 * 60 * 60_000, SERVICE_WAIT_MS * 2 ** Math.max(0, downs));
+}
 
 /** Waits before trying again: 15 min, 30 min, 1 h ... up to 12 h. */
 export function retryDelay(tries: number): number {
@@ -132,6 +142,7 @@ export async function runCajonJob(
   job: Job,
   call: (videoId: string) => Promise<Response>,
   now = () => Date.now(),
+  downWaitMs = SERVICE_WAIT_MS,
 ): Promise<CajonStatus | "down"> {
   await db.prepare("UPDATE yt_songs SET cajon = 'working', cajon_at = ? WHERE video_id = ?").bind(now(), job.videoId).run();
   let result: CajonEvent | null = null;
@@ -151,7 +162,7 @@ export async function runCajonJob(
   }
   if (!answered) {
     // back in the queue, and the whole queue waits
-    const at = now() + SERVICE_WAIT_MS;
+    const at = now() + downWaitMs;
     await db.batch([
       db.prepare("UPDATE yt_songs SET cajon = 'queued', cajon_error = ?, cajon_at = ? WHERE video_id = ?").bind(result?.type === "error" ? result.message : "", at, job.videoId),
       db.prepare("UPDATE yt_songs SET cajon_at = ? WHERE cajon IN ('queued', 'waiting') AND cajon_at < ?").bind(at, at),
