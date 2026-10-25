@@ -112,8 +112,17 @@ youtube.get("/search", async (c) => {
   const q = (c.req.query("q") ?? "").trim().slice(0, 200);
   if (!q) throw new HttpError(400, "Type a song or artist to search for");
   let results: YouTubeResult[];
-  if (c.env.YOUTUBE_API_KEY) results = await searchWithApi(q, c.env.YOUTUBE_API_KEY);
-  else if (c.env.PREP) results = await searchWithContainer(c.env, q);
+  if (c.env.YOUTUBE_API_KEY) {
+    try {
+      results = await searchWithApi(q, c.env.YOUTUBE_API_KEY);
+    } catch (e) {
+      // over the key's daily limit (about 99 searches, shared by everyone), or YouTube not
+      // answering: the prep container searches instead, so search keeps working
+      if (!c.env.PREP) throw e;
+      console.warn("youtube search: using the container instead:", (e as Error).message);
+      results = await searchWithContainer(c.env, q);
+    }
+  } else if (c.env.PREP) results = await searchWithContainer(c.env, q);
   else throw new HttpError(503, "Song search isn't switched on yet: it needs the YouTube key or the cloud song-prep.");
   if (results.length) {
     const marks = await c.env.DB

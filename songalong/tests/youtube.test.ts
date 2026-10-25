@@ -696,4 +696,36 @@ describe("preparing a song", () => {
     const r = (await client.call("GET", "/api/youtube/search?q=test")).body.results;
     expect(r[0]).toMatchObject({ videoId: "abcdefghijk", title: "Test & Song", duration: 181, status: "ready", songId: "song123" });
   });
+
+  it("search uses the prep container once the YouTube key is over its daily limit", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL | Request) =>
+        String(url).includes("/youtube/v3/") ? Response.json({ error: { code: 403, message: "quotaExceeded" } }, { status: 403 }) : new Response("", { status: 404 }),
+      ),
+    );
+    const searched: string[] = [];
+    const PREP = {
+      idFromName: (n: string) => n,
+      get: () => ({
+        fetch: async (req: Request) => {
+          searched.push(new URL(req.url).searchParams.get("q") ?? "");
+          return Response.json({ results: [{ videoId: "zyxwvutsrqp", title: "From the container", channel: "Chan", duration: 200, thumbnail: "" }] });
+        },
+      }),
+    };
+    const { env } = makeEnv({ YOUTUBE_API_KEY: "test-key", PREP });
+    const { client } = await signUp(env, "quota@example.com");
+    const r = (await client.call("GET", "/api/youtube/search?q=over limit")).body.results;
+    expect(searched).toEqual(["over limit"]);
+    expect(r[0]).toMatchObject({ videoId: "zyxwvutsrqp", title: "From the container" });
+  });
+
+  it("search with the YouTube key and no container says the key is over its limit", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: { code: 403 } }, { status: 403 })));
+    const { env } = makeEnv({ YOUTUBE_API_KEY: "test-key" });
+    const { client } = await signUp(env, "quota2@example.com");
+    const res = await client.call("GET", "/api/youtube/search?q=test");
+    expect(res.status).toBe(502);
+  });
 });
