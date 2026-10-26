@@ -4,7 +4,6 @@
 // a deploy) can keep a machine awake for days. So every 5 minutes (the cron trigger in
 // wrangler.jsonc) each container is asked to stop if it is running with nothing to do.
 
-import { getContainer } from "@cloudflare/containers";
 import type { Env } from "./env";
 import { PREP_BUCKETS } from "./youtube";
 
@@ -42,7 +41,9 @@ export async function stopIdleContainers(env: Env): Promise<string[]> {
     const ns = env[binding];
     if (!ns) continue;
     try {
-      const stub = getContainer(ns as unknown as DurableObjectNamespace, name) as unknown as Stoppable;
+      // (what getContainer() does: the container's Durable Object by name)
+      const space = ns as unknown as { idFromName(n: string): DurableObjectId; get(id: DurableObjectId): unknown };
+      const stub = space.get(space.idFromName(name)) as Stoppable;
       if (await stub.stopIfIdle()) stopped.push(name);
     } catch (e) {
       console.warn(`watchdog: couldn't check ${name}:`, (e as Error).message);
