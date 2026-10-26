@@ -14,6 +14,8 @@ import { songs } from "./songs";
 import { helper } from "./helperApi";
 import { oauth } from "./oauth";
 import { youtube } from "./youtube";
+import { stopIdleContainers } from "./watchdog";
+import type { Env } from "./env";
 
 export type { Env } from "./env";
 export { PrepContainer } from "./prepContainer";
@@ -67,4 +69,13 @@ app.route("/helper", helper);
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 app.onError(handleError);
 
-export default app;
+/** The API (tests call it directly). */
+export { app };
+
+export default {
+  fetch: app.fetch,
+  // every 5 minutes (wrangler.jsonc "triggers"): stop any container left running with no work
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(stopIdleContainers(env));
+  },
+} satisfies ExportedHandler<Env>;

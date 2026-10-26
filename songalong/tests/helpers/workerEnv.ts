@@ -1,7 +1,7 @@
 // Builds a Worker Env on the fakes and a cookie-keeping client that calls the Hono app directly.
 
 import { readFileSync } from "node:fs";
-import app from "../../worker/index";
+import { app } from "../../worker/index";
 import type { Env } from "../../worker/env";
 import { FakeD1 } from "./fakeD1";
 import { FakeR2 } from "./fakeR2";

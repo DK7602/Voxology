@@ -64,6 +64,13 @@ export class CajonContainer extends Container<Env> {
     if (due === null || due - Date.now() > IDLE_STOP_MS) await this.stopMachine();
   }
 
+  /** The watchdog's check (worker/watchdog.ts): stops the machine if it runs with no job going. */
+  async stopIfIdle(): Promise<boolean> {
+    if (this.busy || !this.ctx.container?.running) return false;
+    await this.destroy();
+    return true;
+  }
+
   private async stopMachine(): Promise<void> {
     try {
       await this.stop();

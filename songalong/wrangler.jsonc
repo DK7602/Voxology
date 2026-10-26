@@ -30,6 +30,8 @@
     { "class_name": "PrepContainer", "image": "./prep/Dockerfile", "max_instances": 3, "instance_type": "standard-1" },
     { "class_name": "CajonContainer", "image": "./cajon/Dockerfile", "max_instances": 1, "instance_type": "standard-4" }
   ],
+  // Every 5 minutes: stop any container left running with no work (worker/watchdog.ts)
+  "triggers": { "crons": ["*/5 * * * *"] },
   "durable_objects": {
     "bindings": [
       { "name": "PREP", "class_name": "PrepContainer" },

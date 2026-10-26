@@ -162,7 +162,10 @@ async function* ndjson(body: ReadableStream<Uint8Array>): AsyncGenerator<unknown
 }
 
 /** Spreads songs over a few container instances. */
-function bucket(videoId: string, n = 3): number {
+/** How many prep machines songs are spread over (prep-0, prep-1, ...). */
+export const PREP_BUCKETS = 3;
+
+function bucket(videoId: string, n = PREP_BUCKETS): number {
   let h = 0;
   for (const ch of videoId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return h % n;
