@@ -1,4 +1,4 @@
-# The SongAlong app icons, from the round logo in scripts/icon-source.webp:
+# The SongAlong app icons and the app's emblem, from the round logo in scripts/icon-source.webp:
 #   python3 scripts/make-icons.py scripts/icon-source.webp public
 # A true circle on transparency (the supplied ring is a little oval and has glints outside it),
 # and on black where a platform shows no transparency (iPhone home screen, Android masked icons).
@@ -36,6 +36,8 @@ def on_black(size, share):
     return bg.convert("RGB")
 
 round_icon(64).save(f"{out}/favicon.png", optimize=True)
+# the emblem in the app itself (the bar at the top, the loading screen)
+round_icon(512).save(f"{out}/brand/emblem.webp", quality=90, method=6)
 round_icon(192).save(f"{out}/icon-192.png", optimize=True)
 round_icon(512).save(f"{out}/icon-512.png", optimize=True)
 # Android masks these to a circle or rounded square: the logo stays inside the 80% safe circle
