@@ -1,9 +1,11 @@
 // SongAlong service worker: keeps the app's own files so it opens fast (and opens at all when
 // offline). The API is never cached: songs, sign-in and uploads always come from the server.
 
-const CACHE = "songalong-v1";
+const CACHE = "songalong-v2";
 const SHELL = ["/", "/manifest.webmanifest", "/favicon.png", "/brand/emblem.webp", "/brand/wordmark.webp"];
 const MAX_ASSETS = 80;
+/** The app's name and icons, which the browser reads when installing or updating the app. */
+const APP_ID = /^\/(manifest\.webmanifest|favicon\.png|apple-touch-icon\.png|icon-[\w-]+\.png)$/;
 
 /** Saves the page and the built files it names (scripts, styles), so it can open offline. */
 async function saveShell(cache, html) {
@@ -90,7 +92,24 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // images, icons and the like: the saved copy at once, refreshed in the background
+  // the app's name and icons: the network first, so an installed app gets a new icon (a saved copy
+  // would hand the browser the old one), the saved copy when offline
+  if (APP_ID.test(url.pathname)) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            event.waitUntil(caches.open(CACHE).then((cache) => cache.put(req, copy)));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req).then((hit) => hit || Response.error())),
+    );
+    return;
+  }
+
+  // images and the like: the saved copy at once, refreshed in the background
   event.respondWith(
     caches.open(CACHE).then((cache) =>
       cache.match(req).then((hit) => {
