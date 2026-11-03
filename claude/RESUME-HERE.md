@@ -1863,3 +1863,17 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   a fresh pick; a preset follows the project's style (followLiveChoice); the DAW also from JUCE's host name.
 - JUCE's index.js served with its private class method renamed (macOS 11 / Safari 14 couldn't parse it: no UI there).
 - daws.js: realtimeExport (the same file in all three). Mac CI: auval needs Apple's success line.
+
+## v0.53.0 No plug-in feedback loop (2026-11-03)
+- The user asked whether Voxology, Mixology and Masterology's Auto Analyze could chase each other. Audit: nothing
+  applies by itself (every suggestion waits for APPLY); Voxology listens to the raw vocal (first slot, before
+  processing), Masterology to its untouched input. The one loop: Mixology's Balance / Auto Mix split a vocal-level fix
+  half on the vocal faders, half on the music faders; the music feeds Voxology's side-chain post-fader, so Voxology's
+  Auto Analyze offered THE BEAT IS LOUDER / QUIETER HERE (Output), Mixology answered back, and so on (halving each round).
+- Fix: Voxology leaves the vocal's level to Mixology when Mixology's answer is matched + (balancesLevel or heard)
+  (`VoxologyAudioProcessor::levelByMixology`): findNewNeeds (..., levelByMixology) drops "beatlevel" and FIT LEVEL from
+  "beatnew" (Tone EQ + Compressor still), AutoEditController::setLevelByMixology removes those cards / Output moves on
+  the spot, the report's FIT LEVEL button is replaced by the MIXOLOGY line (frame.mixology.ownsLevel; a FIT LEVEL
+  pressed before keeps PUT OUTPUT BACK). Test: "Auto Analyze: when Mixology sets the vocal's level...".
+- With Mixology 0.24.0 (publishes suite::MixInfo::changing while it changes the mix) and Masterology 0.30.0 (Auto
+  Analyze waits, drops its edits and listens afresh). SuiteLink.h gains only that flag bit: layout stays 4.

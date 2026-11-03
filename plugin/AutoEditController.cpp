@@ -456,9 +456,10 @@ void AutoEditController::launchCheck()
     const auto was = baseline;
     const auto wasBeat = baselineBeat;
     const auto skip = dismissed;
+    const bool byMixology = levelByMixology.load();
 
     const int thisSession = session;
-    pool.addJob ([this, audio = std::move (audio), sr, settings, thisSession, ref, beat, was, wasBeat, skip]
+    pool.addJob ([this, audio = std::move (audio), sr, settings, thisSession, ref, beat, was, wasBeat, skip, byMixology]
     {
         std::unique_ptr<vox::AutoEditResult> result;
         std::vector<vox::AnalyzeNeed> found;
@@ -467,7 +468,7 @@ void AutoEditController::launchCheck()
             // First the measurements alone (a fraction of a second) ...
             const auto now = vox::analyseVocal (audio, sr);
             const auto nowBeat = beat != nullptr ? vox::analyseBeat (*beat, audio, sr) : vox::BeatAnalysis {};
-            for (auto& n : vox::findNewNeeds (was, wasBeat, now, nowBeat))
+            for (auto& n : vox::findNewNeeds (was, wasBeat, now, nowBeat, byMixology))
                 if (! skip.contains (juce::String (n.key)))
                     found.push_back (std::move (n));
             // ... and only when something needs a new setting, the full Auto-Edit on this part (seconds).
@@ -558,7 +559,7 @@ void AutoEditController::finishCheck (const std::vector<vox::AnalyzeNeed>& found
                 }
                 addChange (id, v);
             }
-            if (n.fitLevel && std::abs (result->fitLevelDb) > 0.01)
+            if (n.fitLevel && ! levelByMixology.load() && std::abs (result->fitLevelDb) > 0.01)
             {
                 const auto to = static_cast<float> (juce::jlimit (-24.0, 24.0, result->params.outputDb + result->fitLevelDb));
                 if (std::abs (to - current ("outGain")) >= 1.0f)
@@ -592,6 +593,23 @@ bool AutoEditController::applyNeed (const juce::String& key)
     needs.erase (it);
     ++watchVersion;
     return true;
+}
+
+void AutoEditController::setLevelByMixology (bool byMixology)
+{
+    if (levelByMixology.exchange (byMixology) == byMixology || ! byMixology)
+        return;
+    // Mixology took the vocal's level over: what Auto Analyze offered for it goes (a check already running drops it too).
+    bool changed = false;
+    for (auto it = needs.begin(); it != needs.end();)
+    {
+        if (it->key == "beatlevel") { it = needs.erase (it); changed = true; continue; }
+        if (auto* arr = it->changes.getArray())
+            for (int i = arr->size(); --i >= 0;)
+                if ((*arr)[i]["id"].toString() == "outGain") { arr->remove (i); changed = true; }
+        ++it;
+    }
+    if (changed) ++watchVersion;
 }
 
 bool AutoEditController::dismissNeed (const juce::String& key)

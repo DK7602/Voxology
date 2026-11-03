@@ -107,6 +107,10 @@ public:
     juce::String getWatchJson() const;
     bool applyNeed (const juce::String& key);
     bool dismissNeed (const juce::String& key);
+    /** The suite link (message thread): Mixology sets this vocal's level against the beat. Auto Analyze then leaves that
+        level to it (no THE BEAT IS LOUDER / QUIETER HERE, no Output move): see vox::findNewNeeds. */
+    void setLevelByMixology (bool byMixology);
+    bool isLevelByMixology() const noexcept    { return levelByMixology.load(); }
 
 private:
     template <typename Sample>
@@ -196,6 +200,7 @@ private:
     // Auto Analyze
     struct Shown { juce::String key, note; juce::var changes; };   // changes: [{ id, module, from, to }]
     std::atomic<bool> watchOn { false }, editorOpen { false }, offline { false };
+    std::atomic<bool> levelByMixology { false };
     bool baselineOk = false;                  // the report has Auto-Edit's measurements to compare with
     std::atomic<float> recordedPeak { -100.0f };
     std::atomic<int> recordedClips { 0 };

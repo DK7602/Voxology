@@ -1693,6 +1693,9 @@ let fitLevelUndo = null;   // { time: report it belongs to, from: Output before 
 function fitLevelButton() {
   const f = report.fitLevel;
   const wrap = el("div", "fit-level");
+  // Mixology sets this vocal's level: no FIT LEVEL (the two would keep answering each other), just why.
+  const owner = mixologyBalanceLine();
+  if (owner && !(fitLevelUndo && fitLevelUndo.time === report.time)) { wrap.append(owner); return wrap; }
   const b = el("button", "chip");
   b.type = "button";
   const note = el("div", "l-why");
@@ -1712,8 +1715,7 @@ function fitLevelButton() {
   });
   show();
   wrap.append(b, note);
-  const mix = mixologyBalanceLine();
-  if (mix) wrap.append(mix);
+  if (owner) wrap.append(owner);   // pressed before Mixology took the level over: PUT OUTPUT BACK stays
   return wrap;
 }
 
@@ -2097,7 +2099,7 @@ async function fetchReport(switchTab) {
 
 // ---------------------------------------------------------------------------------------------
 // MIXOLOGY in the bottom bar: what Mixology (the suite link) knows about this track. The plug-in sends
-// frame.mixology = { here, state, balances, heard, vocalDb, targetDb } (null / false: no Mixology; true, from an
+// frame.mixology = { here, state, balances, heard, ownsLevel, vocalDb, targetDb } (null / false: no Mixology; true, from an
 // older plug-in: Mixology is in the project, nothing known about this track). Every word of it is here.
 const MIXOLOGY_TEXT = {
   matched: { bar: " · MIXOLOGY ✓", tip: "Mixology is in this project: it sees what Voxology does on this vocal and won't add a second compressor, reverb or delay." },
@@ -2110,8 +2112,9 @@ const MIXOLOGY_TEXT = {
   here: { bar: " · MIXOLOGY", tip: "Mixology is in this project." },
   // Added to "matched" when Mixology hears the vocal against the beat ({vocal}, {target}: "-2.1 dB").
   heard: "Mixology hears this vocal {vocal} against the beat (your style wants {target}).",
-  // Under FIT LEVEL and Auto Analyze's THE BEAT IS LOUDER / QUIETER HERE card, when Mixology rides this vocal's fader.
-  balances: "Mixology sets this vocal's level with its fader: use Mixology's Balance (or Auto Mix) instead, so the two don't both move it.",
+  // In place of FIT LEVEL when Mixology sets this vocal's level (ownsLevel). Auto Analyze then doesn't offer
+  // THE BEAT IS LOUDER / QUIETER HERE at all (vox::findNewNeeds), so the two never answer each other's moves.
+  balances: "Mixology sets this vocal's level against the beat: use Mixology's Balance (or Auto Mix) for it. Voxology leaves Output alone here, so the two plug-ins never correct each other's moves.",
 };
 const MIXOLOGY_STATES = ["matched", "beatTrack", "noLink", "noName", "sharedName", "notVocal", "waiting"];
 /** Mixology's word on this track from the latest frame: null (no Mixology) or { bar, tip, balances }. */
@@ -2123,9 +2126,11 @@ function mixologyNow() {
   let tip = D(MIXOLOGY_TEXT[state].tip);
   if (state === "matched" && x.heard && Number.isFinite(x.vocalDb) && Number.isFinite(x.targetDb))
     tip += " " + MIXOLOGY_TEXT.heard.replace("{vocal}", fmtSigned(x.vocalDb)).replace("{target}", fmtSigned(x.targetDb));
-  return { bar: MIXOLOGY_TEXT[state].bar, tip, balances: !!x.balances };
+  // ownsLevel: from 0.53 on; an older frame only says whether Mixology rides the fader.
+  const owns = typeof x.ownsLevel === "boolean" ? x.ownsLevel : !!x.balances;
+  return { bar: MIXOLOGY_TEXT[state].bar, tip, balances: owns };
 }
-/** The line under a level move when Mixology rides this vocal's fader (null: no line). */
+/** The line in place of FIT LEVEL when Mixology sets this vocal's level (null: no line). */
 const mixologyBalanceLine = () => { const x = mixologyNow(); return x && x.balances ? el("div", "l-why", MIXOLOGY_TEXT.balances) : null; };
 
 /** The bottom bar's status: its parts in order. If they don't fit next to the DAW pick, the tempo goes first,

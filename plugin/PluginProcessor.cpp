@@ -116,6 +116,7 @@ void VoxologyAudioProcessor::leaveSuite()
     songStyle.leave (link, suiteId);
     daw.leave (link, suiteId);
     mixology = {};
+    autoEdit.setLevelByMixology (false);
 }
 
 void VoxologyAudioProcessor::timerCallback()
@@ -179,7 +180,7 @@ void VoxologyAudioProcessor::publishSuite()
         suggestVocalStyle();
     }
     if (suiteSlot < 0) suiteSlot = link.claimVocal (suiteId, now);
-    if (suiteSlot < 0) return;   // 64 vocals already: try again later
+    if (suiteSlot < 0) { autoEdit.setLevelByMixology (false); return; }   // 64 vocals already: try again later
 
     vox::ChainParams p;
     reader.read (p, hostBpm.load());
@@ -237,6 +238,9 @@ void VoxologyAudioProcessor::publishSuite()
     view.here = mixologyHere;
     if (suiteSlot >= 0)
         view.answered = link.vocalAck (suiteSlot, suiteId, v.trackName.empty() ? 0u : suite::nameHash (v.trackName), view.ack, now);
+    // Mixology sets this vocal's level against the beat (rides its fader, or Analyze Mix judges it there): Voxology's
+    // Auto Analyze and FIT LEVEL leave that level alone, so the two never answer each other's moves.
+    autoEdit.setLevelByMixology (levelByMixology (view));
     const juce::ScopedLock sl (styleLock);
     mixology = view;
 }

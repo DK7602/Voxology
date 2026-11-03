@@ -29,7 +29,14 @@ struct AnalyzeNeed
 /** What changed between the vocal (and beat) Auto-Edit heard and a new part of the song, measured the same way
     (analyseVocal, analyseBeat: a fraction of a second, so every check can afford it). Empty = this part fits the
     settings. Readings a saved report doesn't have (-120 / 0) are skipped. Only when something comes back does the
-    plug-in run the full Auto-Edit on the part (seconds of work) to find the settings that fix it. */
-std::vector<AnalyzeNeed> findNewNeeds (const VocalAnalysis& was, const BeatAnalysis& wasBeat, const VocalAnalysis& now, const BeatAnalysis& nowBeat);
+    plug-in run the full Auto-Edit on the part (seconds of work) to find the settings that fix it.
+
+    levelByMixology: Mixology sets this vocal's level against the beat (it rides the vocal's fader, or Analyze Mix judges
+    the vocal there). Then Voxology leaves that level to Mixology: no "beatlevel" need, and a beat that arrives only
+    retunes the Tone EQ and compressor (no FIT LEVEL). Mixology's Balance moves the music faders as well as the vocal's,
+    and those feed the side-chain (post-fader): if Voxology answered each move with its Output, the two would keep
+    correcting each other. */
+std::vector<AnalyzeNeed> findNewNeeds (const VocalAnalysis& was, const BeatAnalysis& wasBeat, const VocalAnalysis& now, const BeatAnalysis& nowBeat,
+                                       bool levelByMixology = false);
 
 } // namespace vox

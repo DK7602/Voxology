@@ -122,6 +122,36 @@ TEST_CASE ("Auto Analyze: picks up each kind of change, each with a plan", "[aut
     checkNotes (all);
 }
 
+TEST_CASE ("Auto Analyze: when Mixology sets the vocal's level, Voxology doesn't move it too", "[autoanalyze]")
+{
+    // Mixology's Balance moved the music faders (the side-chain is post-fader): the beat reads 3 dB louder.
+    auto withBeat = measured();
+    withBeat.beat.heard = true; withBeat.beat.vocalOverBeatDb = -3.0;
+    auto louder = withBeat;
+    louder.beat.vocalOverBeatDb = -6.0;
+    REQUIRE (find (findNewNeeds (withBeat.analysis, withBeat.beat, louder.analysis, louder.beat), "beatlevel") != nullptr);
+    const auto mixology = findNewNeeds (withBeat.analysis, withBeat.beat, louder.analysis, louder.beat, true);
+    CHECK (find (mixology, "beatlevel") == nullptr);
+    CHECK (std::none_of (mixology.begin(), mixology.end(), [] (const AnalyzeNeed& n) { return n.fitLevel; }));
+
+    // A beat that arrives still fits the tone, but leaves Output alone.
+    auto noBeat = measured();
+    auto now = measured(); now.beat.heard = true;
+    const auto arrived = findNewNeeds (noBeat.analysis, noBeat.beat, now.analysis, now.beat, true);
+    const auto* n = find (arrived, "beatnew");
+    REQUIRE (n != nullptr);
+    CHECK_FALSE (n->fitLevel);
+    CHECK (retunes (*n, Module::eq));
+    CHECK (retunes (*n, Module::comp));
+    CHECK (n->note.find ("Mixology") != std::string::npos);
+    checkNotes (arrived);
+
+    // Everything else is still Voxology's: a louder take is still found.
+    auto take = withBeat;
+    take.analysis.voiceRmsDb += 6.0;
+    CHECK (find (findNewNeeds (withBeat.analysis, withBeat.beat, take.analysis, take.beat, true), "level") != nullptr);
+}
+
 TEST_CASE ("Auto Analyze: readings an older report doesn't have are skipped", "[autoanalyze]")
 {
     VocalAnalysis old;   // -120 / 0 everywhere: a report saved before these were kept

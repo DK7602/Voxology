@@ -374,6 +374,7 @@ void VoxWebEditor::timerCallback()
             o->setProperty ("state", state);
             o->setProperty ("balances", mx.answered && (mx.ack.bits & suite::VocalAck::balancesLevel) != 0);
             o->setProperty ("heard", mx.answered && (mx.ack.bits & suite::VocalAck::heard) != 0);
+            o->setProperty ("ownsLevel", VoxologyAudioProcessor::levelByMixology (mx));   // FIT LEVEL steps aside
             o->setProperty ("vocalDb", std::round (mx.ack.vocalDb * 10.0f) / 10.0f);
             o->setProperty ("targetDb", std::round (mx.ack.targetDb * 10.0f) / 10.0f);
             frame->setProperty ("mixology", juce::var (o));

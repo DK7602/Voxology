@@ -127,6 +127,13 @@ public:
         suite::VocalAck ack;
     };
     MixologyView mixologyNow() const { const juce::ScopedLock sl (styleLock); return mixology; }
+    /** Mixology sets this vocal's level against the beat: it found the track as a vocal and rides its fader, or its
+        Analyze Mix judges the vocal's level there. Voxology then never moves that level itself (FIT LEVEL, Auto Analyze). */
+    static bool levelByMixology (const MixologyView& v) noexcept
+    {
+        using A = suite::VocalAck;
+        return v.here && v.answered && v.ack.state == A::State::matched && (v.ack.bits & (A::balancesLevel | A::heard)) != 0;
+    }
 
     // The song's style (Mixology's list of 75, the same in Mixology and Masterology), shared through the suite link.
     // It suggests the vocal STYLE (aeStyle) on a track where you haven't picked one yourself. Message thread.

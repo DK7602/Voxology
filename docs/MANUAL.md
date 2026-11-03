@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.52.1. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.53.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.52.1**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.53.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -174,8 +174,8 @@ it adds a card here (the tab then reads "REPORT · 1 NEW"):
 | MORE S HERE / SOFTER S HERE | The s sounds are 3 dB sharper (or 4 dB softer) | De-Esser |
 | NEW TONE HERE | 3 dB or more change in part of the voice (another mic position, take or voice) | Tone EQ and Dynamic EQ |
 | MORE MOVEMENT HERE / STEADIER HERE | Your delivery jumps more, or stays more even, between loud and soft words | Rider and Compressor |
-| THE BEAT IS HERE NOW | Auto-Edit ran without a beat, and now one plays on the side-chain | Tone EQ, Compressor, and Output (FIT LEVEL) |
-| THE BEAT IS LOUDER / QUIETER HERE | The beat moved 1.5 dB or more against your vocal | Output (FIT LEVEL) |
+| THE BEAT IS HERE NOW | Auto-Edit ran without a beat, and now one plays on the side-chain | Tone EQ, Compressor, and Output (FIT LEVEL). When Mixology sets this vocal's level: Tone EQ and Compressor only |
+| THE BEAT IS LOUDER / QUIETER HERE | The beat moved 1.5 dB or more against your vocal | Output (FIT LEVEL). Never shown when Mixology sets this vocal's level (see below) |
 | CLIPPED HERE, YOUR VOCAL IS IN THE BEAT | Something only you can fix (no APPLY) | Nothing: follow the steps, then GOT IT |
 
 Each card lists every move it would make, **now → new**, picked by running Auto-Edit on that part (same style,
@@ -277,7 +277,7 @@ The report's **VOCAL FIT · YOUR BEAT** section (and a "Vocal Fit" line in those
 | --- | --- |
 | Beat heard | How many seconds of beat played under your voice (it needs 4 s; with less, the chain is set as if there were no beat) |
 | Vocal vs beat | Your finished vocal's loudness against the beat's. Pro mixes put the vocal about 2 dB under the beat (most between 0.6 and 4 dB under) |
-| FIT LEVEL button | Appears when your vocal is 1 dB or more off that. It shows the move first ("FIT LEVEL: OUTPUT TO −2.5 dB"); click it to set Voxology's Output there, click again to put it back. It moves Output at most 6 dB (the rest is the fader's). Nothing changes unless you click |
+| FIT LEVEL button | When Mixology sets this vocal's level, a line in its place says so and there's no button (see With Mixology and Masterology). Otherwise it appears when your vocal is 1 dB or more off that. It shows the move first ("FIT LEVEL: OUTPUT TO −2.5 dB"); click it to set Voxology's Output there, click again to put it back. It moves Output at most 6 dB (the rest is the fader's). Nothing changes unless you click |
 | Top end (hi-hats) | How bright the beat is (dark, typical, bright) |
 | Low end (808 / kick) | How heavy the beat's low end is (light, typical, heavy) |
 | Movement | Steady (a wall of sound) or punchy (space between the hits) |
@@ -371,9 +371,16 @@ finished mix into the master. In the same Cubase project they tell each other wh
   - **MIXOLOGY: NO TRACK NAME**: your DAW doesn't tell plug-ins the track's name, so Mixology can't match it.
   - **MIXOLOGY: NOT A VOCAL THERE**: on Mixology's Tracks page this track isn't a vocal. Change its role there if it is one.
   - **MIXOLOGY** alone: Mixology is in the project but hasn't matched this track yet (give it a second).
-- **Who sets the vocal's level?** When Mixology moves this vocal's fader (its bridge is connected), FIT LEVEL and Auto
-  Analyze's "the beat is louder / quieter here" card say so: use Mixology's Balance or Auto Mix for the level then, so
-  the two don't both move it.
+- **Who sets the vocal's level? Mixology, when it's there.** Once Mixology found this vocal (**MIXOLOGY ✓**) and either
+  moves its fader (its bridge is connected) or its Analyze Mix has heard it, the vocal's level against the beat is
+  Mixology's job: FIT LEVEL is replaced by a line that says so, and Auto Analyze never shows **THE BEAT IS LOUDER /
+  QUIETER HERE** (a beat that arrives still gets its Tone EQ and Compressor, but Output stays put). Why: Mixology's
+  Balance moves the music faders as well as the vocal's, and those reach Voxology's side-chain (it's post-fader). If
+  Voxology answered each of those moves with its Output, Mixology would answer back, and the two would keep correcting
+  each other. Everything else Auto Analyze watches (a new take, noise, s sounds, tone, delivery) is still Voxology's: it
+  listens to your raw vocal before any plug-in, so nothing Mixology or Masterology does changes those readings. Nothing
+  changes by itself in any of the three: every suggestion waits for your click. A FIT LEVEL you pressed before Mixology
+  took over can still be put back.
 - **Recorded too hot?** When Auto-Edit finds the vocal clipped or over the top of the meter in the recording itself,
   Voxology tells Mixology: its Auto Mix, Balance, Polish and Vocal Pocket then say "fix this first" above their changes
   (lower the clip gain, press AUTO-EDIT in Voxology again, then let Mixology hear it again), because their level moves depend on it.
@@ -391,7 +398,8 @@ finished mix into the master. In the same Cubase project they tell each other wh
   keep them apart: in Bitwig set Settings > Plug-ins > Plug-in hosting to "By manufacturer" or "Together", in REAPER
   don't run them as separate / dedicated processes, in FL Studio don't make them bridged.
 - Needs Voxology 0.52, Mixology 0.21 and Masterology 0.29.3 or newer, all three (the Sonicology installer puts in a
-  matching set). Older and newer ones don't see each other: update all three together.
+  matching set). Older and newer ones don't see each other: update all three together. Leaving the vocal's level to
+  Mixology needs Voxology 0.53 (with Mixology 0.24 and Masterology 0.30 the three never chase each other's changes).
 
 ## Troubleshooting
 

@@ -41,7 +41,8 @@ constexpr double kRangeDb = 4.0;       // loud vs quiet phrases
 constexpr double kBeatLevelDb = 1.5;   // vocal against the beat
 }
 
-std::vector<AnalyzeNeed> findNewNeeds (const VocalAnalysis& was, const BeatAnalysis& wasBeat, const VocalAnalysis& a, const BeatAnalysis& b)
+std::vector<AnalyzeNeed> findNewNeeds (const VocalAnalysis& was, const BeatAnalysis& wasBeat, const VocalAnalysis& a, const BeatAnalysis& b,
+                                       bool levelByMixology)
 {
     std::vector<AnalyzeNeed> out;
     if (a.voicedSeconds <= 0.0 || ! known (a.voiceRmsDb))
@@ -163,13 +164,19 @@ std::vector<AnalyzeNeed> findNewNeeds (const VocalAnalysis& was, const BeatAnaly
                               "\nNEED: Yes, for Vocal Fit."
                               "\nSTEP: Send only the beat to \"Voxology - Side-Chain\": the instrumental track, or a group with just the music on it.",
              {});
+    else if (b.heard && ! b.hasYourVocal && ! wasBeat.heard && levelByMixology)
+        add ("beatnew", "THE BEAT IS HERE NOW: Auto-Edit set your chain without a beat, and now Voxology hears one on the side-chain. Vocal Fit can fit your tone to it."
+                            "\nNEED: Yes: it's the best way to make the vocal sit in this beat."
+                            "\nSTEP: Press APPLY below: the Tone EQ and compressor nudged for this beat. The vocal's level against the beat is Mixology's job here (its Balance or Auto Mix), so Output stays where it is."
+                            "\nSTEP: Judge it with the beat playing; UNDO puts everything back.",
+             { Module::eq, Module::comp });
     else if (b.heard && ! b.hasYourVocal && ! wasBeat.heard)
         add ("beatnew", "THE BEAT IS HERE NOW: Auto-Edit set your chain without a beat, and now Voxology hears one on the side-chain. Vocal Fit can fit your tone and level to it."
                             "\nNEED: Yes: it's the best way to make the vocal sit in this beat."
                             "\nSTEP: Press APPLY below: the Tone EQ and compressor nudged for this beat, and Output to where pros put the vocal against it (if it isn't there already)."
                             "\nSTEP: Judge it with the beat playing; UNDO puts everything back.",
              { Module::eq, Module::comp }, true);
-    else if (b.heard && wasBeat.heard && ! b.hasYourVocal && ! wasBeat.hasYourVocal &&
+    else if (! levelByMixology && b.heard && wasBeat.heard && ! b.hasYourVocal && ! wasBeat.hasYourVocal &&
              std::abs (b.vocalOverBeatDb - wasBeat.vocalOverBeatDb) >= kBeatLevelDb)
     {
         const double d = b.vocalOverBeatDb - wasBeat.vocalOverBeatDb;

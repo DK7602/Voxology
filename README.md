@@ -41,7 +41,9 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   all three (`plugin/ui/mixstyles.js` is the same list in each; `dsp/include/vox/SongStyle.h` turns it into a
   suggested vocal STYLE; since v0.49.2 it's picked in Mixology or Masterology, Voxology only follows it). Since
   v0.52 (link layout 4) Mixology answers each vocal (MIXOLOGY in the bottom bar says whether it found this track),
-  and the beat's key reaches Honey Tune and every Voxology through it.
+  and the beat's key reaches Honey Tune and every Voxology through it. Since v0.53, when Mixology answers that it sets a
+  vocal's level (it rides the fader, or Analyze Mix heard the vocal), FIT LEVEL and Auto Analyze leave that level to
+  it (`vox::findNewNeeds (..., levelByMixology)`), so the two never answer each other's moves.
 - `tests/` Catch2 tests; `tools/report.cpp` prints Auto-Edit's report for a test vocal or a raw file.
 
 ## Third-party
