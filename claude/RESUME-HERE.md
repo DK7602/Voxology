@@ -1,4 +1,4 @@
-# Voxology: resume here (updated 2026-10-18, v0.52.1; the newest sections are at the bottom)
+# Voxology: resume here (updated 2026-11-06, v0.54.0; the newest sections are at the bottom)
 
 Read this first in a new chat. Code: github.com/DK7602/voxology, branch `claude/upbeat-faraday-iyzicv` (the current one;
 `claude/voxology` was the first).
@@ -1878,7 +1878,7 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - With Mixology 0.24.0 (publishes suite::MixInfo::changing while it changes the mix) and Masterology 0.30.0 (Auto
   Analyze waits, drops its edits and listens afresh). SuiteLink.h gains only that flag bit: layout stays 4.
 
-## Honey Tune audit 2 (2026-11-06, branch honey-audit, on 0.53.0; no version bump yet)
+## v0.54.0: Honey Tune audit 2 (2026-11-06; released as Voxology 0.54.0 with Mixology 0.25.2)
 - User: Voxology + Honey Tune on the chorus vox; "tried to fix a couple wobbly sounding vocals in honeytune but nothing
   helped". Answers relayed: Voxology's 01 Pitch was ON (style Folk: Natural 50 ms, Humanize 60, Amount 70, F minor from
   the beat on its side-chain); they only MOVED notes (never touched DRIFT / VIBRATO); switch was on Tuned; Honey Tune's
