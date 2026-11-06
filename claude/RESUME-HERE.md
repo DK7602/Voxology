@@ -1877,3 +1877,40 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   pressed before keeps PUT OUTPUT BACK). Test: "Auto Analyze: when Mixology sets the vocal's level...".
 - With Mixology 0.24.0 (publishes suite::MixInfo::changing while it changes the mix) and Masterology 0.30.0 (Auto
   Analyze waits, drops its edits and listens afresh). SuiteLink.h gains only that flag bit: layout stays 4.
+
+## Honey Tune audit 2 (2026-11-06, branch honey-audit, on 0.53.0; no version bump yet)
+- User: Voxology + Honey Tune on the chorus vox; "tried to fix a couple wobbly sounding vocals in honeytune but nothing
+  helped". Answers relayed: Voxology's 01 Pitch was ON (style Folk: Natural 50 ms, Humanize 60, Amount 70, F minor from
+  the beat on its side-chain); they only MOVED notes (never touched DRIFT / VIBRATO); switch was on Tuned; Honey Tune's
+  KEY showed Auto with SCALE "Chromatic".
+- Measured (tools/audit/honey_wobble_audit.cpp; synthetic wobbly line 2 - 7 Hz 20 - 80 c + drift, and the test-audio vocals):
+  the engine flattens fine when asked: DRIFT 0 + VIBRATO 0 22.4 -> 1.0 c rms (p5-p95 72 -> 3); real vocals 24 - 45 ->
+  3 - 8 c. Moving / snapping keeps the wobble (by design). KEEP DRIFT 0 alone did nothing (22.4 -> 22.7: the 360 ms
+  moving average's side lobes made a 3.5 - 5 Hz wobble deeper); now a Gaussian split (sigma 75 ms, ~2.5 Hz): 22.4 -> 17.3.
+  Steady notes moved +2 / -3: 0.9 - 1.0 c rms, level flutter 0.22 - 0.40 dB (input 0.30): the shifter adds no warble.
+  Stereo sides rendered alone: 0.87 c apart, side/mid unchanged. Voxology Pitch after a flat Honey Tune render, same key:
+  no wobble back (1.0 c, all styles). Different key (the user's case: Honey Tune Chromatic, Voxology F minor Folk): every
+  note outside F minor pulled 64 - 70 c away from where Honey Tune put it (3 of 8 in the test line).
+- Key bug: a vocal Voxology that hears the beat on its SIDE-CHAIN never shared it (only BEAT mode did): Honey Tune fell back
+  to the voice (unsure -> Chromatic). And Honey Tune's SCALE combo always read "Chromatic" on Auto. Fixed: keyshare::offer
+  (side-chain key too; a different fresh key from another Voxology only replaced when 0.1 surer), SCALE shows "Auto: F Minor".
+- One tuner at a time: vox::honeylink (dsp HoneyLink.h/.cpp, Voxology's OWN shared block "VoxologyHoneyLink.v1.<pid>";
+  SuiteLink.h untouched). Honey Tune publishes the names of tracks (ARA region sequences) with its clips (only while a
+  playback renderer is prepared; waits 2 quiet polls); Voxology publishes its track hash, Pitch state and key + source.
+  Match by track name (unnamed / shared names: never acted on, warned). Voxology's Pitch rests (chainParams.pitch.enabled =
+  false; also in the suite flags), un-rests 3 s after Honey Tune is gone; TUNE HERE ANYWAY / LET PITCH REST in 01 Pitch's
+  Learn (state attribute "pitchAnyway"); footer PITCH RESTS; Auto-Edit leaves pt* params alone (settings.honeyTunesTrack).
+  Honey Tune's status line: "Voxology's Pitch rests on this track" or a red warning; Auto key order now: picked > project >
+  the Voxology on this track (beat / manual) > Voxology's beat key > voice (sure) > that Voxology's voice key.
+- Honey Tune UI (look unchanged): the line in a cell is what will PLAY (soundingLine: steadied notes draw flat; it used to
+  draw the sung line whatever DRIFT / VIBRATO said); the note line says "wobbles N cents: NOTE DRIFT + NOTE VIBRATO at 0
+  make it steady (moving it keeps the wobble)" / "steadied: wobble N -> M cents"; an edit made on Original switches to Tuned.
+- NOT verified (no DAW here): that Cubase names ARA region sequences with the track name (Voxology's name comes from VST3
+  IInfoListener); if it doesn't, nothing rests and Honey Tune shows no Voxology line (the manual says to switch Pitch off).
+- Commits on honey-audit: 74aa50a (the line shows what plays; Gaussian drift split; audit tool), 81e7935 (Pitch rests with
+  Honey Tune, key sharing from the side-chain, SCALE "Auto: F Minor", status / note lines, manual), 5d2ee49 (tracks read
+  from the timer only). 170 engine tests (Release and ASan / UBSan).
+  Voxology + Honey Tune (VST3) and HoneyPreview built Release on Linux; Voxology UI checked in headless Chromium with
+  mock.js ?honey / ?honey=shared; Honey Tune with HoneyPreview (new env: HONEY_BEAT, HONEY_VOXOLOGY, HONEY_STEADY=n).
+- Open ideas: a wobbly note can split into 2 cells (contiguous neighbours < 1 st apart: Don 62 / 332 notes, Don & Lysette
+  56 / 204); merging needs care (saved edits are keyed by note start). A one-click "Steady" button was not added (look locked).
