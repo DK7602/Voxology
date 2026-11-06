@@ -75,6 +75,18 @@ void snapToKey (std::vector<Note>& notes, int key, int scale, double amount = 1.
 /** Cents from the nearest note of the key / scale (signed). */
 double centsOff (const Note& n, int key, int scale);
 
+/** A note's movement is two parts: its drift (the slow part, below about 2.5 Hz) and its vibrato (everything faster:
+    vibrato, the wobble of a shaky voice). Note.drift / Note.vibrato say how much of each it keeps; keeping neither
+    makes it a steady note. The split: a Gaussian average of the sung pitch, this wide (one standard deviation). */
+inline constexpr double kDriftSigmaSeconds = 0.075;
+
+/** The note's pitch line as it will sound: one value per reading from note.firstReading to note.lastReading (MIDI; 0
+    where no pitch was heard): the sung line moved to note.target, its drift and vibrato kept as the note says (the same
+    as render(), which also smooths the moves between notes). The editor draws it. */
+std::vector<double> soundingLine (const Track& track, const Note& note);
+/** How much the note still moves as it will sound (cents, rms around its middle, attack and release left out). */
+double movementCents (const Track& track, const Note& note);
+
 /** How long a moved note takes to reach its new pitch (render(), renderPart()). */
 inline constexpr double kTransitionMs = 25.0;
 

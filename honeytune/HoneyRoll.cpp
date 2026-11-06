@@ -456,16 +456,19 @@ void HoneyRoll::drawCell (Graphics& g, int index)
         g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.45f), 0, b.getY(), Colours::transparentWhite, 0, b.getCentreY(), false));
         g.fillRect (b);
 
-        // The sung pitch line inside the cell (moved with the note).
+        // The pitch line inside the cell: Tuned = as it will play (moved with the note, its drift and vibrato as kept:
+        // a note steadied with NOTE DRIFT / NOTE VIBRATO draws flat); Original = as sung.
         if (snap.track != nullptr && b.getWidth() > 8.0f)
         {
             const auto& t = *snap.track;
-            const double shift = target - v.note.pitch;
+            const auto sounding = original ? std::vector<double> {} : vox::honey::soundingLine (t, v.note);
+            const double shift = original ? 0.0 : target - v.note.target;   // (a drag in progress)
             Path line;
             bool started = false;
             for (int r = v.note.firstReading; r <= v.note.lastReading && r < static_cast<int> (t.midi.size()); ++r)
             {
-                const double m = t.midi[static_cast<size_t> (r)];
+                const auto k = static_cast<size_t> (r - v.note.firstReading);
+                const double m = original ? t.midi[static_cast<size_t> (r)] : k < sounding.size() ? sounding[k] : 0.0;
                 if (m <= 0.0) { started = false; continue; }
                 const Point<float> p { xOf (shownTime (index, t.time[static_cast<size_t> (r)] / t.sampleRate)), yOf (m + shift) };
                 if (! started) { line.startNewSubPath (p); started = true; } else line.lineTo (p);

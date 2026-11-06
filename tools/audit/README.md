@@ -25,5 +25,6 @@ Compile each against the engine: `g++ -std=c++20 -O2 -Idsp/include tools/audit/<
 | `fit_study.cpp name voc.f64 beat.f64 ...` | Vocal Fit: Auto-Edit's analysis of each vocal + `analyseBeat` of the beat under it, as CSV (test-audio/fit-measurements) |
 | `fit_report.cpp voc.f64 beat.f64 [style] [s]` | Vocal Fit: runs Auto-Edit with the beat on the "side-chain" and prints the VOCAL FIT report lines |
 | `honey_tune_audit.cpp in.f64` | Honey Tune: snap every note, keep drift + vibrato, re-analyse: lands within, shape kept, pitch glitches |
+| `honey_wobble_audit.cpp [seed]` / `in.f64 key scale` | Honey Tune on a wobbly voice (2 - 7 Hz, 20 - 80 c, drift): the movement left inside each note (independent tracker) with KEEP DRIFT / KEEP VIBRATO; a steady note moved +2 / -3 (warble, level flutter); stereo sides; Voxology's Pitch after Honey Tune (styles, the right key, a different key: notes pulled away). With a real vocal: as sung vs DRIFT 0 + VIBRATO 0, alone and with Voxology's Pitch after |
 
 Results and history: claude/RESUME-HERE.md (v0.17.0).

@@ -317,6 +317,59 @@ double centsOff (const Note& n, int key, int scale)
 }
 
 namespace {
+/** The reading spacing of a track (seconds). */
+double hopOf (const Track& t)
+{
+    const size_t n = t.midi.size();
+    return n > 1 ? (t.time.back() - t.time.front()) / static_cast<double> (n - 1) / t.sampleRate : 0.003;
+}
+
+/** One note's movement split in two, per reading from its first to its last (0 where no pitch was heard): the drift
+    (the slow part, below ~2.5 Hz: a Gaussian-weighted average of the sung pitch around each reading, within the note)
+    and the vibrato (all the rest: vibrato, a shaky voice's wobble, any faster movement). Both are measured from the
+    note's pitch, so drift + vibrato = the whole movement: keeping neither leaves a steady note.
+    (A Gaussian, not a plain moving average: that one's side lobes made "drift" swing against a 3.5 - 5 Hz wobble, so
+    taking the drift out made that wobble deeper.) */
+struct Movement { std::vector<double> drift, vibrato; };
+Movement movementOf (const Track& t, const Note& note)
+{
+    Movement m;
+    const size_t n = t.midi.size();
+    const auto a0 = static_cast<size_t> (std::max (0, note.firstReading));
+    const size_t b0 = std::min (n, static_cast<size_t> (std::max (0, note.lastReading)) + 1);
+    if (b0 <= a0) return m;
+    m.drift.assign (b0 - a0, 0.0);
+    m.vibrato.assign (b0 - a0, 0.0);
+    const double hop = hopOf (t);
+    const double sigma = kDriftSigmaSeconds / hop;   // readings
+    const auto reach = static_cast<size_t> (std::ceil (3.0 * sigma));
+    std::vector<double> w (reach + 1);
+    for (size_t k = 0; k <= reach; ++k) w[k] = std::exp (-0.5 * static_cast<double> (k * k) / (sigma * sigma));
+    for (size_t i = a0; i < b0; ++i)
+    {
+        if (t.midi[i] <= 0.0) continue;
+        double sum = 0.0, weight = 0.0;
+        for (size_t j = (i > a0 + reach ? i - reach : a0); j < std::min (b0, i + reach + 1); ++j)
+            if (t.midi[j] > 0.0)
+            {
+                const double wj = w[i > j ? i - j : j - i];
+                sum += wj * t.midi[j];
+                weight += wj;
+            }
+        const double drift = (weight > 0.0 ? sum / weight : t.midi[i]) - note.pitch;
+        m.drift[i - a0] = drift;
+        m.vibrato[i - a0] = (t.midi[i] - note.pitch) - drift;
+    }
+    return m;
+}
+
+/** How much of a note's own movement changes at reading i (semitones): faded in / out over 20 ms at its edges. */
+double movementChange (const Movement& m, const Note& note, size_t i, size_t a0, size_t b0, double edgeReadings)
+{
+    const double fade = std::min ({ 1.0, static_cast<double> (i - a0 + 1) / edgeReadings, static_cast<double> (b0 - i) / edgeReadings });
+    return fade * (m.drift[i - a0] * (note.drift - 1.0) + m.vibrato[i - a0] * (note.vibrato - 1.0));
+}
+
 /** The shift (semitones) per reading for these notes. */
 std::vector<double> planShift (const Track& t, const std::vector<Note>& notes, double transitionMs)
 {
@@ -324,23 +377,18 @@ std::vector<double> planShift (const Track& t, const std::vector<Note>& notes, d
     // Shift per reading = the note move (target - pitch), smoothed between notes, plus the drift /
     // vibrato change inside the note (not smoothed: it IS the fast part), faded in / out at note edges.
     std::vector<double> base (n, 0.0), detail (n, 0.0);
-    const double hopSec = n > 1 ? (t.time.back() - t.time.front()) / static_cast<double> (n - 1) / t.sampleRate : 0.003;
-    const auto win = static_cast<size_t> (std::max (1.0, 0.18 / hopSec));   // drift = ~2 vibrato cycles (360 ms)
+    const double hopSec = hopOf (t);
     const auto edge = std::max (1.0, 0.02 / hopSec);
     for (const auto& note : notes)
     {
-        const auto a0 = static_cast<size_t> (note.firstReading), b0 = static_cast<size_t> (note.lastReading) + 1;
-        for (size_t i = a0; i < b0 && i < n; ++i)
+        const auto a0 = static_cast<size_t> (std::max (0, note.firstReading));
+        const size_t b0 = std::min (n, static_cast<size_t> (std::max (0, note.lastReading)) + 1);
+        const bool shaped = std::abs (note.drift - 1.0) > 1.0e-9 || std::abs (note.vibrato - 1.0) > 1.0e-9;
+        const auto m = shaped ? movementOf (t, note) : Movement {};
+        for (size_t i = a0; i < b0; ++i)
         {
             base[i] = note.target - note.pitch;
-            if (t.midi[i] <= 0.0) continue;
-            double sum = 0.0; int cnt = 0;
-            for (size_t j = (i > a0 + win ? i - win : a0); j < std::min (b0, i + win + 1); ++j)
-                if (t.midi[j] > 0.0) { sum += t.midi[j]; ++cnt; }
-            const double driftDev = (cnt ? sum / cnt : t.midi[i]) - note.pitch;
-            const double vib = (t.midi[i] - note.pitch) - driftDev;
-            const double fade = std::min ({ 1.0, static_cast<double> (i - a0 + 1) / edge, static_cast<double> (b0 - i) / edge });
-            detail[i] = fade * (driftDev * (note.drift - 1.0) + vib * (note.vibrato - 1.0));
+            if (shaped && t.midi[i] > 0.0) detail[i] = movementChange (m, note, i, a0, b0, edge);
         }
     }
     // Smooth the note moves (forward + backward, so it doesn't lag).
@@ -546,6 +594,39 @@ std::vector<float> warp (const std::vector<float>& x, double sr, const Track& t,
         y[j] = static_cast<float> (w > 0.05 ? acc[j - lo] / w : at (map.inAt (static_cast<double> (j))));
     }
     return y;
+}
+
+std::vector<double> soundingLine (const Track& t, const Note& note)
+{
+    const size_t n = t.midi.size();
+    const auto a0 = static_cast<size_t> (std::max (0, note.firstReading));
+    const size_t b0 = std::min (n, static_cast<size_t> (std::max (0, note.lastReading)) + 1);
+    std::vector<double> line;
+    if (b0 <= a0) return line;
+    line.assign (b0 - a0, 0.0);
+    const bool shaped = std::abs (note.drift - 1.0) > 1.0e-9 || std::abs (note.vibrato - 1.0) > 1.0e-9;
+    const auto m = shaped ? movementOf (t, note) : Movement {};
+    const double edge = std::max (1.0, 0.02 / hopOf (t));
+    for (size_t i = a0; i < b0; ++i)
+        if (t.midi[i] > 0.0)
+            line[i - a0] = t.midi[i] + (note.target - note.pitch) + (shaped ? movementChange (m, note, i, a0, b0, edge) : 0.0);
+    return line;
+}
+
+double movementCents (const Track& t, const Note& note)
+{
+    const auto line = soundingLine (t, note);
+    // Inside the note (its first and last 40 ms are its attack and release), around its median.
+    const auto skip = static_cast<size_t> (0.04 / hopOf (t));
+    std::vector<double> v;
+    for (size_t i = skip; i + skip < line.size(); ++i) if (line[i] > 0.0) v.push_back (line[i]);
+    if (v.size() < 4) return 0.0;
+    auto sorted = v;
+    std::sort (sorted.begin(), sorted.end());
+    const double mid = sorted[sorted.size() / 2];
+    double e = 0.0;
+    for (double x : v) e += (x - mid) * (x - mid);
+    return 100.0 * std::sqrt (e / static_cast<double> (v.size()));
 }
 
 std::vector<float> render (const std::vector<float>& mono, double sr, const Track& t, const std::vector<Note>& notes, double transitionMs,

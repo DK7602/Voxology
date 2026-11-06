@@ -360,3 +360,103 @@ TEST_CASE ("Honey Tune: analysis and render stop early when the plug-in closes (
     const auto a = render (x, kSr, t, notes), b = render (x, kSr, t, notes, kTransitionMs, &stop);
     for (size_t i = 0; i < a.size(); ++i) REQUIRE (a[i] == b[i]);
 }
+
+namespace {
+/** One long note that wobbles like a shaky voice: three components between 2 and 7 Hz (their depth wandering), 20 - 35
+    cents each, over a slow drift. 0.1 s of breath before and after. */
+std::vector<float> shakyNote (double midi, double seconds)
+{
+    std::vector<float> x;
+    Biquad formant; design::apply (formant, design::bell (700.0, 9.0, 2.0, kSr));
+    for (size_t i = 0; i < static_cast<size_t> (0.1 * kSr); ++i) x.push_back (0.0f);
+    double ph = 0.0;
+    const auto n = static_cast<size_t> (seconds * kSr);
+    for (size_t i = 0; i < n; ++i)
+    {
+        const double t = static_cast<double> (i) / kSr;
+        const double tau = 2 * std::numbers::pi;
+        const double cents = 35.0 * std::sin (tau * 2.3 * t) * (0.7 + 0.3 * std::sin (tau * 0.4 * t))
+                           + 25.0 * std::sin (tau * 3.9 * t + 1.0) * (0.6 + 0.4 * std::sin (tau * 0.7 * t + 2.0))
+                           + 20.0 * std::sin (tau * 6.1 * t + 2.0)
+                           + 20.0 * (t / seconds - 0.5);   // a slow sag up
+        const double f = 440.0 * std::pow (2.0, (midi - 69.0 + cents / 100.0) / 12.0);
+        ph += f / kSr;
+        double v = 0.0;
+        for (int h = 1; h * f < 8000.0; ++h) v += std::sin (tau * h * ph) / h;
+        const double env = std::min ({ 1.0, t / 0.02, (seconds - t) / 0.02 });
+        x.push_back (static_cast<float> (0.1 * env * formant.process (v)));
+    }
+    for (size_t i = 0; i < static_cast<size_t> (0.1 * kSr); ++i) x.push_back (static_cast<float> (formant.process (0.0)));
+    return x;
+}
+/** The note's pitch every 20 ms (30 ms windows) between a and b seconds: p5 .. p95 spread in cents. */
+double spreadCents (const std::vector<float>& y, double a, double b)
+{
+    std::vector<double> m;
+    for (double s = a; s + 0.03 < b; s += 0.02) m.push_back (midiOf (hzAt (y, s, 0.03)));
+    std::sort (m.begin(), m.end());
+    return 100.0 * (m[static_cast<size_t> (0.95 * static_cast<double> (m.size() - 1))] - m[static_cast<size_t> (0.05 * static_cast<double> (m.size() - 1))]);
+}
+}
+
+TEST_CASE ("Honey Tune: NOTE DRIFT 0 + NOTE VIBRATO 0 make a shaky note steady; DRIFT 0 alone never deepens the wobble", "[honey]")
+{
+    const auto x = shakyNote (60.0, 1.6);
+    const auto t = analyse (x, kSr);
+    const auto notes = findNotes (t);
+    REQUIRE (! notes.empty());
+    auto edit = [&] (double drift, double vibrato)
+    {
+        auto n = notes;
+        for (auto& q : n) { q.target = 62.0; q.drift = drift; q.vibrato = vibrato; }   // (all of it moved up to D4)
+        return render (x, kSr, t, n);
+    };
+    const double in = spreadCents (x, 0.3, 1.5);
+    const double moved = spreadCents (edit (1.0, 1.0), 0.3, 1.5);
+    const double driftOnly = spreadCents (edit (0.0, 1.0), 0.3, 1.5);
+    const double vibratoOnly = spreadCents (edit (1.0, 0.0), 0.3, 1.5);
+    const double steady = spreadCents (edit (0.0, 0.0), 0.3, 1.5);
+    CHECK (midiOf (hzAt (edit (0.0, 0.0), 0.8, 0.1)) == Approx (62.0).margin (0.04));
+    INFO ("p5-p95 spread: sung " << in << " c, moved only " << moved << ", drift 0 " << driftOnly << ", vibrato 0 " << vibratoOnly << ", both 0 " << steady);
+    CHECK (in > 80.0);
+    CHECK (moved > 0.9 * in);              // moving a note keeps its wobble (by design)
+    CHECK (driftOnly < in);                // (the old moving-average split made a 3.5 - 5 Hz wobble deeper here)
+    CHECK (vibratoOnly < 0.6 * in);
+    CHECK (steady < 10.0);                 // a steady note: what DRIFT 0 + VIBRATO 0 promise
+    // Every note found in it is steady (a wobble can split a sung note in two: both halves count).
+    const auto t2 = analyse (edit (0.0, 0.0), kSr, false);
+    for (const auto& n : findNotes (t2))
+        if ((n.end - n.start) / kSr > 0.3) CHECK (movementCents (t2, n) < 6.0);
+}
+
+TEST_CASE ("Honey Tune: the line drawn in a note is what it will play", "[honey]")
+{
+    const auto x = shakyNote (62.0, 1.2);
+    const auto t = analyse (x, kSr);
+    auto notes = findNotes (t);
+    REQUIRE (! notes.empty());
+    auto n = notes.front();
+    n.target = n.pitch + 2.0;
+    // As sung (keep all): the sung line, moved by the edit.
+    const auto kept = soundingLine (t, n);
+    REQUIRE (kept.size() == static_cast<size_t> (n.lastReading - n.firstReading + 1));
+    for (size_t k = 0; k < kept.size(); ++k)
+    {
+        const double sung = t.midi[static_cast<size_t> (n.firstReading) + k];
+        if (sung > 0.0) REQUIRE (kept[k] == Approx (sung + 2.0).margin (1.0e-9));
+        else REQUIRE (kept[k] == 0.0);
+    }
+    CHECK (movementCents (t, n) > 15.0);
+    // Drift and vibrato at 0: flat on the target (away from the 20 ms edges).
+    n.drift = n.vibrato = 0.0;
+    const auto flat = soundingLine (t, n);
+    const auto edge = static_cast<size_t> (0.03 * kSr / ((t.time.back() - t.time.front()) / static_cast<double> (t.time.size() - 1)));
+    for (size_t k = edge; k + edge < flat.size(); ++k)
+        if (flat[k] > 0.0) REQUIRE (flat[k] == Approx (n.target).margin (0.005));
+    CHECK (movementCents (t, n) < 1.0);
+    // The render agrees: the note plays where the line says.
+    std::vector<Note> one { n };
+    for (size_t k = 1; k < notes.size(); ++k) one.push_back (notes[k]);
+    const auto y = render (x, kSr, t, one);
+    CHECK (midiOf (hzAt (y, n.start / kSr + 0.4, 0.1)) == Approx (n.target).margin (0.05));
+}
