@@ -30,6 +30,8 @@ public:
     void setModel (honeyui::Model* m);
     /** Call when the clip's notes or render changed (message thread). */
     void refresh();
+    /** The Original | Tuned switch shows this (an edit made while on Original switches to Tuned: you hear what you did). */
+    void showOriginal (bool o);
     /** Playback position in the clip (seconds, negative = stopped): moves the playhead and the time readout. */
     void setPlayhead (double seconds);
 

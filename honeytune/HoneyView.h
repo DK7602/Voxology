@@ -1,5 +1,6 @@
 #pragma once
 
+#include "vox/HoneyLink.h"
 #include "vox/HoneyTune.h"
 
 #include <algorithm>
@@ -67,19 +68,34 @@ inline NoteEdit sanitised (NoteEdit e)
     return e;
 }
 
-/** The song's key from outside the clip: the host's project (its key signature / scale track), else what a
-    Voxology on the beat hears (shared through vox::keyshare). */
+/** The song's key from outside the clip: the host's project (its key signature / scale track), the key the Voxology on
+    this clip's track tunes to (vox::honeylink), or what a Voxology hears of the beat (vox::keyshare). */
 struct HostKey
 {
     bool valid = false;
-    int key = 0;            // 0 = C ... 11 = B
-    int scale = 1;          // vox::kScaleNames
-    bool fromBeat = false;  // Voxology's beat key (else the project's)
+    int key = 0;             // 0 = C ... 11 = B
+    int scale = 1;           // vox::kScaleNames
+    bool fromBeat = false;   // Voxology's beat key (on the beat, or a beat on a Voxology's side-chain)
+    bool fromTrack = false;  // the key the Voxology on this clip's track uses (its beat, or picked there)
+    bool weak = false;       // ... which that Voxology learned from the singing: the clip's own sure key comes first
     bool operator== (const HostKey& o) const
     {
-        return valid == o.valid && (! valid || (key == o.key && scale == o.scale && fromBeat == o.fromBeat));
+        return valid == o.valid && (! valid || (key == o.key && scale == o.scale && fromBeat == o.fromBeat && fromTrack == o.fromTrack && weak == o.weak));
     }
 };
+
+/** The Voxology on this clip's track, as Honey Tune reads it (vox::honeylink): its Pitch and the key it uses. */
+inline HostKey trackKeyFrom (const vox::honeylink::VoxInfo& v)
+{
+    HostKey h;
+    if (v.keyFrom == vox::honeylink::KeyFrom::none) return h;
+    h.valid = true;
+    h.key = std::clamp (v.key, 0, 11);
+    h.scale = std::clamp (v.scale, 0, vox::kScales - 1);
+    h.fromTrack = true;
+    h.weak = v.keyFrom == vox::honeylink::KeyFrom::voice;
+    return h;
+}
 
 /** A host key signature (ARA: root on the circle of fifths, 0 = C, 1 = G, -1 = F; which of the 12 intervals
     above the root are used) as a key and the closest of our scales. */
@@ -98,10 +114,15 @@ inline HostKey hostKeyFromSignature (int circleOfFifths, const bool (&used)[12])
     return h;
 }
 
-/** Which key from outside the clip Auto uses: the project's (you set it in the host), else the beat's. */
-inline HostKey outsideKey (const HostKey& project, const HostKey& beat)
+/** Which key from outside the clip Auto uses: the project's (you set it in the host), else the one the Voxology on this
+    track tunes to (from the beat, or picked there), else the beat's as any Voxology hears it; a key that Voxology on this
+    track only learned from the singing comes last (resolveKey: after the clip's own sure key). */
+inline HostKey outsideKey (const HostKey& project, const HostKey& beat, const HostKey& track = {})
 {
-    return project.valid ? project : beat;
+    if (project.valid) return project;
+    if (track.valid && ! track.weak) return track;
+    if (beat.valid) return beat;
+    return track;
 }
 
 /** Under this the voice alone can't tell the key (Auto then snaps to the nearest note, any note). */
@@ -109,9 +130,15 @@ constexpr double kSureEnough = 0.45;
 
 /** The key and scale actually used: "Auto" takes the key from outside the clip when there is one (the
     project's, else Voxology's beat key), else the one detected from the voice (and its scale when sure enough). */
+/** Auto uses this key from outside the clip (else the voice's). */
+inline bool usesOutsideKey (const Settings& s, const vox::KeyGuess& guess, const HostKey& host)
+{
+    return s.key == kAutoKey && host.valid && ! (host.weak && guess.confidence >= kSureEnough);
+}
+
 inline void resolveKey (const Settings& s, const vox::KeyGuess& guess, int& key, int& scale, const HostKey& host = {})
 {
-    if (s.key == kAutoKey && host.valid)
+    if (usesOutsideKey (s, guess, host))
     {
         key = host.key;
         scale = s.scale == 0 ? host.scale : s.scale;
@@ -210,6 +237,10 @@ struct Snapshot
     vox::KeyGuess guess;
     bool keyFromHost = false;  // the key came from the host's project
     bool keyFromBeat = false;  // ... from Voxology on the beat
+    bool keyFromVoxology = false;  // ... from the Voxology on this clip's track (the key its Pitch uses)
+    // The Voxology on this clip's track (vox::honeylink): is there one, and what does its Pitch do?
+    bool voxologyHere = false;
+    vox::honeylink::Pitch voxologyPitch = vox::honeylink::Pitch::off;
     bool keyUnsure = false;    // Auto couldn't tell the key from the voice: snapping to any note
     double seconds = 0.0;
 };
@@ -222,8 +253,10 @@ inline Snapshot makeSnapshot (std::shared_ptr<const vox::honey::Track> track, co
     snap.track = track;
     snap.guess = guess;
     resolveKey (s, guess, snap.key, snap.scale, host);
-    snap.keyFromHost = s.key == kAutoKey && host.valid && ! host.fromBeat;
-    snap.keyFromBeat = s.key == kAutoKey && host.valid && host.fromBeat;
+    const bool outside = usesOutsideKey (s, guess, host);
+    snap.keyFromHost = outside && ! host.fromBeat && ! host.fromTrack;
+    snap.keyFromBeat = outside && host.fromBeat;
+    snap.keyFromVoxology = outside && host.fromTrack;
     snap.keyUnsure = keyUnsure (s, guess, host);
     if (track != nullptr && ! track->time.empty())
         snap.seconds = track->time.back() / track->sampleRate;
@@ -239,6 +272,42 @@ inline Snapshot makeSnapshot (std::shared_ptr<const vox::honey::Track> track, co
         snap.notes.push_back (v);
     }
     return snap;
+}
+
+/** Where Auto's key came from, for the status line ("" = picked by you, or the voice). */
+inline std::string keySourceText (const Snapshot& s)
+{
+    return s.keyFromHost ? " (from the project)" : s.keyFromVoxology ? " (from Voxology on this track)" : s.keyFromBeat ? " (from Voxology's beat)" : "";
+}
+
+/** The status line's word on the Voxology on this clip's track ("" = nothing to say). warning: show it in red. */
+inline std::string voxologyText (const Snapshot& s, bool& warning)
+{
+    using P = vox::honeylink::Pitch;
+    warning = false;
+    if (! s.voxologyHere) return {};
+    switch (s.voxologyPitch)
+    {
+        case P::resting: return "Voxology's Pitch rests on this track";
+        case P::tuningAnyway: warning = true;
+            return "VOXOLOGY'S PITCH TUNES THIS TRACK TOO (TUNE HERE ANYWAY in its 01 Pitch): it re-tunes your fixes";
+        case P::tuning: warning = true;
+            return "VOXOLOGY'S PITCH TUNES THIS TRACK TOO: switch it off there (01 Pitch), or give this track its own name";
+        case P::off: break;
+    }
+    return {};
+}
+
+/** The selected note's wobble, for the note's line: how much it moves now as it will sound, and as sung. A note you only
+    move keeps its wobble (by design): the hint says which controls make it steady. "" = nothing worth saying. */
+inline std::string wobbleText (double soundingCents, double sungCents)
+{
+    const auto c = [] (double v) { return std::to_string (static_cast<int> (std::lround (v))); };
+    if (soundingCents >= 12.0)
+        return "wobbles " + c (soundingCents) + " cents: NOTE DRIFT + NOTE VIBRATO at 0 make it steady (moving it keeps the wobble)";
+    if (sungCents >= 12.0 && sungCents - soundingCents >= 3.0)
+        return "steadied: wobble " + c (sungCents) + " -> " + c (soundingCents) + " cents";
+    return {};
 }
 
 /** The editor talks to the clip through this. */

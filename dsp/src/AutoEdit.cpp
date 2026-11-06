@@ -1195,7 +1195,14 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
         // Robot style keeps its effect on a rapped take (ad-libs and effect vocals are made for it).
         const bool noPitch = a.f0Median <= 0.0 || a.pitchedShare < 15.0;
         const bool rapped = a.heldShare < kRapHeldShare && style != 3;
-        if (noPitch || rapped)
+        if (settings.honeyTunesTrack)
+        {
+            // Honey Tune (on this track's clip) tunes it note by note: Pitch rests, and Auto-Edit leaves its settings alone.
+            keep (Module::pitch);
+            reason ("pitch", "Amount", "Resting (Honey Tune)", "Honey Tune tunes this track, so Pitch rests here: one tuner at a time. On top of Honey Tune it would "
+                    "tune your vocal a second time and pull the notes you placed by hand to its own key. Auto-Edit left Pitch's settings as they were.");
+        }
+        else if (noPitch || rapped)
         {
             pt.amount = 0.0;
             pt.mode = kPitchNatural;   // if you turn it up yourself

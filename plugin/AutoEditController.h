@@ -176,6 +176,8 @@ private:
 public:
     /** The key Pitch follows right now (Key on Auto), if any: fills settings.beatKey* (message thread). */
     std::function<void (vox::AutoEditSettings&)> liveKeySource;
+    /** Honey Tune tunes this track (Pitch rests there): Auto-Edit leaves Pitch's settings as they are. */
+    std::function<bool()> honeyTunesSource;
     /** Is there a Voxology in BEAT mode in this project (Unmask can already make room)? (message thread) */
     std::function<bool()> unmaskOnBeatSource;
 private:

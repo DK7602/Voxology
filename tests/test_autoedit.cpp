@@ -423,3 +423,19 @@ TEST_CASE ("Auto-Edit's spectrum reads the same at every sample rate", "[autoedi
             }
     }
 }
+
+TEST_CASE ("Auto-Edit: with Honey Tune on this track, Pitch is left resting", "[autoedit]")
+{
+    // A sung take (Folk: Pitch on in Natural). When Honey Tune tunes the track, Auto-Edit keeps Pitch as it is and says why.
+    const auto x = testsig::vocal (kSr, 14.0, -95.0, -16.0, 5, 210.0);
+    AutoEditSettings s { 6, 1, 0.0 };
+    s.honeyTunesTrack = true;
+    const auto r = autoEdit ({ x }, kSr, s);
+    REQUIRE (r.ok);
+    CHECK (r.kept[static_cast<size_t> (Module::pitch)]);
+    bool said = false;
+    for (const auto& reason : r.reasons)
+        if (reason.module == "pitch") { said = said || reason.value.find ("Honey Tune") != std::string::npos; CHECK (reason.why.find ("Honey Tune tunes this track") != std::string::npos); }
+    CHECK (said);
+    checkNotes (r);
+}

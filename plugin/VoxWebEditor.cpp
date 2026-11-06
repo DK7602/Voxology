@@ -85,6 +85,9 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
                              { audioProcessor.pickDaw (args.size() >= 1 ? args[0].toString().toStdString() : std::string()); complete (true); })
         .withNativeFunction ("setVocalStyleMine", [this] (const juce::Array<juce::var>& args, auto complete)
                              { if (args.size() >= 1) audioProcessor.setVocalStyleMine (static_cast<bool> (args[0])); complete (true); })
+        // Honey Tune tunes this track: setPitchAnyway(true) = Pitch tunes here anyway (saved with the project), false = it rests.
+        .withNativeFunction ("setPitchAnyway", [this] (const juce::Array<juce::var>& args, auto complete)
+                             { if (args.size() >= 1) audioProcessor.setPitchAnyway (static_cast<bool> (args[0])); complete (true); })
         .withNativeFunction ("getAutoEditReport", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getReportJson()); })
         .withNativeFunction ("chooseReference", [this] (const juce::Array<juce::var>&, auto complete)
         {
@@ -378,6 +381,20 @@ void VoxWebEditor::timerCallback()
             o->setProperty ("vocalDb", std::round (mx.ack.vocalDb * 10.0f) / 10.0f);
             o->setProperty ("targetDb", std::round (mx.ack.targetDb * 10.0f) / 10.0f);
             frame->setProperty ("mixology", juce::var (o));
+        }
+    }
+    {
+        // Honey Tune on this track (null: none): Pitch rests, unless you told it to tune here anyway.
+        const auto hv = audioProcessor.honeyNow();
+        if (! hv.here) frame->setProperty ("honey", juce::var());
+        else
+        {
+            auto* o = new juce::DynamicObject();
+            o->setProperty ("here", true);
+            o->setProperty ("ambiguous", hv.ambiguous);
+            o->setProperty ("resting", hv.resting);
+            o->setProperty ("anyway", audioProcessor.isPitchAnyway());
+            frame->setProperty ("honey", juce::var (o));
         }
     }
     {

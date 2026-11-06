@@ -3,6 +3,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "vox/BeatKey.h"
+#include "vox/HoneyLink.h"
+#include "vox/KeyShare.h"
 #include "vox/LevelMatch.h"
 #include "vox/LoudnessMeter.h"
 #include "vox/Unmask.h"
@@ -145,6 +147,21 @@ public:
     suite::StyleInfo songStyleNow() const { const juce::ScopedLock sl (styleLock); return songStyle.style(); }
     std::uint32_t songStyleVersion() const { return styleVersion.load(); }
 
+    // Honey Tune on this track (Voxology's own channel with Honey Tune, vox::honeylink; not the suite link): one tuner
+    // at a time. When Honey Tune has a clip on the track Voxology sits on (matched by the track's name), Pitch rests,
+    // unless you told it to tune there anyway (saved with the project). Message thread.
+    struct HoneyView
+    {
+        bool here = false;        // Honey Tune tunes a track with this track's name
+        bool ambiguous = false;   // ... but two tracks have that name: nothing is done automatically
+        bool resting = false;     // Pitch rests here now
+    };
+    HoneyView honeyNow() const { const juce::ScopedLock sl (styleLock); return honey; }
+    bool isPitchAnyway() const { return honeyAnyway.load(); }
+    void setPitchAnyway (bool anyway) { honeyAnyway.store (anyway); updateHoneyLink(); }
+    /** Pitch rests (any thread): Honey Tune tunes this track and you didn't tell Pitch to tune anyway. */
+    bool isPitchResting() const noexcept { return pitchRests.load (std::memory_order_relaxed); }
+
     // The DAW you work in, shared the same way: found from the host, or picked here / in Mixology / in Masterology.
     // Every tip and report line then says how to do things in that DAW. "" = back to the one found.
     void pickDaw (const std::string& key);
@@ -230,6 +247,14 @@ private:
     void leaveSuite();
     suite::SharedChoice daw { suite::StyleInfo::From::voxology, suite::Choice::daw };   // under styleLock
     void suggestVocalStyle();                     // the song style's vocal style, unless you picked one
+    void updateHoneyLink();                       // Honey Tune on this track? (four times a second)
+    HoneyView honey;                              // under styleLock
+    std::atomic<bool> honeyAnyway { false };      // tune here although Honey Tune does (saved with the project)
+    std::atomic<bool> pitchRests { false };       // read by the audio thread
+    bool honeyPublished = false;
+    std::uint64_t honeyActMs = 0;                 // when Honey Tune was last seen on this track (0 = not lately)
+    static constexpr std::uint64_t kHoneyHoldMs = 3000;
+    vox::keyshare::BeatKeyShare sharedKey;        // the beat key this instance last gave Honey Tune
     float suiteCompDb = 0.0f;
     juce::String trackName;
     vox::BandAnalyser vocalBands;

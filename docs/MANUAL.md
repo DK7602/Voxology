@@ -109,6 +109,7 @@ Every knob:
 - **Classic**: at Retune 0 - 10 ms the hard melodic-trap tune (notes snap, slides become steps); slower, a softer tune that only fixes drift.
 - **Natural**: each note lands at the Retune speed while your vibrato (and the start of a scoop) stays, so it's never quite flat: for the flat robot sound pick Robot. At Retune 5 ms and faster it changes notes as fast as you sing (within about 25 ms); from 20 ms up it waits a little longer to be sure, so a wide vibrato never flips to the next note.
 - Pitch reads your pitch over two or three cycles of your voice and stamps each reading with the exact moment it describes (v0.51). Every real voice is a little uneven from cycle to cycle; reading one cycle at a time followed that unevenness, and a hard tune came out wobbly. Measured on a raw vocal at Retune 0 against Cubase Pitch Correct and Waves Tune Real-Time at their fastest: Robot now lands on the notes as reliably as Waves (about 7 % of the time more than 30 cents off a note, mostly the slides between notes) with about 3 - 4 cents of wobble left inside held notes (it was about 6).
+- **With Honey Tune on the same track Pitch rests** (one tuner at a time): see Using both together.
 - **Auto-Edit and rap**: Auto-Edit tunes only a take with held notes. Rap is often clearly pitched, but it glides: on real raps under 25 % of the pitched part is held notes, on sung parts usually 35 % or more. Under 25 % Pitch stays off in every style except Robot (there the effect is the point). In Trap Lead a card says how to get the robotic trap sound anyway: Mode Robot (or Classic at Retune 0 - 10 ms) and Amount 100 %. The report's "you sing N cents away" is measured from the notes Pitch will pull to: your key's scale, or all 12 notes on Chromatic.
 
 **Noise and Room (Cleanup)** work before anything else in the chain, so Pitch and the gate already hear the cleaner vocal.
@@ -264,7 +265,7 @@ Let Voxology hear your beat and it gets the key right, checks how your vocal sit
 2. **A second Voxology on the beat** in BEAT mode (below).
 3. **Your voice**: needs about 6 seconds of held notes. If it stays unsure, Pitch snaps to the nearest note (Chromatic) until you pick the key under **MANUAL**.
 
-The Pitch page shows where the key came from ("beat: Dm", "voice: Dm", "voice: listening…").
+The Pitch page shows where the key came from ("beat: Dm", "voice: Dm", "voice: listening…"). Honey Tune's Auto key gets the beat's key either way (a side-chain or a Voxology in BEAT mode).
 
 **Vocal Fit**: with the beat on the side-chain (step 1 above), Auto-Edit records the beat while it listens to your vocal and sets the chain for that beat. It nudges two modules the way pro vocals sit in their own beats:
 
@@ -322,13 +323,13 @@ Honey Tune shows each sung note as a honeycomb cell on a piano roll, so you can 
 | Gold cell | Honey Tune pulled it onto the key |
 | Red glow | It will play off-key (also when you drag a note onto an off-key note) |
 | Dashed ghost cell | Where the note was sung, after you move it |
-| Line inside a cell | The real pitch: drift and vibrato |
+| Line inside a cell | The pitch the note will play, with its drift and vibrato as you keep them (Original: as sung). A note you steady draws flat |
 
 **Top bar**
 
-- **KEY / SCALE**: Auto finds the key in this order: the key you pick, the project's key (Cubase key signature), Voxology's beat key (when a Voxology hears the beat in the same project), then the voice. If it says **KEY UNSURE** in red, pick your song's key.
+- **KEY / SCALE**: Auto finds the key in this order: the key you pick, the project's key (Cubase key signature), the key Voxology's Pitch uses on this track (from the beat on its side-chain, or picked there), Voxology's beat key (any Voxology in the project that hears the beat: on its side-chain or in BEAT mode), then the voice. On Auto, SCALE shows the key in use (**Auto: F Minor**) and the status line says where it came from. If it says **KEY UNSURE** in red, pick your song's key.
 - **SNAP TO NOTE**: how hard every note is pulled onto the key (100 % = all of them).
-- **KEEP DRIFT / KEEP VIBRATO**: how much of the natural movement inside each note stays.
+- **KEEP DRIFT / KEEP VIBRATO**: how much of the movement inside each note stays, for every note you haven't changed with its own sliders. Drift is the slow part (the note sagging or creeping, slower than about 2.5 times a second); vibrato is everything faster, including the wobble of a shaky voice. Both at 0 % = steady notes.
 - **Original / Tuned**: hear and see the clip as recorded or with your edits.
 - **Fit**: zoom to show the whole clip. **Undo / Redo**.
 
@@ -338,22 +339,30 @@ Honey Tune shows each sung note as a honeycomb cell on a piano roll, so you can 
 - Drag the middle sideways: move it in time. Drag an end: make it longer or shorter.
 - Double-click: snap it to the key. **Delete**: reset it. Arrow keys: up / down = one semitone, left / right = next note.
 - Bottom bar for the selected note: **NOTE DRIFT**, **NOTE VIBRATO**, **NOTE FORMANT** (+ thinner, − deeper; pitch stays), **Snap note to key**, **Reset note**, **Reset all notes**.
+- **A wobbly note**: moving a note (or snapping it) keeps its wobble, on purpose: it moves the note as sung. To steady it, set **NOTE DRIFT** and **NOTE VIBRATO** to 0 (both: the wobble of a shaky voice is mostly "vibrato", and DRIFT alone leaves most of it). The note's line says "wobbles 30 cents..." while it moves, and "steadied" after; the line in the cell goes flat. For the whole clip use KEEP DRIFT / KEEP VIBRATO. A very wobbly note can show as two cells: steady both.
 - Every slider (top and bottom bar): click the number box next to it to type an exact value, then press **Enter**.
 - **Ctrl+Z** undo, **Ctrl+Y** redo. Click the ruler to move the playhead. Mouse wheel scrolls; Ctrl+wheel or + / − zooms.
 
 Your edits are saved with the Cubase project.
 
+**Voxology on the same track**: Voxology's Pitch rests there by itself while Honey Tune tunes the track, and Honey Tune's status line says so ("Voxology's Pitch rests on this track"). If it shows in red that Voxology's Pitch tunes this track too, Voxology re-tunes what you fix here: see Using both together.
+
 ## Using both together
 
-Use Honey Tune for the tuning and Voxology for everything else, and switch Voxology's Pitch off on that track. Voxology processes whatever Honey Tune plays, so leaving Pitch on tunes the vocal twice.
+Use Honey Tune for the tuning and Voxology for everything else. Voxology processes whatever Honey Tune plays, so its Pitch would tune the vocal a second time: it pulls the notes you placed by hand to its own key (in a test, every note outside Voxology's key moved about 70 cents away from where Honey Tune put it) and runs your voice through a second shifter. So **Voxology's Pitch rests by itself** on a track where Honey Tune tunes a clip:
+
+- They find each other by the **track's name** (Cubase tells both). Voxology's 01 Pitch then says **HONEY TUNE TUNES THIS TRACK** and its bottom bar **PITCH RESTS**; Pitch keeps its settings for when Honey Tune is gone. Honey Tune's status line says "Voxology's Pitch rests on this track".
+- Want Pitch's effect on top anyway (like the Robot sound)? Click **TUNE HERE ANYWAY** in 01 Pitch's Learn panel (**LET PITCH REST** undoes it). Voxology keeps that with the project, and Honey Tune's status line warns in red.
+- Two tracks with the same name: they can't tell which one it is, so Pitch keeps tuning and both say so. Rename one of the tracks (or switch Pitch off by hand: click its dot).
+- **AUTO-EDIT** leaves Pitch as it is while Honey Tune tunes the track.
 
 1. Record the vocal (REC on in Voxology if you want to hear yourself tuned while recording; switch it off after).
-2. Open the clip in **Honey Tune**. Let it snap the notes, then fix the few that sound wrong by hand.
-3. In Voxology on the same track: open **01 Pitch** and click its dot off (or set Amount to 0).
-4. Run **AUTO-EDIT** in Voxology for the rest of the chain. Afterwards check Pitch is still off, since Auto-Edit sets every module.
-5. Optional: a second Voxology on the beat in **BEAT** mode. It gives Honey Tune the beat's key and makes room for the vocal.
+2. Open the clip in **Honey Tune**. Let it snap the notes, then fix the few that sound wrong by hand (wobbly notes: NOTE DRIFT and NOTE VIBRATO to 0).
+3. Check Voxology's bottom bar on that track says **PITCH RESTS** (with an older Voxology, or a DAW that doesn't name tracks: switch 01 Pitch off yourself).
+4. Run **AUTO-EDIT** in Voxology for the rest of the chain.
+5. Let Voxology hear the beat (on its side-chain, or a second Voxology on the beat in **BEAT** mode). Honey Tune's Auto key then follows the beat too, and Voxology makes room for the vocal.
 
-Quick rule: a fast trap or robot effect = Voxology's Pitch alone (Robot or Classic mode). A natural, polished sung vocal = Honey Tune + Voxology with Pitch off.
+Quick rule: a fast trap or robot effect = Voxology's Pitch alone (Robot or Classic mode). A natural, polished sung vocal = Honey Tune + Voxology with Pitch resting.
 
 ## With Mixology and Masterology
 
@@ -414,7 +423,9 @@ finished mix into the master. In the same Cubase project they tell each other wh
 | A sample-pack vocal or beat sounds off-key | Pack file names are often wrong about the key (in one tested pack, 24 of 54 were a semitone off). Leave Key on AUTO, or check the key by ear or with a key app |
 | Honey Tune says KEY UNSURE | Pick the song's key in KEY, or put a Voxology on the beat (BEAT mode) and play the song for about 6 s |
 | Honey Tune isn't in Audio > Extensions | Your Cubase edition needs ARA (Artist or Pro). Elements doesn't have it |
-| The vocal sounds tuned twice or warbly | Voxology's Pitch is on after Honey Tune. Switch Pitch off on that track |
+| The vocal sounds tuned twice or warbly | Voxology's Pitch tunes after Honey Tune. Its bottom bar should say PITCH RESTS: if it doesn't, give the track its own name, or switch Pitch off there (and LET PITCH REST if you clicked TUNE HERE ANYWAY) |
+| I edited a note in Honey Tune and nothing changed | Moving or snapping a note keeps its wobble: set NOTE DRIFT and NOTE VIBRATO to 0 (both). A very wobbly note can be two cells: steady both. Check Voxology's Pitch rests on that track (it pulls notes outside its key back). Check the switch says **Tuned**, not Original. Still wobbly with Voxology bypassed in the DAW? Then the wobble is after Honey Tune (Voices' Double or Dimension in Voxology, another plug-in). Two singers on one track (a stacked chorus): Honey Tune follows one voice; the beating between voices isn't one pitch it can steady |
+| Honey Tune's SCALE said Chromatic while Voxology knew the key | Fixed: Auto now takes the key Voxology hears from the beat on its side-chain too, and SCALE shows it (**Auto: F Minor**) |
 | Auto-Edit report has no VOCAL FIT section | The beat isn't on the side-chain. Click the side-chain button at the top of Voxology, add a Send to "Voxology - Side-Chain" on the beat track, play the beat with the vocal and run Auto-Edit again |
 | Report says YOUR VOCAL IS IN THE BEAT | The side-chain gets a mix with your vocal in it. Send only the instrumental track (or a music-only group) to "Voxology - Side-Chain", then run Auto-Edit again |
 | Unmask doesn't dip the beat | Both Voxologys must be in the same project, and the vocal must be playing. The beat's Learn panel says NO VOCAL HEARD if the link is missing |

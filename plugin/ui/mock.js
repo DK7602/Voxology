@@ -6,6 +6,7 @@
 //   ?mixology=matched (the default) | beatTrack | noLink | noName | sharedName | notVocal | waiting | old (true, from an
 //     older plug-in) | none | cycle (each in turn, 3 s each); add &balances when Mixology rides this vocal's fader
 //   ?failed   the next Auto-Edit fails and the report before it stays (opens with that report)
+//   ?honey    Honey Tune tunes this track: Pitch rests (?honey=shared: two tracks have this track's name)
 (function () {
   if (typeof window.__JUCE__ !== "undefined") return;
   const Q = new URLSearchParams(location.search);
@@ -167,10 +168,12 @@
   // The song's style, shared with Mixology and Masterology (as if Mixology picked it).
   const daw = hostile ? { key: "<b>x</b>", picked: true, from: 9, detected: "{daw}" }
     : { key: location.hash === "#studioone" ? "studioone" : "cubase", picked: location.hash === "#studioone", from: 2, detected: "cubase" };
+  // Honey Tune on this track (?honey; ?honey=shared: a track name two tracks share): Pitch rests until TUNE HERE ANYWAY.
+  const honey = Q.has("honey") ? { here: true, ambiguous: Q.get("honey") === "shared", resting: Q.get("honey") !== "shared", anyway: false } : null;
   const song = hostile ? { key: "<script>", name: H[0], from: 2, version: 1, vocalMine: false, suggest: 99 } : { key: "hiphop.gfunk", name: "Hip Hop - G-Funk", from: 2, version: 1, vocalMine: false, suggest: 1 };
   window.__JUCE__ = {
     initialisationData: {
-      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "getAutoAnalyze", "setAutoAnalyze", "applyAutoAnalyze", "dismissAutoAnalyze", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed", "pickStyle", "setVocalStyleMine", "pickDaw",
+      __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "getAutoAnalyze", "setAutoAnalyze", "applyAutoAnalyze", "dismissAutoAnalyze", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed", "pickStyle", "setVocalStyleMine", "pickDaw", "setPitchAnyway",
         "setReferenceSplit", "listChains", "getChainName", "saveChain", "loadChain", "deleteChain"],
       __juce__registeredGlobalEventIds: [], __juce__sliders: Object.keys(sliders), __juce__toggles: Object.keys(toggles), __juce__comboBoxes: Object.keys(combos),
     },
@@ -200,6 +203,7 @@
         if (payload.name === "getAutoAnalyze") result = aaJson();
         if (payload.name === "pickStyle") Object.assign(song, { key: payload.params[0], name: payload.params[1], from: 1, version: song.version + 1 });
         if (payload.name === "setVocalStyleMine") song.vocalMine = !!payload.params[0];
+        if (payload.name === "setPitchAnyway" && honey) { honey.anyway = !!payload.params[0]; honey.resting = !honey.anyway && !honey.ambiguous; }
         if (payload.name === "pickDaw") Object.assign(daw, { key: payload.params[0] || "cubase", picked: !!payload.params[0], from: 1 });
         if (payload.name === "setAutoAnalyze") { aa.on = !!payload.params[0]; if (!aa.on) { aa.needs = []; aa.checks = 0; aa.time = ""; } aa.version++; }
         if (payload.name === "applyAutoAnalyze" || payload.name === "dismissAutoAnalyze") {
@@ -285,7 +289,7 @@
       peakGr: active("cpOn") && s("cpPeak") < 0 ? +(-5 * word * word).toFixed(1) : 0,
       levelGr: active("cpOn") && s("cpRatio") > 1.01 ? +(-4 * word).toFixed(1) : 0,
       satHarm: active("saOn") && s("saDrive") > 0 ? +(-42 + s("saDrive") * 3 + 2 * word).toFixed(1) : -100,
-      matchDb: -1.2, bpm: 140, sr: 48000, mixology: mixology(), songStyle: song, daw,
+      matchDb: -1.2, bpm: 140, sr: 48000, mixology: mixology(), songStyle: song, daw, honey,
       bkState: location.hash === "#beat" ? 5 : 1, bkSource: 2, scState: 2, bkOpen: -1, bkKey: 7, bkMode: 7, bkSet: 0, bkUnclear: 0, bkConf: 0.86, bkTune: -28, bkHeard: 24, keyUsed: 11, scaleUsed: 2, midiNotes: (1 << 11) | (1 << 2), notesUsed: 0b110010101101 & ~(1 << 6), recMode: 1, latencyMs: 6.1,
       pitchSung: sing ? +(57 + 0.25 * Math.sin(t * 3)).toFixed(2) : 0, pitchTarget: sing ? 57 : -1,
       pitchCorr: sing && sliders.ptAmount.value > 0 ? +(-0.25 * Math.sin(t * 3) * sliders.ptAmount.value / 100).toFixed(2) : 0,

@@ -172,6 +172,7 @@ vox::AutoEditSettings AutoEditController::currentSettings (std::shared_ptr<const
     if (choice ("ptKeySrc") == 0 && liveKeySource)
         liveKeySource (settings);
     settings.unmaskOnBeat = unmaskOnBeatSource && unmaskOnBeatSource();
+    settings.honeyTunesTrack = honeyTunesSource && honeyTunesSource();
     {
         const juce::ScopedLock sl (refLock);
         ref = reference;
@@ -274,6 +275,7 @@ void AutoEditController::apply (const vox::AutoEditResult& r, const vox::AutoEdi
         const bool keyByHand = juce::roundToInt (state.getRawParameterValue ("ptKeySrc")->load()) != 0;
         VoxParams::forEachValue (r.params, [&] (const juce::String& id, float v) {
             if (keyByHand && (id == "ptKey" || id == "ptScale")) return;
+            if (s.honeyTunesTrack && id.startsWith ("pt")) return;   // Honey Tune tunes this track: Pitch stays as it is (resting)
             setParam (id, v);
             values->setProperty (id, v);
         });

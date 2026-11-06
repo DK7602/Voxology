@@ -34,6 +34,7 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
         s.beatKeyFromVoice = source == 3;
     };
     autoEdit.unmaskOnBeatSource = [this] { return vox::UnmaskLink::instance().readBeatKey (linkSlot).present; };
+    autoEdit.honeyTunesSource = [this] { return isPitchResting(); };   // Pitch rests: Auto-Edit leaves it alone
     chains.beforeLoad = [this] { autoEdit.takeUndoSnapshot (false); };
     suiteId = static_cast<std::uint64_t> (juce::Random::getSystemRandom().nextInt64()) ^ reinterpret_cast<std::uintptr_t> (this);
     if (suiteId == 0) suiteId = 1;
@@ -59,6 +60,7 @@ VoxologyAudioProcessor::~VoxologyAudioProcessor()
     cancelPendingUpdate();
     vox::UnmaskLink::instance().release (linkSlot);
     suite::Link::process().releaseVocal (suiteSlot, suiteId);
+    vox::honeylink::Link::process().leaveVox (suiteId);
     const juce::ScopedLock sl (styleLock);
     songStyle.leave (suite::Link::process(), suiteId);
     daw.leave (suite::Link::process(), suiteId);
@@ -117,6 +119,10 @@ void VoxologyAudioProcessor::leaveSuite()
     daw.leave (link, suiteId);
     mixology = {};
     autoEdit.setLevelByMixology (false);
+    vox::honeylink::Link::process().leaveVox (suiteId);
+    honeyPublished = false;
+    honey = {};   // (Pitch keeps resting until the next look: a host that stops and restarts plug-ins for an export
+                  // mustn't let the first seconds of it through with Pitch on)
 }
 
 void VoxologyAudioProcessor::timerCallback()
@@ -125,18 +131,32 @@ void VoxologyAudioProcessor::timerCallback()
     // must neither take another song's style nor look present to Mixology. It joins again at the next prepareToPlay.
     if (suitePresence.update (suite::nowMs()) == suite::Presence::Step::leave)
         leaveSuite();
-    publishSuite();   // four times a second (its heartbeat)
+    publishSuite();      // four times a second (its heartbeat)
+    updateHoneyLink();   // Honey Tune on this track: Pitch rests
     if (++timerTicks % 4 != 0) return;
 
     resolveUnmaskSource();   // a saved choice: wait for that vocal's Voxology to appear (project loading)
 
-    // Share a Voxology-on-the-beat's key with Honey Tune in this host (it can't see the link: another plug-in file).
+    // Share the beat's key with Honey Tune in this host (it can't see Voxology's own link: another plug-in file): from a
+    // Voxology on the beat (BEAT mode), else from the beat on this vocal Voxology's side-chain, once Pitch follows it.
     const auto bk = vox::UnmaskLink::instance().readBeatKey (-1);
-    if (bk.present && bk.beat.ready && bk.beat.confidence >= kBeatKeySure && suitePresence.takingPart())
+    if (suitePresence.takingPart())
     {
         int key = 0, scale = 1;
-        vox::followBeatKey (bk.beat, 0, key, scale);
-        vox::keyshare::publish (key, scale, bk.beat.confidence);
+        if (bk.present && bk.beat.ready && bk.beat.confidence >= kBeatKeySure)
+        {
+            vox::followBeatKey (bk.beat, 0, key, scale);
+            vox::keyshare::offer (key, scale, bk.beat.confidence, sharedKey);
+        }
+        else if (! isBeatMode() && keySrcParam->load() < 0.5f && meters.bkState.load() == 1 && meters.bkSource.load() == 2)
+        {
+            vox::BeatKey::Result r;
+            r.ready = true;
+            r.setRoot = meters.bkSet.load();
+            r.tonicOffset = meters.bkMode.load();
+            vox::followBeatKey (r, 0, key, scale);   // the beat's own mode (as from BEAT mode)
+            vox::keyshare::offer (key, scale, meters.bkConf.load(), sharedKey);
+        }
     }
 }
 
@@ -156,6 +176,52 @@ void VoxologyAudioProcessor::updateTrackProperties (const TrackProperties& prope
         trackName = *properties.name;
         publishSuite();
     }
+}
+
+void VoxologyAudioProcessor::updateHoneyLink()
+{
+    // One tuner at a time: Honey Tune (on a clip of this track) tunes note by note; Pitch on top would tune it again
+    // (pulling notes you placed by hand to its own key, and through a second shifter). Matched by the track's name;
+    // an unnamed track, or a name two tracks share, is never acted on.
+    auto& link = vox::honeylink::Link::process();
+    const auto now = suite::nowMs();
+    if (! suitePresence.takingPart())
+    {
+        if (honeyPublished) link.leaveVox (suiteId);
+        honeyPublished = false;
+        return;
+    }
+    const auto hash = trackName.isEmpty() || isBeatMode() ? 0u : suite::nameHash (trackName.toStdString());
+    const auto match = link.honeyOn (hash, suiteId, now);
+    // Pitch rests at once when Honey Tune shows up, and tunes again only once Honey Tune has been gone a few seconds
+    // (a host restarting its plug-ins, e.g. for an export, can leave a short gap in what they publish).
+    if (match.act()) honeyActMs = now;
+    else if (match.ambiguous || hash == 0) honeyActMs = 0;
+    const bool honeyThere = honeyActMs != 0 && now - std::min (now, honeyActMs) <= kHoneyHoldMs;
+    const bool rest = honeyThere && ! honeyAnyway.load();
+    pitchRests.store (rest);
+    {
+        const juce::ScopedLock sl (styleLock);
+        honey = { match.honey || honeyThere, match.ambiguous, rest };
+    }
+    // What Pitch does here, and its key (Honey Tune's Auto can take it).
+    vox::ChainParams p;
+    reader.read (p, hostBpm.load());
+    using H = vox::honeylink::Pitch;
+    vox::honeylink::VoxInfo v;
+    v.nameHash = hash;
+    v.pitch = isBeatMode() || vox::PitchCorrector::isNeutral (p.pitch) ? H::off : rest ? H::resting : honeyThere ? H::tuningAnyway : H::tuning;
+    v.key = juce::jlimit (0, 11, meters.keyUsed.load());
+    v.scale = juce::jlimit (0, vox::kScales - 1, meters.scaleUsed.load());
+    using K = vox::honeylink::KeyFrom;
+    const int source = meters.bkSource.load();
+    v.keyFrom = isBeatMode() ? K::none
+              : keySrcParam->load() > 0.5f ? K::manual
+              : meters.bkState.load() != 1 ? K::none
+              : source == 1 || source == 2 ? K::beat
+              : source == 3 ? K::voice : K::none;
+    link.publishVox (suiteId, v, now);
+    honeyPublished = true;
 }
 
 void VoxologyAudioProcessor::publishSuite()
@@ -184,6 +250,7 @@ void VoxologyAudioProcessor::publishSuite()
 
     vox::ChainParams p;
     reader.read (p, hostBpm.load());
+    if (pitchRests.load()) p.pitch.enabled = false;   // Honey Tune tunes this track
     using F = suite::VocalInfo;
     F v;
     v.trackName = trackName.toStdString();
@@ -319,6 +386,7 @@ void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
     for (int s = standby.load(); s == standbyCleaning || ! standby.compare_exchange_weak (s, standbyCleaning);)
         if (s == standbyCleaning) { juce::Thread::yield(); s = standby.load(); }
     reader.read (chainParams, hostBpm.load());
+    if (pitchRests.load()) chainParams.pitch.enabled = false;   // Honey Tune tunes this track
     chain.setParams (chainParams);
     chain.prepare (sampleRate, juce::jmin (channels, vox::kMaxChannels));
     recChain.setParams (chainParams);
@@ -483,6 +551,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
 
     // MATCH: level-matched A/B, learned while B (the processed vocal) plays; never in an offline export.
     reader.read (chainParams, hostBpm.load());
+    if (pitchRests.load (std::memory_order_relaxed)) chainParams.pitch.enabled = false;   // Honey Tune tunes this track
     if (hostBypass) chainParams.bypass = true;   // the DAW's bypass: Voxology's own (delayed dry, glided)
     const bool listeningB = ! chainParams.bypass && ! chainParams.listenOriginal;
     const bool matching = levelMatchParam->load() > 0.5f && ! isNonRealtime();
@@ -733,6 +802,7 @@ void VoxologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
         xml->setAttribute ("uiRed", uiRed.load() ? 1 : 0);
         xml->setAttribute ("chainName", getChainName());
         xml->setAttribute ("aeWatch", autoEdit.isWatchOn() ? 1 : 0);
+        xml->setAttribute ("pitchAnyway", honeyAnyway.load() ? 1 : 0);   // Pitch tunes although Honey Tune does
         {
             // The song's style (shared with Mixology and Masterology) + when it was picked; and whether you picked
             // this track's vocal style yourself.
@@ -763,6 +833,8 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
             setChainName (xml->getStringAttribute ("chainName"));
             xml->removeAttribute ("chainName");
             xml->removeAttribute ("aeWatch");
+            honeyAnyway.store (xml->getIntAttribute ("pitchAnyway", 0) != 0);
+            xml->removeAttribute ("pitchAnyway");
             {
                 // The song's style. A project from before it existed keeps its vocal style as it was (you chose it).
                 const bool hasStyle = xml->hasAttribute ("songStyle");

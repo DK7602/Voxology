@@ -8,6 +8,8 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include "HoneyPanel.h"
+#include "suite/SuiteLink.h"
+#include "vox/HoneyLink.h"
 #include "vox/KeyShare.h"
 
 #include <ARA_Library/Utilities/ARATimelineConversion.h>
@@ -56,6 +58,10 @@ namespace
         vox::KeyGuess guess;
         std::vector<NoteEdit> edits;           // one per note
         std::vector<SavedEdit> pending;        // restored from the project, waiting for the notes
+        // The Voxology on this clip's track (vox::honeylink, read once a second): the key its Pitch uses, and what it does.
+        honeyui::HostKey trackKey;
+        bool voxologyHere = false;
+        vox::honeylink::Pitch voxologyPitch = vox::honeylink::Pitch::off;
 
         // Render requests (coalesced: one job at a time, re-run if asked again meanwhile)
         std::atomic<int> wanted { 0 };
@@ -177,13 +183,26 @@ class HoneyPlaybackRenderer final : public ARAPlaybackRenderer
 public:
     using ARAPlaybackRenderer::ARAPlaybackRenderer;
 
+    ~HoneyPlaybackRenderer() override { if (prepared) rendererActive (getDocumentController(), -1); }
+
     void prepareToPlay (double sampleRateIn, int maximumSamplesPerBlockIn, int numChannelsIn,
                         AudioProcessor::ProcessingPrecision, AlwaysNonRealtime) override
     {
         sampleRate = sampleRateIn;
         numChannels = numChannelsIn;
         maxBlock = maximumSamplesPerBlockIn;
+        if (! prepared) rendererActive (getDocumentController(), +1);   // the project is active (it plays)
+        prepared = true;
     }
+
+    void releaseResources() override
+    {
+        if (prepared) rendererActive (getDocumentController(), -1);
+        prepared = false;
+    }
+
+    /** The document's plug-ins run (a project the host keeps open but isn't playing doesn't count). */
+    static void rendererActive (ARA::PlugIn::DocumentController*, int delta);
 
     bool processBlock (AudioBuffer<float>& buffer, AudioProcessor::Realtime realtime,
                        const AudioPlayHead::PositionInfo& positionInfo) noexcept override
@@ -260,6 +279,7 @@ public:
 
 private:
     static constexpr int kOfflineWaitMs = 180000;   // (an hour-long take's analysis takes minutes)
+    bool prepared = false;
     double sampleRate = 48000.0;
     int numChannels = 2, maxBlock = 512;
 };
@@ -274,13 +294,20 @@ public:
         // The jobs still running stop early (an analysis or a render can take many seconds) and add no new ones, so
         // closing the project doesn't wait on them.
         beatKeyPoll.stopTimer();
+        vox::honeylink::Link::process().leaveHoney (linkId);
         *controllerAlive = false;
         closing = true;
         pool.removeAllJobs (true, 60000);
     }
 
     Settings getSettings() const { const ScopedLock sl (settingsLock); return settings; }
-    honeyui::HostKey getHostKey() const { const ScopedLock sl (settingsLock); return hostKey; }
+    /** The key from outside the clip that Auto uses for this recording (call with its dataLock held). */
+    honeyui::HostKey getHostKey (const SourceState& st) const
+    {
+        const ScopedLock sl (settingsLock);
+        return honeyui::outsideKey (keyProject, keyBeat, st.trackKey);
+    }
+    void activeChanged (int delta) { active += delta; }
 
     /** The song's key from the host (its key signature / scale track: the first one), for Auto. Message thread. */
     void refreshHostKey()
@@ -289,7 +316,14 @@ public:
         useOutsideKey();
     }
 
-    /** Voxology on the beat (this host, written in the last few seconds), for Auto. Message thread, once a second. */
+    /** Once a second (message thread): Voxology's beat key, and the Voxologys on the tracks of Honey Tune's clips. */
+    void poll()
+    {
+        pollBeatKey();
+        pollTracks();
+    }
+
+    /** Voxology's beat key (this host, written in the last few seconds), for Auto. */
     void pollBeatKey()
     {
         honeyui::HostKey k;
@@ -305,18 +339,72 @@ public:
         useOutsideKey();
     }
 
-    /** The key from outside the clip: the project's, else the beat's. A change re-tunes every clip. */
+    /** The keys from outside the clips: the project's, the beat's. A change re-tunes every clip. */
     void useOutsideKey()
     {
-        const auto use = honeyui::outsideKey (projectKey, beatKey);
         {
             const ScopedLock sl (settingsLock);
-            if (use == hostKey) return;
-            hostKey = use;
+            if (projectKey == keyProject && beatKey == keyBeat) return;
+            keyProject = projectKey;
+            keyBeat = beatKey;
         }
         for (auto* src : sources())
             requestRender (src->state);
         changes.sendChangeMessage();
+    }
+
+    /** The tracks with Honey Tune clips, by name (ARA region sequences): told to the Voxologys there (their Pitch rests
+        while Honey Tune tunes the track), and each clip learns what the Voxology on its track does and the key it uses.
+        Only while the project is active (its plug-ins run): one the host keeps open in the background takes no part. */
+    void pollTracks()
+    {
+        auto& link = vox::honeylink::Link::process();
+        const auto now = suite::nowMs();
+        std::map<std::string, int> named;   // name -> how many of Honey Tune's tracks have it
+        for (auto* seq : getDocumentController()->getDocument<ARADocument>()->getRegionSequences<ARARegionSequence>())
+            if (const auto name = trackName (seq); ! name.empty() && ! seq->getPlaybackRegions().empty())
+                ++named[name];
+        // (A host restarting its plug-ins, e.g. for an export, leaves a moment with none running: wait for a second look.)
+        quietPolls = active.load() > 0 ? 0 : quietPolls + 1;
+        if (quietPolls < 2)
+        {
+            std::vector<vox::honeylink::HoneyTrack> tracks;
+            for (const auto& [name, count] : named)
+                tracks.push_back ({ suite::nameHash (name), count > 1 });
+            link.publishHoney (linkId, tracks, now);
+        }
+        else
+            link.leaveHoney (linkId);
+
+        for (auto* src : sources())
+        {
+            std::string name;
+            for (auto* mod : src->getAudioModifications())
+                for (auto* region : mod->getPlaybackRegions())
+                    if (name.empty())
+                        if (auto* seq = region->getRegionSequence()) name = trackName (seq);
+            vox::honeylink::VoxInfo v;
+            const bool here = ! name.empty() && named[name] == 1 && link.voxologyOn (suite::nameHash (name), v, now);
+            const auto key = here ? honeyui::trackKeyFrom (v) : honeyui::HostKey {};
+            auto& st = *src->state;
+            bool keyChanged = false, changed = false;
+            {
+                const ScopedLock sl (st.dataLock);
+                keyChanged = ! (key == st.trackKey);
+                changed = keyChanged || here != st.voxologyHere || (here && v.pitch != st.voxologyPitch);
+                st.trackKey = key;
+                st.voxologyHere = here;
+                st.voxologyPitch = here ? v.pitch : vox::honeylink::Pitch::off;
+            }
+            if (keyChanged) requestRender (src->state);
+            if (changed) changes.sendChangeMessage();
+        }
+    }
+
+    static std::string trackName (const ARARegionSequence* seq)
+    {
+        const char* n = seq->getName();   // (an optional property: nullptr = the host gave none)
+        return n != nullptr ? std::string (n) : std::string();
     }
 
     honeyui::HostKey readProjectKey()
@@ -356,7 +444,9 @@ public:
         honeyui::Snapshot snap;
         {
             const ScopedLock sl (st->dataLock);
-            snap = honeyui::makeSnapshot (st->track, st->notes, st->edits, st->guess, s, getHostKey());
+            snap = honeyui::makeSnapshot (st->track, st->notes, st->edits, st->guess, s, getHostKey (*st));
+            snap.voxologyHere = st->voxologyHere;
+            snap.voxologyPitch = st->voxologyPitch;
         }
         snap.status = st->status;
         snap.name = st->name;
@@ -562,7 +652,7 @@ private:
     {
         if (closing) return;
         refreshHostKey();
-        pollBeatKey();
+        poll();
         if (! beatKeyPoll.isTimerRunning()) beatKeyPoll.startTimer (1000);
         auto state = src->state;
         state->status = 1;
@@ -688,7 +778,7 @@ private:
             const ScopedLock sl (st.dataLock);
             if (st.track == nullptr) return false;
             int key = 0, scale = 0;
-            honeyui::resolveKey (s, st.guess, key, scale, getHostKey());
+            honeyui::resolveKey (s, st.guess, key, scale, getHostKey (st));
             track = st.track;
             notes = honeyui::applyEdits (st.notes, st.edits, s, key, scale, st.sampleRate);
         }
@@ -746,13 +836,22 @@ private:
     std::shared_ptr<std::atomic<bool>> controllerAlive = std::make_shared<std::atomic<bool>> (true);
     mutable CriticalSection settingsLock;
     Settings settings;
-    honeyui::HostKey hostKey;   // the song's key from outside the clip, in use (settingsLock)
+    honeyui::HostKey keyProject, keyBeat;   // the song's key from outside the clips, in use (settingsLock)
     honeyui::HostKey projectKey, beatKey;   // message thread
-    TimedCallback beatKeyPoll { [this] { pollBeatKey(); } };
+    TimedCallback beatKeyPoll { [this] { poll(); } };
+    std::atomic<int> active { 0 };          // playback renderers prepared: the project plays
+    int quietPolls = 2;                     // polls in a row with none running (message thread; none yet)
+    const std::uint64_t linkId = (static_cast<std::uint64_t> (Random::getSystemRandom().nextInt64()) ^ reinterpret_cast<std::uintptr_t> (this)) | 1u;
     std::atomic<bool> playOriginal { false };
     std::atomic<bool> closing { false };   // the document is going: jobs stop early, no new ones
     ThreadPool pool { 1, 0, Thread::Priority::low };   // (the DAW and its audio come first)
 };
+
+void HoneyPlaybackRenderer::rendererActive (ARA::PlugIn::DocumentController* dc, int delta)
+{
+    if (auto* c = ARADocumentControllerSpecialisation::getSpecialisedDocumentController<HoneyDocumentController> (dc))
+        c->activeChanged (delta);
+}
 
 //==============================================================================
 class HoneyProcessor final : public AudioProcessor,
@@ -895,10 +994,23 @@ private:
     }
     Settings getSettings() override { return dc != nullptr ? dc->getSettings() : Settings {}; }
     void setSettings (const Settings& s) override { if (dc != nullptr) dc->setSettings (s); }
-    void setEdit (int i, const NoteEdit& e) override { if (dc != nullptr && state != nullptr) dc->setEdit (state, i, e); }
-    void resetAllEdits() override { if (dc != nullptr && state != nullptr) dc->resetAllEdits (state); }
-    bool undo() override { return dc != nullptr && state != nullptr && dc->undoRedo (state, true); }
-    bool redo() override { return dc != nullptr && state != nullptr && dc->undoRedo (state, false); }
+    void setEdit (int i, const NoteEdit& e) override { if (dc != nullptr && state != nullptr) { toTuned(); dc->setEdit (state, i, e); } }
+    void resetAllEdits() override { if (dc != nullptr && state != nullptr) { toTuned(); dc->resetAllEdits (state); } }
+    bool undo() override { return stepEdits (true); }
+    bool redo() override { return stepEdits (false); }
+    bool stepEdits (bool back)
+    {
+        if (dc == nullptr || state == nullptr || ! dc->undoRedo (state, back)) return false;
+        toTuned();
+        return true;
+    }
+    /** An edit made while listening to the Original switches to Tuned (else it seemed to do nothing). */
+    void toTuned()
+    {
+        if (! dc->isOriginal()) return;
+        dc->setOriginal (false);
+        panel.showOriginal (false);
+    }
     void setOriginal (bool o) override { if (dc != nullptr) dc->setOriginal (o); }
     bool isOriginal() override { return dc != nullptr && dc->isOriginal(); }
     void seek (double clipSeconds) override

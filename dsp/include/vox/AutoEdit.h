@@ -65,6 +65,7 @@ struct AutoEditSettings
     bool beatKeyFromVoice = false;        // that key was learned from the voice (no beat to hear)
     const std::vector<float>* beat = nullptr;   // Vocal Fit: the beat from the side-chain, recorded with the vocal (mono, same length)
     bool unmaskOnBeat = false;            // a Voxology in BEAT mode is in the project (Unmask can already make room)
+    bool honeyTunesTrack = false;         // Honey Tune tunes this track: Pitch rests there (Auto-Edit leaves it as it is)
     const std::atomic<bool>* cancel = nullptr;  // set it (another thread) to stop early: the plug-in is closing (result: not ok)
 };
 

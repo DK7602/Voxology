@@ -37,6 +37,21 @@ void publish (int key, int scale, double confidence, std::int64_t ms)
     suite::Link::process().publishBeatKey (key, scale, static_cast<float> (confidence), static_cast<std::uint64_t> (std::max<std::int64_t> (1, when)));
 }
 
+bool offer (int key, int scale, double confidence, BeatKeyShare& mine, std::int64_t ms)
+{
+    const auto when = ms < 0 ? nowMs() : ms;
+    BeatKeyShare there;
+    if (read (there))
+    {
+        const bool mineThere = there.ms == mine.ms && there.key == mine.key && there.scale == mine.scale;
+        const bool other = there.key != key || there.scale != scale;
+        if (! mineThere && other && confidence < there.confidence + 0.1) return false;
+    }
+    publish (key, scale, confidence, when);
+    mine = { key, scale, confidence, std::max<std::int64_t> (1, when) };
+    return true;
+}
+
 bool read (BeatKeyShare& k)
 {
     BeatKeyShare got;

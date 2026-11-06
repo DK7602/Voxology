@@ -19,6 +19,7 @@ add_executable(vox_tests
     test_pitch.cpp
     test_honey.cpp
     test_honey_view.cpp
+    test_honey_link.cpp
     test_beatkey.cpp
     test_clipwatch.cpp
     test_manual.cpp

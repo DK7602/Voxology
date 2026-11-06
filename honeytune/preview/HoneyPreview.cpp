@@ -1,10 +1,15 @@
 // Draws the Honey Tune editor with a real vocal into a PNG (developer tool, no host needed).
-// HoneyPreview <mono float32 raw> <sample rate> <out.png> [key 0-11|12=auto] [scale]
+// HoneyPreview <mono float32 raw> <sample rate> <out.png> [key 0-11|12=auto] [scale] [snap]
+// Env: HONEY_W / HONEY_H size, HONEY_BPM tempo map, HONEY_MANUAL the manual, HONEY_BEAT=key,scale a key from Voxology's
+// beat, HONEY_VOXOLOGY=1|2|3 the Voxology on this track (Pitch resting / tuning anyway / tuning), HONEY_STEADY=n note n
+// selected and steadied (NOTE DRIFT + NOTE VIBRATO 0).
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "../HoneyPanel.h"
 
+#include <algorithm>
+#include <cstdio>
 #include <fstream>
 
 using namespace juce;
@@ -19,8 +24,19 @@ struct MemoryModel final : honeyui::Model
 
     honeyui::Snapshot snapshot() override
     {
-        auto s = honeyui::makeSnapshot (track, notes, edits, guess, settings);
+        honeyui::HostKey beat;
+        if (const char* b = std::getenv ("HONEY_BEAT"))
+        {
+            beat.valid = beat.fromBeat = true;
+            std::sscanf (b, "%d,%d", &beat.key, &beat.scale);
+        }
+        auto s = honeyui::makeSnapshot (track, notes, edits, guess, settings, beat);
         s.status = 2;
+        if (const char* v = std::getenv ("HONEY_VOXOLOGY"))
+        {
+            s.voxologyHere = true;
+            s.voxologyPitch = static_cast<vox::honeylink::Pitch> (std::clamp (std::atoi (v) == 1 ? 2 : std::atoi (v) == 2 ? 3 : 1, 0, 3));
+        }
         if (const char* bpm = std::getenv ("HONEY_BPM"))   // a fake host tempo map (4/4)
             for (int b = 0; b < 400; ++b)
                 for (int k = 0; k < 4; ++k)
@@ -75,8 +91,16 @@ int main (int argc, char** argv)
             ++shown;
         }
     }
+    // The selected note (HONEY_STEADY=<note number> picks it, and steadies it).
+    int pick = static_cast<int> (m.notes.size() / 3);
+    if (const char* st = std::getenv ("HONEY_STEADY"); st != nullptr && ! m.edits.empty())
+    {
+        if (std::atoi (st) > 0) pick = std::min (std::atoi (st), static_cast<int> (m.notes.size())) - 1;
+        auto& e = m.edits[static_cast<size_t> (pick)];
+        e.drift = e.vibrato = 0.0;
+    }
     panel.refresh();
-    panel.roll.setSelected (static_cast<int> (m.notes.size() / 3));
+    panel.roll.setSelected (pick);
     panel.setPlayhead (2.5);
 
     if (std::getenv ("HONEY_MANUAL"))   // show the manual (the ? button)

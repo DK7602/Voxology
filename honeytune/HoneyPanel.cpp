@@ -177,17 +177,22 @@ void HoneyPanel::refresh()
         fixed += n.fixed ? 1 : 0;
         edited += n.edit.isDefault() ? 0 : 1;
     }
-    statusWarning = s.status == 2 && s.keyUnsure;
+    bool voxWarning = false;
+    const auto voxLine = String (honeyui::voxologyText (s, voxWarning));
+    statusWarning = s.status == 2 && (s.keyUnsure || voxWarning);
     switch (s.status)
     {
         case 2:
-            status = (s.keyUnsure ? String ("KEY UNSURE: pick your song's key in KEY (heard ") + vox::kNoteNames[static_cast<size_t> (s.guess.key)]
+            status = (voxWarning ? voxLine + "  |  " : String())
+                   + (s.keyUnsure ? String ("KEY UNSURE: pick your song's key in KEY (heard ") + vox::kNoteNames[static_cast<size_t> (s.guess.key)]
                                         + (s.guess.minor ? " minor" : " major")
                                         + (s.guess.ambiguous ? String (" or ") + vox::kNoteNames[static_cast<size_t> (s.guess.altKey)] + (s.guess.altMinor ? " minor" : " major") : String())
                                         + "); until then notes snap to the nearest note, any note  |  "
                                   : String())
                    + String (s.notes.size()) + " notes  |  key " + vox::kNoteNames[static_cast<size_t> (s.key)] + " "
-                   + vox::kScaleNames[static_cast<size_t> (s.scale)] + (s.keyFromHost ? " (from the project)" : s.keyFromBeat ? " (from Voxology's beat)" : "") + "  |  sung off-key " + String (sungOff) + ", fixed " + String (fixed)
+                   + vox::kScaleNames[static_cast<size_t> (s.scale)] + honeyui::keySourceText (s)
+                   + (! voxWarning && voxLine.isNotEmpty() ? "  |  " + voxLine : String())
+                   + "  |  sung off-key " + String (sungOff) + ", fixed " + String (fixed)
                    + ", still off-key " + String (off) + "  |  " + String (edited) + " changed by hand  |  heard " + vox::kNoteNames[static_cast<size_t> (s.guess.key)]
                    + (s.guess.minor ? " minor" : " major")
                    + (s.guess.ambiguous ? String (" or ") + vox::kNoteNames[static_cast<size_t> (s.guess.altKey)] + (s.guess.altMinor ? " minor" : " major") : String())
@@ -200,6 +205,17 @@ void HoneyPanel::refresh()
         case 3: status = "Couldn't read the clip's audio."; break;
         case 4: status = "This clip is too long for Honey Tune (not enough memory to hold it): split it into shorter clips."; break;
         default: status = model == nullptr ? howToOpen() : "Waiting for the clip's audio..."; break;
+    }
+    // On Auto, SCALE shows the key Auto uses ("Auto: F Minor"; it used to read "Chromatic" whatever Auto found). The
+    // status line says where it came from. (KEY is too narrow for it.)
+    if (model != nullptr)
+    {
+        const auto set = model->getSettings();
+        const bool shown = s.status == 2 && set.key == honeyui::kAutoKey && set.scale == 0;
+        scale.changeItemText (1, ! shown ? String (vox::kScaleNames[0])
+                                 : s.scale == 0 ? String ("Auto: Chromatic")   // (KEY UNSURE: any note)
+                                 : "Auto: " + String (vox::kNoteNames[static_cast<size_t> (s.key)]) + " " + vox::kScaleNames[static_cast<size_t> (s.scale)]);
+        scale.setSelectedId (set.scale + 1, dontSendNotification);   // (a combo shows an item's new text once it's selected again)
     }
     updateNoteControls();
     repaint();
@@ -216,6 +232,12 @@ juce::String HoneyPanel::howToOpen()
     if (daw == "cakewalk") return "Honey Tune works on a clip: in Cakewalk right-click the vocal clip > Region FX > Honey Tune.";
     if (daw == "ableton") return "Ableton Live doesn't run ARA plug-ins, so Honey Tune can't see your clips here: use Voxology's Pitch instead.";
     return "Honey Tune works on a clip: if your DAW runs ARA plug-ins (like Melodyne), open it on the vocal clip that way; if not, use Voxology's Pitch instead.";
+}
+
+void HoneyPanel::showOriginal (bool o)
+{
+    (o ? original : tuned).setToggleState (true, dontSendNotification);
+    roll.repaint();
 }
 
 void HoneyPanel::setPlayhead (double seconds)
@@ -259,13 +281,21 @@ void HoneyPanel::updateNoteControls()
     noteVibrato.setValue (n.note.vibrato * 100.0, dontSendNotification);
     noteFormant.setValue (n.edit.formant, dontSendNotification);
     const double sung = n.note.pitch, now = n.note.target;
+    String wobble;
+    if (s.track != nullptr)
+    {
+        auto asSung = n.note;
+        asSung.drift = asSung.vibrato = 1.0;
+        wobble = honeyui::wobbleText (vox::honey::movementCents (*s.track, n.note), vox::honey::movementCents (*s.track, asSung));
+    }
     noteInfo = "Note " + String (i + 1) + ": sung " + noteName (sung) + " " + cents (sung - std::round (sung))
              + "  ->  plays " + noteName (now) + (std::abs (now - std::round (now)) > 0.005 ? " " + cents (now - std::round (now)) : String())
              + (n.off ? "  (off-key)" : n.wasOff ? "  (was off-key, fixed)" : "  (in key)")
              + (n.edit.timed() ? "  |  " + (std::abs (n.edit.shift) > 0.0005 ? String (n.edit.shift >= 0 ? "+" : "") + String (roundToInt (n.edit.shift * 1000.0)) + " ms" : String())
                                        + (std::abs (n.edit.length - 1.0) > 0.005 ? String (std::abs (n.edit.shift) > 0.0005 ? ", " : "") + String (roundToInt (n.edit.length * 100.0)) + " % long" : String())
                                      : String())
-             + (n.edit.isDefault() ? "" : "  - changed by hand");
+             + (n.edit.isDefault() ? "" : "  - changed by hand")
+             + (wobble.isNotEmpty() ? "  |  " + wobble : String());
     repaint();
 }
 

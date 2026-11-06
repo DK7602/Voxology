@@ -519,6 +519,7 @@ function pitchCells() {
   refresh();
   return cells;
 }
+const honeyRests = () => !!(M.honey && M.honey.resting);   // Honey Tune tunes this track: Pitch rests (see honeyTips)
 const noteName = (m) => `${NOTES[((Math.round(m) % 12) + 12) % 12]}${Math.floor(Math.round(m) / 12) - 1}`;
 
 /** Live pitch: the note you sing (with how far off, in cents) and the note it pulls to. */
@@ -536,7 +537,7 @@ function pitchCell() {
     tgt.textContent = noteName(M.pitchTarget);
     dot.classList.remove("idle");
     dot.style.left = `${50 + clamp(off, -50, 50)}%`;
-    c.textContent = `${off >= 0 ? "+" : MINUS}${Math.abs(off).toFixed(0)}\u00A2 \u00B7 fix ${Math.abs(M.pitchCorr * 100).toFixed(0)}\u00A2`;
+    c.textContent = `${off >= 0 ? "+" : MINUS}${Math.abs(off).toFixed(0)}\u00A2 \u00B7 ${honeyRests() ? "resting" : `fix ${Math.abs(M.pitchCorr * 100).toFixed(0)}\u00A2`}`;
   };
   liveMeters.push(cell);
   return cell;
@@ -545,7 +546,7 @@ function pitchCell() {
 const MODULES = [
   { key: "pitch", name: "PITCH", onId: "ptOn", what: "auto-tune: natural tuning to the full robot effect",
     cells: pitchCells,
-    stat: () => (val("ptAmount") < 0.05 ? ["idle", false] : M.pitchTarget >= 0 ? [`\u2192 ${noteName(M.pitchTarget)}`, true]
+    stat: () => (honeyRests() ? ["resting", false] : val("ptAmount") < 0.05 ? ["idle", false] : M.pitchTarget >= 0 ? [`\u2192 ${noteName(M.pitchTarget)}`, true]
       : [`${NOTES[M.keyUsed]} ${SCALES_SHORT[M.scaleUsed].split(" ")[0].toLowerCase()} · ${PITCH_MODES[choice("ptMode")].toLowerCase()}`, true]) },
   { key: "cleanup", name: "CLEANUP", onId: "clOn", what: "noise, room, low cut, pops, clicks, breaths and gate: the recording cleaned up",
     cells: () => [
@@ -1334,6 +1335,42 @@ function inputTips() {
   return t;
 }
 
+// Honey Tune on this track: frame.honey = { here, ambiguous, resting, anyway } (null: no Honey Tune on a track with this
+// name). One tuner at a time: Pitch rests while Honey Tune tunes the track, unless you click TUNE HERE ANYWAY (saved).
+const pitchAnywaySet = Juce.getNativeFunction("setPitchAnyway");
+function honeyTips() {
+  const h = M.honey;
+  if (!h || !h.here) return [];
+  const button = (label, anyway) => {
+    const row = el("div", "aa-row");
+    const b = el("button", `chip${anyway ? "" : " on"}`, label);
+    b.type = "button";
+    b.addEventListener("click", async () => {
+      await pitchAnywaySet(anyway);
+      M.honey = { ...h, anyway, resting: !anyway && !h.ambiguous };
+      for (const id of [...stickyTips.keys()]) if (id.startsWith("pitch|HONEY") || id.startsWith("pitch|PITCH TUNES AFTER")) stickyTips.delete(id);   // (the other card now)
+      refreshHive(); renderLearn();
+    });
+    row.append(b);
+    return row;
+  };
+  if (h.ambiguous) return [tip("HONEY TUNE ON A TRACK WITH THIS NAME", "Honey Tune tunes a clip on a track with this track's name, but two tracks have that name, so Voxology can't tell whether it's this one. Pitch keeps tuning here.", "warn",
+    { need: "Yes, if Honey Tune is on this track: two tuners re-tune each other's notes.", steps: ["Rename one of the tracks in {daw} so each has its own name. Pitch then rests here by itself.", "Or switch Pitch off here: click its dot."] })];
+  if (h.resting) {
+    const t = tip("HONEY TUNE TUNES THIS TRACK", "Honey Tune is on this track's clip, so Pitch rests here: one tuner at a time. Fix your notes in Honey Tune. Pitch keeps its settings for when Honey Tune is gone.", "calm",
+      { need: "No. Only if you want Pitch's effect on top of Honey Tune (like the Robot sound).", steps: ["Click TUNE HERE ANYWAY. Voxology keeps that with the project."] });
+    t.append(button("TUNE HERE ANYWAY", true));
+    return [t];
+  }
+  if (h.anyway) {
+    const t = tip("PITCH TUNES AFTER HONEY TUNE", "Honey Tune is on this track's clip, and you told Pitch to tune here anyway. Pitch tunes what Honey Tune plays a second time: it pulls the notes you placed by hand to its own key and runs your voice through a second shifter.", "warn",
+      { need: "Yes, unless you want Pitch's effect on top (like the Robot sound).", steps: ["Click LET PITCH REST: Honey Tune does the tuning alone."] });
+    t.append(button("LET PITCH REST", false));
+    return [t];
+  }
+  return [];
+}
+
 const LEARN = {
   pitch: {
     does: "Pitch correction (auto-tune). It hears the note you sing, picks the nearest note of your key, and pulls you onto it. Your voice's tone stays the same (no chipmunk sound); breaths and s sounds are never touched. Three modes: Natural (your voice, just in tune), Classic (the familiar auto-tune glide) and Robot (the hard, stepped trap effect). It's first in the chain, so everything after it hears the tuned voice.",
@@ -1350,7 +1387,7 @@ const LEARN = {
       "Amount: 100 % lands right on the note; lower keeps some of your own pitch.",
       "Already using Auto-Tune or Melodyne? Turn this off: one tuner is enough."],
     live: () => {
-      const t = [];
+      const t = honeyTips();
       if (M.recMode) t.push(tip("RECORD MODE", `Voxology is in Record mode: about ${M.latencyMs.toFixed(0)} ms, so you can hear yourself tuned while you record. Pitch uses a faster, slightly rougher method; Voices, Formant, Noise, Room, Clicks and Smooth are off.`, "calm",
         { need: "Switch it off when you're done recording.", steps: ["Click REC in the header to go back to full quality for mixing ({daw} adjusts the timing for you)."] }));
       if (choice("ptMidi") === 2 && M.midiNotes === 0) t.push(tip("LEARN IS WAITING", "MIDI is on Learn, but no notes have been played yet, so Pitch uses the key as usual.", "calm",
@@ -2196,6 +2233,8 @@ window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
     if (on("levelMatch")) parts.push({ text: ` · MATCH ${fmtSigned(M.matchDb)}`, short: " · MATCH" });
     if (M.recMode) parts.push({ text: ` · REC ${M.latencyMs.toFixed(1)} ms`, short: " · REC" });
     if (M.bpm > 0) parts.push({ id: "bpm", text: ` · ${M.bpm.toFixed(0)} BPM` });
+    if (honeyRests()) parts.push({ text: " · HONEY TUNE TUNES THIS TRACK: PITCH RESTS", short: " · PITCH RESTS" });
+    else if (M.honey && M.honey.anyway && !M.honey.ambiguous) parts.push({ text: " · PITCH TUNES AFTER HONEY TUNE", short: " · PITCH + HONEY TUNE" });
     if (mix) parts.push({ text: mix.bar });
     $("status").classList.toggle("bypassed", on("bypass"));
     showStatus(parts);
