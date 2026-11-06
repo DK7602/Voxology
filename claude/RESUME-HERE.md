@@ -1914,5 +1914,5 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   mock.js ?honey / ?honey=shared; Honey Tune with HoneyPreview (new env: HONEY_BEAT, HONEY_VOXOLOGY, HONEY_STEADY=n).
 - Open ideas: a wobbly note can split into 2 cells (contiguous neighbours < 1 st apart: Don 62 / 332 notes, Don & Lysette
   56 / 204); merging needs care (saved edits are keyed by note start). A one-click "Steady" button was not added (look locked).
-- Released: Voxology 0.54.0 = 73856bc; Build & Test 42238110260; Sonicology Beta 13 = Mixology run 42238119394
+- Released: Voxology 0.54.0 = 73856bc; Build & Test 42238110260 green (Windows + ASan/UBSan); Sonicology Beta 13 = Mixology run 42238119394
   (Sonicology-Windows + Sonicology-macOS, with Mixology 0.25.2 and Masterology 0.30.1).
