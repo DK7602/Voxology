@@ -1916,3 +1916,5 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   56 / 204); merging needs care (saved edits are keyed by note start). A one-click "Steady" button was not added (look locked).
 - Released: Voxology 0.54.0 = 73856bc; Build & Test 42238110260 green (Windows + ASan/UBSan); Sonicology Beta 13 = Mixology run 42238119394
   (Sonicology-Windows + Sonicology-macOS, with Mixology 0.25.2 and Masterology 0.30.1).
+- Verified by the user in Cubase Artist 14 (Windows, Beta 13): PITCH RESTS shows on the chorus vox with Honey Tune on it,
+  so Cubase names Honey Tune's ARA region sequences with the track name and the match works there.
