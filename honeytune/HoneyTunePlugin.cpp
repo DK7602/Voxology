@@ -652,7 +652,7 @@ private:
     {
         if (closing) return;
         refreshHostKey();
-        poll();
+        pollBeatKey();   // (the tracks: from the timer, outside the host's edit of the document)
         if (! beatKeyPoll.isTimerRunning()) beatKeyPoll.startTimer (1000);
         auto state = src->state;
         state->status = 1;
