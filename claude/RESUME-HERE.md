@@ -1918,3 +1918,5 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   (Sonicology-Windows + Sonicology-macOS, with Mixology 0.25.2 and Masterology 0.30.1).
 - Verified by the user in Cubase Artist 14 (Windows, Beta 13): PITCH RESTS shows on the chorus vox with Honey Tune on it,
   so Cubase names Honey Tune's ARA region sequences with the track name and the match works there.
+- Also verified by the user (Beta 13, Cubase): Honey Tune's SCALE shows "Auto: F Minor" (the key from Voxology's
+  side-chain), and the wobbly chorus notes sound steady with NOTE DRIFT + NOTE VIBRATO at 0. Honey Tune audit 2 closed.
