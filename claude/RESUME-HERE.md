@@ -1921,7 +1921,7 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Also verified by the user (Beta 13, Cubase): Honey Tune's SCALE shows "Auto: F Minor" (the key from Voxology's
   side-chain), and the wobbly chorus notes sound steady with NOTE DRIFT + NOTE VIBRATO at 0. Honey Tune audit 2 closed.
 
-## NEXT: Sonicology Rack, stage 1 (planned 2026-11-14, not built; the user says when to start)
+## NOW: Sonicology Rack, stage 1 (planned 2026-11-14; steps 1 - 3 built 2026-11-15; next: step 4)
 - The plan lives in Mixology: docs/rack/RACK-PLAN.md (branch claude/mixology), with the concept art in docs/rack/concepts.
 - A view inside all three plug-ins (a RACK button on Voxology's top bar, beside MY CHAINS in the row under INTENSITY: the
   only change to its locked look; the top and bottom bars have no free space) that shows every Sonicology plug-in's modules per track and how they work together. Voxology's part
@@ -1929,4 +1929,9 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   the new shared block RackLink (same files in all three), serve the shared rack.js / rack.css, the RACK button.
 - Step 2 done (2026-11-15): dsp/include/suite/RackLink.h, dsp/src/RackLink.cpp, tests/test_rack_link.cpp copied from
   Mixology (the master copy; the suite's shared-files job checks they match), in this repo's dsp library and tests.
-  Nothing in the plug-in uses them yet: step 3 (this plug-in publishes its modules) comes next.
+  Nothing in the plug-in used them in step 2.
+- Step 3 done (2026-11-15): dsp/include/vox/RackUnit.h + src/RackUnit.cpp (the 13 cells, the Beat Listener; tests in
+  tests/test_rack_unit.cpp), published from VoxologyAudioProcessor::publishRack (timer; its own meter copies, the vocal's
+  spectrum while a Rack watches; starts / stops with prepareToPlay / releaseResources). Honey Tune publishes itself:
+  HoneyDocumentController::publishRack, one Rack entry per track with its clips (honeyui::RackTrack / rackModule in
+  HoneyView.h, tested). Next: step 4 (the RACK button beside MY CHAINS, serve rack.js / rack.css / art, getRack()).

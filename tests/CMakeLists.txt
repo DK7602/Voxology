@@ -31,6 +31,7 @@ add_executable(vox_tests
     test_smooth.cpp
     test_suite.cpp
     test_rack_link.cpp
+    test_rack_unit.cpp
     test_songstyle.cpp)
 
 target_link_libraries(vox_tests PRIVATE vox_dsp Catch2::Catch2WithMain)

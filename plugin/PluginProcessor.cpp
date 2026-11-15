@@ -105,6 +105,7 @@ void VoxologyAudioProcessor::resolveUnmaskSource()
 void VoxologyAudioProcessor::releaseResources()
 {
     suitePresence.stop();   // off the suite link at the next tick
+    rackPub.stop();         // ... and out of the Rack
 }
 
 void VoxologyAudioProcessor::leaveSuite()
@@ -133,6 +134,7 @@ void VoxologyAudioProcessor::timerCallback()
         leaveSuite();
     publishSuite();      // four times a second (its heartbeat)
     updateHoneyLink();   // Honey Tune on this track: Pitch rests
+    publishRack();       // the Sonicology Rack (more often while a Rack view watches)
     if (++timerTicks % 4 != 0) return;
 
     resolveUnmaskSource();   // a saved choice: wait for that vocal's Voxology to appear (project loading)
@@ -312,6 +314,96 @@ void VoxologyAudioProcessor::publishSuite()
     mixology = view;
 }
 
+void VoxologyAudioProcessor::publishRack()
+{
+    const auto now = suite::nowMs();
+    const auto due = rackPub.due (now);
+    if (due == rack::Publisher::Due::none) return;
+    const bool full = due == rack::Publisher::Due::full;
+
+    vox::rackunit::State st;
+    reader.read (st.params, hostBpm.load());
+    st.params.pitch.key = juce::jlimit (0, 11, meters.keyUsed.load());     // the key Pitch uses now (Auto: what it follows)
+    st.params.pitch.scale = juce::jlimit (0, vox::kScales - 1, meters.scaleUsed.load());
+    st.pitchRests = pitchRests.load();
+    st.keyAuto = keySrcParam->load() < 0.5f;
+    st.keyState = meters.bkState.load();
+    st.beat = isBeatMode();
+    st.beatState = meters.bkState.load();
+    st.beatKey = meters.bkKey.load();
+    st.beatMode = meters.bkMode.load();
+    st.beatTuneCents = meters.bkTune.load();
+    st.unmaskAmount = umAmountParam != nullptr ? umAmountParam->load() : 0.0f;
+    const bool playing = now - std::min (now, lastAudioMs.load (std::memory_order_relaxed)) < 1000;
+    auto take = [] (std::atomic<float>& a, float rest) { return a.exchange (rest, std::memory_order_relaxed); };
+    const float gate = take (rackMeters.gate, 0.0f), deEss = take (rackMeters.deEss, 0.0f);
+    const float peakGr = take (rackMeters.peakGr, 0.0f), levelGr = take (rackMeters.levelGr, 0.0f);
+    const float inPeak = take (rackMeters.inPeak, -100.0f), outPeak = take (rackMeters.outPeak, -100.0f);
+    std::array<float, vox::kDynBands> dyn {};
+    for (size_t b = 0; b < dyn.size(); ++b) dyn[b] = take (rackMeters.dynEq[b], 0.0f);
+    if (playing)
+    {
+        st.hasMeters = true;
+        st.meters.gate = gate;
+        st.meters.deEss = deEss;
+        st.meters.rider = rackMeters.rider.load (std::memory_order_relaxed);
+        st.meters.peakGr = peakGr;
+        st.meters.levelGr = levelGr;
+        st.meters.dynEq = dyn;
+    }
+
+    rack::Unit u;
+    u.product = rack::Product::voxology;
+    u.role = st.beat ? rack::Role::beat : rack::Role::vocal;
+    u.track = trackName.toStdString();
+    u.version = static_cast<std::uint32_t> (JucePlugin_VersionCode);
+    u.on = ! st.params.bypass && ! isHostBypassed();
+    if (playing)
+    {
+        u.inDb = inPeak;
+        u.outDb = outPeak;
+    }
+    const double rate = getSampleRate();
+    u.latencyMs = rate > 0.0 ? static_cast<float> (getLatencySamples() * 1000.0 / rate) : 0.0f;
+    u.modules = vox::rackunit::modules (st, full);
+    if (full && playing && ! st.beat) u.spectrum = rackSpectrum();
+    if (! st.beat && levelByMixology (mixologyNow())) u.lines.push_back ({ rack::Level::ok, "Mixology sets this vocal's level against the beat (Voxology leaves it alone)." });
+    if (st.beat && st.unmaskAmount >= 0.05f)
+        u.lines.push_back ({ rack::Level::ok, "Unmask dips the beat only where the vocal sits, while the vocal sings (Amount "
+                                              + std::to_string (juce::roundToInt (st.unmaskAmount)) + " %)." });
+    rackPub.publish (std::move (u), now);
+}
+
+std::vector<float> VoxologyAudioProcessor::rackSpectrum()
+{
+    // The same reading as Voxology's own display (a 4.5 dB / octave tilt: a balanced vocal reads about flat), in the
+    // Rack's 128 bins from 20 Hz to 20 kHz, gently smoothed between looks.
+    constexpr int size = 1 << kRackFftOrder;
+    rackFftBuffer.assign (2 * size, 0.0f);
+    outputTap.copyLatest (rackFftBuffer.data(), size);
+    rackWindow.multiplyWithWindowingTable (rackFftBuffer.data(), static_cast<size_t> (size));
+    rackFft.performFrequencyOnlyForwardTransform (rackFftBuffer.data(), true);
+    const double binHz = juce::jmax (8000.0, getSampleRate()) / size;
+    const float fullScale = size * 0.25f;
+    constexpr int lastBin = size / 2 - 1;
+    const bool primed = rackSmoothed.size() == static_cast<size_t> (rack::kSpectrumBins);
+    rackSmoothed.resize (static_cast<size_t> (rack::kSpectrumBins), -120.0f);
+    for (int i = 0; i < rack::kSpectrumBins; ++i)
+    {
+        const double f = 20.0 * std::pow (1000.0, static_cast<double> (i) / (rack::kSpectrumBins - 1));
+        const int lo = juce::jlimit (1, lastBin, static_cast<int> (std::floor (f * std::pow (2.0, -1.0 / 12.0) / binHz)));
+        const int hi = juce::jlimit (lo, lastBin, static_cast<int> (std::ceil (f * std::pow (2.0, 1.0 / 12.0) / binHz)));
+        double power = 0.0;
+        for (int b = lo; b <= hi; ++b)
+            power += static_cast<double> (rackFftBuffer[static_cast<size_t> (b)]) * rackFftBuffer[static_cast<size_t> (b)];
+        const double mag = std::sqrt (power / (hi - lo + 1)) / fullScale;
+        const float db = juce::jlimit (-120.0f, 12.0f, static_cast<float> (20.0 * std::log10 (mag + 1.0e-9) + 4.5 * std::log2 (f / 1000.0)));
+        auto& s = rackSmoothed[static_cast<size_t> (i)];
+        s = ! primed ? db : db > s ? 0.6f * db + 0.4f * s : 0.7f * s + 0.3f * db;
+    }
+    return rackSmoothed;
+}
+
 void VoxologyAudioProcessor::pickStyle (const std::string& key, const std::string& name)
 {
     {
@@ -410,6 +502,7 @@ void VoxologyAudioProcessor::prepareToPlay (double sampleRate, int)
     wantedLatency = active().latencySamples();
     setLatencySamples (wantedLatency.load());
     suitePresence.start();   // on the suite link from the next tick
+    rackPub.start();
 }
 
 void VoxologyAudioProcessor::handleAsyncUpdate()
@@ -750,6 +843,16 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     holdMin (meters.peakGr, static_cast<float> (m.peakGrDb));
     holdMin (meters.levelGr, static_cast<float> (m.levelGrDb));
     holdMax (meters.suiteGr, static_cast<float> (-(m.peakGrDb + m.levelGrDb)));
+    // The Rack's own copies (deepest since it last read them).
+    holdMin (rackMeters.gate, static_cast<float> (m.gateDb));
+    holdMin (rackMeters.deEss, static_cast<float> (m.deEssDb));
+    for (size_t b = 0; b < rackMeters.dynEq.size(); ++b) holdMin (rackMeters.dynEq[b], static_cast<float> (m.dynEqDb[b]));
+    rackMeters.rider.store (static_cast<float> (m.riderDb));
+    holdMin (rackMeters.peakGr, static_cast<float> (m.peakGrDb));
+    holdMin (rackMeters.levelGr, static_cast<float> (m.levelGrDb));
+    holdMax (rackMeters.inPeak, clampDb (inputPeak > 0.0 ? 20.0 * std::log10 (inputPeak) : -100.0));
+    holdMax (rackMeters.outPeak, clampDb (outPeak > 0.0 ? 20.0 * std::log10 (outPeak) : -100.0));
+    lastAudioMs.store (suite::nowMs(), std::memory_order_relaxed);
     addTo (meters.satResidual, static_cast<float> (m.satResidual));
     addTo (meters.satSignal, static_cast<float> (m.satSignal));
     meters.matchDb.store (static_cast<float> (chainParams.listenOriginal ? levelMatch.gainForADb() : levelMatch.gainForBDb()));

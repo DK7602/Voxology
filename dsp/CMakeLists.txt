@@ -27,7 +27,8 @@ add_library(vox_dsp STATIC
     src/Crepe.cpp
     src/CrepeWeights.cpp
     src/SuiteLink.cpp
-    src/RackLink.cpp)
+    src/RackLink.cpp
+    src/RackUnit.cpp)
 
 target_include_directories(vox_dsp PUBLIC include)
 target_compile_features(vox_dsp PUBLIC cxx_std_20)

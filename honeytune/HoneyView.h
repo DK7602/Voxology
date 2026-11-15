@@ -2,6 +2,7 @@
 
 #include "vox/HoneyLink.h"
 #include "vox/HoneyTune.h"
+#include "suite/RackLink.h"
 
 #include <algorithm>
 #include <cmath>
@@ -308,6 +309,73 @@ inline std::string wobbleText (double soundingCents, double sungCents)
     if (sungCents >= 12.0 && sungCents - soundingCents >= 3.0)
         return "steadied: wobble " + c (sungCents) + " -> " + c (soundingCents) + " cents";
     return {};
+}
+
+/** Sonicology Rack (Mixology's docs/rack/RACK-PLAN.md): what Honey Tune does on one track (all its clips there), for
+    the Rack's HONEY TUNE cell. The plug-in adds each clip's snapshot, then publishes rackModule() for the track. */
+struct RackTrack
+{
+    int clips = 0, listening = 0;             // its clips on the track; ... still being listened to
+    int notes = 0, edited = 0, steadied = 0;  // notes; ... you changed by hand; ... that will sound steady (no drift or vibrato)
+    bool keyKnown = false;
+    int key = 0, scale = 0;                   // the key used (the first clip that has one)
+    std::string keyFrom;                      // " (from Voxology's beat)" ... ("" = picked by you, or the voice)
+    bool unsure = false;                      // Auto couldn't tell the key: snapping to any note
+};
+
+inline void addClip (RackTrack& t, const Snapshot& snap, const Settings& s)
+{
+    ++t.clips;
+    if (snap.status < 2) ++t.listening;
+    if (snap.status != 2) return;
+    t.notes += static_cast<int> (snap.notes.size());
+    for (const auto& n : snap.notes)
+    {
+        if (! n.edit.isDefault()) ++t.edited;
+        const double drift = n.edit.drift >= 0.0 ? n.edit.drift : s.drift;
+        const double vibrato = n.edit.vibrato >= 0.0 ? n.edit.vibrato : s.vibrato;
+        if (drift < 0.01 && vibrato < 0.01) ++t.steadied;
+    }
+    if (! t.keyKnown)
+    {
+        t.keyKnown = true;
+        t.key = snap.key;
+        t.scale = snap.scale;
+        t.keyFrom = keySourceText (snap);
+        t.unsure = snap.keyUnsure;
+    }
+}
+
+inline rack::Module rackModule (const Settings& s, const RackTrack& t, bool full)
+{
+    const auto pct = [] (double v) { return std::to_string (static_cast<int> (std::lround (std::clamp (v, 0.0, 1.0) * 100.0))) + " %"; };
+    const bool autoKey = s.key == kAutoKey;
+    const std::string note = vox::kNoteNames[static_cast<size_t> (std::clamp (t.key, 0, 11))];
+    const std::string scale = vox::kScaleNames[static_cast<size_t> (std::clamp (t.scale, 0, vox::kScales - 1))];
+    std::string key = ! t.keyKnown ? "" : t.unsure ? "any note" : t.scale == 0 ? "Chromatic" : note + " " + scale;
+    if (autoKey && ! key.empty()) key = "Auto: " + key + t.keyFrom;
+
+    rack::Module m;
+    m.key = "ht.tune";
+    m.state = rack::State::on;
+    std::string sum;
+    const auto add = [&] (const std::string& part) { if (! part.empty()) sum += (sum.empty() ? "" : " \xC2\xB7 ") + part; };
+    if (t.notes == 0 && t.listening > 0) add ("Listening to the clip");
+    else add (std::to_string (t.edited > 0 ? t.edited : t.notes) + (t.edited > 0 ? (t.edited == 1 ? " note edited" : " notes edited") : t.notes == 1 ? " note" : " notes"));
+    if (t.steadied > 0 && t.notes > 0) add (t.steadied == t.notes ? std::string ("all steady") : std::to_string (t.steadied) + " steadied");
+    add (key);
+    m.summary = sum;
+    if (full)
+    {
+        const auto knob = [&] (const char* name, std::string text, float norm) { m.values.push_back ({ name, std::move (text), norm, false }); };
+        knob ("Key", autoKey ? (t.keyKnown && ! t.unsure && t.scale != 0 ? "Auto: " + note : std::string ("Auto")) : note,
+              autoKey ? 1.0f : static_cast<float> (std::clamp (s.key, 0, 11)) / 11.0f);
+        knob ("Scale", t.keyKnown && ! t.unsure ? scale : std::string ("\xE2\x80\x94"), static_cast<float> (std::clamp (t.scale, 0, vox::kScales - 1)) / static_cast<float> (vox::kScales - 1));
+        knob ("Snap to Note", pct (s.snap), static_cast<float> (std::clamp (s.snap, 0.0, 1.0)));
+        knob ("Keep Drift", pct (s.drift), static_cast<float> (std::clamp (s.drift, 0.0, 1.0)));
+        knob ("Keep Vibrato", pct (s.vibrato), static_cast<float> (std::clamp (s.vibrato, 0.0, 1.0)));
+    }
+    return m;
 }
 
 /** The editor talks to the clip through this. */

@@ -7,13 +7,17 @@
 #include "vox/KeyShare.h"
 #include "vox/LevelMatch.h"
 #include "vox/LoudnessMeter.h"
+#include "vox/RackUnit.h"
 #include "vox/Unmask.h"
 #include "vox/VocalChain.h"
+#include "suite/RackLink.h"
 #include "suite/SuiteLink.h"
 #include "AutoEditController.h"
 #include "ChainLibrary.h"
 #include "Params.h"
 #include "SpectrumTap.h"
+
+#include <juce_dsp/juce_dsp.h>
 
 #include <atomic>
 
@@ -255,6 +259,24 @@ private:
     std::uint64_t honeyActMs = 0;                 // when Honey Tune was last seen on this track (0 = not lately)
     static constexpr std::uint64_t kHoneyHoldMs = 3000;
     vox::keyshare::BeatKeyShare sharedKey;        // the beat key this instance last gave Honey Tune
+
+    // The Sonicology Rack (suite/RackLink.h): this vocal's modules for a Rack view open in any Sonicology plug-in. Its
+    // own meter copies (deepest since the Rack last read them), so it never takes the window's readings.
+    void publishRack();
+    std::vector<float> rackSpectrum();   // the vocal as it leaves Voxology (message thread, while a Rack view watches)
+    rack::Publisher rackPub;
+    struct RackMeters
+    {
+        std::atomic<float> gate { 0.0f }, deEss { 0.0f }, rider { 0.0f }, peakGr { 0.0f }, levelGr { 0.0f };
+        std::atomic<float> inPeak { -100.0f }, outPeak { -100.0f };
+        std::array<std::atomic<float>, vox::kDynBands> dynEq {};
+    };
+    RackMeters rackMeters;
+    std::atomic<std::uint64_t> lastAudioMs { 0 };
+    static constexpr int kRackFftOrder = 12;
+    juce::dsp::FFT rackFft { kRackFftOrder };
+    juce::dsp::WindowingFunction<float> rackWindow { static_cast<size_t> (1 << kRackFftOrder), juce::dsp::WindowingFunction<float>::hann, false };
+    std::vector<float> rackFftBuffer, rackSmoothed;
     float suiteCompDb = 0.0f;
     juce::String trackName;
     vox::BandAnalyser vocalBands;

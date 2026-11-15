@@ -8,6 +8,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include "HoneyPanel.h"
+#include "suite/RackLink.h"
 #include "suite/SuiteLink.h"
 #include "vox/HoneyLink.h"
 #include "vox/KeyShare.h"
@@ -295,6 +296,7 @@ public:
         // closing the project doesn't wait on them.
         beatKeyPoll.stopTimer();
         vox::honeylink::Link::process().leaveHoney (linkId);
+        leaveRack();
         *controllerAlive = false;
         closing = true;
         pool.removeAllJobs (true, 60000);
@@ -372,9 +374,13 @@ public:
             for (const auto& [name, count] : named)
                 tracks.push_back ({ suite::nameHash (name), count > 1 });
             link.publishHoney (linkId, tracks, now);
+            publishRack (named, now);
         }
         else
+        {
             link.leaveHoney (linkId);
+            leaveRack();
+        }
 
         for (auto* src : sources())
         {
@@ -399,6 +405,61 @@ public:
             if (keyChanged) requestRender (src->state);
             if (changed) changes.sendChangeMessage();
         }
+    }
+
+    /** The Sonicology Rack (suite/RackLink.h): one entry per track with Honey Tune clips (all its clips there as one
+        HONEY TUNE cell), so the Rack shows Honey Tune above Voxology on that track. Once a second, with the poll. */
+    void publishRack (const std::map<std::string, int>& named, std::uint64_t now)
+    {
+        auto& rk = rack::Link::process();
+        const bool full = rk.watched (now);
+        const auto s = getSettings();
+        std::map<std::uint32_t, honeyui::RackTrack> tracks;
+        std::map<std::uint32_t, std::string> names;
+        for (auto* src : sources())
+        {
+            std::string name;
+            for (auto* mod : src->getAudioModifications())
+                for (auto* region : mod->getPlaybackRegions())
+                    if (name.empty())
+                        if (auto* seq = region->getRegionSequence()) name = trackName (seq);
+            if (name.empty() || named.count (name) == 0) continue;   // an unnamed track can't be placed in the Rack
+            const auto hash = suite::nameHash (name);
+            honeyui::addClip (tracks[hash], snapshot (src->state), s);
+            names[hash] = name;
+        }
+        for (auto it = rackSlots.begin(); it != rackSlots.end();)   // tracks with no clip any more: out of the Rack
+        {
+            if (tracks.count (it->first) == 0)
+            {
+                rk.release (it->second.slot, it->second.id);
+                it = rackSlots.erase (it);
+            }
+            else ++it;
+        }
+        for (const auto& [hash, t] : tracks)
+        {
+            auto& rs = rackSlots[hash];
+            if (rs.id == 0) rs.id = (linkId * 0x9E3779B97F4A7C15ull + hash) | 1u;
+            if (rs.slot < 0) rs.slot = rk.claim (rs.id, now);
+            if (rs.slot < 0) continue;   // the Rack is full: try again next time
+            rack::Unit u;
+            u.product = rack::Product::honeytune;
+            u.role = rack::Role::vocal;
+            u.track = names[hash];
+            u.version = static_cast<std::uint32_t> (JucePlugin_VersionCode);
+            u.on = true;
+            u.detailed = full;
+            u.modules = { honeyui::rackModule (s, t, full) };
+            if (! rk.publish (rs.slot, rs.id, u, now)) rs.slot = -1;   // taken over while silent: claim again
+        }
+    }
+
+    void leaveRack()
+    {
+        auto& rk = rack::Link::process();
+        for (const auto& [hash, rs] : rackSlots) rk.release (rs.slot, rs.id);
+        rackSlots.clear();
     }
 
     static std::string trackName (const ARARegionSequence* seq)
@@ -841,6 +902,8 @@ private:
     TimedCallback beatKeyPoll { [this] { poll(); } };
     std::atomic<int> active { 0 };          // playback renderers prepared: the project plays
     int quietPolls = 2;                     // polls in a row with none running (message thread; none yet)
+    struct RackSlot { int slot = -1; std::uint64_t id = 0; };
+    std::map<std::uint32_t, RackSlot> rackSlots;   // the Rack: one entry per track Honey Tune tunes (message thread)
     const std::uint64_t linkId = (static_cast<std::uint64_t> (Random::getSystemRandom().nextInt64()) ^ reinterpret_cast<std::uintptr_t> (this)) | 1u;
     std::atomic<bool> playOriginal { false };
     std::atomic<bool> closing { false };   // the document is going: jobs stop early, no new ones
