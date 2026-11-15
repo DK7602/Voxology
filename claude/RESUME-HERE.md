@@ -1927,3 +1927,6 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   only change to its locked look; the top and bottom bars have no free space) that shows every Sonicology plug-in's modules per track and how they work together. Voxology's part
   in stage 1: publish its 13 cells (state, summaries, knob values, EQ bands, meters) and Honey Tune on its track into
   the new shared block RackLink (same files in all three), serve the shared rack.js / rack.css, the RACK button.
+- Step 2 done (2026-11-15): dsp/include/suite/RackLink.h, dsp/src/RackLink.cpp, tests/test_rack_link.cpp copied from
+  Mixology (the master copy; the suite's shared-files job checks they match), in this repo's dsp library and tests.
+  Nothing in the plug-in uses them yet: step 3 (this plug-in publishes its modules) comes next.
