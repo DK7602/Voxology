@@ -1923,7 +1923,7 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 
 ## NEXT: Sonicology Rack, stage 1 (planned 2026-11-14, not built; the user says when to start)
 - The plan lives in Mixology: docs/rack/RACK-PLAN.md (branch claude/mixology), with the concept art in docs/rack/concepts.
-- A view inside all three plug-ins (a RACK button on Voxology's top bar, between REC and the logo: the only change to
-  its locked look) that shows every Sonicology plug-in's modules per track and how they work together. Voxology's part
+- A view inside all three plug-ins (a RACK button on Voxology's top bar, beside MY CHAINS in the row under INTENSITY: the
+  only change to its locked look; the top and bottom bars have no free space) that shows every Sonicology plug-in's modules per track and how they work together. Voxology's part
   in stage 1: publish its 13 cells (state, summaries, knob values, EQ bands, meters) and Honey Tune on its track into
   the new shared block RackLink (same files in all three), serve the shared rack.js / rack.css, the RACK button.
