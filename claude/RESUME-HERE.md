@@ -1938,3 +1938,5 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Step 4 (2026-11-16): the RACK pill beside MY CHAINS (index.html, styles.css #rack, app.js), getRack / getRackTheme /
   setRackTheme in VoxWebEditor.cpp (rack::viewJson; opens on this track via rackTrackHash()), rack.js / rack.css /
   ui/rack/ copied from Mixology (the master copy; shared-files job), mock.js answers the Rack in the browser preview.
+- Voxology 0.55.0 (2026-11-16, step 5): the manual's "Sonicology Rack: your whole suite in one view" section, version,
+  README. Goes out in Sonicology Beta 14 with Mixology 0.26.0 and Masterology 0.31.0.

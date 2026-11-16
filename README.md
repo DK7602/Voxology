@@ -44,6 +44,10 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   and the beat's key reaches Honey Tune and every Voxology through it. Since v0.53, when Mixology answers that it sets a
   vocal's level (it rides the fader, or Analyze Mix heard the vocal), FIT LEVEL and Auto Analyze leave that level to
   it (`vox::findNewNeeds (..., levelByMixology)`), so the two never answer each other's moves.
+- `dsp/include/suite/RackLink.h` + `plugin/ui/rack.js` / `rack.css` / `rack/` the Sonicology Rack (since v0.55): every
+  Sonicology plug-in in the project in one view (the RACK pill beside MY CHAINS). The same files in all three repos;
+  `dsp/include/vox/RackUnit.h` is what Voxology publishes (its 13 modules, the Beat Listener), Honey Tune publishes
+  each track it tunes (`honeytune/HoneyView.h`: `rackModule`).
 - `tests/` Catch2 tests; `tools/report.cpp` prints Auto-Edit's report for a test vocal or a raw file.
 
 ## Third-party
