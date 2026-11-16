@@ -1921,6 +1921,12 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Also verified by the user (Beta 13, Cubase): Honey Tune's SCALE shows "Auto: F Minor" (the key from Voxology's
   side-chain), and the wobbly chorus notes sound steady with NOTE DRIFT + NOTE VIBRATO at 0. Honey Tune audit 2 closed.
 
+## Sonicology Rack, stage 2 (started 2026-11-16; Mixology's RESUME-HERE "NOW: Sonicology Rack, stage 2" leads)
+- Step 1 (the plumbing: requests from a Rack view to the plug-in that owns a module) built in Mixology; RackLink.h /
+  .cpp / test_rack_link.cpp copied here unchanged (layout 2; Unit gained lock + generation with defaults, so
+  publishRack and Honey Tune compile as they are). [rack] tests pass here. Step 3 wires serve() into publishRack and
+  Honey Tune (lock while Auto-Edit runs).
+
 ## NOW: Sonicology Rack, stage 1 (planned 2026-11-14; steps 1 - 3 built 2026-11-15; next: step 4)
 - The plan lives in Mixology: docs/rack/RACK-PLAN.md (branch claude/mixology), with the concept art in docs/rack/concepts.
 - A view inside all three plug-ins (a RACK button on Voxology's top bar, beside MY CHAINS in the row under INTENSITY: the
