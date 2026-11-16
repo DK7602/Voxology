@@ -1946,3 +1946,7 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   asks only for the shown track's details. Goes out in Sonicology Beta 15 with Mixology 0.26.1 and Masterology 0.31.1.
   Here also: the honey link's kAliveMs 8000 and kHoneyHoldMs 10000 (Pitch no longer flips ON / RESTS when Cubase's
   window thread stalls).
+  Beta 15 built 2026-11-16: Mixology's Sonicology suite run 43896548580 (label "Beta 15", version 0.15.0; Mixology
+  0.26.1 89c9c01, Voxology 0.55.1 d32231c, Masterology 0.31.1 6f9ab1e), all green, both installers. Build & Test:
+  Mixology 43896414539 green; Voxology 43896452035 and Masterology 43896463325 green on Windows (+ UI smoke), their
+  ASan jobs ran on after. Next: the user checks the Rack again in Cubase.
