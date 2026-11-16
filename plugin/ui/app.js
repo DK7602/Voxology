@@ -2109,6 +2109,24 @@ document.addEventListener("mousedown", (e) => { if (!(chainMenu && chainMenu.con
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeChainMenu(); });
 $("chains").addEventListener("click", async () => { if (chainMenu) closeChainMenu(); else await openChainMenu(); });
 
+// The Sonicology Rack: every Sonicology plug-in in the project in one view, over this page (BACK returns). Opened
+// from Voxology it starts on this vocal's track.
+const rackGet = Juce.getNativeFunction("getRack");
+const rackThemeGet = Juce.getNativeFunction("getRackTheme");
+const rackThemeSet = Juce.getNativeFunction("setRackTheme");
+$("rack").addEventListener("click", async () => {
+  if (!window.SonicologyRack || window.SonicologyRack.isOpen()) return;
+  closeChainMenu();
+  const theme = await rackThemeGet().catch(() => "");
+  window.SonicologyRack.open({
+    host: "voxology",
+    theme: theme === "light" || theme === "dark" ? theme : undefined,
+    getRack: async () => { const j = await rackGet().catch(() => null); return j ? JSON.parse(j) : null; },
+    onTheme: (t) => { rackThemeSet(t).catch(() => {}); },
+    back: () => {},
+  });
+});
+
 // UNDO: back to before the last Auto-Edit (its report goes) or the last chain / look loaded (the report stays).
 $("undo").addEventListener("click", async () => { if (await aeUndo()) { await fetchReport(false); if (!report) learnTab = "report"; renderLearn(); refreshAll(); } });
 

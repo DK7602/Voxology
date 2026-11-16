@@ -1,5 +1,6 @@
 #include "VoxWebEditor.h"
 #include "vox/SongStyle.h"
+#include "suite/RackLink.h"
 
 #include "VoxologyUIData.h"
 
@@ -7,6 +8,17 @@
 
 namespace
 {
+    // The Sonicology Rack's light / dark view: one choice for all three plug-ins, kept in the user's own settings folder.
+    juce::File rackThemeFile()
+    {
+        const auto base = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory);
+       #if JUCE_MAC
+        return base.getChildFile ("Application Support/Sonicology/rack-theme.txt");
+       #else
+        return base.getChildFile ("Sonicology/rack-theme.txt");
+       #endif
+    }
+
     juce::String mimeTypeFor (const juce::String& file)
     {
         const auto ext = file.fromLastOccurrenceOf (".", false, false).toLowerCase();
@@ -171,6 +183,20 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
             complete (true);
         })
         .withNativeFunction ("getReference", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getReferenceJson()); })
+        // The Sonicology Rack (suite/RackLink.h): every Sonicology plug-in in the project, as rack.js shows it.
+        .withNativeFunction ("getRack", [this] (const juce::Array<juce::var>&, auto complete)
+                             {
+                                 const auto json = rack::viewJson ("voxology", audioProcessor.rackTrackHash(), suite::nowMs());
+                                 complete (juce::String::fromUTF8 (json.data(), static_cast<int> (json.size())));
+                             })
+        .withNativeFunction ("getRackTheme", [] (const juce::Array<juce::var>&, auto complete)
+                             { complete (rackThemeFile().loadFileAsString().trim()); })
+        .withNativeFunction ("setRackTheme", [] (const juce::Array<juce::var>& args, auto complete)
+                             {
+                                 const auto f = rackThemeFile();
+                                 f.getParentDirectory().createDirectory();
+                                 complete (f.replaceWithText (args.size() > 0 && args[0].toString() == "light" ? "light" : "dark"));
+                             })
         .withResourceProvider ([] (const auto& url) { return getResource (url); });
 }
 

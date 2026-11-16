@@ -174,7 +174,7 @@
   window.__JUCE__ = {
     initialisationData: {
       __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "getAutoAnalyze", "setAutoAnalyze", "applyAutoAnalyze", "dismissAutoAnalyze", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed", "pickStyle", "setVocalStyleMine", "pickDaw", "setPitchAnyway",
-        "setReferenceSplit", "listChains", "getChainName", "saveChain", "loadChain", "deleteChain"],
+        "setReferenceSplit", "listChains", "getChainName", "saveChain", "loadChain", "deleteChain", "getRack", "getRackTheme", "setRackTheme"],
       __juce__registeredGlobalEventIds: [], __juce__sliders: Object.keys(sliders), __juce__toggles: Object.keys(toggles), __juce__comboBoxes: Object.keys(combos),
     },
     postMessage(message) {
@@ -197,6 +197,12 @@
         } else if (payload.eventType === "valueChanged") c.value = payload.value;
       } else if (eventId === "__juce__invoke") {
         let result = true;
+        if (payload.name === "getRack") {   // tools/rack/rack_mock.js in Mixology, when the preview loads it: a demo project
+          if (window.SonicologyRackMock) { Promise.resolve(window.SonicologyRackMock.getRack()).then((d) => send("__juce__complete", { promiseId: payload.resultId, result: JSON.stringify(d) })); return; }
+          result = null;
+        }
+        if (payload.name === "getRackTheme") { try { result = localStorage.getItem("sonicologyRackTheme") || ""; } catch (e) { result = ""; } }
+        if (payload.name === "setRackTheme") { try { localStorage.setItem("sonicologyRackTheme", payload.params[0]); } catch (e) { /* none */ } }
         if (payload.name === "startAutoEdit") { ae.state = 1; ae.progress = 0; }
         if (payload.name === "cancelAutoEdit" && ae.state === 1) ae.state = 0;
         if (payload.name === "getAutoEditReport") result = ae.report;

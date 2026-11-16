@@ -172,6 +172,9 @@ public:
     suite::StyleInfo dawNow() const { const juce::ScopedLock sl (styleLock); return daw.style(); }
     std::string dawDetected() const { return detectedDaw; }
 
+    /** The Sonicology Rack opened here starts on this track (message thread; 0 = the host gave no name). */
+    std::uint32_t rackTrackHash() const { return trackName.isEmpty() ? 0u : suite::nameHash (trackName.toStdString()); }
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:

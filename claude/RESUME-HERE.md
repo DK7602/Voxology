@@ -1935,3 +1935,6 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   spectrum while a Rack watches; starts / stops with prepareToPlay / releaseResources). Honey Tune publishes itself:
   HoneyDocumentController::publishRack, one Rack entry per track with its clips (honeyui::RackTrack / rackModule in
   HoneyView.h, tested). Next: step 4 (the RACK button beside MY CHAINS, serve rack.js / rack.css / art, getRack()).
+- Step 4 (2026-11-16): the RACK pill beside MY CHAINS (index.html, styles.css #rack, app.js), getRack / getRackTheme /
+  setRackTheme in VoxWebEditor.cpp (rack::viewJson; opens on this track via rackTrackHash()), rack.js / rack.css /
+  ui/rack/ copied from Mixology (the master copy; shared-files job), mock.js answers the Rack in the browser preview.
