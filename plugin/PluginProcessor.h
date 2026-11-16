@@ -260,7 +260,7 @@ private:
     std::atomic<bool> pitchRests { false };       // read by the audio thread
     bool honeyPublished = false;
     std::uint64_t honeyActMs = 0;                 // when Honey Tune was last seen on this track (0 = not lately)
-    static constexpr std::uint64_t kHoneyHoldMs = 3000;
+    static constexpr std::uint64_t kHoneyHoldMs = 10000;   // through a host restarting its plug-ins, or a stalled window thread
     vox::keyshare::BeatKeyShare sharedKey;        // the beat key this instance last gave Honey Tune
 
     // The Sonicology Rack (suite/RackLink.h): this vocal's modules for a Rack view open in any Sonicology plug-in. Its

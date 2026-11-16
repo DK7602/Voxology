@@ -22,7 +22,9 @@ namespace vox::honeylink {
 
 constexpr std::uint32_t kLayout = 1;
 constexpr int kSlots = 64;
-constexpr std::uint64_t kAliveMs = 3000;
+// (8 s, not less: the plug-ins' timers run on the DAW's window thread, which can stall for seconds on a busy computer;
+// a stall must not make Pitch start tuning a track Honey Tune tunes.)
+constexpr std::uint64_t kAliveMs = 8000;
 
 /** What Voxology's 01 Pitch does on its track. */
 enum class Pitch : std::uint32_t

@@ -1941,3 +1941,8 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Voxology 0.55.0 (2026-11-16, step 5): the manual's "Sonicology Rack: your whole suite in one view" section, version,
   README. Goes out in Sonicology Beta 14 with Mixology 0.26.0 and Masterology 0.31.0.
   Beta 14 built 2026-11-16: Mixology's Sonicology suite run 43876865629 (label "Beta 14", version 0.14.0), all green.
+- Voxology 0.55.1 (2026-11-16, Beta 14 feedback: light liquid glass flat, knobs appearing / disappearing, the Rack slow): the
+  shared rack.js / rack.css / light liquid art / RackLink from Mixology (details: Mixology's RESUME-HERE), getRack(track)
+  asks only for the shown track's details. Goes out in Sonicology Beta 15 with Mixology 0.26.1 and Masterology 0.31.1.
+  Here also: the honey link's kAliveMs 8000 and kHoneyHoldMs 10000 (Pitch no longer flips ON / RESTS when Cubase's
+  window thread stalls).

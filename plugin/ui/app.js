@@ -2121,7 +2121,7 @@ $("rack").addEventListener("click", async () => {
   window.SonicologyRack.open({
     host: "voxology",
     theme: theme === "light" || theme === "dark" ? theme : undefined,
-    getRack: async () => { const j = await rackGet().catch(() => null); return j ? JSON.parse(j) : null; },
+    getRack: async (track) => { const j = await rackGet(track || "").catch(() => null); return j ? JSON.parse(j) : null; },
     onTheme: (t) => { rackThemeSet(t).catch(() => {}); },
     back: () => {},
   });

@@ -184,9 +184,10 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
         })
         .withNativeFunction ("getReference", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getReferenceJson()); })
         // The Sonicology Rack (suite/RackLink.h): every Sonicology plug-in in the project, as rack.js shows it.
-        .withNativeFunction ("getRack", [this] (const juce::Array<juce::var>&, auto complete)
+        .withNativeFunction ("getRack", [this] (const juce::Array<juce::var>& args, auto complete)
                              {
-                                 const auto json = rack::viewJson ("voxology", audioProcessor.rackTrackHash(), suite::nowMs());
+                                 const auto json = rack::viewJson ("voxology", audioProcessor.rackTrackHash(), suite::nowMs(),
+                                                                 args.size() > 0 ? args[0].toString().toStdString() : std::string());   // the track it shows
                                  complete (juce::String::fromUTF8 (json.data(), static_cast<int> (json.size())));
                              })
         .withNativeFunction ("getRackTheme", [] (const juce::Array<juce::var>&, auto complete)
