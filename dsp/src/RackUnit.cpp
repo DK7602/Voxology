@@ -56,15 +56,76 @@ namespace vox::rackunit
         }
         float choice (int i, int count) { return count > 1 ? static_cast<float> (std::clamp (i, 0, count - 1)) / static_cast<float> (count - 1) : 0.0f; }
 
+        // Every knob the Rack can turn: its parameter (plugin/Params.h: the same range; centre: JUCE's skew for a centre
+        // value, 0 = linear; steps: a choice of that many).
+        struct Knob
+        {
+            const char* key;
+            double lo, hi, centre;
+            int steps;
+        };
+        const Knob kKnobs[] = {
+            { "ptMode", 0, kPitchModes - 1, 0, kPitchModes }, { "ptAmount", 0, 100, 0, 0 }, { "ptSpeed", 0, 400, 60, 0 },
+            { "ptVibrato", -100, 100, 0, 0 }, { "ptHumanize", 0, 100, 0, 0 }, { "ptFormant", -kMaxFormant, kMaxFormant, 0, 0 },
+            { "ptTranspose", -12, 12, 0, 0 },
+            { "clNoise", 0, Denoiser::kMaxNoiseDb, 0, 0 }, { "clRoom", 0, 100, 0, 0 }, { "clLowCut", 20, 400, 80, 0 },
+            { "clPops", 0, 100, 0, 0 }, { "clClicks", 0, 100, 0, 0 }, { "clBreath", 0, BreathControl::kMaxReductionDb, 0, 0 },
+            { "clGateThr", -80, -20, 0, 0 }, { "clGateRange", 0, 30, 0, 0 },
+            { "eqGain1", -kEqMaxDb, kEqMaxDb, 0, 0 }, { "eqGain2", -kEqMaxDb, kEqMaxDb, 0, 0 }, { "eqGain3", -kEqMaxDb, kEqMaxDb, 0, 0 },
+            { "eqGain4", -kEqMaxDb, kEqMaxDb, 0, 0 }, { "eqGain5", -kEqMaxDb, kEqMaxDb, 0, 0 },
+            { "dqCut1", 0, kDynMaxCutDb, 0, 0 }, { "dqCut2", 0, kDynMaxCutDb, 0, 0 }, { "dqCut3", 0, kDynMaxCutDb, 0, 0 },
+            { "dqCut4", 0, kDynMaxCutDb, 0, 0 }, { "dqSmooth", 0, 100, 0, 0 }, { "dqSens", 0, 100, 0, 0 },
+            { "dsAmount", 0, 100, 0, 0 }, { "dsSens", 0, 100, 0, 0 }, { "dsFreq", 3000, 12000, 6000, 0 },
+            { "rdTarget", -40, -6, 0, 0 }, { "rdRange", 0, 12, 0, 0 }, { "rdSpeed", 0, 2, 0, 3 },
+            { "cpPeak", -40, 0, 0, 0 }, { "cpThr", -60, 0, 0, 0 }, { "cpRatio", 1, 10, 3, 0 }, { "cpMakeup", 0, 24, 0, 0 },
+            { "cpMix", 0, 100, 0, 0 },
+            { "saMode", 0, 2, 0, 3 }, { "saDrive", 0, Saturation::kMaxDriveDb, 0, 0 }, { "saMix", 0, 100, 0, 0 },
+            { "dbAmount", 0, 100, 0, 0 }, { "dbWidth", 0, 100, 0, 0 }, { "hv1", 0, kHarmonies - 1, 0, kHarmonies },
+            { "hv2", 0, kHarmonies - 1, 0, kHarmonies }, { "hvStack", 0, 3, 0, 4 }, { "hvLevel", 0, 100, 0, 0 },
+            { "hvFormant", -kMaxFormant, kMaxFormant, 0, 0 }, { "hvCrew", 0, 100, 0, 0 },
+            { "dmMode", 0, kDimensionModes - 1, 0, kDimensionModes }, { "dmAmount", 0, 100, 0, 0 },
+            { "dmRate", Dimension::kMinRateHz, Dimension::kMaxRateHz, 0.6, 0 }, { "dmWidth", 0, 100, 0, 0 },
+            { "dlTime", 0, kDelayDivisions - 1, 0, kDelayDivisions }, { "dlFeedback", 0, 90, 0, 0 }, { "dlMix", 0, 100, 0, 0 },
+            { "dlTone", 1000, 16000, 4000, 0 }, { "dlDuck", 0, 100, 0, 0 }, { "dlThrow", 0, 100, 0, 0 }, { "dlPing", 0, 1, 0, 2 },
+            { "rvDecay", 0.3, 8, 1.5, 0 }, { "rvPredelay", 0, 200, 0, 0 }, { "rvMix", 0, 100, 0, 0 }, { "rvTone", 2000, 16000, 6000, 0 },
+            { "rvDuck", 0, 100, 0, 0 }, { "rvThrow", 0, 100, 0, 0 },
+            { "outGain", -24, 24, 0, 0 },
+            { "umAmount", 0, 100, 0, 0 },
+        };
+
+        const Knob* knobSpec (const std::string& key)
+        {
+            for (const auto& k : kKnobs)
+                if (key == k.key) return &k;
+            return nullptr;
+        }
+
+        float knobNorm (const Knob& k, double value)
+        {
+            if (k.steps >= 2) return choice (static_cast<int> (std::lround (value - k.lo)), k.steps);
+            return k.centre > 0.0 ? skew (value, k.lo, k.hi, k.centre) : lin (value, k.lo, k.hi);
+        }
+
         template <typename Array>
         const char* nameOf (const Array& names, int i) { return names[static_cast<std::size_t> (std::clamp (i, 0, static_cast<int> (names.size()) - 1))]; }
 
         const char* interval (int i) { return kHarmonyIntervals[static_cast<std::size_t> (std::clamp (i, 0, kHarmonies - 1))].name; }
 
+        // Shown only (not a control of its own): the key Pitch follows, what the Beat Listener hears.
         void add (rack::Module& m, const char* name, const std::string& text, float norm, bool bi = false)
         {
             if (m.values.size() < static_cast<std::size_t> (rack::kMaxValues)) m.values.push_back ({ name, text, norm, bi });
         }
+
+        // A knob the Rack can turn: its parameter (kKnobs) places it.
+        void add (rack::Module& m, const char* name, const std::string& text, const std::string& key, double value, bool bi = false)
+        {
+            const auto* k = knobSpec (key);
+            if (k == nullptr || m.values.size() >= static_cast<std::size_t> (rack::kMaxValues)) return;
+            m.values.push_back ({ name, text, knobNorm (*k, value), bi, key, k->steps });
+        }
+
+        std::string numbered (const char* prefix, int b) { return prefix + std::to_string (b + 1); }
 
         void join (std::string& s, const std::string& part, std::size_t limit = 64)
         {
@@ -114,10 +175,41 @@ namespace vox::rackunit
                 add (m, "Scale", has ? modeName (s.beatMode) : "\xE2\x80\x94", has ? choice (s.beatMode, 12) : 0.0f);
                 const double c = std::clamp (static_cast<double> (s.beatTuneCents), -50.0, 50.0);
                 add (m, "Tuning", has ? std::string (c >= 0.0 ? "+" : kMinus) + digits (c, 0) + " cents" : "\xE2\x80\x94", has ? lin (c, -50.0, 50.0) : 0.5f, true);
-                add (m, "Unmask", offOr (s.unmaskAmount, pct (s.unmaskAmount)), lin (s.unmaskAmount, 0.0, 100.0));
+                add (m, "Unmask", offOr (s.unmaskAmount, pct (s.unmaskAmount)), "umAmount", s.unmaskAmount);
             }
             return m;
         }
+    }
+
+    const char* switchOf (const std::string& moduleKey)
+    {
+        static const std::pair<const char*, const char*> kSwitches[] = {
+            { "vox.pitch", "ptOn" }, { "vox.cleanup", "clOn" }, { "vox.eq", "eqOn" }, { "vox.dyneq", "dqOn" }, { "vox.deess", "dsOn" },
+            { "vox.rider", "rdOn" }, { "vox.comp", "cpOn" }, { "vox.sat", "saOn" }, { "vox.voices", "dbOn" }, { "vox.dimension", "dmOn" },
+            { "vox.delay", "dlOn" }, { "vox.reverb", "rvOn" },
+        };
+        for (const auto& [module, param] : kSwitches)
+            if (moduleKey == module) return param;
+        return nullptr;
+    }
+
+    bool fromKnob (const std::string& key, float knob, double& value)
+    {
+        const auto* k = knobSpec (key);
+        if (k == nullptr) return false;
+        const double n = std::clamp (std::isfinite (knob) ? static_cast<double> (knob) : 0.0, 0.0, 1.0);
+        if (k->steps >= 2)
+            value = k->lo + std::round (n * (k->steps - 1));
+        else if (k->centre > 0.0)
+        {
+            // JUCE's skew for a centre value: n = x^s, s = log 0.5 / log ((centre - lo) / (hi - lo)).
+            const double s = std::log (0.5) / std::log ((k->centre - k->lo) / (k->hi - k->lo));
+            value = k->lo + std::pow (n, 1.0 / s) * (k->hi - k->lo);
+        }
+        else
+            value = k->lo + n * (k->hi - k->lo);
+        value = std::clamp (value, k->lo, k->hi);
+        return true;
     }
 
     std::string keyText (int key, int scale)
@@ -139,6 +231,7 @@ namespace vox::rackunit
             return m;
         };
         auto finish = [&] (rack::Module& m) {
+            m.switchable = switchOf (m.key) != nullptr;
             if (m.state == rack::State::off) m.summary = "Off";
             else if (m.state == rack::State::idle) m.summary = "Set to do nothing";
             if (! full)
@@ -155,14 +248,14 @@ namespace vox::rackunit
             auto m = cell ("vox.pitch", pt.enabled || s.pitchRests, PitchCorrector::isNeutral (pt));
             std::string key = keyText (pt.key, pt.scale);
             if (s.keyAuto) key = (s.keyState == 2 || s.keyState == 3) ? "Auto: listening" : "Auto: " + key;
-            add (m, "Mode", nameOf (kPitchModeNames, pt.mode), choice (pt.mode, kPitchModes));
-            add (m, "Amount", pct (pt.amount), lin (pt.amount, 0.0, 100.0));
-            add (m, "Retune", ms (pt.speedMs), skew (pt.speedMs, 0.0, 400.0, 60.0));
-            add (m, "Vibrato", vib (pt.vibrato), lin (pt.vibrato, -100.0, 100.0), true);
-            add (m, "Humanize", pct (pt.humanize), lin (pt.humanize, 0.0, 100.0));
-            add (m, "Formant", st (pt.formant), lin (pt.formant, -kMaxFormant, kMaxFormant), true);
+            add (m, "Mode", nameOf (kPitchModeNames, pt.mode), "ptMode", pt.mode);
+            add (m, "Amount", pct (pt.amount), "ptAmount", pt.amount);
+            add (m, "Retune", ms (pt.speedMs), "ptSpeed", pt.speedMs);
+            add (m, "Vibrato", vib (pt.vibrato), "ptVibrato", pt.vibrato, true);
+            add (m, "Humanize", pct (pt.humanize), "ptHumanize", pt.humanize);
+            add (m, "Formant", st (pt.formant), "ptFormant", pt.formant, true);
             add (m, "Key", key, pt.scale <= 0 ? 0.0f : choice (pt.key, 12));
-            if (pt.transpose != 0) add (m, "Transpose", st (pt.transpose), lin (pt.transpose, -12.0, 12.0), true);
+            if (pt.transpose != 0) add (m, "Transpose", st (pt.transpose), "ptTranspose", pt.transpose, true);
             m.summary = nameOf (kPitchModeNames, pt.mode);
             join (m.summary, "Amount " + pct (pt.amount));
             join (m.summary, key);
@@ -180,14 +273,14 @@ namespace vox::rackunit
             const auto& c = p.cleanup;
             auto m = cell ("vox.cleanup", c.enabled, cleanupIdle (c));
             const bool lowCut = c.lowCutHz > Cleanup::kLowCutOffHz;
-            add (m, "Noise", cut (c.noiseDb), lin (c.noiseDb, 0.0, 24.0));
-            add (m, "Room", offOr (c.roomPct, pct (c.roomPct)), lin (c.roomPct, 0.0, 100.0));
-            add (m, "Low Cut", lowCut ? hz (c.lowCutHz) : "Off", skew (c.lowCutHz, 20.0, 400.0, 80.0));
-            add (m, "Pops", offOr (c.popAmount, pct (c.popAmount)), lin (c.popAmount, 0.0, 100.0));
-            add (m, "Clicks", offOr (c.clickAmount, pct (c.clickAmount)), lin (c.clickAmount, 0.0, 100.0));
-            add (m, "Breaths", cut (c.breathDb), lin (c.breathDb, 0.0, 24.0));
-            add (m, "Gate", db (c.gateThrDb), lin (c.gateThrDb, -80.0, -20.0));
-            add (m, "Gate Range", offOr (c.gateRangeDb, db (c.gateRangeDb)), lin (c.gateRangeDb, 0.0, 30.0));
+            add (m, "Noise", cut (c.noiseDb), "clNoise", c.noiseDb);
+            add (m, "Room", offOr (c.roomPct, pct (c.roomPct)), "clRoom", c.roomPct);
+            add (m, "Low Cut", lowCut ? hz (c.lowCutHz) : "Off", "clLowCut", c.lowCutHz);
+            add (m, "Pops", offOr (c.popAmount, pct (c.popAmount)), "clPops", c.popAmount);
+            add (m, "Clicks", offOr (c.clickAmount, pct (c.clickAmount)), "clClicks", c.clickAmount);
+            add (m, "Breaths", cut (c.breathDb), "clBreath", c.breathDb);
+            add (m, "Gate", db (c.gateThrDb), "clGateThr", c.gateThrDb);
+            add (m, "Gate Range", offOr (c.gateRangeDb, db (c.gateRangeDb)), "clGateRange", c.gateRangeDb);
             if (c.noiseDb >= 0.05) join (m.summary, "Noise " + cut (c.noiseDb));
             if (c.roomPct >= 0.05) join (m.summary, "Room " + pct (c.roomPct));
             if (lowCut) join (m.summary, "Low cut " + hz (c.lowCutHz));
@@ -209,7 +302,7 @@ namespace vox::rackunit
             {
                 const auto& info = kEqBandInfo[static_cast<std::size_t> (b)];
                 const double g = e.gainDb[static_cast<std::size_t> (b)], f = e.freqHz[static_cast<std::size_t> (b)];
-                add (m, info.name, signedDb (g), lin (g, -kEqMaxDb, kEqMaxDb), true);
+                add (m, info.name, signedDb (g), numbered ("eqGain", b), g, true);
                 if (std::abs (g) < 0.05) continue;
                 join (m.summary, std::string (info.name) + " " + signedDb (g));
                 const auto type = info.type == 0 ? rack::BandType::lowShelf : info.type == 2 ? rack::BandType::highShelf : rack::BandType::bell;
@@ -229,7 +322,7 @@ namespace vox::rackunit
             {
                 const auto& info = kDynBandInfo[static_cast<std::size_t> (b)];
                 const double c = d.maxCutDb[static_cast<std::size_t> (b)], f = d.freqHz[static_cast<std::size_t> (b)];
-                add (m, info.name, cut (c), lin (c, 0.0, kDynMaxCutDb));
+                add (m, info.name, cut (c), numbered ("dqCut", b), c);
                 if (c < 0.05) continue;
                 join (m.summary, std::string (info.name) + " up to " + cut (c));
                 // The cut it makes now (it moves: only while the band jumps out).
@@ -237,8 +330,8 @@ namespace vox::rackunit
                 deepest = std::min (deepest, now);
                 m.bands.push_back ({ rack::BandType::bell, static_cast<float> (f), now, static_cast<float> (info.q), info.name, true });
             }
-            add (m, "Smooth", pct (d.smoothPct), lin (d.smoothPct, 0.0, 100.0));
-            add (m, "Sensitivity", pct (d.sensitivity), lin (d.sensitivity, 0.0, 100.0));
+            add (m, "Smooth", pct (d.smoothPct), "dqSmooth", d.smoothPct);
+            add (m, "Sensitivity", pct (d.sensitivity), "dqSens", d.sensitivity);
             if (d.smoothPct >= 0.05) join (m.summary, "Smooth " + pct (d.smoothPct));
             gr (m, s, deepest);
             finish (m);
@@ -248,9 +341,9 @@ namespace vox::rackunit
         {
             const auto& d = p.deEsser;
             auto m = cell ("vox.deess", d.enabled, d.amount < 0.05);
-            add (m, "Amount", pct (d.amount), lin (d.amount, 0.0, 100.0));
-            add (m, "Sensitivity", pct (d.sensitivity), lin (d.sensitivity, 0.0, 100.0));
-            add (m, "Frequency", hz (d.freqHz), skew (d.freqHz, 3000.0, 12000.0, 6000.0));
+            add (m, "Amount", pct (d.amount), "dsAmount", d.amount);
+            add (m, "Sensitivity", pct (d.sensitivity), "dsSens", d.sensitivity);
+            add (m, "Frequency", hz (d.freqHz), "dsFreq", d.freqHz);
             m.summary = "Amount " + pct (d.amount);
             join (m.summary, "above " + hz (d.freqHz));
             gr (m, s, s.meters.deEss);
@@ -263,9 +356,9 @@ namespace vox::rackunit
             static const char* const kSpeeds[] = { "Slow", "Medium", "Fast" };
             auto m = cell ("vox.rider", r.enabled, r.rangeDb < 0.05);
             const std::string range = r.rangeDb < 0.05 ? "Off" : "\xC2\xB1" + num (r.rangeDb) + " dB";
-            add (m, "Target", db (r.targetDb), lin (r.targetDb, -40.0, -6.0));
-            add (m, "Range", range, lin (r.rangeDb, 0.0, 12.0));
-            add (m, "Speed", kSpeeds[std::clamp (r.speed, 0, 2)], choice (r.speed, 3));
+            add (m, "Target", db (r.targetDb), "rdTarget", r.targetDb);
+            add (m, "Range", range, "rdRange", r.rangeDb);
+            add (m, "Speed", kSpeeds[std::clamp (r.speed, 0, 2)], "rdSpeed", r.speed);
             m.summary = "Target " + db (r.targetDb);
             join (m.summary, range);
             gr (m, s, s.meters.rider);   // the gain it rides now (+ lifts a quiet word)
@@ -277,11 +370,11 @@ namespace vox::rackunit
             const auto& c = p.comp;
             auto m = cell ("vox.comp", c.enabled, VocalCompressor::isNeutral (c));
             const bool peak = c.peakThrDb <= -0.05, level = c.ratio >= 1.005;
-            add (m, "Peak", peak ? db (c.peakThrDb) : "Off", lin (c.peakThrDb, -40.0, 0.0));
-            add (m, "Threshold", db (c.thrDb), lin (c.thrDb, -60.0, 0.0));
-            add (m, "Ratio", digits (c.ratio, 1) + ":1", skew (c.ratio, 1.0, 10.0, 3.0));
-            add (m, "Makeup", signedDb (c.makeupDb), lin (c.makeupDb, 0.0, 24.0));
-            add (m, "Mix", pct (c.mix), lin (c.mix, 0.0, 100.0));
+            add (m, "Peak", peak ? db (c.peakThrDb) : "Off", "cpPeak", c.peakThrDb);
+            add (m, "Threshold", db (c.thrDb), "cpThr", c.thrDb);
+            add (m, "Ratio", digits (c.ratio, 1) + ":1", "cpRatio", c.ratio);
+            add (m, "Makeup", signedDb (c.makeupDb), "cpMakeup", c.makeupDb);
+            add (m, "Mix", pct (c.mix), "cpMix", c.mix);
             if (level) join (m.summary, "Ratio " + digits (c.ratio, 1) + ":1" + kDot + "Threshold " + db (c.thrDb));
             if (peak) join (m.summary, "Peak " + db (c.peakThrDb));
             if (c.mix < 99.5) join (m.summary, "Mix " + pct (c.mix));
@@ -296,9 +389,9 @@ namespace vox::rackunit
             static const char* const kModes[] = { "Tape", "Tube", "Clip" };
             const int mode = std::clamp (static_cast<int> (c.mode), 0, 2);
             auto m = cell ("vox.sat", c.enabled, c.driveDb < 0.05 || c.mix < 0.05);
-            add (m, "Mode", kModes[mode], choice (mode, 3));
-            add (m, "Drive", db (c.driveDb), lin (c.driveDb, 0.0, Saturation::kMaxDriveDb));
-            add (m, "Mix", pct (c.mix), lin (c.mix, 0.0, 100.0));
+            add (m, "Mode", kModes[mode], "saMode", mode);
+            add (m, "Drive", db (c.driveDb), "saDrive", c.driveDb);
+            add (m, "Mix", pct (c.mix), "saMix", c.mix);
             m.summary = kModes[mode];
             join (m.summary, "Drive " + db (c.driveDb));
             join (m.summary, "Mix " + pct (c.mix));
@@ -311,19 +404,19 @@ namespace vox::rackunit
             const auto& v = p.voices;
             const bool doubleOn = d.amount >= 0.05, voicesOn = ! HarmonyVoices::isNeutral (v);
             auto m = cell ("vox.voices", d.enabled, ! doubleOn && ! voicesOn);
-            add (m, "Double", offOr (d.amount, pct (d.amount)), lin (d.amount, 0.0, 100.0));
-            add (m, "Width", pct (d.width), lin (d.width, 0.0, 100.0));
+            add (m, "Double", offOr (d.amount, pct (d.amount)), "dbAmount", d.amount);
+            add (m, "Width", pct (d.width), "dbWidth", d.width);
             if (v.midi)
                 add (m, "Voices", "MIDI notes", 1.0f);
             else
             {
-                add (m, "Voice 1", interval (v.interval[0]), choice (v.interval[0], kHarmonies));
-                add (m, "Voice 2", interval (v.interval[1]), choice (v.interval[1], kHarmonies));
-                add (m, "Stack", v.stack <= 0 ? "Off" : std::to_string (kStackSizes[static_cast<std::size_t> (std::clamp (v.stack, 0, 3))]), choice (v.stack, 4));
+                add (m, "Voice 1", interval (v.interval[0]), "hv1", v.interval[0]);
+                add (m, "Voice 2", interval (v.interval[1]), "hv2", v.interval[1]);
+                add (m, "Stack", v.stack <= 0 ? "Off" : std::to_string (kStackSizes[static_cast<std::size_t> (std::clamp (v.stack, 0, 3))]), "hvStack", v.stack);
             }
-            add (m, "Level", pct (v.level), lin (v.level, 0.0, 100.0));
-            add (m, "Formant", st (v.formant), lin (v.formant, -kMaxFormant, kMaxFormant), true);
-            add (m, "Crew", pct (v.crew), lin (v.crew, 0.0, 100.0));
+            add (m, "Level", pct (v.level), "hvLevel", v.level);
+            add (m, "Formant", st (v.formant), "hvFormant", v.formant, true);
+            add (m, "Crew", pct (v.crew), "hvCrew", v.crew);
             if (doubleOn) join (m.summary, "Double " + pct (d.amount));
             if (voicesOn)
             {
@@ -342,10 +435,10 @@ namespace vox::rackunit
         {
             const auto& d = p.dimension;
             auto m = cell ("vox.dimension", d.enabled, d.amount < 0.05);
-            add (m, "Mode", nameOf (kDimensionNames, d.mode), choice (d.mode, kDimensionModes));
-            add (m, "Amount", pct (d.amount), lin (d.amount, 0.0, 100.0));
-            add (m, "Speed", rate (d.rateHz), skew (d.rateHz, Dimension::kMinRateHz, Dimension::kMaxRateHz, 0.6));
-            add (m, "Width", pct (d.width), lin (d.width, 0.0, 100.0));
+            add (m, "Mode", nameOf (kDimensionNames, d.mode), "dmMode", d.mode);
+            add (m, "Amount", pct (d.amount), "dmAmount", d.amount);
+            add (m, "Speed", rate (d.rateHz), "dmRate", d.rateHz);
+            add (m, "Width", pct (d.width), "dmWidth", d.width);
             m.summary = nameOf (kDimensionNames, d.mode);
             join (m.summary, "Amount " + pct (d.amount));
             finish (m);
@@ -356,13 +449,13 @@ namespace vox::rackunit
             const auto& d = p.delay;
             const double echo = p.throws.echo;
             auto m = cell ("vox.delay", d.enabled, d.mix < 0.05 && echo < 0.05);
-            add (m, "Time", nameOf (kDelayNames, d.division), choice (d.division, kDelayDivisions));
-            add (m, "Feedback", pct (d.feedback), lin (d.feedback, 0.0, 90.0));
-            add (m, "Mix", pct (d.mix), lin (d.mix, 0.0, 100.0));
-            add (m, "Tone", hz (d.toneHz), skew (d.toneHz, 1000.0, 16000.0, 4000.0));
-            add (m, "Duck", pct (d.duck), lin (d.duck, 0.0, 100.0));
-            add (m, "Throw", offOr (echo, pct (echo)), lin (echo, 0.0, 100.0));
-            add (m, "Ping-Pong", d.pingPong ? "On" : "Off", d.pingPong ? 1.0f : 0.0f);
+            add (m, "Time", nameOf (kDelayNames, d.division), "dlTime", d.division);
+            add (m, "Feedback", pct (d.feedback), "dlFeedback", d.feedback);
+            add (m, "Mix", pct (d.mix), "dlMix", d.mix);
+            add (m, "Tone", hz (d.toneHz), "dlTone", d.toneHz);
+            add (m, "Duck", pct (d.duck), "dlDuck", d.duck);
+            add (m, "Throw", offOr (echo, pct (echo)), "dlThrow", echo);
+            add (m, "Ping-Pong", d.pingPong ? "On" : "Off", "dlPing", d.pingPong ? 1.0 : 0.0);
             m.summary = nameOf (kDelayNames, d.division);
             if (d.mix >= 0.05) join (m.summary, "Mix " + pct (d.mix));
             if (echo >= 0.05) join (m.summary, "Throw " + pct (echo));
@@ -375,12 +468,12 @@ namespace vox::rackunit
             const auto& r = p.reverb;
             const double wash = p.throws.wash;
             auto m = cell ("vox.reverb", r.enabled, r.mix < 0.05 && wash < 0.05);
-            add (m, "Decay", digits (r.decayS, 1) + " s", skew (r.decayS, 0.3, 8.0, 1.5));
-            add (m, "Pre-delay", ms (r.predelayMs), lin (r.predelayMs, 0.0, 200.0));
-            add (m, "Mix", pct (r.mix), lin (r.mix, 0.0, 100.0));
-            add (m, "Tone", hz (r.toneHz), skew (r.toneHz, 2000.0, 16000.0, 6000.0));
-            add (m, "Duck", pct (r.duck), lin (r.duck, 0.0, 100.0));
-            add (m, "Throw", offOr (wash, pct (wash)), lin (wash, 0.0, 100.0));
+            add (m, "Decay", digits (r.decayS, 1) + " s", "rvDecay", r.decayS);
+            add (m, "Pre-delay", ms (r.predelayMs), "rvPredelay", r.predelayMs);
+            add (m, "Mix", pct (r.mix), "rvMix", r.mix);
+            add (m, "Tone", hz (r.toneHz), "rvTone", r.toneHz);
+            add (m, "Duck", pct (r.duck), "rvDuck", r.duck);
+            add (m, "Throw", offOr (wash, pct (wash)), "rvThrow", wash);
             m.summary = digits (r.decayS, 1) + " s";
             if (r.mix >= 0.05) join (m.summary, "Mix " + pct (r.mix));
             if (wash >= 0.05) join (m.summary, "Throw " + pct (wash));
@@ -390,7 +483,7 @@ namespace vox::rackunit
         // 13 Output
         {
             auto m = cell ("vox.output", true, std::abs (p.outputDb) < 0.05);
-            add (m, "Output", signedDb (p.outputDb), lin (p.outputDb, -24.0, 24.0), true);
+            add (m, "Output", signedDb (p.outputDb), "outGain", p.outputDb, true);
             m.summary = signedDb (p.outputDb);
             finish (m);
             if (out.back().state == rack::State::idle) out.back().summary = "0.0 dB";

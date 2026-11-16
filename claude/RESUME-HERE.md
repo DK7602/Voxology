@@ -1926,6 +1926,10 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   .cpp / test_rack_link.cpp copied here unchanged (layout 2; Unit gained lock + generation with defaults, so
   publishRack and Honey Tune compile as they are). [rack] tests pass here. Step 3 wires serve() into publishRack and
   Honey Tune (lock while Auto-Edit runs).
+- Step 2 built (2026-11-16): every Rack knob names its parameter (Value::key = the id in plugin/Params.h; steps for
+  choices), modules switchable (switchOf: "vox.comp" -> "cpOn"); vox::rackunit::fromKnob() turns the Rack's 0..1
+  back into the parameter value (one knob table, kKnobs, places and reads back); Honey Tune: snap / drift / vibrato
+  (honeyui::rackSet), Key / Scale shown only. Tests check every key exists in Params.h.
 
 ## NOW: Sonicology Rack, stage 1 (planned 2026-11-14; steps 1 - 3 built 2026-11-15; next: step 4)
 - The plan lives in Mixology: docs/rack/RACK-PLAN.md (branch claude/mixology), with the concept art in docs/rack/concepts.

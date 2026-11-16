@@ -39,6 +39,7 @@ target_include_directories(vox_tests PRIVATE ${CMAKE_SOURCE_DIR}/honeytune)   # 
 target_compile_definitions(vox_tests PRIVATE
     VOX_MANUAL_PATH="${CMAKE_SOURCE_DIR}/docs/MANUAL.md"
     VOX_UI_INDEX="${CMAKE_SOURCE_DIR}/plugin/ui/index.html"
+    VOX_PARAMS_PATH="${CMAKE_SOURCE_DIR}/plugin/Params.h"
     VOX_UI_STYLES="${CMAKE_SOURCE_DIR}/plugin/ui/mixstyles.js"
     VOX_VERSION="${PROJECT_VERSION}")
 set_target_properties(vox_tests PROPERTIES FOLDER "Voxology")

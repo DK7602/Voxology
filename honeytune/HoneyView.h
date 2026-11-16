@@ -367,15 +367,30 @@ inline rack::Module rackModule (const Settings& s, const RackTrack& t, bool full
     m.summary = sum;
     if (full)
     {
-        const auto knob = [&] (const char* name, std::string text, float norm) { m.values.push_back ({ name, std::move (text), norm, false }); };
+        const auto knob = [&] (const char* name, std::string text, float norm, const char* key = "") {
+            m.values.push_back ({ name, std::move (text), norm, false, key });
+        };
         knob ("Key", autoKey ? (t.keyKnown && ! t.unsure && t.scale != 0 ? "Auto: " + note : std::string ("Auto")) : note,
               autoKey ? 1.0f : static_cast<float> (std::clamp (s.key, 0, 11)) / 11.0f);
         knob ("Scale", t.keyKnown && ! t.unsure ? scale : std::string ("\xE2\x80\x94"), static_cast<float> (std::clamp (t.scale, 0, vox::kScales - 1)) / static_cast<float> (vox::kScales - 1));
-        knob ("Snap to Note", pct (s.snap), static_cast<float> (std::clamp (s.snap, 0.0, 1.0)));
-        knob ("Keep Drift", pct (s.drift), static_cast<float> (std::clamp (s.drift, 0.0, 1.0)));
-        knob ("Keep Vibrato", pct (s.vibrato), static_cast<float> (std::clamp (s.vibrato, 0.0, 1.0)));
+        // The Rack turns these (stage 2: on every clip of the track); Key and Scale stay Honey Tune's own choice.
+        knob ("Snap to Note", pct (s.snap), static_cast<float> (std::clamp (s.snap, 0.0, 1.0)), "snap");
+        knob ("Keep Drift", pct (s.drift), static_cast<float> (std::clamp (s.drift, 0.0, 1.0)), "drift");
+        knob ("Keep Vibrato", pct (s.vibrato), static_cast<float> (std::clamp (s.vibrato, 0.0, 1.0)), "vibrato");
     }
     return m;
+}
+
+/** Stage 2: a Rack knob (0..1) on Honey Tune's settings ("snap", "drift", "vibrato": 0..1 as they are). False: not
+    one the Rack can turn. */
+inline bool rackSet (Settings& s, const std::string& key, float knob)
+{
+    const double v = std::clamp (std::isfinite (knob) ? static_cast<double> (knob) : 0.0, 0.0, 1.0);
+    if (key == "snap") s.snap = v;
+    else if (key == "drift") s.drift = v;
+    else if (key == "vibrato") s.vibrato = v;
+    else return false;
+    return true;
 }
 
 /** The editor talks to the clip through this. */

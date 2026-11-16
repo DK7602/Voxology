@@ -6,8 +6,12 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <cctype>
 #include <cmath>
+#include <fstream>
+#include <iterator>
 #include <memory>
+#include <string>
 
 using namespace vox;
 
@@ -268,4 +272,138 @@ TEST_CASE ("Rack unit: Honey Tune with Pitch resting on the same track reads as 
     }
     CHECK (rests);
     CHECK_FALSE (twoTuners);
+}
+
+TEST_CASE ("Rack unit (Voxology): every knob the Rack can turn names its parameter, and turns back to its value", "[rack]")
+{
+    auto st = fresh();
+    st.params.pitch.amount = 80.0;
+    st.params.pitch.speedMs = 120.0;
+    st.params.pitch.transpose = -3;
+    st.params.comp.thrDb = -18.0;
+    st.params.comp.ratio = 4.0;
+    st.params.rider.speed = 2;
+    st.params.dynEq.maxCutDb[2] = 6.0;
+    st.params.eq.gainDb[2] = 3.5;
+    st.params.delay.division = 4;
+    st.params.delay.pingPong = true;
+    st.params.reverb.decayS = 2.4;
+    st.params.dimension.rateHz = 1.2;
+
+    // Every value is a knob the Rack can turn, except what is only shown (the key Pitch follows).
+    const auto ms = rackunit::modules (st, true);
+    int turnable = 0;
+    for (const auto& m : ms)
+    {
+        CAPTURE (m.key);
+        CHECK (m.switchable == (m.key != "vox.output"));
+        if (m.switchable) CHECK (rackunit::switchOf (m.key) != nullptr);
+        for (const auto& v : m.values)
+        {
+            CAPTURE (v.name);
+            if (m.key == "vox.pitch" && v.name == "Key") { CHECK (v.key.empty()); continue; }
+            REQUIRE_FALSE (v.key.empty());
+            double back = 0.0;
+            CHECK (rackunit::fromKnob (v.key, v.norm, back));
+            ++turnable;
+        }
+    }
+    CHECK (turnable > 55);
+    CHECK (rackunit::switchOf ("vox.output") == nullptr);
+    CHECK (std::string (rackunit::switchOf ("vox.comp")) == "cpOn");
+
+    // Back from where the knob sits: linear, skewed (JUCE's centre), a choice, a band's own control.
+    auto back = [&] (const char* module, const char* name) {
+        const auto* v = value (*find (ms, module), name);
+        REQUIRE (v != nullptr);
+        double x = -999.0;
+        REQUIRE (rackunit::fromKnob (v->key, v->norm, x));
+        return x;
+    };
+    CHECK (back ("vox.comp", "Threshold") == Catch::Approx (-18.0).margin (1e-3));
+    CHECK (back ("vox.comp", "Ratio") == Catch::Approx (4.0).margin (1e-3));
+    CHECK (back ("vox.pitch", "Retune") == Catch::Approx (120.0).margin (1e-2));
+    CHECK (back ("vox.pitch", "Amount") == Catch::Approx (80.0).margin (1e-3));
+    CHECK (back ("vox.pitch", "Transpose") == Catch::Approx (-3.0).margin (1e-3));
+    CHECK (back ("vox.rider", "Speed") == 2.0);
+    CHECK (value (*find (ms, "vox.rider"), "Speed")->steps == 3);
+    CHECK (back ("vox.delay", "Time") == 4.0);
+    CHECK (back ("vox.delay", "Ping-Pong") == 1.0);
+    CHECK (back ("vox.reverb", "Decay") == Catch::Approx (2.4).margin (1e-3));
+    CHECK (back ("vox.dimension", "Speed") == Catch::Approx (1.2).margin (1e-3));
+    CHECK (value (*find (ms, "vox.dyneq"), kDynBandInfo[2].name)->key == "dqCut3");
+    CHECK (back ("vox.dyneq", kDynBandInfo[2].name) == Catch::Approx (6.0).margin (1e-3));
+    CHECK (value (*find (ms, "vox.eq"), kEqBandInfo[2].name)->key == "eqGain3");
+
+    // Choices land on whole options; past the ends stays in range; not a knob: refused.
+    double x = 0.0;
+    REQUIRE (rackunit::fromKnob ("rdSpeed", 0.4f, x));
+    CHECK (x == 1.0);
+    REQUIRE (rackunit::fromKnob ("cpThr", 3.0f, x));
+    CHECK (x == 0.0);
+    REQUIRE (rackunit::fromKnob ("cpThr", std::nanf (""), x));
+    CHECK (x == -60.0);
+    CHECK_FALSE (rackunit::fromKnob ("ptKey", 0.5f, x));
+
+    // Beat mode: Unmask is the knob; what it hears is only shown.
+    auto beat = fresh();
+    beat.beat = true;
+    beat.beatState = 5;
+    beat.unmaskAmount = 40.0f;
+    const auto b = rackunit::modules (beat, true);
+    REQUIRE (b.size() == 1);
+    CHECK_FALSE (b[0].switchable);
+    for (const auto& v : b[0].values) CHECK (v.key.empty() == (v.name != "Unmask"));
+}
+
+TEST_CASE ("Rack unit (Voxology): the Rack's knobs are Voxology's parameters", "[rack]")
+{
+    // Every key a Rack knob or switch names is declared in plugin/Params.h (eqGain1 .. through n ("eqGain", b)).
+    std::ifstream in (VOX_PARAMS_PATH);
+    REQUIRE (in.good());
+    const std::string params ((std::istreambuf_iterator<char> (in)), std::istreambuf_iterator<char>());
+    auto st = fresh();
+    st.params.pitch.transpose = 2;
+    for (const auto& m : rackunit::modules (st, true))
+    {
+        if (const char* sw = rackunit::switchOf (m.key)) CHECK (params.find ("\"" + std::string (sw) + "\"") != std::string::npos);
+        for (const auto& v : m.values)
+        {
+            if (v.key.empty()) continue;
+            CAPTURE (v.key);
+            std::string prefix = v.key;
+            while (! prefix.empty() && std::isdigit (static_cast<unsigned char> (prefix.back()))) prefix.pop_back();
+            const bool numbered = prefix.size() < v.key.size();
+            const bool declared = params.find ("(\"" + v.key + "\"") != std::string::npos
+                               || (numbered && params.find ("n (\"" + prefix + "\", b)") != std::string::npos);
+            CHECK (declared);
+        }
+    }
+    CHECK (params.find ("(\"umAmount\"") != std::string::npos);
+}
+
+TEST_CASE ("Rack unit (Honey Tune): the Rack turns Snap, Drift and Vibrato; the key stays Honey Tune's choice", "[rack]")
+{
+    honeyui::Settings s;
+    s.snap = 0.8;
+    s.drift = 0.25;
+    s.vibrato = 0.5;
+    honeyui::RackTrack t;
+    const auto m = honeyui::rackModule (s, t, true);
+    CHECK_FALSE (m.switchable);
+    for (const auto& v : m.values)
+    {
+        CAPTURE (v.name);
+        if (v.name == "Key" || v.name == "Scale") { CHECK (v.key.empty()); continue; }
+        REQUIRE_FALSE (v.key.empty());
+        honeyui::Settings back;
+        REQUIRE (honeyui::rackSet (back, v.key, v.norm));
+        if (v.key == "snap") CHECK (back.snap == Catch::Approx (0.8));
+        if (v.key == "drift") CHECK (back.drift == Catch::Approx (0.25));
+        if (v.key == "vibrato") CHECK (back.vibrato == Catch::Approx (0.5));
+    }
+    honeyui::Settings x;
+    CHECK (honeyui::rackSet (x, "snap", 7.0f));
+    CHECK (x.snap == 1.0);
+    CHECK_FALSE (honeyui::rackSet (x, "key", 0.5f));
 }

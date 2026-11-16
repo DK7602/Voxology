@@ -42,6 +42,13 @@ namespace vox::rackunit
     /** The modules (brief: keys, states and summaries only; full: values, bands and meters too). */
     std::vector<rack::Module> modules (const State&, bool full);
 
+    /** Stage 2: a module's on switch (its parameter id: "vox.comp" -> "cpOn"), nullptr for none (Output, the Beat
+        Listener). */
+    const char* switchOf (const std::string& moduleKey);
+    /** Where a Rack knob (0..1, as modules() published it) puts its parameter (by its id, plugin/Params.h), the same
+        range and curve as the host's; a choice to a whole option. False: not a knob the Rack can turn. */
+    bool fromKnob (const std::string& key, float knob, double& value);
+
     /** A key as Voxology writes it: "F Minor", "C Chromatic" -> "Chromatic (any note)". */
     std::string keyText (int key, int scale);
 }
