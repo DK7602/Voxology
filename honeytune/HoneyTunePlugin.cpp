@@ -295,6 +295,7 @@ public:
         // The jobs still running stop early (an analysis or a render can take many seconds) and add no new ones, so
         // closing the project doesn't wait on them.
         beatKeyPoll.stopTimer();
+        rackPoll.stopTimer();
         vox::honeylink::Link::process().leaveHoney (linkId);
         leaveRack();
         *controllerAlive = false;
@@ -452,6 +453,33 @@ public:
             u.detailed = full;
             u.modules = { honeyui::rackModule (s, t, full) };
             if (! rk.publish (rs.slot, rs.id, u, now)) rs.slot = -1;   // taken over while silent: claim again
+        }
+    }
+
+    /** Stage 2: Snap to Note, Keep Drift and Keep Vibrato turned in a Rack view. They are Honey Tune's settings for all
+        its clips (as in its window), and a change re-renders the clips: a drag is applied once, where you let go. */
+    void serveRack()
+    {
+        auto& rk = rack::Link::process();
+        const auto now = suite::nowMs();
+        if (! rk.watched (now)) return;
+        rack::Request batch[rack::kMaxRequests];
+        for (auto& [hash, rs] : rackSlots)
+        {
+            if (rs.slot < 0) continue;
+            const int n = rk.take (rs.slot, rs.id, batch, rack::kMaxRequests, now, rs.waitingSince);
+            auto s = getSettings();
+            bool changed = false;
+            for (int i = 0; i < n; ++i)
+            {
+                const auto& r = batch[i];
+                if (r.change != rack::Change::value) { rk.refuse (rs.slot, rs.id, r.ticket, "Honey Tune has no on switch: it tunes the clips you put it on."); continue; }
+                if (r.gesture == rack::Gesture::begin || r.gesture == rack::Gesture::move) continue;   // the end of the drag carries where it stops
+                if (! honeyui::rackSet (s, r.control, r.value)) { rk.refuse (rs.slot, rs.id, r.ticket, "Honey Tune's key and scale are chosen in its own window."); continue; }
+                changed = true;
+            }
+            if (changed) setSettings (s);
+            rk.answered (rs.slot, rs.id, ~std::uint64_t { 0 });
         }
     }
 
@@ -715,6 +743,7 @@ private:
         refreshHostKey();
         pollBeatKey();   // (the tracks: from the timer, outside the host's edit of the document)
         if (! beatKeyPoll.isTimerRunning()) beatKeyPoll.startTimer (1000);
+        if (! rackPoll.isTimerRunning()) rackPoll.startTimer (100);
         auto state = src->state;
         state->status = 1;
         state->samplesChanged = false;
@@ -900,9 +929,10 @@ private:
     honeyui::HostKey keyProject, keyBeat;   // the song's key from outside the clips, in use (settingsLock)
     honeyui::HostKey projectKey, beatKey;   // message thread
     TimedCallback beatKeyPoll { [this] { poll(); } };
+    TimedCallback rackPoll { [this] { serveRack(); } };   // the Rack's requests, ten times a second while one is open
     std::atomic<int> active { 0 };          // playback renderers prepared: the project plays
     int quietPolls = 2;                     // polls in a row with none running (message thread; none yet)
-    struct RackSlot { int slot = -1; std::uint64_t id = 0; };
+    struct RackSlot { int slot = -1; std::uint64_t id = 0; std::uint64_t waitingSince = 0; };
     std::map<std::uint32_t, RackSlot> rackSlots;   // the Rack: one entry per track Honey Tune tunes (message thread)
     const std::uint64_t linkId = (static_cast<std::uint64_t> (Random::getSystemRandom().nextInt64()) ^ reinterpret_cast<std::uintptr_t> (this)) | 1u;
     std::atomic<bool> playOriginal { false };

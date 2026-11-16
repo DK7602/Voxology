@@ -1930,6 +1930,12 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   choices), modules switchable (switchOf: "vox.comp" -> "cpOn"); vox::rackunit::fromKnob() turns the Rack's 0..1
   back into the parameter value (one knob table, kKnobs, places and reads back); Honey Tune: snap / drift / vibrato
   (honeyui::rackSet), Key / Scale shown only. Tests check every key exists in Params.h.
+- Step 3 built (2026-11-16), Voxology 0.56.0: the Rack's knobs and switches work here. applyRack (fromKnob /
+  switchOf -> plugin/RackHost.h, shared: one host gesture per drag), rackLock (Auto-Edit listening / analysing), a
+  25 Hz rackTimer while a Rack is open (main timer 4 Hz), rackRequest / rackAnswer native functions, app.js passes
+  request / answer to the Rack. Honey Tune: serveRack (10 Hz while a Rack is open; applies a drag where it stops,
+  Snap / Drift / Vibrato are its settings for all its clips). Manual's Rack section updated; window label v0.56.0.
+  Not in a DAW yet; Beta 16.
 
 ## NOW: Sonicology Rack, stage 1 (planned 2026-11-14; steps 1 - 3 built 2026-11-15; next: step 4)
 - The plan lives in Mixology: docs/rack/RACK-PLAN.md (branch claude/mixology), with the concept art in docs/rack/concepts.

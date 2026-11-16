@@ -48,6 +48,10 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   Sonicology plug-in in the project in one view (the RACK pill beside MY CHAINS). The same files in all three repos;
   `dsp/include/vox/RackUnit.h` is what Voxology publishes (its 13 modules, the Beat Listener), Honey Tune publishes
   each track it tunes (`honeytune/HoneyView.h`: `rackModule`).
+- Since v0.56 (Rack stage 2) the Rack changes things too: Voxology serves the Rack's requests (`applyRack`, through the
+  shared `plugin/RackHost.h`: a knob drag is one host gesture), locked while Auto-Edit listens or works; every knob
+  names its parameter (`vox::rackunit::fromKnob` / `switchOf`). Honey Tune takes Snap / Drift / Vibrato
+  (`honeyui::rackSet`), applied once where a drag stops.
 - `tests/` Catch2 tests; `tools/report.cpp` prints Auto-Edit's report for a test vocal or a raw file.
 
 ## Third-party

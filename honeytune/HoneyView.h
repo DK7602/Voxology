@@ -373,7 +373,8 @@ inline rack::Module rackModule (const Settings& s, const RackTrack& t, bool full
         knob ("Key", autoKey ? (t.keyKnown && ! t.unsure && t.scale != 0 ? "Auto: " + note : std::string ("Auto")) : note,
               autoKey ? 1.0f : static_cast<float> (std::clamp (s.key, 0, 11)) / 11.0f);
         knob ("Scale", t.keyKnown && ! t.unsure ? scale : std::string ("\xE2\x80\x94"), static_cast<float> (std::clamp (t.scale, 0, vox::kScales - 1)) / static_cast<float> (vox::kScales - 1));
-        // The Rack turns these (stage 2: on every clip of the track); Key and Scale stay Honey Tune's own choice.
+        // The Rack turns these (stage 2: Honey Tune's settings for all its clips, as in its window); Key and Scale stay
+        // Honey Tune's own choice.
         knob ("Snap to Note", pct (s.snap), static_cast<float> (std::clamp (s.snap, 0.0, 1.0)), "snap");
         knob ("Keep Drift", pct (s.drift), static_cast<float> (std::clamp (s.drift, 0.0, 1.0)), "drift");
         knob ("Keep Vibrato", pct (s.vibrato), static_cast<float> (std::clamp (s.vibrato, 0.0, 1.0)), "vibrato");

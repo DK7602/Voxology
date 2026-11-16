@@ -268,6 +268,16 @@ private:
     void publishRack();
     std::vector<float> rackSpectrum();   // the vocal as it leaves Voxology (message thread, while a Rack view watches)
     rack::Publisher rackPub;
+    // Stage 2: knobs turned and modules switched in a Rack view, applied here like a move of your own mouse. While a
+    // Rack view is open anywhere, a faster timer serves them (the main one runs four times a second).
+    std::string applyRack (const rack::Request&);
+    std::string rackLock() const;
+    struct RackTimer final : juce::Timer
+    {
+        std::function<void()> tick;
+        void timerCallback() override { if (tick) tick(); }
+    };
+    RackTimer rackTimer;
     struct RackMeters
     {
         std::atomic<float> gate { 0.0f }, deEss { 0.0f }, rider { 0.0f }, peakGr { 0.0f }, levelGr { 0.0f };

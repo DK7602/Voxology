@@ -2114,6 +2114,8 @@ $("chains").addEventListener("click", async () => { if (chainMenu) closeChainMen
 const rackGet = Juce.getNativeFunction("getRack");
 const rackThemeGet = Juce.getNativeFunction("getRackTheme");
 const rackThemeSet = Juce.getNativeFunction("setRackTheme");
+const rackRequest = Juce.getNativeFunction("rackRequest");
+const rackAnswer = Juce.getNativeFunction("rackAnswer");
 $("rack").addEventListener("click", async () => {
   if (!window.SonicologyRack || window.SonicologyRack.isOpen()) return;
   closeChainMenu();
@@ -2122,6 +2124,9 @@ $("rack").addEventListener("click", async () => {
     host: "voxology",
     theme: theme === "light" || theme === "dark" ? theme : undefined,
     getRack: async (track) => { const j = await rackGet(track || "").catch(() => null); return j ? JSON.parse(j) : null; },
+    // stage 2: a knob turned or a module switched, for the plug-in that owns it; and what became of it
+    request: async (r) => JSON.parse(await rackRequest(r.unit, r.gen, r.change, r.module, r.control || "", r.value, r.gesture || "set")),
+    answer: async (unit, gen, ticket) => JSON.parse(await rackAnswer(unit, gen, ticket)),
     onTheme: (t) => { rackThemeSet(t).catch(() => {}); },
     back: () => {},
   });

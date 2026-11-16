@@ -174,7 +174,7 @@
   window.__JUCE__ = {
     initialisationData: {
       __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "getAutoAnalyze", "setAutoAnalyze", "applyAutoAnalyze", "dismissAutoAnalyze", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed", "pickStyle", "setVocalStyleMine", "pickDaw", "setPitchAnyway",
-        "setReferenceSplit", "listChains", "getChainName", "saveChain", "loadChain", "deleteChain", "getRack", "getRackTheme", "setRackTheme"],
+        "setReferenceSplit", "listChains", "getChainName", "saveChain", "loadChain", "deleteChain", "getRack", "getRackTheme", "setRackTheme", "rackRequest", "rackAnswer"],
       __juce__registeredGlobalEventIds: [], __juce__sliders: Object.keys(sliders), __juce__toggles: Object.keys(toggles), __juce__comboBoxes: Object.keys(combos),
     },
     postMessage(message) {
@@ -200,6 +200,15 @@
         if (payload.name === "getRack") {   // tools/rack/rack_mock.js in Mixology, when the preview loads it: a demo project
           if (window.SonicologyRackMock) { Promise.resolve(window.SonicologyRackMock.getRack()).then((d) => send("__juce__complete", { promiseId: payload.resultId, result: JSON.stringify(d) })); return; }
           result = null;
+        }
+        if (payload.name === "rackRequest" || payload.name === "rackAnswer") {   // stage 2, against the same demo project
+          const p = payload.params || [];
+          const M = window.SonicologyRackMock;
+          const call = !M ? Promise.resolve({ ticket: 0, why: "No demo project in this preview." })
+            : payload.name === "rackRequest" ? M.request({ unit: p[0], gen: p[1], change: p[2], module: p[3], control: p[4], value: p[5], gesture: p[6] })
+            : M.answer(p[0], p[1], p[2]);
+          Promise.resolve(call).then((d) => send("__juce__complete", { promiseId: payload.resultId, result: JSON.stringify(d) }));
+          return;
         }
         if (payload.name === "getRackTheme") { try { result = localStorage.getItem("sonicologyRackTheme") || ""; } catch (e) { result = ""; } }
         if (payload.name === "setRackTheme") { try { localStorage.setItem("sonicologyRackTheme", payload.params[0]); } catch (e) { /* none */ } }

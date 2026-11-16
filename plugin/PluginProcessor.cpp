@@ -2,6 +2,7 @@
 #include "vox/KeyShare.h"
 #include "vox/SongStyle.h"
 #include "VoxWebEditor.h"
+#include "RackHost.h"
 
 VoxologyAudioProcessor::VoxologyAudioProcessor()
     : AudioProcessor (BusesProperties()
@@ -57,6 +58,7 @@ namespace
 VoxologyAudioProcessor::~VoxologyAudioProcessor()
 {
     stopTimer();
+    rackTimer.stopTimer();
     cancelPendingUpdate();
     vox::UnmaskLink::instance().release (linkSlot);
     suite::Link::process().releaseVocal (suiteSlot, suiteId);
@@ -134,7 +136,15 @@ void VoxologyAudioProcessor::timerCallback()
         leaveSuite();
     publishSuite();      // four times a second (its heartbeat)
     updateHoneyLink();   // Honey Tune on this track: Pitch rests
-    publishRack();       // the Sonicology Rack (more often while a Rack view watches)
+    publishRack();       // the Sonicology Rack (more often while a Rack view watches: rackTimer)
+    const bool watched = rackPub.watched (suite::nowMs());
+    if (watched && ! rackTimer.isTimerRunning())
+    {
+        rackTimer.tick = [this] { publishRack(); };
+        rackTimer.startTimerHz (25);
+    }
+    else if (! watched && rackTimer.isTimerRunning())
+        rackTimer.stopTimer();
     if (++timerTicks % 4 != 0) return;
 
     resolveUnmaskSource();   // a saved choice: wait for that vocal's Voxology to appear (project loading)
@@ -314,9 +324,38 @@ void VoxologyAudioProcessor::publishSuite()
     mixology = view;
 }
 
+std::string VoxologyAudioProcessor::rackLock() const
+{
+    switch (autoEdit.getState())
+    {
+        case AutoEditController::listening: return "Auto-Edit is listening to the vocal.";
+        case AutoEditController::analysing: return "Auto-Edit is working out the settings.";
+        default: return {};
+    }
+}
+
+std::string VoxologyAudioProcessor::applyRack (const rack::Request& r)
+{
+    if (r.change == rack::Change::state)
+    {
+        const char* id = vox::rackunit::switchOf (r.module);
+        auto* p = id != nullptr ? rack::host::find (parameters, id) : nullptr;
+        if (p == nullptr) return rack::host::cannot ("Voxology", r);
+        rack::host::setSwitch (*p, r.value >= 0.5f);
+        return {};
+    }
+    double value = 0.0;
+    auto* p = vox::rackunit::fromKnob (r.control, r.value, value) ? rack::host::find (parameters, r.control) : nullptr;
+    if (p == nullptr) return rack::host::cannot ("Voxology", r);
+    rack::host::set (*p, r.gesture, static_cast<float> (value));
+    return {};
+}
+
 void VoxologyAudioProcessor::publishRack()
 {
     const auto now = suite::nowMs();
+    // Stage 2: knobs turned and modules switched in a Rack view (in any Sonicology plug-in), on this Voxology.
+    rackPub.serve (now, rackLock(), [this] (const rack::Request& r) { return applyRack (r); });
     const auto due = rackPub.due (now);
     if (due == rack::Publisher::Due::none) return;
     const bool full = due == rack::Publisher::Due::full;
@@ -358,6 +397,7 @@ void VoxologyAudioProcessor::publishRack()
     u.track = trackName.toStdString();
     u.version = static_cast<std::uint32_t> (JucePlugin_VersionCode);
     u.on = ! st.params.bypass && ! isHostBypassed();
+    u.lock = rackLock();   // the Rack can't change it while Auto-Edit works
     if (playing)
     {
         u.inDb = inPeak;
