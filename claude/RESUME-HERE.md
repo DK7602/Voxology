@@ -1940,3 +1940,4 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   ui/rack/ copied from Mixology (the master copy; shared-files job), mock.js answers the Rack in the browser preview.
 - Voxology 0.55.0 (2026-11-16, step 5): the manual's "Sonicology Rack: your whole suite in one view" section, version,
   README. Goes out in Sonicology Beta 14 with Mixology 0.26.0 and Masterology 0.31.0.
+  Beta 14 built 2026-11-16: Mixology's Sonicology suite run 43876865629 (label "Beta 14", version 0.14.0), all green.
