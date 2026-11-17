@@ -407,3 +407,17 @@ TEST_CASE ("Rack unit (Honey Tune): the Rack turns Snap, Drift and Vibrato; the 
     CHECK (x.snap == 1.0);
     CHECK_FALSE (honeyui::rackSet (x, "key", 0.5f));
 }
+
+TEST_CASE ("Rack unit (Honey Tune): a double-click puts a knob back to Honey Tune's default", "[rack]")
+{
+    honeyui::Settings s;
+    const honeyui::Settings def;
+    s.snap = 0.1;
+    s.drift = 0.9;
+    REQUIRE (honeyui::rackReset (s, "snap"));
+    CHECK (s.snap == def.snap);
+    CHECK (s.drift == 0.9);
+    REQUIRE (honeyui::rackReset (s, "drift"));
+    CHECK (s.drift == def.drift);
+    CHECK_FALSE (honeyui::rackReset (s, "key"));
+}

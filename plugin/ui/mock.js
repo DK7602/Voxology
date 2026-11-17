@@ -174,7 +174,7 @@
   window.__JUCE__ = {
     initialisationData: {
       __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "getAutoAnalyze", "setAutoAnalyze", "applyAutoAnalyze", "dismissAutoAnalyze", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed", "pickStyle", "setVocalStyleMine", "pickDaw", "setPitchAnyway",
-        "setReferenceSplit", "listChains", "getChainName", "saveChain", "loadChain", "deleteChain", "getRack", "getRackTheme", "setRackTheme", "rackRequest", "rackAnswer"],
+        "setReferenceSplit", "listChains", "getChainName", "saveChain", "loadChain", "deleteChain", "getRack", "getRackTheme", "setRackTheme", "rackRequest", "rackAnswer", "rackWindow"],
       __juce__registeredGlobalEventIds: [], __juce__sliders: Object.keys(sliders), __juce__toggles: Object.keys(toggles), __juce__comboBoxes: Object.keys(combos),
     },
     postMessage(message) {

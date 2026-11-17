@@ -1966,3 +1966,11 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   0.26.1 89c9c01, Voxology 0.55.1 d32231c, Masterology 0.31.1 6f9ab1e), all green, both installers. Build & Test:
   Mixology 43896414539 green; Voxology 43896452035 and Masterology 43896463325 green on Windows (+ UI smoke), their
   ASan jobs ran on after. Next: the user checks the Rack again in Cubase.
+- Voxology 0.57.0 (2026-11-17, Sonicology Beta 18: the Rack audit's fixes, docs/rack/AUDIT-2026-11-17.md in
+  Mixology): shared RackLink layout 3 / RackHost.h / rack.js / rack.css from Mixology (details: Mixology's
+  RESUME-HERE). Here: a 25 Hz Rack timer only while a Rack shows this vocal (`rk.shows`), details only then;
+  applyRack takes Change::reset (setDefault); Honey Tune resets too (honeyui::rackReset); getAutoAnalyze /
+  getAutoEditReport / listReferences / listChains / getReference return objects (rack::host::jsonObject; app.js
+  jsonText() makes them text again): JUCE escapes long native-function text in time that grows with its square;
+  getRack returns base64; the window grows while the Rack is open (rackWindow native). RackUnit.cpp: Value's
+  missing initializers (a warning). Tested here: [rack], [manual], the full suite; editors compiled against JUCE.

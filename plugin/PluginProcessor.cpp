@@ -136,14 +136,14 @@ void VoxologyAudioProcessor::timerCallback()
         leaveSuite();
     publishSuite();      // four times a second (its heartbeat)
     updateHoneyLink();   // Honey Tune on this track: Pitch rests
-    publishRack();       // the Sonicology Rack (more often while a Rack view watches: rackTimer)
-    const bool watched = rackPub.watched (suite::nowMs());
-    if (watched && ! rackTimer.isTimerRunning())
+    publishRack();       // the Sonicology Rack (more often while a Rack view shows this track: rackTimer)
+    const bool shown = rackPub.shows (suite::nowMs(), rackTrackHash(), rack::Role::vocal);
+    if (shown && ! rackTimer.isTimerRunning())
     {
         rackTimer.tick = [this] { publishRack(); };
         rackTimer.startTimerHz (25);
     }
-    else if (! watched && rackTimer.isTimerRunning())
+    else if (! shown && rackTimer.isTimerRunning())
         rackTimer.stopTimer();
     if (++timerTicks % 4 != 0) return;
 
@@ -336,6 +336,14 @@ std::string VoxologyAudioProcessor::rackLock() const
 
 std::string VoxologyAudioProcessor::applyRack (const rack::Request& r)
 {
+    if (r.change == rack::Change::reset)
+    {
+        double unused = 0.0;
+        auto* p = vox::rackunit::fromKnob (r.control, 0.0f, unused) ? rack::host::find (parameters, r.control) : nullptr;   // a knob the Rack shows
+        if (p == nullptr) return rack::host::cannot ("Voxology", r);
+        rack::host::setDefault (*p);
+        return {};
+    }
     if (r.change == rack::Change::state)
     {
         const char* id = vox::rackunit::switchOf (r.module);
@@ -356,7 +364,7 @@ void VoxologyAudioProcessor::publishRack()
     const auto now = suite::nowMs();
     // Stage 2: knobs turned and modules switched in a Rack view (in any Sonicology plug-in), on this Voxology.
     rackPub.serve (now, rackLock(), [this] (const rack::Request& r) { return applyRack (r); });
-    const auto due = rackPub.due (now);
+    const auto due = rackPub.due (now, rackTrackHash(), rack::Role::vocal);
     if (due == rack::Publisher::Due::none) return;
     const bool full = due == rack::Publisher::Due::full;
 

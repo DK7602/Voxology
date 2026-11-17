@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PluginProcessor.h"
+#include "RackHost.h"
 
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_dsp/juce_dsp.h>
@@ -65,6 +66,7 @@ private:
     std::vector<std::unique_ptr<juce::WebToggleButtonRelay>> toggleRelays = makeRelays<juce::WebToggleButtonRelay> (VoxParams::toggleIds());
     std::vector<std::unique_ptr<juce::WebComboBoxRelay>> comboRelays = makeRelays<juce::WebComboBoxRelay> (VoxParams::comboIds());
 
+    rack::host::RackWindow rackWindow;   // the window grows while the Rack is open (RackHost.h)
     juce::WebBrowserComponent webView;
     std::unique_ptr<juce::FileChooser> refChooser;
 

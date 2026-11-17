@@ -413,7 +413,6 @@ public:
     void publishRack (const std::map<std::string, int>& named, std::uint64_t now)
     {
         auto& rk = rack::Link::process();
-        const bool full = rk.watched (now);
         const auto s = getSettings();
         std::map<std::uint32_t, honeyui::RackTrack> tracks;
         std::map<std::uint32_t, std::string> names;
@@ -450,6 +449,7 @@ public:
             u.track = names[hash];
             u.version = static_cast<std::uint32_t> (JucePlugin_VersionCode);
             u.on = true;
+            const bool full = rk.shows (now, hash, rack::Role::vocal);   // details only for the track a Rack shows
             u.detailed = full;
             u.modules = { honeyui::rackModule (s, t, full) };
             if (! rk.publish (rs.slot, rs.id, u, now)) rs.slot = -1;   // taken over while silent: claim again
@@ -473,7 +473,13 @@ public:
             for (int i = 0; i < n; ++i)
             {
                 const auto& r = batch[i];
-                if (r.change != rack::Change::value) { rk.refuse (rs.slot, rs.id, r.ticket, "Honey Tune has no on switch: it tunes the clips you put it on."); continue; }
+                if (r.change == rack::Change::state) { rk.refuse (rs.slot, rs.id, r.ticket, "Honey Tune has no on switch: it tunes the clips you put it on."); continue; }
+                if (r.change == rack::Change::reset)
+                {
+                    if (honeyui::rackReset (s, r.control)) changed = true;
+                    else rk.refuse (rs.slot, rs.id, r.ticket, "Honey Tune's key and scale are chosen in its own window.");
+                    continue;
+                }
                 if (r.gesture == rack::Gesture::begin || r.gesture == rack::Gesture::move) continue;   // the end of the drag carries where it stops
                 if (! honeyui::rackSet (s, r.control, r.value)) { rk.refuse (rs.slot, rs.id, r.ticket, "Honey Tune's key and scale are chosen in its own window."); continue; }
                 changed = true;

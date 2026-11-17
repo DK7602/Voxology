@@ -114,7 +114,7 @@ namespace vox::rackunit
         // Shown only (not a control of its own): the key Pitch follows, what the Beat Listener hears.
         void add (rack::Module& m, const char* name, const std::string& text, float norm, bool bi = false)
         {
-            if (m.values.size() < static_cast<std::size_t> (rack::kMaxValues)) m.values.push_back ({ name, text, norm, bi });
+            if (m.values.size() < static_cast<std::size_t> (rack::kMaxValues)) m.values.push_back ({ name, text, norm, bi, {}, 0 });
         }
 
         // A knob the Rack can turn: its parameter (kKnobs) places it.

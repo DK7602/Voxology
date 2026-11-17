@@ -79,7 +79,7 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
         .withNativeFunction ("startAutoEdit", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.start()); })
         .withNativeFunction ("cancelAutoEdit", [this] (const juce::Array<juce::var>&, auto complete) { audioProcessor.autoEdit.cancel(); complete (true); })
         .withNativeFunction ("undoAutoEdit", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.undo()); })
-        .withNativeFunction ("getAutoAnalyze", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getWatchJson()); })
+        .withNativeFunction ("getAutoAnalyze", [this] (const juce::Array<juce::var>&, auto complete) { complete (rack::host::jsonObject (audioProcessor.autoEdit.getWatchJson())); })
         .withNativeFunction ("setAutoAnalyze", [this] (const juce::Array<juce::var>& args, auto complete)
                              { if (args.size() >= 1) audioProcessor.autoEdit.setWatchOn (static_cast<bool> (args[0])); complete (true); })
         .withNativeFunction ("applyAutoAnalyze", [this] (const juce::Array<juce::var>& args, auto complete)
@@ -101,7 +101,7 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
         // Honey Tune tunes this track: setPitchAnyway(true) = Pitch tunes here anyway (saved with the project), false = it rests.
         .withNativeFunction ("setPitchAnyway", [this] (const juce::Array<juce::var>& args, auto complete)
                              { if (args.size() >= 1) audioProcessor.setPitchAnyway (static_cast<bool> (args[0])); complete (true); })
-        .withNativeFunction ("getAutoEditReport", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getReportJson()); })
+        .withNativeFunction ("getAutoEditReport", [this] (const juce::Array<juce::var>&, auto complete) { complete (rack::host::jsonObject (audioProcessor.autoEdit.getReportJson())); })
         .withNativeFunction ("chooseReference", [this] (const juce::Array<juce::var>&, auto complete)
         {
             // Start where downloads land (or the last folder used), not an empty default folder.
@@ -116,7 +116,7 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
                                      });
             complete (true);
         })
-        .withNativeFunction ("listReferences", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.listReferencesJson()); })
+        .withNativeFunction ("listReferences", [this] (const juce::Array<juce::var>&, auto complete) { complete (rack::host::jsonObject (audioProcessor.autoEdit.listReferencesJson())); })
         .withNativeFunction ("selectReference", [this] (const juce::Array<juce::var>& args, auto complete)
         {
             if (args.size() >= 2) audioProcessor.autoEdit.selectReference (static_cast<bool> (args[0]), args[1].toString());
@@ -132,7 +132,7 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
             if (args.size() >= 1) audioProcessor.autoEdit.deleteUserReference (args[0].toString());
             complete (true);
         })
-        .withNativeFunction ("listChains", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.chains.listJson()); })
+        .withNativeFunction ("listChains", [this] (const juce::Array<juce::var>&, auto complete) { complete (rack::host::jsonObject (audioProcessor.chains.listJson())); })
         .withNativeFunction ("getChainName", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.getChainName()); })
         .withNativeFunction ("saveChain", [this] (const juce::Array<juce::var>& args, auto complete)
         {
@@ -183,13 +183,17 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
             audioProcessor.setUnmaskSourceByName (args.isEmpty() ? juce::String() : args[0].toString());
             complete (true);
         })
-        .withNativeFunction ("getReference", [this] (const juce::Array<juce::var>&, auto complete) { complete (audioProcessor.autoEdit.getReferenceJson()); })
+        .withNativeFunction ("getReference", [this] (const juce::Array<juce::var>&, auto complete) { complete (rack::host::jsonObject (audioProcessor.autoEdit.getReferenceJson())); })
         // The Sonicology Rack (suite/RackLink.h): every Sonicology plug-in in the project, as rack.js shows it.
+        .withNativeFunction ("rackWindow", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            // the Rack opens (true) / goes BACK (false): a bigger window for it, then the one you had
+            if (args.size() > 0 && static_cast<bool> (args[0])) rackWindow.open (*this); else rackWindow.close (*this);
+            complete (juce::var());
+        })
         .withNativeFunction ("getRack", [this] (const juce::Array<juce::var>& args, auto complete)
                              {
-                                 const auto json = rack::viewJson ("voxology", audioProcessor.rackTrackHash(), suite::nowMs(),
-                                                                 args.size() > 0 ? args[0].toString().toStdString() : std::string());   // the track it shows
-                                 complete (juce::String::fromUTF8 (json.data(), static_cast<int> (json.size())));
+                                 complete (rack::host::viewBase64 ("voxology", audioProcessor.rackTrackHash(), args.size() > 0 ? args[0] : juce::var()));
                              })
         // Stage 2: a knob turned or a module switched in the Rack, for the plug-in that owns it; and what became of it.
         .withNativeFunction ("rackRequest", [] (const juce::Array<juce::var>& args, auto complete) { complete (rack::host::requestFrom (args)); })

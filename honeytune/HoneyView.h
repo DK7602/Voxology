@@ -394,6 +394,17 @@ inline bool rackSet (Settings& s, const std::string& key, float knob)
     return true;
 }
 
+/** A Rack knob back to Honey Tune's default (a double-click). False: not one the Rack can turn. */
+inline bool rackReset (Settings& s, const std::string& key)
+{
+    const Settings def;
+    if (key == "snap") s.snap = def.snap;
+    else if (key == "drift") s.drift = def.drift;
+    else if (key == "vibrato") s.vibrato = def.vibrato;
+    else return false;
+    return true;
+}
+
 /** The editor talks to the clip through this. */
 struct Model
 {

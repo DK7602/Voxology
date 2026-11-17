@@ -153,18 +153,20 @@ const choice = (id) => P[id].getChoiceIndex();
 const aeStart = Juce.getNativeFunction("startAutoEdit");
 const aeCancel = Juce.getNativeFunction("cancelAutoEdit");
 const aeUndo = Juce.getNativeFunction("undoAutoEdit");
-const aeGetReport = Juce.getNativeFunction("getAutoEditReport");
-const aaGet = Juce.getNativeFunction("getAutoAnalyze");
+// A reply sent as an object (RackHost.h's jsonObject: JUCE escapes long text slowly) back as the JSON text this page reads.
+const jsonText = (fn) => async (...args) => { const r = await fn(...args); return r == null || typeof r === "string" ? r : JSON.stringify(r); };
+const aeGetReport = jsonText(Juce.getNativeFunction("getAutoEditReport"));
+const aaGet = jsonText(Juce.getNativeFunction("getAutoAnalyze"));
 const aaSet = Juce.getNativeFunction("setAutoAnalyze");
 const aaApply = Juce.getNativeFunction("applyAutoAnalyze");
 const aaDismiss = Juce.getNativeFunction("dismissAutoAnalyze");
 const refChoose = Juce.getNativeFunction("chooseReference");
 const refClear = Juce.getNativeFunction("clearReference");
-const refList = Juce.getNativeFunction("listReferences");
+const refList = jsonText(Juce.getNativeFunction("listReferences"));
 const refSelect = Juce.getNativeFunction("selectReference");
 const refDelete = Juce.getNativeFunction("deleteReference");
 const refSetSplit = Juce.getNativeFunction("setReferenceSplit");
-const refGet = Juce.getNativeFunction("getReference");
+const refGet = jsonText(Juce.getNativeFunction("getReference"));
 const umGetSources = Juce.getNativeFunction("getUnmaskSources");
 const umSetSource = Juce.getNativeFunction("setUnmaskSource");
 let refInfo = { state: "none" };   // Reference Match: none / loading / ok / problem
@@ -2027,7 +2029,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeRefMe
 $("ref").addEventListener("click", async () => { if (refMenu) closeRefMenu(); else await openRefMenu(); });
 
 // My Chains: your setups saved under a name (every project), Quick Looks (set only their modules), Start fresh.
-const chList = Juce.getNativeFunction("listChains");
+const chList = jsonText(Juce.getNativeFunction("listChains"));
 const chSave = Juce.getNativeFunction("saveChain");
 const chLoad = Juce.getNativeFunction("loadChain");
 const chDelete = Juce.getNativeFunction("deleteChain");
@@ -2116,6 +2118,7 @@ const rackThemeGet = Juce.getNativeFunction("getRackTheme");
 const rackThemeSet = Juce.getNativeFunction("setRackTheme");
 const rackRequest = Juce.getNativeFunction("rackRequest");
 const rackAnswer = Juce.getNativeFunction("rackAnswer");
+const rackWindow = Juce.getNativeFunction("rackWindow");
 $("rack").addEventListener("click", async () => {
   if (!window.SonicologyRack || window.SonicologyRack.isOpen()) return;
   closeChainMenu();
@@ -2124,13 +2127,14 @@ $("rack").addEventListener("click", async () => {
     host: "voxology",
     theme: theme === "light" || theme === "dark" ? theme : undefined,
     dataFile: true,   // the plug-in serves rack-data/<track>.json (fast); getRack only if that can't be read
-    getRack: async (track) => { const j = await rackGet(track || "").catch(() => null); return j ? JSON.parse(j) : null; },
+    getRack: async (track) => { const j = await rackGet(track || "").catch(() => null); return j ? window.SonicologyRack.fromBase64Json(j) : null; },
     // stage 2: a knob turned or a module switched, for the plug-in that owns it; and what became of it
     request: async (r) => JSON.parse(await rackRequest(r.unit, r.gen, r.change, r.module, r.control || "", r.value, r.gesture || "set")),
     answer: async (unit, gen, ticket) => JSON.parse(await rackAnswer(unit, gen, ticket)),
     onTheme: (t) => { rackThemeSet(t).catch(() => {}); },
-    back: () => {},
+    back: () => { rackWindow(false).catch(() => {}); },   // the window as it was
   });
+  rackWindow(true).catch(() => {});   // a bigger window while the Rack is open
 });
 
 // UNDO: back to before the last Auto-Edit (its report goes) or the last chain / look loaded (the report stays).

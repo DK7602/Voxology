@@ -52,6 +52,10 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   shared `plugin/RackHost.h`: a knob drag is one host gesture), locked while Auto-Edit listens or works; every knob
   names its parameter (`vox::rackunit::fromKnob` / `switchOf`). Honey Tune takes Snap / Drift / Vibrato
   (`honeyui::rackSet`), applied once where a drag stops.
+- Since v0.57 (Beta 18): details only for the track a Rack shows (`rack::Link::shows`, a 25 Hz timer while shown),
+  reset to default (`Change::reset`; Honey Tune `honeyui::rackReset`), the window grows while the Rack is open
+  (`rack::host::RackWindow`), and report natives return objects (`rack::host::jsonObject`, `jsonText` in app.js): JUCE
+  escapes long text from a native function in time that grows with its square.
 - `tests/` Catch2 tests; `tools/report.cpp` prints Auto-Edit's report for a test vocal or a raw file.
 
 ## Third-party
