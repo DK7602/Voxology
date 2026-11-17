@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.57.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.58.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.57.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.58.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -95,8 +95,8 @@ Every knob:
 | 04 | Dynamic EQ | Cuts boom, mud, honk and harshness only when they jump out; Smooth tames ringing resonances | 4 bands, each Max Cut + Frequency, Sensitivity, Smooth |
 | 05 | De-Esser | Tames sharp s, t, sh and ch | Amount, Sensitivity, Frequency |
 | 06 | Rider | Rides the level word by word, like a hand on the fader | Target, Range, Speed (Slow, Med, Fast) |
-| 07 | Compressor | Evens the performance | Peak (catches spikes), Threshold + Ratio (smooth leveler), Makeup, Mix (parallel blend) |
-| 08 | Saturation | Adds harmonics: warmth, density, presence | Mode (Tape, Tube, Clip), Drive, Mix |
+| 07 | Compressor | Evens the performance | Style (Clean, FET, Opto), Peak (catches spikes), Threshold + Ratio (smooth leveler), Makeup, Mix (parallel blend) |
+| 08 | Saturation | Adds harmonics: warmth, density, presence, and Air on top | Mode (Tape, Tube, Clip), Drive, Mix, Air (sparkle above 8 kHz) |
 | 09 | Voices | Doubles, extra voices and harmonies in key, up to 8 voices | Double, Width, Voice 1 (left) + Voice 2 (right): **Unison** (a second singer on your own notes, same octave) or a harmony: 3rd, 4th, 5th or octave, up or down, Stack (2, 4 or 6 more singers on your notes, or **MIDI chords**: the voices sing the chords you play), Crew (each voice its own singer), Level, Formant |
 | 10 | Dimension | Movement and width: chorus, flanger or phaser | Mode (Chorus, Flanger, Phaser), Amount, Speed, Width |
 | 11 | Delay | Echoes locked to the song's tempo | Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong, Throw (an echo on each line's last word) |
@@ -111,6 +111,38 @@ Every knob:
 - Pitch reads your pitch over two or three cycles of your voice and stamps each reading with the exact moment it describes (v0.51). Every real voice is a little uneven from cycle to cycle; reading one cycle at a time followed that unevenness, and a hard tune came out wobbly. Measured on a raw vocal at Retune 0 against Cubase Pitch Correct and Waves Tune Real-Time at their fastest: Robot now lands on the notes as reliably as Waves (about 7 % of the time more than 30 cents off a note, mostly the slides between notes) with about 3 - 4 cents of wobble left inside held notes (it was about 6).
 - **With Honey Tune on the same track Pitch rests** (one tuner at a time): see Using both together.
 - **Auto-Edit and rap**: Auto-Edit tunes only a take with held notes. Rap is often clearly pitched, but it glides: on real raps under 25 % of the pitched part is held notes, on sung parts usually 35 % or more. Under 25 % Pitch stays off in every style except Robot (there the effect is the point). In Trap Lead a card says how to get the robotic trap sound anyway: Mode Robot (or Classic at Retune 0 - 10 ms) and Amount 100 %. The report's "you sing N cents away" is measured from the notes Pitch will pull to: your key's scale, or all 12 notes on Chromatic.
+
+**LISTEN: hear what a module takes out** (Cleanup, Dynamic EQ and De-Esser, the **LISTEN** button at the top right of
+the module, next to ON). It plays only what that module removes from your vocal, instead of the vocal, turned up so you
+can hear it (the line next to the module's name says by how much). It's the quickest way to set these modules right:
+
+- **De-Esser:** you should hear only the "s", "t", "sh" and "ch" sounds. If you hear whole words or vowels, Amount or
+  Sensitivity is too high, or Frequency too low.
+- **Cleanup:** you should hear the hiss, room echo, rumble, thumps, clicks and breaths it takes out (and the gaps the
+  gate turns down). If words or the start of notes are in it, a setting is too strong: back it off.
+- **Dynamic EQ:** you should hear the boom, mud or ringing it cuts, not whole words.
+- It's for listening only: it plays on B (A and bypass play as usual), opening another module switches LISTEN to that
+  module (or off, on a module without it), it switches off when you close Voxology, and it's never in a bounce or an
+  export.
+
+**Compressor Style.** The leveler (Threshold + Ratio) comes in three characters; Peak works the same in all three, and
+the same settings take about the same amount off a held note (measured within 1.5 dB):
+
+- **Clean** (the original): even and transparent.
+- **FET**: grabs the front of each word (about 1 ms, where Clean takes about 10) and lets go quicker: upfront and
+  aggressive, the 1176 school. Great for rap and trap leads.
+- **Opto**: smooth and slow to let go: half the reduction lets go in about 60 ms, the rest over half a second to three
+  seconds (longer after long, deep reduction), with a soft knee: the LA-2A school. The vocal stays even without
+  pumping. Great for sung R&B, ballads and natural singers.
+- Auto-Edit picks it for your style: FET for Trap Lead and Rap, Opto for R&B, Folk and Natural Singer, Clean for the
+  rest. Switching while it works never jumps.
+
+**Air (Saturation)** adds sparkle on top: it makes new harmonics from the top of your voice (above about 3.5 kHz) and
+adds only what lands above 8 kHz, so the vocal sounds open and expensive without getting harsher where "s" sounds and
+harshness live. It works even with Drive at 0. It does less on an "s" (where the top is most of the sound), and nothing
+folds back as aliasing (it runs in Saturation's 4x oversampling). Measured on a test vocal at 60 %: the top (12 - 20
+kHz) up about 4 - 6 dB, 100 Hz - 2 kHz unchanged. 20 - 40 % is felt more than heard. Auto-Edit adds 10 - 30 % for most
+styles (more on Strong, less on Light), none when you aim at a reference.
 
 **Noise and Room (Cleanup)** work before anything else in the chain, so Pitch and the gate already hear the cleaner vocal.
 

@@ -187,6 +187,10 @@ html.kbd .hex:focus { filter: drop-shadow(0 0 6px var(--blue)) drop-shadow(0 0 3
 .mod-what { font-size: 14px; color: var(--ink-soft); }
 .kept { font-size: 11px; color: var(--ok); letter-spacing: 0.08em; padding: 3px 8px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--ok); }
 #mod-power { height: 30px; padding: 0 14px; }
+#mod-listen { height: 30px; padding: 0 14px; }
+#mod-listen.listening { color: #9b2c1f; box-shadow: inset 0 0 0 2.5px #e0402c, 0 0 10px rgba(224, 64, 44, 0.65); }
+#mod-what.listening { color: #9b2c1f; font-weight: 700; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#mod-name { white-space: nowrap; }
 #cells { display: flex; flex-wrap: wrap; gap: 4px 3px; padding: 12px 14px; align-content: flex-start; }
 .cell { width: 116px; height: 152px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 #cells[data-cols="5"] .cell { width: 136px; }

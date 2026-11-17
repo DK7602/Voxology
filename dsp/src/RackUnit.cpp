@@ -78,8 +78,8 @@ namespace vox::rackunit
             { "dsAmount", 0, 100, 0, 0 }, { "dsSens", 0, 100, 0, 0 }, { "dsFreq", 3000, 12000, 6000, 0 },
             { "rdTarget", -40, -6, 0, 0 }, { "rdRange", 0, 12, 0, 0 }, { "rdSpeed", 0, 2, 0, 3 },
             { "cpPeak", -40, 0, 0, 0 }, { "cpThr", -60, 0, 0, 0 }, { "cpRatio", 1, 10, 3, 0 }, { "cpMakeup", 0, 24, 0, 0 },
-            { "cpMix", 0, 100, 0, 0 },
-            { "saMode", 0, 2, 0, 3 }, { "saDrive", 0, Saturation::kMaxDriveDb, 0, 0 }, { "saMix", 0, 100, 0, 0 },
+            { "cpMix", 0, 100, 0, 0 }, { "cpStyle", 0, kCompStyles - 1, 0, kCompStyles },
+            { "saMode", 0, 2, 0, 3 }, { "saDrive", 0, Saturation::kMaxDriveDb, 0, 0 }, { "saMix", 0, 100, 0, 0 }, { "saAir", 0, 100, 0, 0 },
             { "dbAmount", 0, 100, 0, 0 }, { "dbWidth", 0, 100, 0, 0 }, { "hv1", 0, kHarmonies - 1, 0, kHarmonies },
             { "hv2", 0, kHarmonies - 1, 0, kHarmonies }, { "hvStack", 0, 3, 0, 4 }, { "hvLevel", 0, 100, 0, 0 },
             { "hvFormant", -kMaxFormant, kMaxFormant, 0, 0 }, { "hvCrew", 0, 100, 0, 0 },
@@ -370,6 +370,8 @@ namespace vox::rackunit
             const auto& c = p.comp;
             auto m = cell ("vox.comp", c.enabled, VocalCompressor::isNeutral (c));
             const bool peak = c.peakThrDb <= -0.05, level = c.ratio >= 1.005;
+            const int style = std::clamp (c.style, 0, kCompStyles - 1);
+            add (m, "Style", kCompStyleNames[static_cast<std::size_t> (style)], "cpStyle", style);
             add (m, "Peak", peak ? db (c.peakThrDb) : "Off", "cpPeak", c.peakThrDb);
             add (m, "Threshold", db (c.thrDb), "cpThr", c.thrDb);
             add (m, "Ratio", digits (c.ratio, 1) + ":1", "cpRatio", c.ratio);
@@ -379,6 +381,7 @@ namespace vox::rackunit
             if (peak) join (m.summary, "Peak " + db (c.peakThrDb));
             if (c.mix < 99.5) join (m.summary, "Mix " + pct (c.mix));
             if (m.summary.empty()) m.summary = "Makeup " + signedDb (c.makeupDb);
+            if (style != 0) m.summary = std::string (kCompStyleNames[static_cast<std::size_t> (style)]) + kDot + m.summary;
             gr (m, s, s.meters.peakGr + s.meters.levelGr);
             finish (m);
         }
@@ -388,13 +391,20 @@ namespace vox::rackunit
             const auto& c = p.saturation;
             static const char* const kModes[] = { "Tape", "Tube", "Clip" };
             const int mode = std::clamp (static_cast<int> (c.mode), 0, 2);
-            auto m = cell ("vox.sat", c.enabled, c.driveDb < 0.05 || c.mix < 0.05);
+            const bool air = c.air >= 0.05;
+            auto m = cell ("vox.sat", c.enabled, (c.driveDb < 0.05 || c.mix < 0.05) && ! air);
             add (m, "Mode", kModes[mode], "saMode", mode);
             add (m, "Drive", db (c.driveDb), "saDrive", c.driveDb);
             add (m, "Mix", pct (c.mix), "saMix", c.mix);
-            m.summary = kModes[mode];
-            join (m.summary, "Drive " + db (c.driveDb));
-            join (m.summary, "Mix " + pct (c.mix));
+            add (m, "Air", air ? pct (c.air) : "Off", "saAir", c.air);
+            if (c.driveDb >= 0.05 && c.mix >= 0.05)
+            {
+                m.summary = kModes[mode];
+                join (m.summary, "Drive " + db (c.driveDb));
+                join (m.summary, "Mix " + pct (c.mix));
+            }
+            if (air) join (m.summary, "Air " + pct (c.air));
+            if (m.summary.empty()) m.summary = kModes[mode];
             finish (m);
         }
 

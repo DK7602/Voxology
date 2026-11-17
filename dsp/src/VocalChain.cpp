@@ -32,6 +32,9 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
     for (auto& w : work) w.assign (kChunk, 0.0);
     for (auto& d : dryLine) d.assign (static_cast<size_t> (latencySamples() + 1), 0.0);
     mono.assign (kChunk, 0.0);
+    listenMix.prepare (sr);
+    for (auto& l : earlyLine) l.assign (static_cast<size_t> (pitch.latencySamples() + 1), 0.0);
+    for (auto& l : lateLine) l.assign (static_cast<size_t> (Saturation::kLatency + 1), 0.0);
     outGlide = design::onePole (0.020, sr);
     abGlide = design::onePole (0.020, sr);
     setParams (params);
@@ -61,6 +64,9 @@ void VocalChain::reset() noexcept
     reverb.reset();
     for (auto& d : dryLine) std::fill (d.begin(), d.end(), 0.0);
     dryPos = 0;
+    listenMix.reset();
+    clearListenLines();
+    denoise.setListen (0);
     outGain = fromDb (params.outputDb);
     mixB = (params.bypass || params.listenOriginal) ? 0.0 : 1.0;
     gainA = fromDb (params.gainOriginalDb);
@@ -107,6 +113,13 @@ void VocalChain::setParams (const ChainParams& p) noexcept
     reverb.setParams (p.reverb);
 }
 
+void VocalChain::clearListenLines() noexcept
+{
+    for (auto& l : earlyLine) std::fill (l.begin(), l.end(), 0.0);
+    for (auto& l : lateLine) std::fill (l.begin(), l.end(), 0.0);
+    earlyPos = latePos = 0;
+}
+
 ChainMeters VocalChain::takeMeters() noexcept
 {
     ChainMeters m = meters;
@@ -127,6 +140,9 @@ ChainMeters VocalChain::takeMeters() noexcept
     m.pitch = pitch.reading();
     m.voiceNotes = voices.currentNotes();
     m.input = clipWatch.take();
+    m.listenPlaying = listenMix.audible();
+    m.listenGainDb = m.listenPlaying != listen::off ? listenMix.appliedGainDb() : 0.0;
+    m.listenUnderDb = m.listenPlaying != listen::off ? listenMix.levelUnderVocalDb() : -100.0;
     meters = {};
     return m;
 }
@@ -155,10 +171,28 @@ void VocalChain::processChunk (int nch, int len) noexcept
     // The incoming vocal: clipped or too hot? (read-only, for the tips)
     clipWatch.process (ch.data(), nch, len);
 
+    // LISTEN (monitoring only): which module's take-out is formed this chunk. Only while you hear B (the processed
+    // vocal); A and bypass fade it out. It is complete once the whole chain's latency has passed through.
+    const bool hearB = ! (params.bypass || params.listenOriginal);
+    listenMix.request (hearB ? params.listenMode : static_cast<int> (listen::off), latencySamples() + kChunk);
+    const int lm = listenMix.beginBlock();
+    if (listenMix.startedArming()) clearListenLines();
+    denoise.setListen (lm == listen::cleanup ? 1 : lm == listen::dynEq ? 2 : 0);
+    std::array<std::array<double, kChunk>, kMaxChannels> early {}, late {}, before {};
+    std::array<double*, kMaxChannels> earlyPtr {};
+    for (int c = 0; c < nch; ++c) earlyPtr[static_cast<size_t> (c)] = early[static_cast<size_t> (c)].data();
+    const auto keep = [&] { for (int c = 0; c < nch; ++c) std::copy_n (ch[static_cast<size_t> (c)], len, before[static_cast<size_t> (c)].data()); };
+    const auto takenOut = [&]
+    {
+        for (int c = 0; c < nch; ++c)
+            for (int i = 0; i < len; ++i)
+                late[static_cast<size_t> (c)][static_cast<size_t> (i)] += before[static_cast<size_t> (c)][static_cast<size_t> (i)] - ch[static_cast<size_t> (c)][i];
+    };
+
     // Noise / room reduction first (Cleanup's): Pitch, the side-chain below and everything else hear the cleaner
     // vocal. It always runs (a constant delay, and no stale frame when B comes back); not in Record mode.
     if (! pitch.isLowLatency())
-        denoise.process (ch.data(), nch, len);
+        denoise.process (ch.data(), nch, len, lm != listen::off ? earlyPtr.data() : nullptr);
 
     // The input, before Pitch delays it: the gate / pops / breaths side-chain.
     cleanup.listen (ch.data(), nch, len);
@@ -175,13 +209,19 @@ void VocalChain::processChunk (int nch, int len) noexcept
     {
         // Inserts (the chain keeps running while you listen to A, so B comes back without a jump).
         pitch.process (ch.data(), nch, len);
+        if (lm == listen::cleanup) keep();
         cleanup.process (ch.data(), nch, len);
         pops.process (ch.data(), nch, len, side.data());
         declick.process (ch.data(), nch, len, side.data());
         breaths.process (ch.data(), nch, len, side.data());
+        if (lm == listen::cleanup) takenOut();
         eq.process (ch.data(), nch, len);
+        if (lm == listen::dynEq) keep();
         dynEq.process (ch.data(), nch, len);
+        if (lm == listen::dynEq) takenOut();
+        if (lm == listen::deEsser) keep();
         deEsser.process (ch.data(), nch, len);
+        if (lm == listen::deEsser) takenOut();
         rider.process (ch.data(), nch, len);
         comp.process (ch.data(), nch, len);
         saturation.process (ch.data(), nch, len);
@@ -204,6 +244,28 @@ void VocalChain::processChunk (int nch, int len) noexcept
         throws.process (mono.data(), ch.data(), nch, len);
     }
 
+    // LISTEN: the take-out lined up with the vocal: the spectral stage's waits Pitch's latency, then all of it
+    // Saturation's.
+    if (lm != listen::off)
+    {
+        const int eLen = static_cast<int> (earlyLine[0].size()), lLen = static_cast<int> (lateLine[0].size());
+        for (int i = 0; i < len; ++i)
+        {
+            for (int c = 0; c < nch; ++c)
+            {
+                const auto cs = static_cast<size_t> (c), is = static_cast<size_t> (i);
+                auto& el = earlyLine[cs];
+                el[static_cast<size_t> (earlyPos)] = early[cs][is];
+                const double e = el[static_cast<size_t> ((earlyPos + 1) % eLen)];   // eLen - 1 samples ago
+                auto& ll = lateLine[cs];
+                ll[static_cast<size_t> (latePos)] = e + late[cs][is];
+                late[cs][is] = ll[static_cast<size_t> ((latePos + 1) % lLen)];
+            }
+            earlyPos = (earlyPos + 1) % eLen;
+            latePos = (latePos + 1) % lLen;
+        }
+    }
+
     const double outTarget = fromDb (std::clamp (params.outputDb, -24.0, 24.0));
     const double gATarget = fromDb (std::min (0.0, params.listenOriginal && ! params.bypass ? params.gainOriginalDb : 0.0));
     const double gBTarget = fromDb (std::min (0.0, params.gainProcessedDb));
@@ -224,6 +286,14 @@ void VocalChain::processChunk (int nch, int len) noexcept
             else if (mixB == 0.0)  y = params.bypass ? a : a * gainA;
             else                   y = mixB * y * outGain * gainB + (1.0 - mixB) * a * gainA;
             check += y * 0.0;
+        }
+        if (listenMix.isActive())
+        {
+            // LISTEN: the take-out (at the vocal's own output level) plays in the vocal's place.
+            double v[2] { ch[0][i], ch[static_cast<size_t> (nch - 1)][i] }, t[2] {};
+            for (int c = 0; c < nch; ++c) t[c] = late[static_cast<size_t> (c)][static_cast<size_t> (i)] * outGain * gainB;
+            listenMix.process (v, t, nch);
+            for (int c = 0; c < nch; ++c) ch[static_cast<size_t> (c)][i] = v[c];
         }
     }
     if (! std::isfinite (check))

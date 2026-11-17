@@ -235,13 +235,26 @@ struct CompParams
     double ratio = 1.0;        // Level stage ratio; 1 = off
     double makeupDb = 0.0;
     double mix = 100.0;        // %
+    int style = 0;             // the Level stage's character: CompStyle (Clean = the original design)
 };
+
+/** The Level stage's character (the Peak stage stays the same):
+      Clean  RMS (30 ms), 10 ms attack, 60 - 600 ms release that lengthens with sustained reduction, 6 dB knee: even
+             and transparent (the original design).
+      FET    peak detector, 0.8 ms attack, 50 - 400 ms release, 2 dB knee: grabs the front of each word, upfront and
+             aggressive (the 1176 school of fast compressors).
+      Opto   RMS, 10 ms attack, a 10 dB knee and a two-stage release: half the reduction lets go in ~60 ms, the rest
+             over 0.5 - 3 s (longer after long, deep reduction, like a light cell's memory): smooth, gentle, the vocal
+             stays even without pumping (the LA-2A school). */
+enum class CompStyle : int { clean = 0, fet = 1, opto = 2 };
+inline constexpr int kCompStyles = 3;
+inline constexpr std::array<const char*, kCompStyles> kCompStyleNames { "Clean", "FET", "Opto" };
 
 class VocalCompressor
 {
 public:
     static constexpr double kPeakRatio = 6.0;
-    static constexpr double kPeakKneeDb = 4.0, kLevelKneeDb = 6.0;
+    static constexpr double kPeakKneeDb = 4.0, kLevelKneeDb = 6.0, kFetKneeDb = 2.0, kOptoKneeDb = 10.0;
     void prepare (double sampleRate, int numChannels);
     void reset() noexcept;
     void setParams (const CompParams& p) noexcept { params = p; }
@@ -253,7 +266,7 @@ public:
 
     /** Static gain computers (dB of gain reduction, <= 0), exposed for tests. */
     static double peakGrDb (double levelDb, double thrDb) noexcept;
-    static double levelGrDb (double levelDb, double thrDb, double ratio) noexcept;
+    static double levelGrDb (double levelDb, double thrDb, double ratio, double kneeDb = kLevelKneeDb) noexcept;
 
     double takePeakGrDb() noexcept { const double v = minPeak; minPeak = 0.0; return v; }
     double takeLevelGrDb() noexcept { const double v = minLevel; minLevel = 0.0; return v; }
@@ -266,6 +279,9 @@ private:
     double gr1 = 0.0, gr2 = 0.0, ms2 = 0.0, sustained = 0.0, pkEnv = 0.0, pkRel = 0.0;
     double a1 = 0.0, r1 = 0.0, a2 = 0.0, msC = 0.0, susC = 0.0, makeup = 1.0, mixGlide = 1.0, glide = 0.0;
     double minPeak = 0.0, minLevel = 0.0;
+    double fetEnv = 0.0, fetAtk = 0.0, fetEnvRel = 0.0, fetGrAtk = 0.0;     // FET
+    double optoFast = 0.0, optoSlow = 0.0, optoFastRel = 0.0;                  // Opto: its two release stages (dB)
+    int lastStyle = 0;
     bool running = false;   // switched off, it keeps running until its mix has faded to the dry vocal
 };
 

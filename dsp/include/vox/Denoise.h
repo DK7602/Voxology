@@ -58,7 +58,13 @@ public:
     void setParams (const DenoiseParams& p) noexcept { params = p; }
     static bool isNeutral (const DenoiseParams& p) noexcept { return p.noiseDb < 0.05 && p.roomPct < 0.05 && p.smoothPct < 0.05; }
 
-    void process (double* const* ch, int nch, int len) noexcept;
+    /** removed (optional, nch channels of len): what it takes out, at the output's latency (LISTEN, setListen). */
+    void process (double* const* ch, int nch, int len, double* const* removed = nullptr) noexcept;
+
+    /** LISTEN: also form what it takes out, from the same spectra (an extra inverse FFT per frame only while on):
+        0 nothing, 1 Noise + Room, 2 Smooth (the Dynamic EQ's). The removed part is the vocal it got (one frame late)
+        minus its output, split by the stage that cut it. Switching clears it (it is complete one frame later). */
+    void setListen (int what) noexcept;
 
     /** How far it turned the sound down on average since the last call (dB, <= 0), and the deepest. */
     double takeReductionDb() noexcept;
@@ -78,6 +84,10 @@ private:
     std::array<std::vector<double>, kMaxChannels> inBuf, outBuf, delay;   // delay: the neutral path (the input, one frame late)
     std::vector<double> window;
     std::array<std::vector<std::complex<double>>, kMaxChannels> spec;
+    std::array<std::vector<double>, kMaxChannels> remBuf;   // LISTEN: what it took out (overlap-add, as outBuf)
+    std::vector<std::complex<double>> remSpec;
+    std::vector<double> gainNR;                              // the Noise + Room gain (before Smooth)
+    int listenWhat = 0;
     std::vector<double> power, smooth, noise, curMin, prevGain, prevPost, gain, gainSm;
     std::vector<double> longAvg, lvlLong, topsLong, resDb;   // Smooth: long-term spectrum, its level and tops (dB), the cut (dB)
     double smoothDeepest = 0.0, smoothRelease = 0.0, longCoeff = 0.0;

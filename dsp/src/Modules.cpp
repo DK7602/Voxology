@@ -431,6 +431,10 @@ void VocalCompressor::prepare (double sampleRate, int numChannels)
     pkRel = onePole (0.015, sr);
     susC = onePole (1.0, sr);
     glide = onePole (0.020, sr);
+    fetAtk = onePole (0.0002, sr);      // the FET's detector: instant up, 50 ms down
+    fetEnvRel = onePole (0.050, sr);
+    fetGrAtk = onePole (0.0008, sr);
+    optoFastRel = onePole (0.060, sr);
     reset();
 }
 
@@ -438,6 +442,8 @@ void VocalCompressor::reset() noexcept
 {
     scHp.reset();
     gr1 = gr2 = 0.0;
+    fetEnv = optoFast = optoSlow = 0.0;
+    lastStyle = params.style;
     ms2 = 0.0;
     pkEnv = 0.0;
     sustained = 0.0;
@@ -456,10 +462,10 @@ double VocalCompressor::peakGrDb (double levelDb, double thrDb) noexcept
     return slope * x * x / (2.0 * k);
 }
 
-double VocalCompressor::levelGrDb (double levelDb, double thrDb, double ratio) noexcept
+double VocalCompressor::levelGrDb (double levelDb, double thrDb, double ratio, double kneeDb) noexcept
 {
     if (ratio <= 1.0) return 0.0;
-    const double over = levelDb - thrDb, k = kLevelKneeDb;
+    const double over = levelDb - thrDb, k = std::max (0.01, kneeDb);
     if (over <= -k / 2.0) return 0.0;
     const double slope = 1.0 / ratio - 1.0;
     if (over >= k / 2.0) return slope * over;
@@ -483,6 +489,14 @@ void VocalCompressor::process (double* const* ch, int nch, int n) noexcept
     const bool levelOn = params.ratio >= 1.005;
     const double makeupTarget = fromDb (params.makeupDb);
     const double mixTarget = off ? 0.0 : std::clamp (params.mix, 0.0, 100.0) / 100.0;
+    const auto style = static_cast<CompStyle> (std::clamp (params.style, 0, kCompStyles - 1));
+    if (params.style != lastStyle)
+    {
+        // Another character: it carries on from the reduction it has (no jump).
+        optoFast = optoSlow = gr2;
+        fetEnv = std::sqrt (std::max (0.0, 2.0 * ms2));
+        lastStyle = params.style;
+    }
 
     for (int i = 0; i < n; ++i)
     {
@@ -500,18 +514,35 @@ void VocalCompressor::process (double* const* ch, int nch, int n) noexcept
             t1 = peakGrDb (toDb (pkEnv + 1.0e-12), params.peakThrDb);
         gr1 += (t1 - gr1) * (t1 < gr1 ? a1 : r1);
 
-        // Level stage: hears the output of the peak stage (5 ms RMS), program-dependent release.
+        // Level stage: hears the output of the peak stage, in the chosen character (CompStyle).
         double t2 = 0.0;
+        const double s2 = sc * fromDb (gr1);
+        ms2 += (s2 * s2 - ms2) * msC;   // 30 ms RMS
+        if (style == CompStyle::fet)
+        {
+            const double a = std::abs (s2);
+            fetEnv += (a - fetEnv) * (a > fetEnv ? fetAtk : fetEnvRel);
+        }
         if (levelOn)
         {
-            const double s2 = sc * fromDb (gr1);
-            ms2 += (s2 * s2 - ms2) * msC;   // 30 ms RMS
-            // RMS of the sidechain, +3 dB so a sine's RMS reads at its peak level (like the meters).
-            t2 = levelGrDb (10.0 * std::log10 (ms2 + 1.0e-24) + 3.0103, params.thrDb, params.ratio);
+            // RMS of the sidechain +3 dB so a sine's RMS reads at its peak level (like the meters); the FET hears peaks.
+            const double levelDb = style == CompStyle::fet ? toDb (fetEnv + 1.0e-12) : 10.0 * std::log10 (ms2 + 1.0e-24) + 3.0103;
+            t2 = levelGrDb (levelDb, params.thrDb, params.ratio,
+                            style == CompStyle::fet ? kFetKneeDb : style == CompStyle::opto ? kOptoKneeDb : kLevelKneeDb);
         }
         sustained += (std::min (gr2, 0.0) - sustained) * susC;
-        const double relSeconds = 0.060 + 0.540 * std::clamp (-sustained / 6.0, 0.0, 1.0);
-        gr2 += (t2 - gr2) * (t2 < gr2 ? a2 : onePole (relSeconds, sr));
+        const double memory = std::clamp (-sustained / 6.0, 0.0, 1.0);
+        if (style == CompStyle::fet)
+            gr2 += (t2 - gr2) * (t2 < gr2 ? fetGrAtk : onePole (0.050 + 0.350 * memory, sr));
+        else if (style == CompStyle::opto)
+        {
+            // Two release stages: half lets go fast, half slowly (slower after long, deep reduction).
+            optoFast += (t2 - optoFast) * (t2 < optoFast ? a2 : optoFastRel);
+            optoSlow += (t2 - optoSlow) * (t2 < optoSlow ? a2 : onePole (0.5 + 2.5 * memory, sr));
+            gr2 = 0.5 * (optoFast + optoSlow);
+        }
+        else
+            gr2 += (t2 - gr2) * (t2 < gr2 ? a2 : onePole (0.060 + 0.540 * memory, sr));
 
         makeup += (makeupTarget - makeup) * glide;
         mixGlide += (mixTarget - mixGlide) * glide;

@@ -49,6 +49,32 @@ double Saturation::estimateHarmonicsDb (const std::vector<std::vector<float>>& c
     return ratio > 1.0e-10 ? 10.0 * std::log10 (ratio) : -100.0;
 }
 
+void Saturation::resetAir (Channel& ch) noexcept
+{
+    design::apply (ch.airTop, airTopC);
+    design::apply (ch.airKeepA, airKeepC);
+    design::apply (ch.airKeepB, airKeepC);
+    ch.airTop.reset();
+    ch.airKeepA.reset();
+    ch.airKeepB.reset();
+    ch.envTop = ch.envAll = 0.0;
+}
+
+double Saturation::airHarmonics (Channel& ch, double v) noexcept
+{
+    const double top = ch.airTop.process (v);
+    const double at = std::abs (top), aa = std::abs (v);
+    ch.envTop += (at - ch.envTop) * (at > ch.envTop ? airAtk : airRel);
+    ch.envAll += (aa - ch.envAll) * (aa > ch.envAll ? airAtk : airRel);
+    const double x = std::clamp (top / (ch.envTop + 1.0e-9), -1.0, 1.0);
+    // Even harmonics only (x squared: the 2nd; |x|: the 2nd, 4th, 6th, gently falling): they add to the top without a
+    // copy of it (no odd term with its own "fundamental" to cancel) and land where the filters down keep them out of
+    // the audible band when they pass it.
+    const double gen = x * x + 0.5 * std::abs (x);
+    const double w = std::clamp (1.3 - 1.5 * ch.envTop / (ch.envAll + 1.0e-9), 0.25, 1.0);   // less on an "s"
+    return kAirMax * ch.airKeepB.process (ch.airKeepA.process (gen * ch.envTop * w));
+}
+
 void Saturation::prepare (double sampleRate, int numChannels)
 {
     channelCount = std::clamp (numChannels, 1, kMaxChannels);
@@ -58,6 +84,12 @@ void Saturation::prepare (double sampleRate, int numChannels)
     glideCoeff = 1.0 - std::exp (-1.0 / (0.030 * sampleRate));
     mixCoeff = 1.0 - std::exp (-4.0 / (0.020 * sampleRate));   // settles within ~20 ms
     hpCoeff = std::exp (-2.0 * std::numbers::pi * 1.0 / sampleRate);
+    // Air runs at 4x the rate.
+    const double sr4 = 4.0 * sampleRate;
+    airTopC = design::butterworth (true, kAirFromHz, sr4);
+    airKeepC = design::butterworth (true, kAirKeepHz, sr4);
+    airAtk = 1.0 - std::exp (-1.0 / (0.0005 * sr4));
+    airRel = 1.0 - std::exp (-1.0 / (0.030 * sr4));
     reset();
 }
 
@@ -69,12 +101,14 @@ void Saturation::reset() noexcept
         std::fill (ch.dry.begin(), ch.dry.end(), 0.0);
         ch.dryPos = 0;
         ch.hpX = ch.hpY = 0.0;
+        resetAir (ch);
     }
     bendTarget = std::pow (10.0, (kHeadroomDb - std::clamp (params.driveDb, 0.0, kMaxDriveDb)) / 20.0);
     bend = bendTarget;
     // Start fully in the requested state (offline renders and a fresh prepare): no fade-in.
     running = ! isNeutral (params);
     mix = effectiveMix (params);
+    airGain = params.enabled ? std::clamp (params.air, 0.0, 100.0) / 100.0 : 0.0;
     warmup = 0;
     resEnergy = sigEnergy = 0.0;
 }
@@ -83,19 +117,21 @@ void Saturation::processFrame (double* frame, int numChannels) noexcept
 {
     const int nch = std::min (numChannels, channelCount);
     const double mixTarget = effectiveMix (params);
+    const double airTarget = params.enabled ? std::clamp (params.air, 0.0, 100.0) / 100.0 : 0.0;
     bendTarget = std::pow (10.0, (kHeadroomDb - std::clamp (params.driveDb, 0.0, kMaxDriveDb)) / 20.0);
 
-    const bool idle = mix < 1.0e-6 && mixTarget == 0.0 && warmup == 0;
+    const bool idle = mix < 1.0e-6 && mixTarget == 0.0 && airGain < 1.0e-6 && airTarget == 0.0 && warmup == 0;
     if (idle)
     {
-        if (mix != 0.0 || running)
+        if (mix != 0.0 || airGain != 0.0 || running)
         {
-            mix = 0.0;
+            mix = airGain = 0.0;
             running = false;
             for (auto& ch : channelState)
             {
                 for (auto& st : ch.stages) st.reset();   // start clean next time
                 ch.hpX = ch.hpY = 0.0;
+                resetAir (ch);
             }
         }
     }
@@ -110,7 +146,10 @@ void Saturation::processFrame (double* frame, int numChannels) noexcept
         if (warmup > 0)
             --warmup;
         else
+        {
             mix += (mixTarget - mix) * mixCoeff;
+            airGain += (airTarget - airGain) * mixCoeff;
+        }
         bend += (bendTarget - bend) * glideCoeff;
     }
 
@@ -137,7 +176,8 @@ void Saturation::processFrame (double* frame, int numChannels) noexcept
         ch.stages[0].upsample (x, a, b);
         ch.stages[1].upsample (a, u[0], u[1]);
         ch.stages[1].upsample (b, u[2], u[3]);
-        for (double& v : u) v = curve (v) - v;
+        // What the curve adds (at this Mix) and Air's harmonics, together through the same filters down.
+        for (double& v : u) v = mix * (curve (v) - v) + (airGain > 0.0 || airTarget > 0.0 ? airGain * airHarmonics (ch, v) : 0.0);
         const double ra = ch.stages[1].downsample (u[0], u[1]);
         const double rb = ch.stages[1].downsample (u[2], u[3]);
         const double res = ch.stages[0].downsample (ra, rb);
@@ -154,9 +194,9 @@ void Saturation::processFrame (double* frame, int numChannels) noexcept
             ch.hpX = 0.0;
         }
 
-        resEnergy += mix * mix * ch.hpY * ch.hpY;   // what is actually added at this Mix
+        resEnergy += ch.hpY * ch.hpY;   // what is actually added (at this Mix, with Air)
         sigEnergy += dry * dry;
-        frame[c] = dry + mix * ch.hpY;
+        frame[c] = dry + ch.hpY;
     }
 }
 

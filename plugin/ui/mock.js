@@ -25,7 +25,7 @@
     dqSmooth: lin(0, 100, 40), dsAmount: lin(0, 100, 0), dsSens: lin(0, 100, 50), dsFreq: centre(3000, 12000, 6000, 6000, 10),
     rdTarget: lin(-40, -6, -20), rdRange: lin(0, 12, 0),
     cpPeak: lin(-40, 0, 0), cpThr: lin(-60, 0, 0), cpRatio: centre(1, 10, 3, 1, 0.01), cpMakeup: lin(0, 24, 0), cpMix: lin(0, 100, 100),
-    saDrive: lin(0, 18, 0), saMix: lin(0, 100, 50), dbAmount: lin(0, 100, 0), dbWidth: lin(0, 100, 70),
+    saDrive: lin(0, 18, 0), saMix: lin(0, 100, 50), saAir: lin(0, 100, 0), dbAmount: lin(0, 100, 0), dbWidth: lin(0, 100, 70),
     dlFeedback: lin(0, 90, 25), dlMix: lin(0, 100, 0), dlTone: centre(1000, 16000, 4000, 6000, 10), dlDuck: lin(0, 100, 50),
     rvDecay: centre(0.3, 8, 1.5, 1.6, 0.01), rvPredelay: lin(0, 200, 20, 1), rvMix: lin(0, 100, 0), rvTone: centre(2000, 16000, 6000, 7000, 10),
     rvDuck: lin(0, 100, 30), outGain: lin(-24, 24, 0), umAmount: lin(0, 100, 50),
@@ -50,6 +50,7 @@
     ptMidi: { choices: ["Off", "Notes", "Learn"], value: 0.5 },
     rdSpeed: { choices: ["Slow", "Medium", "Fast"], value: 0.5 },
     saMode: { choices: ["Tape", "Tube", "Clip"], value: 0 },
+    cpStyle: { choices: ["Clean", "FET", "Opto"], value: 0 },
     dlTime: { choices: ["1/4", "1/8", "1/8 dot", "1/4 dot", "1/16", "1/2"], value: 0 },
     mode: { choices: ["Vocal", "Beat"], value: location.hash === "#beat" ? 1 : 0 },
     umFocus: { choices: ["Centre", "Full"], value: 0 },
@@ -171,10 +172,11 @@
   // Honey Tune on this track (?honey; ?honey=shared: a track name two tracks share): Pitch rests until TUNE HERE ANYWAY.
   const honey = Q.has("honey") ? { here: true, ambiguous: Q.get("honey") === "shared", resting: Q.get("honey") !== "shared", anyway: false } : null;
   const song = hostile ? { key: "<script>", name: H[0], from: 2, version: 1, vocalMine: false, suggest: 99 } : { key: "hiphop.gfunk", name: "Hip Hop - G-Funk", from: 2, version: 1, vocalMine: false, suggest: 1 };
+  let listen = 0;   // LISTEN (setListen)
   window.__JUCE__ = {
     initialisationData: {
       __juce__platform: [], __juce__functions: ["startAutoEdit", "cancelAutoEdit", "undoAutoEdit", "getAutoEditReport", "getAutoAnalyze", "setAutoAnalyze", "applyAutoAnalyze", "dismissAutoAnalyze", "chooseReference", "clearReference", "getReference", "listReferences", "selectReference", "deleteReference", "getUnmaskSources", "setUnmaskSource", "getUiRed", "setUiRed", "pickStyle", "setVocalStyleMine", "pickDaw", "setPitchAnyway",
-        "setReferenceSplit", "listChains", "getChainName", "saveChain", "loadChain", "deleteChain", "getRack", "getRackTheme", "setRackTheme", "rackRequest", "rackAnswer", "rackWindow"],
+        "setReferenceSplit", "listChains", "getChainName", "saveChain", "loadChain", "deleteChain", "getRack", "getRackTheme", "setRackTheme", "rackRequest", "rackAnswer", "rackWindow", "setListen"],
       __juce__registeredGlobalEventIds: [], __juce__sliders: Object.keys(sliders), __juce__toggles: Object.keys(toggles), __juce__comboBoxes: Object.keys(combos),
     },
     postMessage(message) {
@@ -210,6 +212,7 @@
           Promise.resolve(call).then((d) => send("__juce__complete", { promiseId: payload.resultId, result: JSON.stringify(d) }));
           return;
         }
+        if (payload.name === "setListen") listen = +((payload.params || [])[0]) || 0;   // LISTEN: heard a moment later, turned up
         if (payload.name === "getRackTheme") { try { result = localStorage.getItem("sonicologyRackTheme") || ""; } catch (e) { result = ""; } }
         if (payload.name === "setRackTheme") { try { localStorage.setItem("sonicologyRackTheme", payload.params[0]); } catch (e) { /* none */ } }
         if (payload.name === "startAutoEdit") { ae.state = 1; ae.progress = 0; }
@@ -305,6 +308,7 @@
       levelGr: active("cpOn") && s("cpRatio") > 1.01 ? +(-4 * word).toFixed(1) : 0,
       satHarm: active("saOn") && s("saDrive") > 0 ? +(-42 + s("saDrive") * 3 + 2 * word).toFixed(1) : -100,
       matchDb: -1.2, bpm: 140, sr: 48000, mixology: mixology(), songStyle: song, daw, honey,
+      listenNow: listen, listenWanted: listen, listenGain: listen ? 18 : 0, listenUnder: listen ? -31 : -100,
       bkState: location.hash === "#beat" ? 5 : 1, bkSource: 2, scState: 2, bkOpen: -1, bkKey: 7, bkMode: 7, bkSet: 0, bkUnclear: 0, bkConf: 0.86, bkTune: -28, bkHeard: 24, keyUsed: 11, scaleUsed: 2, midiNotes: (1 << 11) | (1 << 2), notesUsed: 0b110010101101 & ~(1 << 6), recMode: 1, latencyMs: 6.1,
       pitchSung: sing ? +(57 + 0.25 * Math.sin(t * 3)).toFixed(2) : 0, pitchTarget: sing ? 57 : -1,
       pitchCorr: sing && sliders.ptAmount.value > 0 ? +(-0.25 * Math.sin(t * 3) * sliders.ptAmount.value / 100).toFixed(2) : 0,

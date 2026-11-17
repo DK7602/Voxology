@@ -1974,3 +1974,24 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   jsonText() makes them text again): JUCE escapes long native-function text in time that grows with its square;
   getRack returns base64; the window grows while the Rack is open (rackWindow native). RackUnit.cpp: Value's
   missing initializers (a warning). Tested here: [rack], [manual], the full suite; editors compiled against JUCE.
+- Voxology 0.58.0 (2026-11-17, Sonicology Beta 19, the user's order: "listen to what's removed, Air, FET / opto"; the
+  user is away and said "keep building, once you finish a version move on to the next"):
+  - LISTEN: `vox/Listen.h` (listen modes 1 Cleanup, 2 Dynamic EQ, 3 De-Esser; ListenMix ported from Masterology's
+    Monitoring.h: arm, measure, 15 ms fades, "hear it" gain toward 12 dB under the vocal, max +30 dB). VocalChain forms
+    the take-out: the Denoiser's from its own spectra (setListen 1 = Noise + Room, 2 = Smooth; an extra IFFT only while
+    on), the later stages' as input minus output; the early part waits Pitch's latency, all of it Saturation's, so it
+    lines up. Only on B; A / bypass fade it out. Processor: `listenRequest` (not a parameter), forced 0 offline and on
+    the beat, reset when the editor closes; MATCH doesn't learn B while listening. UI: LISTEN chip next to ON on
+    Cleanup / Dynamic EQ / De-Esser; opening another module follows it there or stops it; the line by the name says
+    what plays and the gain. Test: normal + listened = original (1e-6) for all five cases.
+  - Compressor Style (`CompStyle`, param `cpStyle`, default Clean = the original): FET (peak detector, 0.2 ms up /
+    50 ms down, 0.8 ms gain attack, 50 - 400 ms release, 2 dB knee), Opto (RMS, 10 dB knee, half the reduction
+    releases in 60 ms, half over 0.5 - 3 s). Auto-Edit: FET for Trap Lead / Rap, Opto for R&B / Folk / Natural Singer
+    (kCompStyleOf), with a report line. The Compressor page is now two rows (7 cells).
+  - Air (Saturation, param `saAir`): x^2 + 0.5 |x| of the top (above 3.5 kHz, normalised by its envelope), kept above
+    8 kHz (4th order), x kAirMax 1.0, a quarter on an "s"; in the 4x path with the curve's residual (one set of filters
+    down). First tries (Chebyshev T2 / T3, kept above 5 kHz) cut the existing 5 - 8 kHz (the odd term's copy, and
+    products landing on the voice's own harmonics): measured, then fixed. Auto-Edit: kAirOf per style x 0.6 / 1.4 by
+    intensity, none with a reference. Measured: Air 60 % +4 - 6 dB at 12 - 20 kHz, 100 Hz - 2 kHz unchanged; a 9 kHz
+    tone's alias > 50 dB under its 18 kHz harmonic.
+  - Rack: Style and Air are values in the Rack (RackUnit kKnobs cpStyle / saAir); rack.js catalog text (shared file).

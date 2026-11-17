@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Biquad.h"
+#include "FilterDesign.h"
 #include "SoftClipper.h"   // HalfbandStage
 
 #include <algorithm>
@@ -17,6 +19,7 @@ struct SaturationParams
     SaturationMode mode = SaturationMode::tape;
     double driveDb = 0.0;   // 0 = off (exact pass-through) ... kMaxDriveDb
     double mix = 100.0;     // % of the saturated signal (parallel blend)
+    double air = 0.0;       // Air: 0..100 %, sparkle on top (an exciter; works with Drive at 0)
 };
 
 /** Mastering saturation: adds harmonics that make a master feel denser and help bass translate
@@ -47,6 +50,12 @@ public:
     static constexpr double kHeadroomDb = 7.5;   // S at Drive 0, above full scale
     static constexpr double kFadeInDb = 3.0;     // the effect fades in over the first dB of Drive
     static constexpr double kTubeBias = 0.35;
+    /** Air: the top of the vocal (above kAirFromHz) makes new even harmonics (of it normalised by its own envelope,
+        so they follow its level instead of growing with its square), and only what lands above kAirKeepHz is added,
+        at up to kAirMax of the top's level (Air 100 %). Turned down to a quarter where the
+        top is most of the sound (an "s": the De-Esser's job, not more sparkle). In the 4x oversampled path with the
+        curve's harmonics, so nothing folds back. */
+    static constexpr double kAirFromHz = 3500.0, kAirKeepHz = 8000.0, kAirMax = 1.0;
 
     void prepare (double sampleRate, int numChannels);
     void reset() noexcept;
@@ -54,12 +63,14 @@ public:
     const SaturationParams& getParams() const noexcept { return params; }
     static bool isNeutral (const SaturationParams& p) noexcept
     {
-        return ! p.enabled || p.driveDb < 0.05 || p.mix < 0.05;
+        return ! p.enabled || ((p.driveDb < 0.05 || p.mix < 0.05) && p.air < 0.05);
     }
-    /** The blend actually used: Mix, faded in over the first kFadeInDb of Drive (0 when neutral). */
+    /** The saturation curve's blend actually used: Mix, faded in over the first kFadeInDb of Drive (0 when it's off,
+        whatever Air does). */
     static double effectiveMix (const SaturationParams& p) noexcept
     {
-        return isNeutral (p) ? 0.0 : std::clamp (p.mix, 0.0, 100.0) / 100.0 * std::min (1.0, p.driveDb / kFadeInDb);
+        return ! p.enabled || p.driveDb < 0.05 || p.mix < 0.05 ? 0.0
+             : std::clamp (p.mix, 0.0, 100.0) / 100.0 * std::min (1.0, p.driveDb / kFadeInDb);
     }
     static constexpr int latencySamples() noexcept { return kLatency; }
 
@@ -110,7 +121,11 @@ private:
         std::vector<double> dry;   // latency-matched dry path
         int dryPos = 0;
         double hpX = 0.0, hpY = 0.0;
+        Biquad airTop, airKeepA, airKeepB;   // Air (at 4x): the top it hears; what it keeps (4th order)
+        double envTop = 0.0, envAll = 0.0;
     };
+    double airHarmonics (Channel& ch, double v) noexcept;
+    void resetAir (Channel& ch) noexcept;
 
     double curve (double x) const noexcept { return shape (x, params.mode, bend); }
 
@@ -119,6 +134,8 @@ private:
     std::vector<Channel> channelState;
     double bend = 4.0, bendTarget = 4.0, glideCoeff = 0.0;
     double mix = 0.0, mixCoeff = 0.0, hpCoeff = 0.0;
+    double airGain = 0.0, airAtk = 0.0, airRel = 0.0;
+    design::Coeffs airTopC {}, airKeepC {};
     double resEnergy = 0.0, sigEnergy = 0.0;
     int warmup = 0;
     bool running = false;

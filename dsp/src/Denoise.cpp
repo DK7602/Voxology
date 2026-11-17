@@ -75,6 +75,9 @@ void Denoiser::prepare (double sampleRate, int numChannels)
     for (auto& b : outBuf) b.assign (static_cast<size_t> (n), 0.0);
     for (auto& b : delay) b.assign (static_cast<size_t> (n), 0.0);
     for (auto& s : spec) s.assign (static_cast<size_t> (n), {});
+    for (auto& b : remBuf) b.assign (static_cast<size_t> (n), 0.0);
+    remSpec.assign (static_cast<size_t> (n), {});
+    gainNR.assign (static_cast<size_t> (n / 2 + 1), 1.0);
     for (auto* v : { &power, &smooth, &noise, &curMin, &prevGain, &prevPost, &gain, &gainSm, &lvlLong, &topsLong, &resDb, &longAvg })
         v->assign (static_cast<size_t> (bins), 0.0);
     const double framesPerSecond = sr / hop;
@@ -96,6 +99,7 @@ void Denoiser::reset() noexcept
     for (auto& b : inBuf) std::fill (b.begin(), b.end(), 0.0);
     for (auto& b : outBuf) std::fill (b.begin(), b.end(), 0.0);
     for (auto& b : delay) std::fill (b.begin(), b.end(), 0.0);
+    for (auto& b : remBuf) std::fill (b.begin(), b.end(), 0.0);
     for (auto* v : { &power, &smooth, &noise, &prevPost, &gainSm })
         std::fill (v->begin(), v->end(), 0.0);
     std::fill (prevGain.begin(), prevGain.end(), 1.0);
@@ -122,10 +126,19 @@ double Denoiser::takeReductionDb() noexcept
     return std::min (0.0, db);
 }
 
-void Denoiser::process (double* const* ch, int nch, int len) noexcept
+void Denoiser::setListen (int what) noexcept
+{
+    what = std::clamp (what, 0, 2);
+    if (what == listenWhat) return;
+    listenWhat = what;
+    for (auto& b : remBuf) std::fill (b.begin(), b.end(), 0.0);
+}
+
+void Denoiser::process (double* const* ch, int nch, int len, double* const* removed) noexcept
 {
     nch = std::min (nch, channels);
     const bool neutral = isNeutral (params);
+    const bool listening = removed != nullptr && listenWhat != 0 && ! neutral;
     for (int i = 0; i < len; ++i)
     {
         for (int c = 0; c < nch; ++c)
@@ -137,6 +150,7 @@ void Denoiser::process (double* const* ch, int nch, int len) noexcept
             delay[cs][static_cast<size_t> (delayPos)] = x;
             // Neutral: the input exactly, one frame late (the same latency as the processed path).
             ch[c][i] = neutral ? delayed : outBuf[cs][static_cast<size_t> (count)];
+            if (removed != nullptr) removed[c][i] = listening ? remBuf[cs][static_cast<size_t> (count)] : 0.0;
         }
         if (++delayPos >= n) delayPos = 0;
         if (++count >= hop)
@@ -259,6 +273,8 @@ void Denoiser::processFrame (int nch) noexcept
         gainSm[k] = 0.25 * lo + 0.5 * gain[k] + 0.25 * hi;
     }
 
+    if (listenWhat != 0) std::copy (gainSm.begin(), gainSm.end(), gainNR.begin());   // (LISTEN: Noise + Room alone)
+
     // Smooth: resonances that stick out of the voice's own outline, turned down while they ring.
     if (params.smoothPct >= 0.05)
     {
@@ -319,6 +335,30 @@ void Denoiser::processFrame (int nch) noexcept
     for (size_t k = 0; k < ub; ++k) { eIn += power[k]; eOut += power[k] * gainSm[k] * gainSm[k]; }
     sumIn += eIn;
     sumOut += eOut;
+    // LISTEN: what it takes out, from the same spectrum (by the stage that cut it), overlap-added like the output.
+    if (listenWhat != 0)
+    {
+        for (auto& o : remBuf)
+        {
+            std::copy (o.begin() + static_cast<std::ptrdiff_t> (uh), o.end(), o.begin());
+            std::fill (o.end() - static_cast<std::ptrdiff_t> (uh), o.end(), 0.0);
+        }
+        for (int c = 0; c < nch; ++c)
+        {
+            const auto& s = spec[static_cast<size_t> (c)];
+            for (size_t k = 0; k < ub; ++k)
+            {
+                const double r = listenWhat == 1 ? 1.0 - gainNR[k] : gainNR[k] - gainSm[k];
+                remSpec[k] = s[k] * r;
+                if (k > 0 && k < un - k) remSpec[un - k] = std::conj (remSpec[k]);
+            }
+            for (auto& v : remSpec) v = std::conj (v);
+            fft (remSpec);
+            auto& o = remBuf[static_cast<size_t> (c)];
+            const double scale = 0.5 / static_cast<double> (n);
+            for (size_t i = 0; i < un; ++i) o[i] += scale * window[i] * remSpec[i].real();
+        }
+    }
     for (int c = 0; c < nch; ++c)
     {
         auto& s = spec[static_cast<size_t> (c)];

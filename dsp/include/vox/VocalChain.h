@@ -4,6 +4,7 @@
 #include "DeClick.h"
 #include "Dimension.h"
 #include "Denoise.h"
+#include "Listen.h"
 #include "DynamicEq.h"
 #include "Modules.h"
 #include "PopBreath.h"
@@ -41,6 +42,7 @@ struct ChainParams
     bool bypass = false;      // whole plug-in off (delayed dry, so the timing never jumps)
     bool listenOriginal = false;   // A/B: hear the untouched vocal (delayed to line up)
     double gainOriginalDb = 0.0, gainProcessedDb = 0.0;   // MATCH turn-downs (<= 0)
+    int listenMode = listen::off;   // LISTEN (monitoring only, never offline): hear what one module takes out (Listen.h)
 };
 
 /** The modules in signal order, for the UI and the report. */
@@ -68,6 +70,8 @@ struct ChainMeters
     PitchCorrector::Reading pitch;                // what Pitch hears and does right now
     std::array<int, kMaxVoices> voiceNotes { -1, -1, -1, -1, -1, -1, -1, -1 };   // the harmony voices' notes (MIDI, -1 = none)
     ClipWatch::Counts input;                      // the incoming vocal: clipped stretches, samples over full scale
+    int listenPlaying = listen::off;              // LISTEN: the mode heard now (off while it starts)
+    double listenGainDb = 0.0, listenUnderDb = -100.0;   // how far it's turned up; how far under the vocal it really is
 };
 
 /** Voxology's vocal chain:
@@ -113,6 +117,8 @@ public:
     }
 
     ChainMeters takeMeters() noexcept;
+    /** LISTEN's "hear it" gain on (the plug-in) or off (tests: the take-out at its real level). */
+    void setListenAutoLevel (bool on) noexcept { listenMix.setAutoLevel (on); }
     double getSampleRate() const noexcept { return sr; }
 
     /** Renders a whole clip offline (latency removed), for Auto-Edit and the tests. Stops early (the rest silent)
@@ -122,6 +128,7 @@ public:
 
 private:
     void processChunk (int nch, int len) noexcept;
+    void clearListenLines() noexcept;
 
     ChainParams params;
     double sr = 48000.0;
@@ -145,6 +152,11 @@ private:
     Throws throws;
     EchoDelay delay;
     Reverb reverb;
+    ListenMix listenMix;
+    // LISTEN: what the Noise / Room / Smooth stage took out waits Pitch's latency (earlyLine) to join what the later
+    // modules took out, then Saturation's (lateLine), so it lines up with the vocal it replaces.
+    std::array<std::vector<double>, kMaxChannels> earlyLine, lateLine;
+    int earlyPos = 0, latePos = 0;
     std::array<std::vector<double>, kMaxChannels> work;
     std::array<std::vector<double>, kMaxChannels> dryLine;   // latency-delayed input (bypass / A)
     int dryPos = 0;

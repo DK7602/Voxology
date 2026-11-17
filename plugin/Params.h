@@ -22,7 +22,7 @@ namespace VoxParams
         ids.add ("dqSmooth");
         for (int b = 0; b < vox::kDynBands; ++b) { ids.add (n ("dqCut", b)); ids.add (n ("dqFreq", b)); }
         ids.addArray ({ "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
-                        "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix",
+                        "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "saAir",
                         "dbAmount", "dbWidth", "dmAmount", "dmRate", "dmWidth", "dlFeedback", "dlMix", "dlTone", "dlDuck", "dlThrow",
                         "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "rvThrow", "outGain", "umAmount" });
         return ids;
@@ -33,7 +33,7 @@ namespace VoxParams
         for (int k = 0; k < 12; ++k) ids.add ("ptRm" + juce::String (k));   // Pitch: notes switched off (C .. B)
         return ids;
     }
-    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode" }; }
+    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode" }; }
 
     inline void addTo (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
     {
@@ -166,11 +166,18 @@ namespace VoxParams
                 [] (float v, int) { return String (v, 1) + ":1"; });
         slider ("cpMakeup", "Compressor Makeup", NormalisableRange<float> (0.0f, 24.0f, 0.1f), 0.0f, "dB", dbText);
         slider ("cpMix", "Compressor Mix", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 100.0f, "%", pctText);
+        {
+            StringArray compStyles;
+            for (auto* m : vox::kCompStyleNames) compStyles.add (m);
+            choice ("cpStyle", "Compressor Style", compStyles, 0);   // Clean = the original design
+        }
 
         toggle ("saOn", "Saturation On", true);
         choice ("saMode", "Saturation Mode", { "Tape", "Tube", "Clip" }, 0);
         slider ("saDrive", "Saturation Drive", NormalisableRange<float> (0.0f, static_cast<float> (vox::Saturation::kMaxDriveDb), 0.1f), 0.0f, "dB", dbText);
         slider ("saMix", "Saturation Mix", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f, "%", pctText);
+        slider ("saAir", "Saturation Air", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%",
+                [] (float v, int) { return v < 0.05f ? String ("Off") : String (roundToInt (v)) + " %"; });
 
         toggle ("dbOn", "Doubler On", true);
         slider ("dbAmount", "Doubler Amount", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
@@ -256,10 +263,12 @@ namespace VoxParams
         set ("cpRatio", static_cast<float> (p.comp.ratio));
         set ("cpMakeup", static_cast<float> (p.comp.makeupDb));
         set ("cpMix", static_cast<float> (p.comp.mix));
+        set ("cpStyle", static_cast<float> (p.comp.style));
         set ("saOn", 1.0f);
         set ("saMode", static_cast<float> (static_cast<int> (p.saturation.mode)));
         set ("saDrive", static_cast<float> (p.saturation.driveDb));
         set ("saMix", static_cast<float> (p.saturation.mix));
+        set ("saAir", static_cast<float> (p.saturation.air));
         set ("dbOn", 1.0f);
         set ("dbAmount", static_cast<float> (p.doubler.amount));
         set ("dbWidth", static_cast<float> (p.doubler.width));
@@ -335,11 +344,12 @@ namespace VoxParams
             }
             p.deEsser = { on (dsOn), d (dsAmount), d (dsSens), d (dsFreq) };
             p.rider = { on (rdOn), d (rdTarget), d (rdRange), idx (rdSpeed, 2) };
-            p.comp = { on (cpOn), d (cpPeak), d (cpThr), d (cpRatio), d (cpMakeup), d (cpMix) };
+            p.comp = { on (cpOn), d (cpPeak), d (cpThr), d (cpRatio), d (cpMakeup), d (cpMix), idx (cpStyle, vox::kCompStyles - 1) };
             p.saturation.enabled = on (saOn);
             p.saturation.mode = static_cast<vox::SaturationMode> (idx (saMode, 2));
             p.saturation.driveDb = d (saDrive);
             p.saturation.mix = d (saMix);
+            p.saturation.air = d (saAir);
             p.doubler = { on (dbOn), d (dbAmount), d (dbWidth) };
             p.dimension = { on (dmOn), idx (dmMode, vox::kDimensionModes - 1), d (dmAmount), d (dmRate), d (dmWidth) };
             p.delay = { on (dlOn), idx (dlTime, vox::kDelayDivisions - 1), d (dlFeedback), d (dlMix), d (dlTone), d (dlDuck), on (dlPing), bpm };
@@ -374,7 +384,7 @@ namespace VoxParams
                         dqSens, dqSmooth, dsOn, dsAmount, dsSens, dsFreq, rdOn, rdTarget, rdRange, rdSpeed, cpOn,
                         cpPeak, cpThr, cpRatio, cpMakeup, cpMix, saOn, saMode, saDrive, saMix, dbOn, dbAmount, dmOn,
                         dmMode, dmAmount, dmRate, dmWidth, dlOn, dlTime, dlFeedback, dlMix, dlTone, dlDuck, dlPing,
-                        rvOn, rvDecay, rvPredelay, rvMix, rvTone, rvDuck, dlThrow, rvThrow, outGain, idCount };
+                        rvOn, rvDecay, rvPredelay, rvMix, rvTone, rvDuck, dlThrow, rvThrow, outGain, cpStyle, saAir, idCount };
         static constexpr std::array<const char*, idCount> kIds { "bypass", "listenA", "ptOn", "ptAmount", "ptKey",
             "ptScale", "ptSpeed", "ptHumanize", "ptFormant", "ptMode", "ptVibrato", "ptTranspose", "hv1", "hv2",
             "hvLevel", "hvFormant", "hvStack", "hvMidi", "hvCrew", "dbWidth", "clOn", "clLowCut", "clGateThr",
@@ -383,7 +393,7 @@ namespace VoxParams
             "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saOn", "saMode", "saDrive", "saMix", "dbOn",
             "dbAmount", "dmOn", "dmMode", "dmAmount", "dmRate", "dmWidth", "dlOn", "dlTime", "dlFeedback", "dlMix",
             "dlTone", "dlDuck", "dlPing", "rvOn", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "dlThrow",
-            "rvThrow", "outGain" };
+            "rvThrow", "outGain", "cpStyle", "saAir" };
         float v (Id id) const noexcept { return ptr[static_cast<size_t> (id)]->load(); }
 
         std::array<std::atomic<float>*, idCount> ptr {};

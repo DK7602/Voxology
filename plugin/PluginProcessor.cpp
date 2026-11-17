@@ -694,7 +694,9 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     reader.read (chainParams, hostBpm.load());
     if (pitchRests.load (std::memory_order_relaxed)) chainParams.pitch.enabled = false;   // Honey Tune tunes this track
     if (hostBypass) chainParams.bypass = true;   // the DAW's bypass: Voxology's own (delayed dry, glided)
-    const bool listeningB = ! chainParams.bypass && ! chainParams.listenOriginal;
+    // LISTEN: never in a bounce. (MATCH doesn't learn B's loudness from it: it isn't the vocal.)
+    chainParams.listenMode = isNonRealtime() ? 0 : juce::jlimit (0, vox::listen::count - 1, listenRequest.load (std::memory_order_relaxed));
+    const bool listeningB = ! chainParams.bypass && ! chainParams.listenOriginal && meters.listenPlaying.load (std::memory_order_relaxed) == 0;
     const bool matching = levelMatchParam->load() > 0.5f && ! isNonRealtime();
     // The output meter reads after the MATCH gain; take that gain back out before comparing.
     levelMatch.update (inMeter.shortTermLufs(), outMeter.shortTermLufs() - (listeningB ? appliedMatchDb : 0.0), inputPeak, n, listeningB);
@@ -791,6 +793,7 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
         // BEAT: the vocal chain stays out (its delayed dry path keeps the latency the same in both modes).
         chainParams.bypass = true;
         chainParams.listenOriginal = false;
+        chainParams.listenMode = 0;
     }
     // Record mode: the low-latency chain. Switching starts the other chain fresh (cleaned on the message thread) and
     // crossfades to it once it hears the vocal; then the host hears of the new latency.
@@ -904,6 +907,9 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     addTo (meters.satResidual, static_cast<float> (m.satResidual));
     addTo (meters.satSignal, static_cast<float> (m.satSignal));
     meters.matchDb.store (static_cast<float> (chainParams.listenOriginal ? levelMatch.gainForADb() : levelMatch.gainForBDb()));
+    meters.listenPlaying.store (m.listenPlaying);
+    meters.listenGainDb.store (static_cast<float> (m.listenGainDb));
+    meters.listenUnderDb.store (static_cast<float> (m.listenUnderDb));
     meters.bpm.store (static_cast<float> (hostBpm.load()));
     meters.pitchSung.store (m.pitch.voiced ? static_cast<float> (m.pitch.sungMidi) : 0.0f);
     meters.pitchTarget.store (m.pitch.voiced ? m.pitch.targetMidi : -1);

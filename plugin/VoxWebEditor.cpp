@@ -184,6 +184,12 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
             complete (true);
         })
         .withNativeFunction ("getReference", [this] (const juce::Array<juce::var>&, auto complete) { complete (rack::host::jsonObject (audioProcessor.autoEdit.getReferenceJson())); })
+        // LISTEN: hear what a module takes out (vox::listen; 0 = off). Monitoring only, forgotten when the window closes.
+        .withNativeFunction ("setListen", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            audioProcessor.listenRequest.store (args.size() > 0 ? juce::jlimit (0, vox::listen::count - 1, static_cast<int> (args[0])) : 0);
+            complete (true);
+        })
         // The Sonicology Rack (suite/RackLink.h): every Sonicology plug-in in the project, as rack.js shows it.
         .withNativeFunction ("rackWindow", [this] (const juce::Array<juce::var>& args, auto complete)
         {
@@ -244,6 +250,7 @@ VoxWebEditor::~VoxWebEditor()
 {
     stopTimer();
     audioProcessor.autoEdit.setEditorOpen (false);
+    audioProcessor.listenRequest.store (0);   // LISTEN too (it was never a parameter)
     // A/B and MATCH are listening aids: switch them off when the window closes so they can't end up in a bounce.
     for (const char* id : { "levelMatch", "listenA" })
         if (auto* prm = audioProcessor.parameters.getParameter (id))
@@ -390,6 +397,10 @@ void VoxWebEditor::timerCallback()
     frame->setProperty ("levelGr", roundTo (levelHold, 0.1f));
     frame->setProperty ("satHarm", roundTo (ratio > 1.0e-10 ? static_cast<float> (10.0 * std::log10 (ratio)) : -100.0f, 0.1f));
     frame->setProperty ("matchDb", roundTo (m.matchDb.load(), 0.1f));
+    frame->setProperty ("listenNow", m.listenPlaying.load());
+    frame->setProperty ("listenWanted", audioProcessor.listenRequest.load());
+    frame->setProperty ("listenGain", roundTo (m.listenGainDb.load(), 0.1f));
+    frame->setProperty ("listenUnder", roundTo (m.listenUnderDb.load(), 0.1f));
     frame->setProperty ("bpm", roundTo (m.bpm.load(), 0.1f));
     {
         // The suite link: a Mixology in this project, and what it answered for this vocal (the footer's MIXOLOGY).

@@ -610,6 +610,12 @@ const std::array<StyleSpec, kStyles> kSpecs {{
       "your own voice, just cleaner and more even: light control, little colour, a small room" },
 }};
 
+// The Compressor's character per style (CompStyle: 0 Clean, 1 FET, 2 Opto): FET's quick grab for the rapped, upfront
+// styles, Opto's smooth hold for the sung, soulful ones, Clean elsewhere.
+constexpr std::array<int, kStyles> kCompStyleOf { 1, 1, 0, 0, 2, 0, 2, 2 };
+// Saturation's Air (%, at Balanced): sparkle on top for the bright, modern styles, a touch for the natural ones.
+constexpr std::array<double, kStyles> kAirOf { 25, 15, 25, 20, 25, 30, 10, 10 };
+
 constexpr std::array<double, kIntensities> kIntensityScale { 0.6, 0.85, 1.1 };
 constexpr double kRefSibRangeDb = 3.0;   // a reference's "s" level moves the De-Esser's target at most this far from the style's
 constexpr std::array<double, kIntensities> kSpaceScale { 0.75, 1.0, 1.25 };
@@ -1875,6 +1881,7 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
 
         CompParams c;
         c.ratio = 1.0;
+        c.style = kCompStyleOf[static_cast<size_t> (style)];   // (its timing changes how hard each threshold works)
         // Peak stage: the deepest 5 % of moments get about wantPeak dB.
         double lo = -50.0, hi = 0.0;
         for (int it = 0; it < 14; ++it)
@@ -2006,6 +2013,13 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
                     " vocal usually gets so it sits at one steady level " + (style == 1 ? "and every word punches through." : "on top of the beat.")
                     + (gotLevel < wantLevel - 1.0 ? " (Less than usual: more would flatten your punch below a finished pro vocal's.)" : ""));
         reason ("comp", "Makeup", signedDb (c.makeupDb), "Puts back the level the compressor took away, so you compare tone, not loudness.");
+        {
+            static const char* const why[] = { "even and transparent: it smooths without adding a sound of its own",
+                                                "it grabs the front of each word, so the vocal stays upfront and punchy",
+                                                "it lets go slowly and smoothly, so sung lines stay even without pumping" };
+            reason ("comp", "Style", kCompStyleNames[static_cast<size_t> (c.style)],
+                    std::string ("For ") + kStyleNames[static_cast<size_t> (style)] + ": " + why[c.style] + ".");
+        }
         if (fitPunchFrom != 0.0 || fitPunchTo != 0.0)
             reason ("comp", "Vocal Fit", signedDb (r.fitPunchDb) + " punch",
                     std::string (beatFitNow.punchDb > 0.0 ? "Your beat is punchy, so the leveler smooths a little less" : "Your beat is steady, so the leveler smooths a little more") +
@@ -2033,6 +2047,11 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
         static const char* feel[] = { "smooth glue and density", "warmth and a rich, forward low-mid", "grit and edge that cuts through busy beats" };
         const auto mi = static_cast<size_t> (s.mode);
         reason ("sat", "Mode", modes[mi], std::string ("For ") + kStyleNames[static_cast<size_t> (style)] + ", " + modes[mi] + " adds " + feel[mi] + ".");
+        // Air (sparkle on top): not with a reference (its own top is matched by the Tone EQ, and more would overshoot it).
+        p.saturation.air = ref != nullptr ? 0.0
+                         : std::round (kAirOf[static_cast<size_t> (style)] * (intensity == 0 ? 0.6 : intensity == 2 ? 1.4 : 1.0));
+        if (p.saturation.air >= 0.05)
+            reason ("sat", "Air", pct (p.saturation.air), "Sparkle on top: harmonics from the top of your voice, added only above 8 kHz, so it sounds open and finished without getting harsh.");
         reason ("sat", "Drive", db (s.driveDb) + ", Mix 50 %",
                 "Set so the added harmonics sit around " + db (target) + " under your voice: felt more than heard. It makes the vocal sound finished and helps it stay audible on phone speakers.");
     }

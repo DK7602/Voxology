@@ -74,6 +74,9 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState parameters;
+    /** LISTEN (vox::listen): hear what one module takes out. Monitoring only: set by the window, back to off when it
+        closes, never applied offline (a bounce) or on the beat. */
+    std::atomic<int> listenRequest { 0 };
     std::atomic<bool> uiRed { false };   // the logo easter egg: red instead of blue (saved with the project)
 
     struct Meters
@@ -105,6 +108,8 @@ public:
         std::atomic<int> midiNotes { 0 }, notesUsed { 0 }, heldNotes { 0 };   // heldNotes: how many MIDI notes are held now
         std::atomic<int> recMode { 0 }, latencyMs10 { 0 };   // Record mode on; the chain's latency (0.1 ms)   // pitch classes (bits): MIDI held / learned, and what Pitch may aim for
         std::atomic<float> bkConf { 0.0f }, bkTune { 0.0f }, bkHeard { 0.0f };
+        std::atomic<int> listenPlaying { 0 };                                // LISTEN: the module heard now (vox::listen)
+        std::atomic<float> listenGainDb { 0.0f }, listenUnderDb { -100.0f };   // how far turned up; how far under the vocal
     };
     Meters meters;
 

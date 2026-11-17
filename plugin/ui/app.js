@@ -136,12 +136,12 @@ window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !manual.hi
 // Parameters
 const NOTES_C = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "hvCrew", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "clClicks", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
-  "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "dbAmount", "dbWidth", "dmAmount", "dmRate", "dmWidth",
+  "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "saAir", "dbAmount", "dbWidth", "dmAmount", "dmRate", "dmWidth",
   "dlFeedback", "dlMix", "dlTone", "dlDuck", "dlThrow", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "rvThrow", "outGain", "umAmount",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", "dqSmooth", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
 const PT_RM = NOTES_C.map((_, k) => "ptRm" + k);
 const TOGGLES = [...PT_RM, "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn", "hvMidi", "dmOn"];
-const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode"];
+const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
 for (const id of TOGGLES) P[id] = Juce.getToggleState(id);
@@ -302,6 +302,7 @@ const dynLive = (b) => (M.dyn && Number.isFinite(M.dyn[b]) ? M.dyn[b] : 0);   //
 const fmtCut = (v) => (v < 0.05 ? "Off" : `${MINUS}${v.toFixed(1)} dB`);
 const eqGain = (b) => val("eqGain" + (b + 1));
 const eqFreq = (b) => val("eqFreq" + (b + 1));
+const COMP_STYLES = ["Clean", "FET", "Opto"];
 const compNeutral = () => val("cpPeak") > -0.05 && val("cpRatio") < 1.005 && Math.abs(val("cpMakeup")) < 0.005;
 
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -550,7 +551,8 @@ const MODULES = [
     cells: pitchCells,
     stat: () => (honeyRests() ? ["resting", false] : val("ptAmount") < 0.05 ? ["idle", false] : M.pitchTarget >= 0 ? [`\u2192 ${noteName(M.pitchTarget)}`, true]
       : [`${NOTES[M.keyUsed]} ${SCALES_SHORT[M.scaleUsed].split(" ")[0].toLowerCase()} · ${PITCH_MODES[choice("ptMode")].toLowerCase()}`, true]) },
-  { key: "cleanup", name: "CLEANUP", onId: "clOn", what: "noise, room, low cut, pops, clicks, breaths and gate: the recording cleaned up",
+  { key: "cleanup", name: "CLEANUP", onId: "clOn", listen: 1, listenWhat: "what Cleanup takes out",
+    what: "noise, room, low cut, pops, clicks, breaths and gate: the recording cleaned up",
     cells: () => [
       knob("clNoise", "Noise", "hiss & hum down", (v) => (v < 0.05 ? "Off" : `${MINUS}${v.toFixed(1)} dB`), 0),
       knob("clRoom", "Room", "echo after words", (v) => (v < 0.05 ? "Off" : fmtPct(v)), 0),
@@ -581,7 +583,7 @@ const MODULES = [
       ...EQ_BANDS.map((b, i) => knob("eqFreq" + (i + 1), b.name, "frequency", fmtHz, [180, 300, 900, 4000, 12000][i])),
     ],
     stat: () => { const n = [0, 1, 2, 3, 4].filter((b) => Math.abs(eqGain(b)) >= 0.05).length; return n ? [`${n} band${n > 1 ? "s" : ""}`, true] : ["flat", false]; } },
-  { key: "dyneq", name: "DYNAMIC EQ", onId: "dqOn", what: "cuts boom, mud, honk and harshness only when they jump out; Smooth tames ringing resonances",
+  { key: "dyneq", name: "DYNAMIC EQ", onId: "dqOn", listen: 2, listenWhat: "what the bands and Smooth cut", what: "cuts boom, mud, honk and harshness only when they jump out; Smooth tames ringing resonances",
     cells: () => [
       ...DYN_BANDS.map((b, i) => knob("dqCut" + (i + 1), b.name, "max cut", fmtCut, 0)),
       dynMeter(),
@@ -595,7 +597,7 @@ const MODULES = [
       const deepest = Math.min(...[0, 1, 2, 3].map(dynLive));
       return deepest < -0.3 ? [fmtDb(deepest), true] : [`${n} band${n > 1 ? "s" : ""}`, true];
     } },
-  { key: "deess", name: "DE-ESSER", onId: "dsOn", what: "tames sharp s, t, sh and ch sounds",
+  { key: "deess", name: "DE-ESSER", onId: "dsOn", listen: 3, listenWhat: "the s sounds it takes out", what: "tames sharp s, t, sh and ch sounds",
     cells: () => [
       knob("dsAmount", "Amount", "how hard", fmtPct, 0),
       knob("dsSens", "Sensitivity", "how easily", fmtPct, 50),
@@ -611,8 +613,9 @@ const MODULES = [
       meter("Gain", "riding now", () => M.rider, 12, null, fmtSigned),
     ],
     stat: () => (val("rdRange") < 0.05 ? ["idle", false] : [fmtSigned(M.rider), true]) },
-  { key: "comp", name: "COMPRESSOR", onId: "cpOn", what: "evens the performance: peak catcher + smooth leveler",
+  { key: "comp", name: "COMPRESSOR", onId: "cpOn", what: "evens the performance: peak catcher + leveler, Clean, FET or Opto",
     cells: () => [
+      seg("cpStyle", "Style", "character", COMP_STYLES),
       knob("cpPeak", "Peak", "catch spikes", (v) => (v > -0.05 ? "Off" : fmtDb(v)), 0),
       knob("cpThr", "Threshold", "smooth leveler", fmtDb, 0),
       knob("cpRatio", "Ratio", "how firm", (v) => `${v.toFixed(1)}:1`, 1),
@@ -620,15 +623,20 @@ const MODULES = [
       knob("cpMix", "Mix", "parallel blend", fmtPct, 100),
       meter("Reduction", "peak + level", () => M.peakGr + M.levelGr, 18, false, (v) => (v > -0.1 ? "0 dB" : fmtDb(v))),
     ],
-    stat: () => (compNeutral() ? ["idle", false] : [fmtDb(M.peakGr + M.levelGr), true]) },
-  { key: "sat", name: "SATURATION", onId: "saOn", what: "harmonics: warmth, density, presence",
+    stat: () => (compNeutral() ? ["idle", false] : [`${choice("cpStyle") ? COMP_STYLES[choice("cpStyle")] + " " : ""}${fmtDb(M.peakGr + M.levelGr)}`, true]) },
+  { key: "sat", name: "SATURATION", onId: "saOn", what: "harmonics: warmth, density, presence, and Air on top",
     cells: () => [
       seg("saMode", "Mode", "character", ["Tape", "Tube", "Clip"]),
       knob("saDrive", "Drive", "how much", fmtDb, 0),
       knob("saMix", "Mix", "blend", fmtPct, 50),
+      knob("saAir", "Air", "sparkle on top", (v) => (v < 0.05 ? "Off" : fmtPct(v)), 0),
       meter("Harmonics", "added now", () => M.satHarm, 60, true, (v) => (v <= -99 ? "none" : fmtDb(v)), -70),
     ],
-    stat: () => (val("saDrive") < 0.05 || val("saMix") < 0.05 ? ["idle", false] : [["Tape", "Tube", "Clip"][choice("saMode")] + ` ${fmtNum(val("saDrive"), 0)} dB`, true]) },
+    stat: () => {
+      const air = val("saAir") >= 0.05 ? `air ${fmtPct(val("saAir"))}` : "";
+      if (val("saDrive") < 0.05 || val("saMix") < 0.05) return air ? [air, true] : ["idle", false];
+      return [["Tape", "Tube", "Clip"][choice("saMode")] + ` ${fmtNum(val("saDrive"), 0)} dB${air ? " + air" : ""}`, true];
+    } },
   { key: "double", name: "VOICES", onId: "dbOn", what: "doubles, stacks and harmonies: in key, or the chords you play",
     cells: voicesCells,
     stat: () => {
@@ -1062,11 +1070,45 @@ function refreshHive() {
 // ---------------------------------------------------------------------------------------------
 // Module panel
 const cellsEl = $("cells");
+// LISTEN: hear only what a module takes out (Cleanup, Dynamic EQ, De-Esser; numbers as vox::listen). Monitoring only:
+// the plug-in forgets it when the window closes and never applies it in a bounce. Opening another module follows it
+// there (or stops it, on a module without it), so it is never left on by mistake.
+const setListen = Juce.getNativeFunction("setListen");
+let listenWanted = 0;
+setListen(0).catch(() => {});
+function wantListen(mode) {
+  if (mode === listenWanted) return;
+  listenWanted = mode;
+  setListen(mode).catch(() => {});
+  refreshListen();
+}
+function refreshListen() {
+  const m = cur(), b = $("mod-listen");
+  if (!b) return;
+  b.hidden = beat || !m.listen;
+  const mine = !beat && !!m.listen && listenWanted === m.listen;
+  const playing = mine && M.listenNow === m.listen;
+  b.classList.toggle("on", mine);
+  b.classList.toggle("listening", playing);
+  b.textContent = playing ? "LISTENING" : mine ? "LISTEN\u2026" : "LISTEN";
+  b.setAttribute("aria-pressed", String(mine));
+  let what = m.what;
+  if (mine && (on("listenA") || on("bypass"))) what = "LISTEN plays on B: switch to B to hear it";
+  else if (mine && !playing) what = "Listening in a moment\u2026";
+  else if (playing) what = (M.listenUnder ?? -100) <= -99 ? "Listening: nothing taken out right now"
+    : `Listening to ${m.listenWhat}${(M.listenGain || 0) >= 1 ? ` (+${fmtNum(M.listenGain, 0)} dB to hear it)` : ""}`;
+  const w = $("mod-what");
+  if (w.textContent !== what) w.textContent = what;
+  w.classList.toggle("listening", mine);
+}
+$("mod-listen").addEventListener("click", () => { const m = cur(); if (m.listen) wantListen(listenWanted === m.listen ? 0 : m.listen); });
+
 function renderModuleHead() {
   const m = cur();
   $("mod-num").textContent = beat ? "BEAT" : String(selected + 1).padStart(2, "0");
   $("mod-name").textContent = m.name;
   $("mod-what").textContent = m.what;
+  refreshListen();
   const pw = $("mod-power");
   pw.hidden = !m.onId;
   if (m.onId) { pw.textContent = on(m.onId) ? "ON" : "OFF"; pw.classList.toggle("on", on(m.onId)); pw.setAttribute("aria-pressed", String(on(m.onId))); pw.setAttribute("aria-label", `${m.name} on / off`); }
@@ -1080,8 +1122,9 @@ $("mod-power").addEventListener("click", () => {
 });
 function select(i) {
   selected = i;
+  if (listenWanted) wantListen(MODULES[i].listen || 0);   // LISTEN follows you to the module you open (or stops)
   if (beat) return;
-  cellsEl.dataset.cols = MODULES[i].key === "eq" || MODULES[i].key === "dyneq" || MODULES[i].key === "cleanup" || MODULES[i].key === "double" || MODULES[i].key === "delay" ? "5" : "6";   // EQs: amounts on top, frequencies below; Cleanup, Voices: two rows
+  cellsEl.dataset.cols = MODULES[i].key === "eq" || MODULES[i].key === "dyneq" || MODULES[i].key === "cleanup" || MODULES[i].key === "double" || MODULES[i].key === "delay" || MODULES[i].key === "comp" ? "5" : "6";   // EQs: amounts on top, frequencies below; Cleanup, Voices: two rows
   cellsEl.dataset.mod = MODULES[i].key;
   cellsEl.dataset.page = MODULES[i].key;
   cellsEl.replaceChildren(...cellsByModule[i]);
@@ -1421,7 +1464,8 @@ const LEARN = {
       "Pops: 60 - 100 % catches them. It only acts on a pop, so a high setting is safe.",
       "Breaths: 4 - 8 dB keeps them natural, 10 - 15 dB is the clean, tight rap sound. Off keeps every breath as recorded.",
       "Gate: set it between the noise in your gaps and your quietest words. Gate Range 10 - 15 dB sounds natural.",
-      "The Working meter shows N (noise and room taken out), P (pop cut), C (mouth click cut), B (breath turn-down) and G (gate) live."],
+      "The Working meter shows N (noise and room taken out), P (pop cut), C (mouth click cut), B (breath turn-down) and G (gate) live.",
+      "LISTEN (top right): hear only what Cleanup takes out, turned up so you can hear it. Words or the start of notes in it? That setting is too strong: back it off until you only hear noise, room, rumble and thumps. Click again for your vocal."],
     live: () => {
       const t = [];
       t.push(...inputTips());
@@ -1467,7 +1511,8 @@ const LEARN = {
       "Frequency (bottom row): where the problem lives. Easy trick: raise Max Cut, then sweep Frequency while a problem word plays until the orange cut appears on it.",
       "Sensitivity: how far a band may rise above your normal before it's pulled back. Higher catches more.",
       "Smooth (soothe-style): finds narrow resonances that ring in your voice (a whistly, harsh or nasal spot from the room, the mic or your nose) by listening for a couple of seconds, and turns just those down while they ring. A smooth voice is left alone. 30 - 60 % is natural. It works 800 Hz - 7 kHz (the s zone is the De-Esser's) and adds no delay; off in Record mode.",
-      "On the spectrum, drag the B, M, N, H points: left / right = where, down = Max Cut. The orange shape is what it's cutting right now."],
+      "On the spectrum, drag the B, M, N, H points: left / right = where, down = Max Cut. The orange shape is what it's cutting right now.",
+      "LISTEN (top right): hear only what the bands and Smooth cut. You should hear the boom, mud or ringing, not whole words."],
     live: () => {
       const t = [];
       if (on("dqOn") && [0, 1, 2, 3].every((b) => dynCut(b) < 0.05) && val("dqSmooth") < 0.05) t.push(tip("NO BANDS SET", "Every band's Max Cut is Off, so the Dynamic EQ does nothing yet.", "calm",
@@ -1481,7 +1526,8 @@ const LEARN = {
     does: "Turns harsh s, t, sh and ch sounds down only while they happen. It compares the sizzle band with the rest of your voice, so it works the same whether you whisper or shout, and it only touches the top end, never the body of the word.",
     how: ["Amount: how hard it cuts. Raise it until s sounds stop stinging on earbuds.",
       "Sensitivity: how easily a sound counts as an s. Raise it if some s sounds slip through.",
-      "Frequency: where the cut starts. Lower for a lispy, thick s; higher for a thin whistle."],
+      "Frequency: where the cut starts. Lower for a lispy, thick s; higher for a thin whistle.",
+      "LISTEN (top right): hear only the s sounds it takes out. If you hear whole words or vowels in it, Amount or Sensitivity is too high, or Frequency too low."],
     live: () => {
       const t = [];
       if (M.deEss < -9) t.push(tip("CUTTING HARD", `It's cutting ${fmtDb(M.deEss)} on the loudest s sounds. Too much makes the vocal sound lispy, like "th" instead of "s".`, "warn",
@@ -1499,7 +1545,8 @@ const LEARN = {
     how: ["Peak: lower it until the loudest words get about 3 - 6 dB of reduction.",
       "Threshold: lower it until the meter shows about 3 - 6 dB while you sing.",
       "Ratio: 2 - 3:1 is gentle, 4:1 is a modern rap vocal, 6:1+ is very controlled.",
-      "Mix below 100 % keeps some life if it sounds squashed."],
+      "Mix below 100 % keeps some life if it sounds squashed.",
+      "Style: Clean is even and transparent. FET grabs the front of each word: upfront, aggressive, great for rap. Opto is smooth and slow to let go: the vocal stays even without pumping, great for sung R&B and ballads."],
     live: () => {
       const t = [];
       const gr = M.peakGr + M.levelGr;
@@ -1508,10 +1555,11 @@ const LEARN = {
       return t;
     } },
   sat: {
-    does: "Adds harmonics: the warmth, density and edge that make a vocal sound finished and help it come through on phone speakers. Tape is smooth glue, Tube is warm and rich, Clip is gritty and aggressive.",
+    does: "Adds harmonics: the warmth, density and edge that make a vocal sound finished and help it come through on phone speakers. Tape is smooth glue, Tube is warm and rich, Clip is gritty and aggressive. Air adds sparkle on top.",
     how: ["Drive: how hard it's pushed. Felt more than heard is the goal for a lead vocal.",
       "Mix: blend with the clean voice. 30 - 50 % keeps it natural.",
-      "Turn Drive up until you hear it, then back off a little."],
+      "Turn Drive up until you hear it, then back off a little.",
+      "Air: sparkle on top. It makes new harmonics from the top of your voice and adds only what lands above 8 kHz, so the vocal sounds open and expensive without getting harsh. 20 - 40 % is felt more than heard; it works even with Drive at 0."],
     live: () => {
       const t = [];
       if (M.satHarm > -18 && M.satHarm > -99) t.push(tip("AUDIBLE DISTORTION", `Harmonics are at ${fmtDb(M.satHarm)}, loud enough to hear as distortion.`, "calm",
@@ -2243,6 +2291,7 @@ window.__JUCE__.backend.addEventListener("voxMeters", (frame) => {
   liveMeters.forEach((c) => frameStep("cells", () => c.update()));
   frameStep("autoEdit", refreshAutoEdit);
   frameStep("hive", refreshHive);
+  frameStep("listen", refreshListen);
   if (M.umLink > 0 || !beat) lastLinkSeen = performance.now();
   if (beat) frameStep("beat", () => {
     $("beat-stat").textContent = M.umLink > 0 ? `hearing ${M.umLink > 1 ? M.umLink + " vocals" : "your vocal"}` : "no vocal yet";

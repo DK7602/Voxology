@@ -52,6 +52,12 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   shared `plugin/RackHost.h`: a knob drag is one host gesture), locked while Auto-Edit listens or works; every knob
   names its parameter (`vox::rackunit::fromKnob` / `switchOf`). Honey Tune takes Snap / Drift / Vibrato
   (`honeyui::rackSet`), applied once where a drag stops.
+- Since v0.58 (Beta 19, the sound gaps from Mixology's docs/rack/AUDIT-2026-11-17.md): LISTEN (`vox/Listen.h`:
+  hear only what Cleanup, the Dynamic EQ or the De-Esser takes out; the Denoiser forms its own take-out from the same
+  spectra, the later stages' is their input minus output; the same ListenMix design as Masterology's; monitoring only,
+  `setListen` native, never offline), the Compressor's Style (`CompStyle`: Clean, FET, Opto; Auto-Edit picks it per
+  style) and Saturation's Air (even harmonics of the vocal's top, kept above 8 kHz, in the 4x oversampled path).
+  Tests: `tests/test_listen.cpp`, `tests/test_character.cpp`.
 - Since v0.57 (Beta 18): details only for the track a Rack shows (`rack::Link::shows`, a 25 Hz timer while shown),
   reset to default (`Change::reset`; Honey Tune `honeyui::rackReset`), the window grows while the Rack is open
   (`rack::host::RackWindow`), and report natives return objects (`rack::host::jsonObject`, `jsonText` in app.js): JUCE
