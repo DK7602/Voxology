@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.61.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.62.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.61.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.62.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -253,6 +253,8 @@ Click **MY CHAINS** (under INTENSITY).
 - **Start fresh** sets every module back to neutral (the key stays when ticked).
 - **UNDO** takes back the last chain, look or Start fresh (the Auto-Edit report stays).
 - A chain saved with an older Voxology still loads; anything newer than the chain starts off.
+- **From the Sonicology Rack**: **SAVE** on Voxology's row saves this setup too, named after the track and the time
+  ("Lead Vox 17 Nov 22.41").
 
 Tip: one chain per kind of part works well: "Lead", "Hook stack", "Ad-libs". Auto-Edit fits a chain to a new recording, but it sets every module, so run Auto-Edit first and load a Quick Look on top, not the other way round.
 
@@ -516,6 +518,12 @@ Esc) brings you back, at the size the window had before.
   live) and how much it adds. It warns when one makes the track much louder (louder sounds better by itself, so
   compare at the same level: Voxology's MATCH does it for you) or peaks close to 0 dB. Masterology is meant to make
   the mix louder, so only its peaks count.
+  - **Track fader**: the track's fader in your DAW, as Mixology's DAW bridge reads it (so only with Mixology on the
+    master and its bridge connected). Turn it like any knob in the Rack (drag, mouse wheel, double-click for 0 dB,
+    UNDO); Mixology moves the fader, and its History has the move. It moves when the track is among the channels the
+    DAW shows Mixology right now (Mixology's Tracks page); for another, the Rack says so.
+- **SAVE** (on Voxology's row in the Signal Chain): keeps this vocal's whole Voxology setup in Voxology's **MY
+  CHAINS**, named after the track and the time ("Lead Vox 17 Nov 22.41"), to use on your next song.
 - **The bottom bar:** IN and OUT of the picked plug-in, and the mix's loudness (from Mixology, or what reaches
   Masterology). A dash means nothing has measured it yet.
 
@@ -532,7 +540,7 @@ that module on the RACK page.
 
 **Good to know**
 - Honey Tune has no RACK button: it shows up in the Rack above Voxology on the track it tunes.
-- Mixology Link has no RACK button yet: Links show up in the Rack opened from Voxology, Mixology or Masterology.
+- Mixology Link has a RACK button too (the spinning cube, top right of its window): the Rack opens on the Link's track.
 - The Rack costs nothing while it's closed: the plug-ins send their details only while a Rack is open.
 - **Locked for a moment:** while Voxology's Auto-Edit or Masterology's Auto-Master listens or works, the Rack can't
   change that plug-in (a lock and the reason show under its knobs). It can again as soon as it has finished.

@@ -2010,3 +2010,6 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Voxology 0.61.0 (2026-11-17, Sonicology Beta 23): shared rack.js / rack.css from Mixology (the Rack's SESSION page,
   gain staging in the Rack Coach, TURN ON HERE: Mixology's RESUME-HERE). No Voxology code changed. Manual: the Rack
   section.
+- Voxology 0.62.0 (2026-11-17, Sonicology Beta 24): the Rack's SAVE on Voxology's row: `rack::Change::save` in applyRack
+  saves a My Chain named "<track> <d Mon HH.MM>" (ChainLibrary::save). Honey Tune refuses a save. Shared RackLink /
+  rack.js from Mixology (the track's fader in the Rack, the Link's RACK button: Mixology's RESUME-HERE).

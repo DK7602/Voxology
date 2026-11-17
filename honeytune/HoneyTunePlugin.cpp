@@ -475,6 +475,7 @@ public:
                 const auto& r = batch[i];
                 if (r.change == rack::Change::state) { rk.refuse (rs.slot, rs.id, r.ticket, "Honey Tune has no on switch: it tunes the clips you put it on."); continue; }
                 if (r.change == rack::Change::power) { rk.refuse (rs.slot, rs.id, r.ticket, "Honey Tune has no bypass of its own: use your DAW's (it plays the clips it tuned)."); continue; }
+                if (r.change == rack::Change::save) { rk.refuse (rs.slot, rs.id, r.ticket, "Only Voxology saves chains from the Rack."); continue; }
                 if (r.change == rack::Change::reset)
                 {
                     if (honeyui::rackReset (s, r.control)) changed = true;

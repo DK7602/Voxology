@@ -336,6 +336,17 @@ std::string VoxologyAudioProcessor::rackLock() const
 
 std::string VoxologyAudioProcessor::applyRack (const rack::Request& r)
 {
+    if (r.change == rack::Change::save)
+    {
+        // The Rack's SAVE CHAIN: this setup in My Chains, named after the track and the time ("Lead Vox 17 Nov 22.41",
+        // as the Rack's message says it).
+        const auto t = juce::Time::getCurrentTime();
+        const auto name = (trackName.isNotEmpty() ? trackName : juce::String ("Rack chain")) + " " + juce::String (t.getDayOfMonth()) + " "
+                          + juce::Time::getMonthName (t.getMonth(), true) + " " + juce::String (t.getHours()).paddedLeft ('0', 2) + "."
+                          + juce::String (t.getMinutes()).paddedLeft ('0', 2);
+        if (! chains.save (name)) return "Voxology couldn't save the chain (Documents/Voxology/Chains).";
+        return {};
+    }
     if (r.change == rack::Change::power)
     {
         // The Rack's BYPASS: Voxology's own (its delayed dry path: the timing never jumps).
