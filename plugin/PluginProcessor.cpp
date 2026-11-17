@@ -336,6 +336,14 @@ std::string VoxologyAudioProcessor::rackLock() const
 
 std::string VoxologyAudioProcessor::applyRack (const rack::Request& r)
 {
+    if (r.change == rack::Change::power)
+    {
+        // The Rack's BYPASS: Voxology's own (its delayed dry path: the timing never jumps).
+        auto* p = rack::host::find (parameters, "bypass");
+        if (p == nullptr) return rack::host::cannot ("Voxology", r);
+        rack::host::setSwitch (*p, r.value < 0.5f);
+        return {};
+    }
     if (r.change == rack::Change::reset)
     {
         double unused = 0.0;

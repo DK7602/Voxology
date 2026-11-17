@@ -52,6 +52,8 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   shared `plugin/RackHost.h`: a knob drag is one host gesture), locked while Auto-Edit listens or works; every knob
   names its parameter (`vox::rackunit::fromKnob` / `switchOf`). Honey Tune takes Snap / Drift / Vibrato
   (`honeyui::rackSet`), applied once where a drag stops.
+- Since v0.59 (Beta 20): the Rack's BYPASS reaches Voxology's own bypass (`rack::Change::power` in `applyRack`); Honey
+  Tune refuses it (no bypass of its own). UNDO / REDO and A / B are the Rack page's own (rack.js).
 - Since v0.58 (Beta 19, the sound gaps from Mixology's docs/rack/AUDIT-2026-11-17.md): LISTEN (`vox/Listen.h`:
   hear only what Cleanup, the Dynamic EQ or the De-Esser takes out; the Denoiser forms its own take-out from the same
   spectra, the later stages' is their input minus output; the same ListenMix design as Masterology's; monitoring only,

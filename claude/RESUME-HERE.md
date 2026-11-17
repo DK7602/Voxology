@@ -1995,3 +1995,6 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
     intensity, none with a reference. Measured: Air 60 % +4 - 6 dB at 12 - 20 kHz, 100 Hz - 2 kHz unchanged; a 9 kHz
     tone's alias > 50 dB under its 18 kHz harmonic.
   - Rack: Style and Air are values in the Rack (RackUnit kKnobs cpStyle / saAir); rack.js catalog text (shared file).
+- Voxology 0.59.0 (2026-11-17, Sonicology Beta 20): the Rack's BYPASS reaches Voxology's own bypass (Change::power in
+  applyRack); Honey Tune refuses power (no bypass of its own). Shared RackLink / rack.js / rack.css from Mixology (the
+  Rack's UNDO / REDO, A / B, BYPASS: Mixology's RESUME-HERE). Manual: the Rack's top-bar tools.
