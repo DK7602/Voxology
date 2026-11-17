@@ -84,6 +84,8 @@ void EchoDelay::prepare (double sampleRate)
     lineL.allocate (static_cast<int> (kMaxSeconds * sr) + 8);
     lineR.allocate (static_cast<int> (kMaxSeconds * sr) + 8);
     design::apply (inHp, design::butterworth (true, 250.0, sr));
+    design::apply (loopHpL, design::butterworth (true, 150.0, sr));
+    design::apply (loopHpR, design::butterworth (true, 150.0, sr));
     delayGlide = onePole (0.15, sr);
     duckAtk = onePole (0.010, sr);
     duckRel = onePole (0.300, sr);
@@ -95,9 +97,11 @@ void EchoDelay::reset() noexcept
 {
     lineL.clear();
     lineR.clear();
-    inHp.reset(); lpL.reset(); lpR.reset();
+    inHp.reset(); lpL.reset(); lpR.reset(); loopHpL.reset(); loopHpR.reset();
     curDelay = -1.0;
     designedTone = -1.0;
+    designedCharacter = -1;
+    wowPhase = flutterPhase = 0.0;
     duckEnv = 0.0;
     wet = 0.0;
     silent = true;
@@ -118,12 +122,22 @@ void EchoDelay::process (const double* mono, double* const* out, int nch, int n)
     if (off && silent)
         return;
     silent = false;
-    if (std::abs (params.toneHz - designedTone) > 0.5)
+    const int character = std::clamp (params.character, 0, kDelayCharacters - 1);
+    if (std::abs (params.toneHz - designedTone) > 0.5 || character != designedCharacter)
     {
         designedTone = params.toneHz;
-        const auto c = design::butterworth (false, std::clamp (params.toneHz, 500.0, 0.45 * sr), sr);
+        designedCharacter = character;
+        // Tape and Analog cap the repeats' top (their own darkening on top of Tone).
+        const double cap = character == 1 ? 7000.0 : character == 2 ? 3200.0 : 1.0e9;
+        const auto c = design::butterworth (false, std::clamp (std::min (params.toneHz, cap), 500.0, 0.45 * sr), sr);
         design::apply (lpL, c); design::apply (lpR, c);
     }
+    constexpr double twoPi = 2.0 * std::numbers::pi;
+    // Tape: wow (0.7 Hz) and flutter (5.5 Hz); Analog: a slow drift (0.35 Hz). Fractions of the delay time.
+    const double wowHz = character == 1 ? 0.7 : 0.35, wowDepth = character == 1 ? 0.0018 : character == 2 ? 0.0008 : 0.0;
+    const double flutterDepth = character == 1 ? 0.0006 : 0.0;
+    const double drive = character == 1 ? 1.3 : 1.1;   // soft saturation as the repeats go round
+    const auto warm = [drive] (double v) { return std::tanh (drive * v) / drive; };
     const double target = delaySeconds (params) * sr;
     if (curDelay < 0.0) curDelay = target;
     const double fb = std::clamp (params.feedback, 0.0, 95.0) / 100.0;
@@ -136,16 +150,36 @@ void EchoDelay::process (const double* mono, double* const* out, int nch, int n)
         duckEnv += (x * x - duckEnv) * (x * x > duckEnv ? duckAtk : duckRel);
         const double in = inHp.process (x);
 
-        const double l = lpL.process (lineL.read (curDelay));
-        const double r = lpR.process (lineR.read (curDelay));
-        if (params.pingPong)
+        double d = curDelay;
+        if (character != 0)
         {
-            lineL.push (in + fb * r);
-            lineR.push (fb * l);
+            wowPhase += wowHz / sr; if (wowPhase >= 1.0) wowPhase -= 1.0;
+            flutterPhase += 5.5 / sr; if (flutterPhase >= 1.0) flutterPhase -= 1.0;
+            d = std::clamp (curDelay * (1.0 + wowDepth * std::sin (twoPi * wowPhase) + flutterDepth * std::sin (twoPi * flutterPhase)), 1.0, kMaxSeconds * sr);
+        }
+        const double l = lpL.process (lineL.read (d));
+        const double r = lpR.process (lineR.read (d));
+        if (character == 0)
+        {
+            if (params.pingPong)
+            {
+                lineL.push (in + fb * r);
+                lineR.push (fb * l);
+            }
+            else
+            {
+                lineL.push (in + fb * l);
+                lineR.push (0.0);
+            }
+        }
+        else if (params.pingPong)
+        {
+            lineL.push (warm (in + fb * loopHpL.process (r)));
+            lineR.push (warm (fb * loopHpR.process (l)));
         }
         else
         {
-            lineL.push (in + fb * l);
+            lineL.push (warm (in + fb * loopHpL.process (l)));
             lineR.push (0.0);
         }
         wet += (wetTarget * duckGain (duckEnv, params.duck) - wet) * glide;
@@ -177,9 +211,10 @@ void Reverb::prepare (double sampleRate)
     constexpr std::array<double, kLines> lineMs { 29.7, 37.1, 41.1, 43.7, 53.3, 59.9, 67.7, 73.1 };
     for (size_t k = 0; k < static_cast<size_t> (kLines); ++k)
     {
-        lineLen[k] = std::max (8, static_cast<int> (lineMs[k] * 0.001 * sr));
-        lines[k].assign (static_cast<size_t> (lineLen[k]), 0.0);
+        lineBase[k] = lineMs[k] * 0.001 * sr;
+        lines[k].assign (static_cast<size_t> (std::max (8.0, lineBase[k] * kMaxSize) + 1), 0.0);   // room for the biggest space
     }
+    shapeLines (std::clamp (params.type, 0, kReverbTypes - 1));
     design::apply (inHp, design::butterworth (true, 200.0, sr));
     duckAtk = onePole (0.010, sr);
     duckRel = onePole (0.400, sr);
@@ -196,9 +231,25 @@ void Reverb::reset() noexcept
     lp.fill (0.0);
     inHp.reset();
     designedDecay = designedTone = -1.0;
+    retyping = false;
     duckEnv = 0.0;
     wet = 0.0;
     silent = true;
+}
+
+void Reverb::shapeLines (int type) noexcept
+{
+    const auto& sh = kShapes[static_cast<size_t> (type)];
+    for (size_t k = 0; k < static_cast<size_t> (kLines); ++k)
+    {
+        lineLen[k] = std::clamp (static_cast<int> (lineBase[k] * sh.size), 8, static_cast<int> (lines[k].size()) - 1);
+        std::fill (lines[k].begin(), lines[k].end(), 0.0);
+        linePos[k] = 0;
+    }
+    for (size_t k = 0; k < diffusers.size(); ++k) diffusers[k].g = k < 2 ? sh.diffA : sh.diffB;
+    lp.fill (0.0);
+    designedType = type;
+    designedDecay = -1.0;   // (the feedback gains follow the new lengths)
 }
 
 void Reverb::design() noexcept
@@ -219,10 +270,20 @@ void Reverb::process (const double* mono, double* const* out, int nch, int n) no
     if (off && silent)
         return;
     silent = false;
+    // Another space: the tail fades out (the wet glide), then the lines change size (a clean start, no smear).
+    const int type = std::clamp (params.type, 0, kReverbTypes - 1);
+    if (type != designedType) retyping = true;
+    if (retyping && wet < 1.0e-3) { shapeLines (type); retyping = false; }
     if (params.decayS != designedDecay || params.toneHz != designedTone)
         design();
     const double preSamples = std::clamp (params.predelayMs, 0.0, 200.0) * 0.001 * sr;
-    const double wetTarget = off ? 0.0 : std::clamp (params.mix, 0.0, 100.0) / 100.0;
+    const double wetTarget = off || retyping ? 0.0 : std::clamp (params.mix, 0.0, 100.0) / 100.0;
+    const auto& shape = kShapes[static_cast<size_t> (designedType)];
+    // Early reflections (Room, Chamber): taps off the pre-delay line, a little after it, alternating left and right.
+    constexpr std::array<double, 6> erMs { 7.1, 11.3, 16.9, 23.3, 29.1, 37.7 };
+    constexpr std::array<double, 6> erGain { 0.9, -0.75, 0.62, -0.5, 0.4, -0.32 };
+    std::array<double, 6> erAt {};
+    for (size_t k = 0; k < erAt.size(); ++k) erAt[k] = std::min (preSamples + erMs[k] * 0.001 * sr * shape.size, 0.249 * sr);
     constexpr double householder = 2.0 / kLines;
     constexpr std::array<double, kLines> inSign { 1, -1, 1, 1, -1, 1, -1, -1 };
     const double outScale = 0.6;
@@ -250,8 +311,11 @@ void Reverb::process (const double* mono, double* const* out, int nch, int n) no
             lines[k][static_cast<size_t> (linePos[k])] = o[k] - mixSum + 0.35 * inSign[k] * d;
             if (++linePos[k] >= lineLen[k]) linePos[k] = 0;
         }
-        const double l = outScale * (o[0] - o[2] + o[4] - o[6] + 0.5 * (o[1] - o[5]));
-        const double r = outScale * (o[1] - o[3] + o[5] - o[7] + 0.5 * (o[2] - o[6]));
+        double l = outScale * (o[0] - o[2] + o[4] - o[6] + 0.5 * (o[1] - o[5]));
+        double r = outScale * (o[1] - o[3] + o[5] - o[7] + 0.5 * (o[2] - o[6]));
+        if (shape.early > 0.0)
+            for (size_t k = 0; k < erAt.size(); ++k)
+                (k % 2 == 0 ? l : r) += shape.early * erGain[k] * pre.read (erAt[k]);
         wet += (wetTarget * duckGain (duckEnv, params.duck) - wet) * glide;
         if (off && wet < 1.0e-4) { reset(); return; }   // (the rest of the block untouched)
         if (nch >= 2)

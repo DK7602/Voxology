@@ -73,6 +73,16 @@ private:
 inline constexpr int kDelayDivisions = 6;
 inline constexpr std::array<double, kDelayDivisions> kDelayBeats { 1.0, 0.5, 0.75, 1.5, 0.25, 2.0 };
 inline constexpr std::array<const char*, kDelayDivisions> kDelayNames { "1/4", "1/8", "1/8 dot", "1/4 dot", "1/16", "1/2" };
+/** The Delay's character: Clean (the original), Tape (the repeats waver a little, wow and flutter, and warm up as they
+    go round: soft saturation, top above 7 kHz rolled off), Analog (a bucket-brigade's: darker and softer each time,
+    the top above 3.2 kHz rolled off, a slow, slight drift). */
+inline constexpr int kDelayCharacters = 3;
+inline constexpr std::array<const char*, kDelayCharacters> kDelayCharacterNames { "Clean", "Tape", "Analog" };
+/** The Reverb's space: Plate (the original: smooth, bright, no early echoes), Room (small: dense early reflections, a
+    short, tight tail), Hall (big: longer, smoother build-up), Chamber (between: some early reflections, a warm, even
+    tail). Decay sets how long the tail lasts in each. */
+inline constexpr int kReverbTypes = 4;
+inline constexpr std::array<const char*, kReverbTypes> kReverbTypeNames { "Plate", "Room", "Hall", "Chamber" };
 
 struct DelayParams
 {
@@ -84,6 +94,7 @@ struct DelayParams
     double duck = 50.0;        // %
     bool pingPong = false;
     double bpm = 120.0;        // from the host
+    int character = 0;         // kDelayCharacterNames
 };
 
 class EchoDelay
@@ -102,8 +113,10 @@ private:
     double sr = 48000.0;
     FracDelay lineL, lineR;
     double curDelay = -1.0, delayGlide = 0.0;
-    Biquad inHp, lpL, lpR;
+    Biquad inHp, lpL, lpR, loopHpL, loopHpR;
     double designedTone = -1.0;
+    int designedCharacter = -1;
+    double wowPhase = 0.0, flutterPhase = 0.0;
     double duckEnv = 0.0, duckAtk = 0.0, duckRel = 0.0, wet = 0.0, glide = 0.0;
     bool silent = true;
 };
@@ -121,6 +134,7 @@ struct ReverbParams
     double mix = 0.0;          // %; 0 = off
     double toneHz = 7000.0;
     double duck = 30.0;        // %
+    int type = 0;              // kReverbTypeNames
 };
 
 class Reverb
@@ -135,6 +149,17 @@ public:
 
 private:
     void design() noexcept;
+    void shapeLines (int type) noexcept;
+
+    /** Each space: the lines' size (x Plate's), the diffusers' gains, the early reflections' level. */
+    struct Shape { double size, diffA, diffB, early; };
+    static constexpr double kMaxSize = 1.6;
+    static constexpr std::array<Shape, kReverbTypes> kShapes {{
+        { 1.0, 0.65, 0.55, 0.0 },     // Plate (the original)
+        { 0.5, 0.60, 0.50, 0.35 },    // Room
+        { 1.6, 0.72, 0.62, 0.0 },     // Hall
+        { 0.75, 0.62, 0.55, 0.2 },    // Chamber
+    }};
 
     struct Allpass { std::vector<double> buf; int pos = 0; double g = 0.6;
         double process (double x) noexcept
@@ -152,6 +177,9 @@ private:
     std::array<Allpass, 4> diffusers;
     std::array<std::vector<double>, kLines> lines;
     std::array<int, kLines> linePos {}, lineLen {};
+    std::array<double, kLines> lineBase {};   // each line's length at size 1 (Plate), in samples
+    int designedType = -1;
+    bool retyping = false;                    // another type: the tail fades out, then the lines change size
     std::array<double, kLines> fbGain {}, lp {};
     double lpCoeff = 0.0;
     double designedDecay = -1.0, designedTone = -1.0;

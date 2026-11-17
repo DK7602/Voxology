@@ -5,6 +5,7 @@
 #include "vox/Fft.h"
 
 #include <cmath>
+#include <random>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -174,4 +175,135 @@ TEST_CASE ("Air: adds sparkle above 5 kHz, from the vocal's own top, without fol
 
     // Air 0 and Drive 0: the exact (delayed) vocal.
     for (size_t i = Saturation::kLatency; i < x.size(); ++i) REQUIRE (y0[i] == x[i - Saturation::kLatency]);
+}
+
+#include "vox/Space.h"
+
+namespace {
+/** The Reverb's wet output (stereo, mix 100 %) for `x`. */
+std::array<std::vector<double>, 2> reverbOf (int type, const std::vector<double>& x, double decayS = 1.6)
+{
+    Reverb r;
+    r.prepare (kSr);
+    ReverbParams p;
+    p.type = type;
+    p.decayS = decayS;
+    p.predelayMs = 0.0;
+    p.mix = 100.0;
+    p.toneHz = 16000.0;
+    p.duck = 0.0;
+    r.setParams (p);
+    std::array<std::vector<double>, 2> out { std::vector<double> (x.size(), 0.0), std::vector<double> (x.size(), 0.0) };
+    for (size_t s = 0; s < x.size(); s += 256)
+    {
+        const int n = static_cast<int> (std::min<size_t> (256, x.size() - s));
+        double* o[2] { out[0].data() + s, out[1].data() + s };
+        r.process (x.data() + s, o, 2, n);
+    }
+    return out;
+}
+
+double energyDb (const std::array<std::vector<double>, 2>& y, double from, double to)
+{
+    double e = 0.0;
+    for (const auto& ch : y)
+        for (size_t i = static_cast<size_t> (from * kSr); i < static_cast<size_t> (to * kSr) && i < ch.size(); ++i) e += ch[i] * ch[i];
+    return 10.0 * std::log10 (e + 1.0e-30);
+}
+
+/** The Delay's output (mono in, stereo out, mix 100 %, the dry not included). */
+std::vector<double> delayOf (int character, const std::vector<double>& x, double feedback = 0.0)
+{
+    EchoDelay d;
+    d.prepare (kSr);
+    DelayParams p;
+    p.character = character;
+    p.mix = 100.0;
+    p.feedback = feedback;
+    p.duck = 0.0;
+    p.toneHz = 16000.0;
+    p.bpm = 120.0;   // 1/4 = 0.5 s
+    d.setParams (p);
+    std::vector<double> l (x.size(), 0.0), r (x.size(), 0.0);
+    for (size_t s = 0; s < x.size(); s += 256)
+    {
+        const int n = static_cast<int> (std::min<size_t> (256, x.size() - s));
+        double* o[2] { l.data() + s, r.data() + s };
+        d.process (x.data() + s, o, 2, n);
+    }
+    return l;
+}
+}
+
+TEST_CASE ("Reverb types: each keeps the Decay you set, Room and Chamber add early reflections", "[space][character]")
+{
+    std::vector<double> imp (static_cast<size_t> (3.0 * kSr), 0.0);
+    imp[100] = 1.0;
+    std::array<double, kReverbTypes> early {};
+    for (int t = 0; t < kReverbTypes; ++t)
+    {
+        INFO (kReverbTypeNames[static_cast<size_t> (t)]);
+        const auto y = reverbOf (t, imp);
+        // RT60 from the slope between 0.4 and 1.2 s: within a third of the 1.6 s set.
+        const double slope = (energyDb (y, 1.1, 1.3) - energyDb (y, 0.4, 0.6)) / 0.7;   // dB per second
+        const double rt60 = -60.0 / slope;
+        CHECK (rt60 > 1.6 * 0.67);
+        CHECK (rt60 < 1.6 * 1.33);
+        early[static_cast<size_t> (t)] = energyDb (y, 0.0, 0.05) - energyDb (y, 0.0, 1.5);
+    }
+    CHECK (early[1] > early[0] + 1.0);   // Room: more of its energy in the first 50 ms than the Plate
+    CHECK (early[3] > early[0] + 0.5);   // Chamber too
+    CHECK (early[2] < early[1]);         // Hall: a slower build-up than the Room
+}
+
+TEST_CASE ("Reverb: changing the type while it rings fades over, no jump", "[space][character]")
+{
+    const auto v = testsig::vocal (kSr, 3.0, -70.0, -20.0);
+    const std::vector<double> x (v.begin(), v.end());
+    Reverb r;
+    r.prepare (kSr);
+    ReverbParams p;
+    p.mix = 40.0;
+    r.setParams (p);
+    std::vector<double> l (x.size(), 0.0), rr (x.size(), 0.0);
+    double worst = 0.0, prev = 0.0;
+    for (size_t s = 0; s < x.size(); s += 256)
+    {
+        if (s == static_cast<size_t> (kSr)) { p.type = 2; r.setParams (p); }
+        if (s == static_cast<size_t> (2.0 * kSr)) { p.type = 1; r.setParams (p); }
+        const int n = static_cast<int> (std::min<size_t> (256, x.size() - s));
+        double* o[2] { l.data() + s, rr.data() + s };
+        r.process (x.data() + s, o, 2, n);
+        for (int i = 0; i < n; ++i) { REQUIRE (std::isfinite (l[s + static_cast<size_t> (i)])); worst = std::max (worst, std::abs (l[s + static_cast<size_t> (i)] - prev)); prev = l[s + static_cast<size_t> (i)]; }
+    }
+    CHECK (worst < 0.2);   // no step (the input's own sample-to-sample moves are about this size)
+}
+
+TEST_CASE ("Delay characters: Tape wavers, Analog is darker, Clean is exact", "[space][character]")
+{
+    // A steady 1 kHz tone: the echo's period (zero crossings) stays put when Clean, wavers on Tape.
+    std::vector<double> tone (static_cast<size_t> (4.0 * kSr));
+    for (size_t i = 0; i < tone.size(); ++i) tone[i] = 0.3 * std::sin (2.0 * std::numbers::pi * 1000.0 * static_cast<double> (i) / kSr);
+    const auto spread = [] (const std::vector<double>& y)
+    {
+        std::vector<double> t;
+        for (size_t i = static_cast<size_t> (1.0 * kSr); i < y.size(); ++i)
+            if (y[i - 1] < 0.0 && y[i] >= 0.0) t.push_back (static_cast<double> (i) - 1.0 + (-y[i - 1]) / (y[i] - y[i - 1]));
+        double lo = 1e9, hi = 0.0;
+        for (size_t k = 1; k < t.size(); ++k) { lo = std::min (lo, t[k] - t[k - 1]); hi = std::max (hi, t[k] - t[k - 1]); }
+        return hi - lo;   // samples
+    };
+    CHECK (spread (delayOf (0, tone)) < 0.01);
+    CHECK (spread (delayOf (1, tone)) > 0.05);   // the pitch wavers (wow and flutter)
+
+    // White noise in: the first echo's top (above 5 kHz) is well down on Analog, a little on Tape.
+    std::vector<double> noise (static_cast<size_t> (2.0 * kSr), 0.0);
+    std::mt19937 rng (3);
+    std::normal_distribution<double> w (0.0, 0.1);
+    for (size_t i = 0; i < static_cast<size_t> (0.3 * kSr); ++i) noise[i] = w (rng);
+    const auto top = [] (const std::vector<double>& y) { return bandDb (y, 5000.0, 15000.0) - bandDb (y, 200.0, 2000.0); };
+    const double clean = top (delayOf (0, noise)), tape = top (delayOf (1, noise)), analog = top (delayOf (2, noise));
+    CHECK (analog < clean - 6.0);
+    CHECK (tape < clean - 1.0);
+    CHECK (tape > analog);
 }

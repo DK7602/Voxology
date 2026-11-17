@@ -87,6 +87,7 @@ namespace vox::rackunit
             { "dmRate", Dimension::kMinRateHz, Dimension::kMaxRateHz, 0.6, 0 }, { "dmWidth", 0, 100, 0, 0 },
             { "dlTime", 0, kDelayDivisions - 1, 0, kDelayDivisions }, { "dlFeedback", 0, 90, 0, 0 }, { "dlMix", 0, 100, 0, 0 },
             { "dlTone", 1000, 16000, 4000, 0 }, { "dlDuck", 0, 100, 0, 0 }, { "dlThrow", 0, 100, 0, 0 }, { "dlPing", 0, 1, 0, 2 },
+            { "dlChar", 0, kDelayCharacters - 1, 0, kDelayCharacters }, { "rvType", 0, kReverbTypes - 1, 0, kReverbTypes },
             { "rvDecay", 0.3, 8, 1.5, 0 }, { "rvPredelay", 0, 200, 0, 0 }, { "rvMix", 0, 100, 0, 0 }, { "rvTone", 2000, 16000, 6000, 0 },
             { "rvDuck", 0, 100, 0, 0 }, { "rvThrow", 0, 100, 0, 0 },
             { "outGain", -24, 24, 0, 0 },
@@ -459,6 +460,8 @@ namespace vox::rackunit
             const auto& d = p.delay;
             const double echo = p.throws.echo;
             auto m = cell ("vox.delay", d.enabled, d.mix < 0.05 && echo < 0.05);
+            const int character = std::clamp (d.character, 0, kDelayCharacters - 1);
+            add (m, "Character", nameOf (kDelayCharacterNames, character), "dlChar", character);
             add (m, "Time", nameOf (kDelayNames, d.division), "dlTime", d.division);
             add (m, "Feedback", pct (d.feedback), "dlFeedback", d.feedback);
             add (m, "Mix", pct (d.mix), "dlMix", d.mix);
@@ -467,6 +470,7 @@ namespace vox::rackunit
             add (m, "Throw", offOr (echo, pct (echo)), "dlThrow", echo);
             add (m, "Ping-Pong", d.pingPong ? "On" : "Off", "dlPing", d.pingPong ? 1.0 : 0.0);
             m.summary = nameOf (kDelayNames, d.division);
+            if (character != 0) join (m.summary, nameOf (kDelayCharacterNames, character));
             if (d.mix >= 0.05) join (m.summary, "Mix " + pct (d.mix));
             if (echo >= 0.05) join (m.summary, "Throw " + pct (echo));
             if (d.pingPong) join (m.summary, "Ping-pong");
@@ -478,13 +482,15 @@ namespace vox::rackunit
             const auto& r = p.reverb;
             const double wash = p.throws.wash;
             auto m = cell ("vox.reverb", r.enabled, r.mix < 0.05 && wash < 0.05);
+            const int type = std::clamp (r.type, 0, kReverbTypes - 1);
+            add (m, "Type", nameOf (kReverbTypeNames, type), "rvType", type);
             add (m, "Decay", digits (r.decayS, 1) + " s", "rvDecay", r.decayS);
             add (m, "Pre-delay", ms (r.predelayMs), "rvPredelay", r.predelayMs);
             add (m, "Mix", pct (r.mix), "rvMix", r.mix);
             add (m, "Tone", hz (r.toneHz), "rvTone", r.toneHz);
             add (m, "Duck", pct (r.duck), "rvDuck", r.duck);
             add (m, "Throw", offOr (wash, pct (wash)), "rvThrow", wash);
-            m.summary = digits (r.decayS, 1) + " s";
+            m.summary = std::string (nameOf (kReverbTypeNames, type)) + " " + digits (r.decayS, 1) + " s";
             if (r.mix >= 0.05) join (m.summary, "Mix " + pct (r.mix));
             if (wash >= 0.05) join (m.summary, "Throw " + pct (wash));
             finish (m);

@@ -33,7 +33,7 @@ namespace VoxParams
         for (int k = 0; k < 12; ++k) ids.add ("ptRm" + juce::String (k));   // Pitch: notes switched off (C .. B)
         return ids;
     }
-    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode" }; }
+    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "dlChar", "rvType", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode" }; }
 
     inline void addTo (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
     {
@@ -202,6 +202,11 @@ namespace VoxParams
         slider ("dlTone", "Delay Tone", skewed (1000.0f, 16000.0f, 10.0f, 4000.0f), 6000.0f, "Hz", hzText);
         slider ("dlDuck", "Delay Duck", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f, "%", pctText);
         toggle ("dlPing", "Delay Ping-Pong", false);
+        {
+            StringArray chars;
+            for (auto* c : vox::kDelayCharacterNames) chars.add (c);
+            choice ("dlChar", "Delay Character", chars, 0);   // Clean = the original
+        }
         slider ("dlThrow", "Delay Throw", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
 
         toggle ("rvOn", "Reverb On", true);
@@ -211,6 +216,11 @@ namespace VoxParams
         slider ("rvTone", "Reverb Tone", skewed (2000.0f, 16000.0f, 10.0f, 6000.0f), 7000.0f, "Hz", hzText);
         slider ("rvDuck", "Reverb Duck", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 30.0f, "%", pctText);
         slider ("rvThrow", "Reverb Throw", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%", pctText);
+        {
+            StringArray types;
+            for (auto* t : vox::kReverbTypeNames) types.add (t);
+            choice ("rvType", "Reverb Type", types, 0);   // Plate = the original
+        }
 
         slider ("outGain", "Output", NormalisableRange<float> (-24.0f, 24.0f, 0.1f), 0.0f, "dB", dbText);
     }
@@ -279,12 +289,14 @@ namespace VoxParams
         set ("dlTone", static_cast<float> (p.delay.toneHz));
         set ("dlDuck", static_cast<float> (p.delay.duck));
         set ("dlPing", p.delay.pingPong ? 1.0f : 0.0f);
+        set ("dlChar", static_cast<float> (p.delay.character));
         set ("rvOn", 1.0f);
         set ("rvDecay", static_cast<float> (p.reverb.decayS));
         set ("rvPredelay", static_cast<float> (p.reverb.predelayMs));
         set ("rvMix", static_cast<float> (p.reverb.mix));
         set ("rvTone", static_cast<float> (p.reverb.toneHz));
         set ("rvDuck", static_cast<float> (p.reverb.duck));
+        set ("rvType", static_cast<float> (p.reverb.type));
         set ("outGain", static_cast<float> (p.outputDb));
     }
 
@@ -352,8 +364,9 @@ namespace VoxParams
             p.saturation.air = d (saAir);
             p.doubler = { on (dbOn), d (dbAmount), d (dbWidth) };
             p.dimension = { on (dmOn), idx (dmMode, vox::kDimensionModes - 1), d (dmAmount), d (dmRate), d (dmWidth) };
-            p.delay = { on (dlOn), idx (dlTime, vox::kDelayDivisions - 1), d (dlFeedback), d (dlMix), d (dlTone), d (dlDuck), on (dlPing), bpm };
-            p.reverb = { on (rvOn), d (rvDecay), d (rvPredelay), d (rvMix), d (rvTone), d (rvDuck) };
+            p.delay = { on (dlOn), idx (dlTime, vox::kDelayDivisions - 1), d (dlFeedback), d (dlMix), d (dlTone), d (dlDuck), on (dlPing), bpm,
+                        idx (dlChar, vox::kDelayCharacters - 1) };
+            p.reverb = { on (rvOn), d (rvDecay), d (rvPredelay), d (rvMix), d (rvTone), d (rvDuck), idx (rvType, vox::kReverbTypes - 1) };
             p.throws.echo = d (dlThrow);
             p.throws.wash = d (rvThrow);
             p.outputDb = d (outGain);
@@ -384,7 +397,7 @@ namespace VoxParams
                         dqSens, dqSmooth, dsOn, dsAmount, dsSens, dsFreq, rdOn, rdTarget, rdRange, rdSpeed, cpOn,
                         cpPeak, cpThr, cpRatio, cpMakeup, cpMix, saOn, saMode, saDrive, saMix, dbOn, dbAmount, dmOn,
                         dmMode, dmAmount, dmRate, dmWidth, dlOn, dlTime, dlFeedback, dlMix, dlTone, dlDuck, dlPing,
-                        rvOn, rvDecay, rvPredelay, rvMix, rvTone, rvDuck, dlThrow, rvThrow, outGain, cpStyle, saAir, idCount };
+                        rvOn, rvDecay, rvPredelay, rvMix, rvTone, rvDuck, dlThrow, rvThrow, outGain, cpStyle, saAir, dlChar, rvType, idCount };
         static constexpr std::array<const char*, idCount> kIds { "bypass", "listenA", "ptOn", "ptAmount", "ptKey",
             "ptScale", "ptSpeed", "ptHumanize", "ptFormant", "ptMode", "ptVibrato", "ptTranspose", "hv1", "hv2",
             "hvLevel", "hvFormant", "hvStack", "hvMidi", "hvCrew", "dbWidth", "clOn", "clLowCut", "clGateThr",
@@ -393,7 +406,7 @@ namespace VoxParams
             "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saOn", "saMode", "saDrive", "saMix", "dbOn",
             "dbAmount", "dmOn", "dmMode", "dmAmount", "dmRate", "dmWidth", "dlOn", "dlTime", "dlFeedback", "dlMix",
             "dlTone", "dlDuck", "dlPing", "rvOn", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "dlThrow",
-            "rvThrow", "outGain", "cpStyle", "saAir" };
+            "rvThrow", "outGain", "cpStyle", "saAir", "dlChar", "rvType" };
         float v (Id id) const noexcept { return ptr[static_cast<size_t> (id)]->load(); }
 
         std::array<std::atomic<float>*, idCount> ptr {};

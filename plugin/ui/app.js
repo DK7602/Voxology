@@ -141,7 +141,7 @@ const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", 
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", "dqSmooth", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
 const PT_RM = NOTES_C.map((_, k) => "ptRm" + k);
 const TOGGLES = [...PT_RM, "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn", "hvMidi", "dmOn"];
-const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode"];
+const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "dlChar", "rvType", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
 for (const id of TOGGLES) P[id] = Juce.getToggleState(id);
@@ -303,6 +303,8 @@ const fmtCut = (v) => (v < 0.05 ? "Off" : `${MINUS}${v.toFixed(1)} dB`);
 const eqGain = (b) => val("eqGain" + (b + 1));
 const eqFreq = (b) => val("eqFreq" + (b + 1));
 const COMP_STYLES = ["Clean", "FET", "Opto"];
+const DELAY_CHARS = ["Clean", "Tape", "Analog"];
+const REVERB_TYPES = ["Plate", "Room", "Hall", "Chamber"];
 const compNeutral = () => val("cpPeak") > -0.05 && val("cpRatio") < 1.005 && Math.abs(val("cpMakeup")) < 0.005;
 
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -659,6 +661,7 @@ const MODULES = [
     stat: () => (val("dmAmount") < 0.05 ? ["idle", false] : [`${DIM_MODES[choice("dmMode")]} ${fmtPct(val("dmAmount"))}`, true]) },
   { key: "delay", name: "DELAY", onId: "dlOn", what: "echoes locked to your song's tempo",
     cells: () => [
+      seg("dlChar", "Character", "the repeats", DELAY_CHARS),
       vseg("dlTime", "Time", "on the beat", DELAYS),
       knob("dlFeedback", "Feedback", "repeats", fmtPct, 25),
       knob("dlMix", "Mix", "echo level", fmtPct, 0),
@@ -670,10 +673,11 @@ const MODULES = [
     stat: () => {
       const throwing = val("dlThrow") >= 0.05;
       if (val("dlMix") < 0.05) return throwing ? [`throws ${DELAYS[choice("dlTime")]}`, true] : ["idle", false];
-      return [`${DELAYS[choice("dlTime")]} · ${fmtPct(val("dlMix"))}${throwing ? " + throws" : ""}`, true];
+      return [`${choice("dlChar") ? DELAY_CHARS[choice("dlChar")].toLowerCase() + " " : ""}${DELAYS[choice("dlTime")]} · ${fmtPct(val("dlMix"))}${throwing ? " + throws" : ""}`, true];
     } },
-  { key: "reverb", name: "REVERB", onId: "rvOn", what: "a vocal plate: a space for the voice to live",
+  { key: "reverb", name: "REVERB", onId: "rvOn", what: "a plate, room, hall or chamber: a space for the voice to live",
     cells: () => [
+      seg("rvType", "Type", "the space", REVERB_TYPES),
       knob("rvDecay", "Decay", "tail length", (v) => `${v.toFixed(1)} s`, 1.6),
       knob("rvPredelay", "Pre-delay", "keeps words clear", fmtMs, 20),
       knob("rvMix", "Mix", "space level", fmtPct, 0),
@@ -684,7 +688,7 @@ const MODULES = [
     stat: () => {
       const throwing = val("rvThrow") >= 0.05;
       if (val("rvMix") < 0.05) return throwing ? ["throws", true] : ["idle", false];
-      return [`${val("rvDecay").toFixed(1)} s · ${fmtPct(val("rvMix"))}${throwing ? " + throws" : ""}`, true];
+      return [`${REVERB_TYPES[choice("rvType")].toLowerCase()} ${val("rvDecay").toFixed(1)} s · ${fmtPct(val("rvMix"))}${throwing ? " + throws" : ""}`, true];
     } },
   { key: "out", name: "OUTPUT", onId: null, what: "final level into your mix",
     cells: () => [
@@ -1124,7 +1128,7 @@ function select(i) {
   selected = i;
   if (listenWanted) wantListen(MODULES[i].listen || 0);   // LISTEN follows you to the module you open (or stops)
   if (beat) return;
-  cellsEl.dataset.cols = MODULES[i].key === "eq" || MODULES[i].key === "dyneq" || MODULES[i].key === "cleanup" || MODULES[i].key === "double" || MODULES[i].key === "delay" || MODULES[i].key === "comp" ? "5" : "6";   // EQs: amounts on top, frequencies below; Cleanup, Voices: two rows
+  cellsEl.dataset.cols = MODULES[i].key === "eq" || MODULES[i].key === "dyneq" || MODULES[i].key === "cleanup" || MODULES[i].key === "double" || MODULES[i].key === "delay" || MODULES[i].key === "comp" || MODULES[i].key === "reverb" ? "5" : "6";   // EQs: amounts on top, frequencies below; Cleanup, Voices: two rows
   cellsEl.dataset.mod = MODULES[i].key;
   cellsEl.dataset.page = MODULES[i].key;
   cellsEl.replaceChildren(...cellsByModule[i]);
@@ -1594,14 +1598,16 @@ const LEARN = {
       { need: "Only if it sounds out of tune.", steps: ["Bring Speed under 1 Hz or Amount under 40 %."] })] : []) },
   delay: {
     does: "Echoes locked to your song's tempo, so they groove with the beat. Duck turns the echoes down while you're rapping and lets them come up in the gaps, so words stay clear.",
-    how: ["Time: 1/4 and 1/8 are classic; 1/8 dot gives a bouncy feel.",
+    how: ["Character: Clean repeats stay out of the way; Tape repeats waver a little and warm up as they fade (lo-fi, melodic); Analog repeats are dark and soft, sitting behind the voice (R&B, ballads).",
+      "Time: 1/4 and 1/8 are classic; 1/8 dot gives a bouncy feel.",
       "Throw: an echo on the last word of each line, on the beat, like an engineer throwing it by hand (the rest of the line stays dry). 30 - 60 % for trap hooks and ad-lib lines. It works even with Mix at 0: then only the line ends echo.",
       "Mix: keep it low (10 - 20 %) so you feel it more than hear it.",
       "Tone: lower makes the repeats darker so they sit behind the vocal."],
     live: () => (M.bpm > 0 ? [] : [tip("NO TEMPO YET", "The delay locks to {daw}'s tempo once playback runs (120 BPM until then).", "")]) },
   reverb: {
-    does: "Puts the vocal in a space, like a vocal plate in a studio. Pre-delay keeps the start of each word dry and clear; Duck lets the tail bloom in the gaps. The low end of the reverb is cut so it never muddies the 808.",
-    how: ["Decay: 0.8 - 1.5 s for rap, 1.5 - 3 s for sung parts.",
+    does: "Puts the vocal in a space: a plate, a room, a hall or a chamber. Pre-delay keeps the start of each word dry and clear; Duck lets the tail bloom in the gaps. The low end of the reverb is cut so it never muddies the 808.",
+    how: ["Type: Plate is smooth and bright (the classic vocal sound); Room is small and close, so rap stays upfront; Hall is big and smooth for sung lines; Chamber is warm and even, natural around the voice.",
+      "Decay: 0.8 - 1.5 s for rap, 1.5 - 3 s for sung parts.",
       "Throw: a long reverb wash after the last word of each line (its own plate), so the end of a line blooms while the words stay dry. Works even with Mix at 0.",
       "Mix: 8 - 20 %. If you notice the reverb, it's probably a bit much.",
       "Pre-delay: 20 - 40 ms keeps words upfront."],

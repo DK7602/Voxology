@@ -615,6 +615,9 @@ const std::array<StyleSpec, kStyles> kSpecs {{
 constexpr std::array<int, kStyles> kCompStyleOf { 1, 1, 0, 0, 2, 0, 2, 2 };
 // Saturation's Air (%, at Balanced): sparkle on top for the bright, modern styles, a touch for the natural ones.
 constexpr std::array<double, kStyles> kAirOf { 25, 15, 25, 20, 25, 30, 10, 10 };
+// The Reverb's space and the Delay's character per style (kReverbTypeNames, kDelayCharacterNames).
+constexpr std::array<int, kStyles> kReverbTypeOf { 0, 1, 2, 0, 2, 0, 3, 3 };    // Plate, Room, Hall, Plate, Hall, Plate, Chamber, Chamber
+constexpr std::array<int, kStyles> kDelayCharOf { 0, 1, 1, 0, 2, 0, 1, 2 };     // Clean, Tape, Tape, Clean, Analog, Clean, Tape, Analog
 
 constexpr std::array<double, kIntensities> kIntensityScale { 0.6, 0.85, 1.1 };
 constexpr double kRefSibRangeDb = 3.0;   // a reference's "s" level moves the De-Esser's target at most this far from the style's
@@ -2201,6 +2204,7 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
         p.delay.toneHz = spec.dlTone;
         p.delay.duck = spec.dlDuck;
         p.delay.pingPong = spec.dlPing;
+        p.delay.character = kDelayCharOf[static_cast<size_t> (style)];
         p.delay.bpm = settings.bpm > 0.0 ? settings.bpm : 120.0;
         if (p.delay.mix < 1.0)
         {
@@ -2214,6 +2218,12 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
                 std::string ("Echoes on the beat grid fill the gaps between lines. Duck ") + pct (spec.dlDuck) + " keeps them quiet while you're singing or rapping, so words stay clear."
                 + (settings.bpm > 0.0 ? "" : " Your session tempo wasn't available, so 120 BPM is used: it locks to {daw}'s tempo once playback runs."));
         reason ("delay", "Mix", pct (p.delay.mix) + ", Feedback " + pct (p.delay.feedback), "Low enough to feel, not hear as a separate echo" + std::string (spec.dlPing ? "; Ping-Pong bounces the repeats left / right." : "."));
+        {
+            static const char* const why[] = { "clean repeats that stay out of the way", "tape repeats that waver a little and warm up as they fade",
+                                                "dark, soft analog repeats that sit behind the voice" };
+            const int c = p.delay.character;
+            reason ("delay", "Character", kDelayCharacterNames[static_cast<size_t> (c)], std::string ("For ") + kStyleNames[static_cast<size_t> (style)] + ": " + why[c] + ".");
+        }
         }
 
         p.reverb.decayS = spec.rvDecay;
@@ -2221,9 +2231,17 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
         p.reverb.mix = std::round (spec.rvMix * ks);
         p.reverb.toneHz = spec.rvTone;
         p.reverb.duck = spec.rvDuck;
-        reason ("reverb", "Decay", num (spec.rvDecay) + " s, Pre-delay " + std::to_string (static_cast<int> (spec.rvPre)) + " ms",
-                std::string ("A ") + (spec.rvDecay < 1.2 ? "short room" : spec.rvDecay < 2.0 ? "medium plate" : "long, lush plate") +
-                    " that gives the vocal a place to live. The pre-delay keeps the start of each word dry and clear.");
+        p.reverb.type = kReverbTypeOf[static_cast<size_t> (style)];
+        {
+            static const char* const space[] = { "plate", "room", "hall", "chamber" };
+            reason ("reverb", "Type", kReverbTypeNames[static_cast<size_t> (p.reverb.type)],
+                    std::string ("For ") + kStyleNames[static_cast<size_t> (style)] + ", a " + space[p.reverb.type] +
+                        (p.reverb.type == 0 ? ": smooth and bright, the classic vocal sound." : p.reverb.type == 1 ? ": small and close, so the words stay upfront."
+                         : p.reverb.type == 2 ? ": big and smooth, for sung lines to bloom." : ": warm and even, natural around the voice."));
+            reason ("reverb", "Decay", num (spec.rvDecay) + " s, Pre-delay " + std::to_string (static_cast<int> (spec.rvPre)) + " ms",
+                    std::string ("A ") + (spec.rvDecay < 1.2 ? "short " : spec.rvDecay < 2.0 ? "medium " : "long, lush ") + space[p.reverb.type] +
+                        " that gives the vocal a place to live. The pre-delay keeps the start of each word dry and clear.");
+        }
         if (ref != nullptr && refTail > -100.0 && ! refWet)
         {
             // Match the reference's space: what rings on after a phrase ends, measured the same way on

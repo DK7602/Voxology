@@ -51,6 +51,8 @@
     rdSpeed: { choices: ["Slow", "Medium", "Fast"], value: 0.5 },
     saMode: { choices: ["Tape", "Tube", "Clip"], value: 0 },
     cpStyle: { choices: ["Clean", "FET", "Opto"], value: 0 },
+    dlChar: { choices: ["Clean", "Tape", "Analog"], value: 0 },
+    rvType: { choices: ["Plate", "Room", "Hall", "Chamber"], value: 0 },
     dlTime: { choices: ["1/4", "1/8", "1/8 dot", "1/4 dot", "1/16", "1/2"], value: 0 },
     mode: { choices: ["Vocal", "Beat"], value: location.hash === "#beat" ? 1 : 0 },
     umFocus: { choices: ["Centre", "Full"], value: 0 },

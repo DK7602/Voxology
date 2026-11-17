@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.59.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.60.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.59.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.60.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -99,8 +99,8 @@ Every knob:
 | 08 | Saturation | Adds harmonics: warmth, density, presence, and Air on top | Mode (Tape, Tube, Clip), Drive, Mix, Air (sparkle above 8 kHz) |
 | 09 | Voices | Doubles, extra voices and harmonies in key, up to 8 voices | Double, Width, Voice 1 (left) + Voice 2 (right): **Unison** (a second singer on your own notes, same octave) or a harmony: 3rd, 4th, 5th or octave, up or down, Stack (2, 4 or 6 more singers on your notes, or **MIDI chords**: the voices sing the chords you play), Crew (each voice its own singer), Level, Formant |
 | 10 | Dimension | Movement and width: chorus, flanger or phaser | Mode (Chorus, Flanger, Phaser), Amount, Speed, Width |
-| 11 | Delay | Echoes locked to the song's tempo | Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong, Throw (an echo on each line's last word) |
-| 12 | Reverb | A vocal plate: a space for the voice | Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps), Throw (a wash after each line) |
+| 11 | Delay | Echoes locked to the song's tempo | Character (Clean, Tape, Analog), Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong, Throw (an echo on each line's last word) |
+| 12 | Reverb | A space for the voice: plate, room, hall or chamber | Type (Plate, Room, Hall, Chamber), Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps), Throw (a wash after each line) |
 | 13 | Output | Final level into your mix | Output gain |
 
 **Pitch: which mode for which sound.**
@@ -143,6 +143,17 @@ harshness live. It works even with Drive at 0. It does less on an "s" (where the
 folds back as aliasing (it runs in Saturation's 4x oversampling). Measured on a test vocal at 60 %: the top (12 - 20
 kHz) up about 4 - 6 dB, 100 Hz - 2 kHz unchanged. 20 - 40 % is felt more than heard. Auto-Edit adds 10 - 30 % for most
 styles (more on Strong, less on Light), none when you aim at a reference.
+
+**Reverb Type and Delay Character** give the space a sound of its own:
+
+- **Reverb Type:** **Plate** (the original: smooth and bright, the classic vocal sound), **Room** (small: dense early
+  reflections and a tight tail, so rap stays upfront), **Hall** (big: a longer, smoother build-up for sung lines to
+  bloom), **Chamber** (between: some early reflections, a warm, even tail). Decay sets how long the tail lasts in each
+  (measured within a third of the setting in all four). Changing the type while it rings fades the old tail out first.
+- **Delay Character:** **Clean** (the original: repeats exactly like your voice), **Tape** (the repeats waver a little,
+  wow and flutter, and warm up and darken as they go round: lo-fi, melodic), **Analog** (dark, soft repeats, a little
+  drift: they sit behind the voice).
+- Auto-Edit picks both for your style (for example Rap: Room + Tape, R&B: Hall + Analog, Trap Lead: Plate + Clean).
 
 **Noise and Room (Cleanup)** work before anything else in the chain, so Pitch and the gate already hear the cleaner vocal.
 

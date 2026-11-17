@@ -155,7 +155,7 @@ TEST_CASE ("Rack unit (Voxology): the compressor's gain reduction, the voices, d
 
     CHECK (find (ms, "vox.delay")->summary == "1/4 \xC2\xB7 Mix 10 % \xC2\xB7 Throw 40 %");
     CHECK (value (*find (ms, "vox.delay"), "Throw")->text == "40 %");
-    CHECK (find (ms, "vox.reverb")->summary == "1.4 s \xC2\xB7 Mix 12 %");
+    CHECK (find (ms, "vox.reverb")->summary == "Plate 1.4 s \xC2\xB7 Mix 12 %");   // (the type first, since Beta 21)
     CHECK (find (ms, "vox.cleanup")->meter == 0.0f);   // idle: no meter
 
     st.params.comp.enabled = false;   // switched off: no meter, whatever the last block said

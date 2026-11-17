@@ -1998,3 +1998,12 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Voxology 0.59.0 (2026-11-17, Sonicology Beta 20): the Rack's BYPASS reaches Voxology's own bypass (Change::power in
   applyRack); Honey Tune refuses power (no bypass of its own). Shared RackLink / rack.js / rack.css from Mixology (the
   Rack's UNDO / REDO, A / B, BYPASS: Mixology's RESUME-HERE). Manual: the Rack's top-bar tools.
+- Voxology 0.60.0 (2026-11-17, Sonicology Beta 21: more reverb and delay character): `ReverbParams::type` (param
+  `rvType`: Plate = the original, Room 0.5x lines + early reflections 0.35, Hall 1.6x + more diffusion, Chamber 0.75x +
+  ER 0.2; lines allocated for 1.6x; a type change waits for the tail to fade (wet < 0.001), then reshapes) and
+  `DelayParams::character` (param `dlChar`: Clean = the original, bit for bit; Tape: wow 0.7 Hz 0.18 % + flutter 5.5
+  Hz 0.06 % of the time, tanh 1.3 in the loop, 150 Hz HP in the loop, top capped at 7 kHz; Analog: drift 0.35 Hz
+  0.08 %, tanh 1.1, top capped at 3.2 kHz). Auto-Edit: kReverbTypeOf / kDelayCharOf per style, report lines. Pages:
+  Type / Character segs; Reverb page now two rows. Rack values Type and Character. Tests (test_character.cpp): each
+  type keeps its RT60 within a third, Room / Chamber more early energy, type change has no jump; Tape wavers (zero-
+  crossing spread), Analog's echo top >= 6 dB down.
