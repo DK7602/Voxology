@@ -202,7 +202,10 @@ juce::WebBrowserComponent::Options VoxWebEditor::makeEditorOptions()
                                  f.getParentDirectory().createDirectory();
                                  complete (f.replaceWithText (args.size() > 0 && args[0].toString() == "light" ? "light" : "dark"));
                              })
-        .withResourceProvider ([] (const auto& url) { return getResource (url); });
+        .withResourceProvider ([this] (const auto& url) {
+            if (auto rack = rack::host::viewResource (url, "voxology", audioProcessor.rackTrackHash())) return rack;   // the Rack's data
+            return getResource (url);
+        });
 }
 
 VoxWebEditor::VoxWebEditor (VoxologyAudioProcessor& p)
