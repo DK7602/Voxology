@@ -28,7 +28,7 @@
     saDrive: lin(0, 18, 0), saMix: lin(0, 100, 50), saAir: lin(0, 100, 0), dbAmount: lin(0, 100, 0), dbWidth: lin(0, 100, 70),
     dlFeedback: lin(0, 90, 25), dlMix: lin(0, 100, 0), dlTone: centre(1000, 16000, 4000, 6000, 10), dlDuck: lin(0, 100, 50),
     rvDecay: centre(0.3, 8, 1.5, 1.6, 0.01), rvPredelay: lin(0, 200, 20, 1), rvMix: lin(0, 100, 0), rvTone: centre(2000, 16000, 6000, 7000, 10),
-    rvDuck: lin(0, 100, 30), outGain: lin(-24, 24, 0), umAmount: lin(0, 100, 50),
+    rvDuck: lin(0, 100, 30), outGain: lin(-24, 24, 0), outCeil: lin(-6, 0, -1), umAmount: lin(0, 100, 50),
   };
   [[80, 400, 180], [150, 800, 300], [500, 2000, 900], [2000, 8000, 4000], [6000, 18000, 12000]].forEach(([lo, hi, def], i) => {
     sliders["eqGain" + (i + 1)] = lin(-12, 12, 0);
@@ -53,6 +53,7 @@
     cpStyle: { choices: ["Clean", "FET", "Opto"], value: 0 },
     dlChar: { choices: ["Clean", "Tape", "Analog"], value: 0 },
     rvType: { choices: ["Plate", "Room", "Hall", "Chamber"], value: 0 },
+    outPeaks: { choices: ["Off", "Clip", "Limit"], value: 0 },
     dlTime: { choices: ["1/4", "1/8", "1/8 dot", "1/4 dot", "1/16", "1/2"], value: 0 },
     mode: { choices: ["Vocal", "Beat"], value: location.hash === "#beat" ? 1 : 0 },
     umFocus: { choices: ["Centre", "Full"], value: 0 },

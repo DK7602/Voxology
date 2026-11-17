@@ -2013,3 +2013,11 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Voxology 0.62.0 (2026-11-17, Sonicology Beta 24): the Rack's SAVE on Voxology's row: `rack::Change::save` in applyRack
   saves a My Chain named "<track> <d Mon HH.MM>" (ChainLibrary::save). Honey Tune refuses a save. Shared RackLink /
   rack.js from Mixology (the track's fader in the Rack, the Link's RACK button: Mixology's RESUME-HERE).
+- Voxology 0.63.0 (2026-11-17, Sonicology Beta 25): the Output's PEAKS: `vox/OutputPeaks.h` / `src/OutputPeaks.cpp`
+  (Off; Clip = SoftClipper::shape with softness 0.5, knee 3 dB under the Ceiling, never past it; Limit = instant-attack
+  stereo-linked gain to the Ceiling, 80 ms one-pole back; no lookahead / oversampling: no latency). In VocalChain's
+  output loop after outGain, on the processed side only (before MATCH's gainB; A and bypass untouched). Params
+  `outPeaks` (choice) and `outCeil` (-6..0 dB, -1) at the end of the ids; NOT in the Auto-Edit writer (Auto-Edit leaves
+  them). Page: OUTPUT cells Output | Peaks seg | Ceiling | Out Peak; the cell's status adds "· clip / limit". Rack
+  values Peaks / Ceiling. Tests: tests/test_output_peaks.cpp. Shared rack.js: the insert-order check (Mixology's
+  RESUME-HERE).

@@ -137,11 +137,11 @@ window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !manual.hi
 const NOTES_C = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", "ptTranspose", "hvLevel", "hvFormant", "hvCrew", "clLowCut", "clGateThr", "clGateRange", "clPops", "clBreath", "clNoise", "clRoom", "clClicks", "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
   "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "saAir", "dbAmount", "dbWidth", "dmAmount", "dmRate", "dmWidth",
-  "dlFeedback", "dlMix", "dlTone", "dlDuck", "dlThrow", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "rvThrow", "outGain", "umAmount",
+  "dlFeedback", "dlMix", "dlTone", "dlDuck", "dlThrow", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "rvThrow", "outGain", "outCeil", "umAmount",
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", "dqSmooth", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
 const PT_RM = NOTES_C.map((_, k) => "ptRm" + k);
 const TOGGLES = [...PT_RM, "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn", "hvMidi", "dmOn"];
-const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "dlChar", "rvType", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode"];
+const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "dlChar", "rvType", "outPeaks", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
 for (const id of TOGGLES) P[id] = Juce.getToggleState(id);
@@ -305,6 +305,7 @@ const eqFreq = (b) => val("eqFreq" + (b + 1));
 const COMP_STYLES = ["Clean", "FET", "Opto"];
 const DELAY_CHARS = ["Clean", "Tape", "Analog"];
 const REVERB_TYPES = ["Plate", "Room", "Hall", "Chamber"];
+const PEAK_MODES = ["Off", "Clip", "Limit"];   // the Output's PEAKS (vox::kPeakModeNames)
 const compNeutral = () => val("cpPeak") > -0.05 && val("cpRatio") < 1.005 && Math.abs(val("cpMakeup")) < 0.005;
 
 const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -693,9 +694,14 @@ const MODULES = [
   { key: "out", name: "OUTPUT", onId: null, what: "final level into your mix",
     cells: () => [
       knob("outGain", "Output", "level", fmtSigned, 0, true),
+      seg("outPeaks", "Peaks", "past the ceiling", PEAK_MODES),
+      knob("outCeil", "Ceiling", "highest peak", fmtDb, -1),
       meter("Out Peak", "loudest sample", () => M.outPeak, 60, true, (v) => (v <= -99 ? "−inf" : fmtDb(v)), -60),
     ],
-    stat: () => [fmtSigned(val("outGain")), Math.abs(val("outGain")) >= 0.05] },
+    stat: () => {
+      const peaks = choice("outPeaks");   // (short: it has to fit the cell)
+      return [fmtSigned(val("outGain")) + (peaks ? ` · ${PEAK_MODES[peaks].toLowerCase()}` : ""), Math.abs(val("outGain")) >= 0.05 || peaks > 0];
+    } },
 ];
 let selected = 0;
 
@@ -724,7 +730,7 @@ function faceFor(id) {
   if (id === "rvDecay") return ["blank", "s"];
   if (id === "rvPredelay") return ["blank", "ms"];
   if (id === "cpRatio") return ["blank", ":1"];
-  if (/Gain|Thr|Target|Range|Peak|Makeup|Drive|Cut|Breath|Noise/.test(id)) return ["db", ""];
+  if (/Gain|Thr|Target|Range|Peak|Makeup|Drive|Cut|Breath|Noise|Ceil/.test(id)) return ["db", ""];
   return ["blank", "%"];
 }
 function knobSvg(face, glyph) {
@@ -1618,13 +1624,14 @@ const LEARN = {
       return t;
     } },
   out: {
-    does: "The final level into your mix. Auto-Edit matches it to the loudness the vocal came in at, so it doesn't jump in your mix; set the vocal's balance against the beat with {daw}'s track fader.",
+    does: "The final level into your mix. Auto-Edit matches it to the loudness the vocal came in at, so it doesn't jump in your mix; set the vocal's balance against the beat with {daw}'s track fader. PEAKS keeps the loudest moments under the Ceiling: Clip rounds them off (a touch of grit when pushed), Limit turns the vocal down for an instant (cleaner). Auto-Edit leaves PEAKS as you set it.",
     how: ["Use A / B with MATCH on to hear what Voxology does at equal loudness.",
-      "Keep Out Peak below about -1 dB on the vocal track."],
+      "Keep Out Peak below about -1 dB on the vocal track.",
+      "Loud words still poke out? PEAKS on Limit with the Ceiling at -1 dB catches them without touching the rest."],
     live: () => {
       const t = inputTips();
       if (M.outPeak > -0.5) t.push(tip("CLIPPING RISK", `The output peaks at ${fmtDb(M.outPeak)}, right at the top.`, "warn",
-        { need: "Yes, if the track meter in {daw} turns red.", steps: ["Lower Output 3 dB.", "Or lower Compressor Makeup."] }));
+        { need: "Yes, if the track meter in {daw} turns red.", steps: ["Lower Output 3 dB.", "Or lower Compressor Makeup.", "Or set PEAKS to Limit (Ceiling -1 dB)."] }));
       return t;
     } },
 };

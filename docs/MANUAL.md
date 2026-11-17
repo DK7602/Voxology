@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.62.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.63.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.62.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.63.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -101,7 +101,7 @@ Every knob:
 | 10 | Dimension | Movement and width: chorus, flanger or phaser | Mode (Chorus, Flanger, Phaser), Amount, Speed, Width |
 | 11 | Delay | Echoes locked to the song's tempo | Character (Clean, Tape, Analog), Time (note value), Feedback, Mix, Tone, Duck (quiet while you sing), Ping-Pong, Throw (an echo on each line's last word) |
 | 12 | Reverb | A space for the voice: plate, room, hall or chamber | Type (Plate, Room, Hall, Chamber), Decay, Pre-delay (keeps words clear), Mix, Tone, Duck (blooms in the gaps), Throw (a wash after each line) |
-| 13 | Output | Final level into your mix | Output gain |
+| 13 | Output | Final level into your mix, and its loudest moments kept under a ceiling | Output gain, Peaks (Off, Clip, Limit), Ceiling |
 
 **Pitch: which mode for which sound.**
 
@@ -196,6 +196,16 @@ styles (more on Strong, less on Light), none when you aim at a reference.
 - **Flanger**: the jet "whoosh" sweep. **Phaser**: the swirling, watery sweep. Both are effects you notice: use them on an ad-lib, an intro or one line (automate the module's ON button in Cubase).
 - **Speed**: slow (0.1 - 0.5 Hz) is smooth; fast (2 - 5 Hz) wobbles. **Width**: 0 = the same both sides, 100 = left and right move opposite ways.
 - The level stays the same at any Amount (within 1 dB). No added delay, so it works in Record mode too. Auto-Edit never changes it.
+
+**Peaks (Output)** keeps the loudest moments of the finished vocal under the **Ceiling** (−6 to 0 dB, −1 by default):
+
+- **Off**: as before.
+- **Clip**: rounds off what reaches past the Ceiling (from 3 dB under it), a touch of grit when it works hard; below
+  that, nothing changes.
+- **Limit**: turns the whole vocal down for an instant when a word would pass the Ceiling, then back up (about 80 ms).
+  Cleaner than Clip.
+- It works after the Output knob, adds no delay, and A / B's **A** and BYPASS stay untouched. Auto-Edit leaves it as
+  you set it. Most vocals never reach it; it's a safety for the loud words.
 
 Each cell shows a short status under its name (for example "idle", "flat", "cut 80 Hz"). Cleanup's status reads "clipped in!" or "too hot in!" when the recording itself is distorted: fix that at the recording stage. "Clipped" means flat-topped peaks cut off by a clipper; the rounded peaks of a quiet 16-bit recording don't count.
 
@@ -524,6 +534,11 @@ Esc) brings you back, at the size the window had before.
     DAW shows Mixology right now (Mixology's Tracks page); for another, the Rack says so.
 - **SAVE** (on Voxology's row in the Signal Chain): keeps this vocal's whole Voxology setup in Voxology's **MY
   CHAINS**, named after the track and the time ("Lead Vox 17 Nov 22.41"), to use on your next song.
+- **Insert order** (in the Rack Coach): Mixology Link belongs in the last insert slot, after Voxology, so Mixology
+  hears the finished vocal. Your DAW doesn't tell the plug-ins their order, so the Rack listens: while the vocal plays,
+  it compares how the Link's input moves with Voxology's input and output. When the Link plainly hears the vocal before
+  Voxology, a red line says so. It needs several seconds of singing and a Voxology that changes the vocal (its
+  compressor or Rider working); otherwise it says nothing rather than guess.
 - **The bottom bar:** IN and OUT of the picked plug-in, and the mix's loudness (from Mixology, or what reaches
   Masterology). A dash means nothing has measured it yet.
 

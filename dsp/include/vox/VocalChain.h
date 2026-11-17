@@ -7,6 +7,7 @@
 #include "Listen.h"
 #include "DynamicEq.h"
 #include "Modules.h"
+#include "OutputPeaks.h"
 #include "PopBreath.h"
 #include "PitchCorrector.h"
 #include "Saturation.h"
@@ -39,6 +40,8 @@ struct ChainParams
     DelayParams delay;
     ReverbParams reverb;
     double outputDb = 0.0;
+    int peakMode = 0;            // the Output's PEAKS: PeakMode (OutputPeaks.h): Off, Clip, Limit
+    double ceilingDb = -1.0;     // ... and its Ceiling (dBFS)
     bool bypass = false;      // whole plug-in off (delayed dry, so the timing never jumps)
     bool listenOriginal = false;   // A/B: hear the untouched vocal (delayed to line up)
     double gainOriginalDb = 0.0, gainProcessedDb = 0.0;   // MATCH turn-downs (<= 0)
@@ -153,6 +156,7 @@ private:
     EchoDelay delay;
     Reverb reverb;
     ListenMix listenMix;
+    OutputPeaks peaks;   // the Output's PEAKS (after the Output level, on the processed side only)
     // LISTEN: what the Noise / Room / Smooth stage took out waits Pitch's latency (earlyLine) to join what the later
     // modules took out, then Saturation's (lateLine), so it lines up with the vocal it replaces.
     std::array<std::vector<double>, kMaxChannels> earlyLine, lateLine;

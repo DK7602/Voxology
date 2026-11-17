@@ -24,7 +24,7 @@ namespace VoxParams
         ids.addArray ({ "dsAmount", "dsSens", "dsFreq", "rdTarget", "rdRange",
                         "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saDrive", "saMix", "saAir",
                         "dbAmount", "dbWidth", "dmAmount", "dmRate", "dmWidth", "dlFeedback", "dlMix", "dlTone", "dlDuck", "dlThrow",
-                        "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "rvThrow", "outGain", "umAmount" });
+                        "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "rvThrow", "outGain", "outCeil", "umAmount" });
         return ids;
     }
     inline juce::StringArray toggleIds()
@@ -33,7 +33,7 @@ namespace VoxParams
         for (int k = 0; k < 12; ++k) ids.add ("ptRm" + juce::String (k));   // Pitch: notes switched off (C .. B)
         return ids;
     }
-    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "dlChar", "rvType", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode" }; }
+    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "dlChar", "rvType", "outPeaks", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode" }; }
 
     inline void addTo (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
     {
@@ -223,6 +223,13 @@ namespace VoxParams
         }
 
         slider ("outGain", "Output", NormalisableRange<float> (-24.0f, 24.0f, 0.1f), 0.0f, "dB", dbText);
+        {
+            StringArray modes;
+            for (auto* m : vox::kPeakModeNames) modes.add (m);
+            choice ("outPeaks", "Output Peaks", modes, 0);   // Off = as before (Auto-Edit leaves it as you set it)
+        }
+        slider ("outCeil", "Output Ceiling", NormalisableRange<float> (static_cast<float> (vox::OutputPeaks::kMinCeilingDb),
+                                                                         static_cast<float> (vox::OutputPeaks::kMaxCeilingDb), 0.1f), -1.0f, "dB", dbText);
     }
 
     /** Writes every chain setting as parameter values (Auto-Edit's apply). */
@@ -370,6 +377,8 @@ namespace VoxParams
             p.throws.echo = d (dlThrow);
             p.throws.wash = d (rvThrow);
             p.outputDb = d (outGain);
+            p.peakMode = idx (outPeaks, vox::kPeakModes - 1);
+            p.ceilingDb = d (outCeil);
         }
 
     private:
@@ -397,7 +406,7 @@ namespace VoxParams
                         dqSens, dqSmooth, dsOn, dsAmount, dsSens, dsFreq, rdOn, rdTarget, rdRange, rdSpeed, cpOn,
                         cpPeak, cpThr, cpRatio, cpMakeup, cpMix, saOn, saMode, saDrive, saMix, dbOn, dbAmount, dmOn,
                         dmMode, dmAmount, dmRate, dmWidth, dlOn, dlTime, dlFeedback, dlMix, dlTone, dlDuck, dlPing,
-                        rvOn, rvDecay, rvPredelay, rvMix, rvTone, rvDuck, dlThrow, rvThrow, outGain, cpStyle, saAir, dlChar, rvType, idCount };
+                        rvOn, rvDecay, rvPredelay, rvMix, rvTone, rvDuck, dlThrow, rvThrow, outGain, cpStyle, saAir, dlChar, rvType, outPeaks, outCeil, idCount };
         static constexpr std::array<const char*, idCount> kIds { "bypass", "listenA", "ptOn", "ptAmount", "ptKey",
             "ptScale", "ptSpeed", "ptHumanize", "ptFormant", "ptMode", "ptVibrato", "ptTranspose", "hv1", "hv2",
             "hvLevel", "hvFormant", "hvStack", "hvMidi", "hvCrew", "dbWidth", "clOn", "clLowCut", "clGateThr",
@@ -406,7 +415,7 @@ namespace VoxParams
             "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saOn", "saMode", "saDrive", "saMix", "dbOn",
             "dbAmount", "dmOn", "dmMode", "dmAmount", "dmRate", "dmWidth", "dlOn", "dlTime", "dlFeedback", "dlMix",
             "dlTone", "dlDuck", "dlPing", "rvOn", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "dlThrow",
-            "rvThrow", "outGain", "cpStyle", "saAir", "dlChar", "rvType" };
+            "rvThrow", "outGain", "cpStyle", "saAir", "dlChar", "rvType", "outPeaks", "outCeil" };
         float v (Id id) const noexcept { return ptr[static_cast<size_t> (id)]->load(); }
 
         std::array<std::atomic<float>*, idCount> ptr {};

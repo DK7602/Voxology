@@ -90,7 +90,8 @@ namespace vox::rackunit
             { "dlChar", 0, kDelayCharacters - 1, 0, kDelayCharacters }, { "rvType", 0, kReverbTypes - 1, 0, kReverbTypes },
             { "rvDecay", 0.3, 8, 1.5, 0 }, { "rvPredelay", 0, 200, 0, 0 }, { "rvMix", 0, 100, 0, 0 }, { "rvTone", 2000, 16000, 6000, 0 },
             { "rvDuck", 0, 100, 0, 0 }, { "rvThrow", 0, 100, 0, 0 },
-            { "outGain", -24, 24, 0, 0 },
+            { "outGain", -24, 24, 0, 0 }, { "outPeaks", 0, kPeakModes - 1, 0, kPeakModes },
+            { "outCeil", OutputPeaks::kMinCeilingDb, OutputPeaks::kMaxCeilingDb, 0, 0 },
             { "umAmount", 0, 100, 0, 0 },
         };
 
@@ -498,9 +499,13 @@ namespace vox::rackunit
 
         // 13 Output
         {
-            auto m = cell ("vox.output", true, std::abs (p.outputDb) < 0.05);
+            const int peakMode = std::clamp (p.peakMode, 0, kPeakModes - 1);
+            auto m = cell ("vox.output", true, std::abs (p.outputDb) < 0.05 && peakMode == 0);
             add (m, "Output", signedDb (p.outputDb), "outGain", p.outputDb, true);
+            add (m, "Peaks", nameOf (kPeakModeNames, peakMode), "outPeaks", peakMode);
+            add (m, "Ceiling", signedDb (p.ceilingDb), "outCeil", p.ceilingDb);
             m.summary = signedDb (p.outputDb);
+            if (peakMode != 0) join (m.summary, std::string (nameOf (kPeakModeNames, peakMode)) + " at " + signedDb (p.ceilingDb));
             finish (m);
             if (out.back().state == rack::State::idle) out.back().summary = "0.0 dB";
         }

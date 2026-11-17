@@ -33,6 +33,7 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
     for (auto& d : dryLine) d.assign (static_cast<size_t> (latencySamples() + 1), 0.0);
     mono.assign (kChunk, 0.0);
     listenMix.prepare (sr);
+    peaks.prepare (sr);
     for (auto& l : earlyLine) l.assign (static_cast<size_t> (pitch.latencySamples() + 1), 0.0);
     for (auto& l : lateLine) l.assign (static_cast<size_t> (Saturation::kLatency + 1), 0.0);
     outGlide = design::onePole (0.020, sr);
@@ -65,6 +66,7 @@ void VocalChain::reset() noexcept
     for (auto& d : dryLine) std::fill (d.begin(), d.end(), 0.0);
     dryPos = 0;
     listenMix.reset();
+    peaks.reset();
     clearListenLines();
     denoise.setListen (0);
     outGain = fromDb (params.outputDb);
@@ -90,6 +92,7 @@ void VocalChain::setParams (const ChainParams& p) noexcept
     breaths.setParams ({ p.cleanup.enabled ? p.cleanup.breathDb : 0.0 });
     eq.setParams (p.eq);
     dynEq.setParams (p.dynEq);
+    peaks.setParams (static_cast<PeakMode> (std::clamp (p.peakMode, 0, kPeakModes - 1)), p.ceilingDb);
     deEsser.setParams (p.deEsser);
     rider.setParams (p.rider);
     comp.setParams (p.comp);
@@ -278,13 +281,21 @@ void VocalChain::processChunk (int nch, int len) noexcept
         if (std::abs (mixB - mixTarget) < 1.0e-6) mixB = mixTarget;
         gainA += (gATarget - gainA) * abGlide;
         gainB += (gBTarget - gainB) * abGlide;
+        double processed[kMaxChannels] {};
+        if (mixB > 0.0)
+        {
+            // The Output level, then its PEAKS (Clip / Limit at the Ceiling): what leaves Voxology, before MATCH's
+            // turn-down for a fair A / B.
+            for (int c = 0; c < nch; ++c) processed[c] = ch[static_cast<size_t> (c)][i] * outGain;
+            peaks.process (processed, nch);
+        }
         for (int c = 0; c < nch; ++c)
         {
             double& y = ch[static_cast<size_t> (c)][i];
             const double a = dry[static_cast<size_t> (c)][static_cast<size_t> (i)];
-            if (mixB == 1.0)       y = y * outGain * gainB;
+            if (mixB == 1.0)       y = processed[c] * gainB;
             else if (mixB == 0.0)  y = params.bypass ? a : a * gainA;
-            else                   y = mixB * y * outGain * gainB + (1.0 - mixB) * a * gainA;
+            else                   y = mixB * processed[c] * gainB + (1.0 - mixB) * a * gainA;
             check += y * 0.0;
         }
         if (listenMix.isActive())
