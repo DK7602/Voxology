@@ -52,6 +52,8 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   shared `plugin/RackHost.h`: a knob drag is one host gesture), locked while Auto-Edit listens or works; every knob
   names its parameter (`vox::rackunit::fromKnob` / `switchOf`). Honey Tune takes Snap / Drift / Vibrato
   (`honeyui::rackSet`), applied once where a drag stops.
+- Since v0.61 (Beta 23): the shared Rack page has a SESSION page (every track and its modules), gain staging in the
+  Rack Coach (each plug-in's peaks in and out) and TURN ON HERE on the MODULES page. No Voxology code changed.
 - Since v0.60 (Beta 21): the Reverb's Type (`ReverbParams::type`: Plate, Room, Hall, Chamber: line sizes, diffusion,
   early reflections; a type change fades the tail out first) and the Delay's Character (`DelayParams::character`:
   Clean, Tape with wow / flutter and warm saturation in the loop, Analog darker and softer). Auto-Edit picks both per

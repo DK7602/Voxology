@@ -2007,3 +2007,6 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   Type / Character segs; Reverb page now two rows. Rack values Type and Character. Tests (test_character.cpp): each
   type keeps its RT60 within a third, Room / Chamber more early energy, type change has no jump; Tape wavers (zero-
   crossing spread), Analog's echo top >= 6 dB down.
+- Voxology 0.61.0 (2026-11-17, Sonicology Beta 23): shared rack.js / rack.css from Mixology (the Rack's SESSION page,
+  gain staging in the Rack Coach, TURN ON HERE: Mixology's RESUME-HERE). No Voxology code changed. Manual: the Rack
+  section.
