@@ -13,6 +13,7 @@ using namespace vox;
 
 namespace {
 constexpr double kSr = 48000.0;
+constexpr double kPi = 3.14159265358979323846;   // (M_PI isn't standard: MSVC has none)
 
 double db (double g) { return 20.0 * std::log10 (std::max (g, 1.0e-12)); }
 
@@ -53,7 +54,7 @@ TEST_CASE ("Output Peaks: Clip and Limit keep every sample under the Ceiling", "
         for (int i = 0; i < 48000; ++i)
         {
             // a 220 Hz tone at +6 dBFS (both channels, the right a little lower)
-            const double x = 2.0 * std::sin (2.0 * M_PI * 220.0 * i / kSr);
+            const double x = 2.0 * std::sin (2.0 * kPi * 220.0 * i / kSr);
             double f[2] { x, 0.8 * x };
             op.process (f, 2);
             worst = std::max ({ worst, std::abs (f[0]), std::abs (f[1]) });
@@ -74,8 +75,8 @@ TEST_CASE ("Output Peaks: Off is untouched, Clip leaves what sits under its knee
     clip.setParams (PeakMode::clip, -1.0);   // knee 3 dB under: -4 dBFS
     for (int i = 0; i < 4800; ++i)
     {
-        const double loud = 3.0 * std::sin (2.0 * M_PI * 440.0 * i / kSr);
-        const double soft = 0.5 * std::sin (2.0 * M_PI * 440.0 * i / kSr);   // -6 dBFS peaks
+        const double loud = 3.0 * std::sin (2.0 * kPi * 440.0 * i / kSr);
+        const double soft = 0.5 * std::sin (2.0 * kPi * 440.0 * i / kSr);   // -6 dBFS peaks
         double a[1] { loud }, b[1] { soft };
         off.process (a, 1);
         clip.process (b, 1);
@@ -93,13 +94,13 @@ TEST_CASE ("Output Peaks: Limit comes back up after a loud moment", "[peaks]")
     // 0.2 s at +6 dBFS, then a quiet tone (-20 dBFS): within half a second it plays at its own level again.
     for (int i = 0; i < 9600; ++i)
     {
-        double f[1] { 2.0 * std::sin (2.0 * M_PI * 220.0 * i / kSr) };
+        double f[1] { 2.0 * std::sin (2.0 * kPi * 220.0 * i / kSr) };
         op.process (f, 1);
     }
     double lastGainDb = -100.0;
     for (int i = 0; i < 48000; ++i)
     {
-        const double x = 0.1 * std::sin (2.0 * M_PI * 220.0 * i / kSr);
+        const double x = 0.1 * std::sin (2.0 * kPi * 220.0 * i / kSr);
         double f[1] { x };
         op.process (f, 1);
         if (i > 24000 && std::abs (x) > 0.05) lastGainDb = db (std::abs (f[0] / x));
