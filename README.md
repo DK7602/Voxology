@@ -54,6 +54,9 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   (`honeyui::rackSet`), applied once where a drag stops.
 - Since v0.66 (Beta 28): shared RackLink.cpp (viewJson keeps a report about the shown track: Mixology's Coach) and
   rack.js (the COACH page on Mixology's tracks). No Voxology code changed.
+- Since v0.67 (Beta 29): shared RackLink (the Coach's steps pass a unit's lock) and rack.js (the COACH page on the
+  master, through Masterology; STOP while the Coach listens). Voxology: the Coach's steps refuse while Auto-Edit runs
+  from Voxology's own window, and "cancel" stops the Coach's own listen.
 - Since v0.65 (Beta 27): the analysis rests on purpose while the song plays (`vox/Pace.h`: a thread's `Scope` turns it
   on; `tick()` in the long loops sleeps 8 ms after every 20 ms of work; off by default, so tests and results are the
   same). Every AutoEditController job (Auto-Edit, the Coach, Auto Analyze, a reference) runs paced: the user heard the

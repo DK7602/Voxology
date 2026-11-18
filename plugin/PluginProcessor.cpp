@@ -340,6 +340,9 @@ std::string VoxologyAudioProcessor::applyRack (const rack::Request& r)
     {
         // The Coach (ANALYZE & BUILD): Auto-Edit's plan, kept until APPLY (AutoEditController::startPlan).
         if (isBeatMode()) return "This Voxology is in BEAT mode: the Coach works on vocals.";
+        // The Coach's steps go through the Rack's lock (Beta 29), so Auto-Edit started in Voxology's own window keeps it.
+        if (const auto lock = rackLock(); ! lock.empty() && ! autoEdit.isPlanMode()) return lock;
+        if (r.control == "cancel") { if (autoEdit.isPlanMode()) autoEdit.discardPlan(); return {}; }   // STOP while it listens
         if (r.control == "plan")
             return autoEdit.startPlan() ? std::string() : std::string ("Auto-Edit is busy: try again in a moment.");
         if (r.control == "apply")

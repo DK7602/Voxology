@@ -2046,3 +2046,7 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   works in bursts and takes about 10 - 30 s. (Mixology's RESUME-HERE has the rest of Beta 27.)
 - Voxology 0.66.0 (2026-11-18, Sonicology Beta 28): shared RackLink.cpp (viewJson keeps a report about the shown
   track) and rack.js (the COACH page on Mixology's tracks: Mixology builds those plans). No Voxology code changed.
+- Voxology 0.67.0 (2026-11-18, Sonicology Beta 29): shared RackLink (Change::coach passes a unit's lock) and rack.js
+  (the COACH page on the master, through Masterology; STOP while the Coach listens). applyRack: Coach steps refused
+  with the lock while Auto-Edit runs from Voxology's own window (AutoEditController::isPlanMode()); new step "cancel"
+  stops the Coach's own listen (discardPlan). Manual: the Coach on the master. (Mixology's RESUME-HERE has the rest.)

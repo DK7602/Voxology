@@ -69,6 +69,7 @@ public:
     bool applyPlan();
     void discardPlan();
     PlanState getPlanState() const noexcept    { return planState; }
+    bool isPlanMode() const noexcept           { return planMode; }   // what listens or works now is the Coach's
     /** The plan as the Rack reads it (vox::coach::planJson), "" when there is none. */
     const juce::String& getPlanJson() const noexcept { return planJson; }
     static constexpr std::size_t kPlanBytes = 7600;   // (the Rack's report holds 8 KB, with the state around it)
