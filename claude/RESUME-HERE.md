@@ -2044,3 +2044,5 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   blocks); every AutoEditController job runs under Scope (20, 8). Same decisions (tests/test_realtime.cpp, which also
   shows the chain never allocates while it plays, with a replaced operator new). Manual: Quick start step 5 says it
   works in bursts and takes about 10 - 30 s. (Mixology's RESUME-HERE has the rest of Beta 27.)
+- Voxology 0.66.0 (2026-11-18, Sonicology Beta 28): shared RackLink.cpp (viewJson keeps a report about the shown
+  track) and rack.js (the COACH page on Mixology's tracks: Mixology builds those plans). No Voxology code changed.

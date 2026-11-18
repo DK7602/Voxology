@@ -52,6 +52,8 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   shared `plugin/RackHost.h`: a knob drag is one host gesture), locked while Auto-Edit listens or works; every knob
   names its parameter (`vox::rackunit::fromKnob` / `switchOf`). Honey Tune takes Snap / Drift / Vibrato
   (`honeyui::rackSet`), applied once where a drag stops.
+- Since v0.66 (Beta 28): shared RackLink.cpp (viewJson keeps a report about the shown track: Mixology's Coach) and
+  rack.js (the COACH page on Mixology's tracks). No Voxology code changed.
 - Since v0.65 (Beta 27): the analysis rests on purpose while the song plays (`vox/Pace.h`: a thread's `Scope` turns it
   on; `tick()` in the long loops sleeps 8 ms after every 20 ms of work; off by default, so tests and results are the
   same). Every AutoEditController job (Auto-Edit, the Coach, Auto Analyze, a reference) runs paced: the user heard the
