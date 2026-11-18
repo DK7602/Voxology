@@ -2021,3 +2021,6 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   them). Page: OUTPUT cells Output | Peaks seg | Ceiling | Out Peak; the cell's status adds "· clip / limit". Rack
   values Peaks / Ceiling. Tests: tests/test_output_peaks.cpp. Shared rack.js: the insert-order check (Mixology's
   RESUME-HERE).
+- 2026-11-18 CI: tests/test_output_peaks.cpp used M_PI (MSVC has none): Windows CI couldn't build the tests; fixed (kPi).
+  Shared plugin/RackHost.h: viewResource only `#if JUCE_WEB_BROWSER` (Masterology's headless plug-in tests). Windows CI
+  green again at 03b4e19 (unit tests, pluginval 10, VST3 validator). Beta 25 installer (Mixology run 44195754708) green.
