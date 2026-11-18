@@ -52,6 +52,13 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   shared `plugin/RackHost.h`: a knob drag is one host gesture), locked while Auto-Edit listens or works; every knob
   names its parameter (`vox::rackunit::fromKnob` / `switchOf`). Honey Tune takes Snap / Drift / Vibrato
   (`honeyui::rackSet`), applied once where a drag stops.
+- Since v0.64 (Beta 26): the Rack's COACH page for a vocal (stage 3). `vox/CoachPlan.h`: what stands out in the take
+  against Auto-Edit's aim (`toneTarget` / `sibilanceTargetDb` in `vox/AutoEdit.h`), the take played through the plan
+  (`VocalChain::render`) and measured again, and the plan as JSON for the Rack (`coach::planJson`, at most 7.6 KB).
+  `AutoEditController::startPlan` / `applyPlan` / `discardPlan`: Auto-Edit listens and decides as usual but keeps the
+  plan; APPLY sets it (one UNDO step). `applyRack` serves `rack::Change::coach` (plan / apply / undo); `coachReport`
+  publishes it in `Unit::report` (RackLink layout 4). The Rack's STYLE / INTENSITY turn `aeStyle` / `aeIntensity`.
+  Tests in `tests/test_coach.cpp`.
 - Since v0.63 (Beta 25): the Output's PEAKS (`vox/OutputPeaks.h`: Off, Clip (SoftClipper's curve, knee 3 dB under the
   Ceiling), Limit (instant on, 80 ms back, stereo-linked); no lookahead, no latency) after the Output level on the
   processed side; params `outPeaks` / `outCeil` (Auto-Edit leaves them). Tests in `tests/test_output_peaks.cpp`. Shared

@@ -1,4 +1,5 @@
 #include "vox/RackUnit.h"
+#include "vox/AutoEdit.h"
 
 #include <algorithm>
 #include <cmath>
@@ -93,6 +94,7 @@ namespace vox::rackunit
             { "outGain", -24, 24, 0, 0 }, { "outPeaks", 0, kPeakModes - 1, 0, kPeakModes },
             { "outCeil", OutputPeaks::kMinCeilingDb, OutputPeaks::kMaxCeilingDb, 0, 0 },
             { "umAmount", 0, 100, 0, 0 },
+            { "aeStyle", 0, kStyles - 1, 0, kStyles }, { "aeIntensity", 0, kIntensities - 1, 0, kIntensities },   // the Coach's setup
         };
 
         const Knob* knobSpec (const std::string& key)

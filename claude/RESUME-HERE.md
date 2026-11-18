@@ -2024,3 +2024,17 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - 2026-11-18 CI: tests/test_output_peaks.cpp used M_PI (MSVC has none): Windows CI couldn't build the tests; fixed (kPi).
   Shared plugin/RackHost.h: viewResource only `#if JUCE_WEB_BROWSER` (Masterology's headless plug-in tests). Windows CI
   green again at 03b4e19 (unit tests, pluginval 10, VST3 validator). Beta 25 installer (Mixology run 44195754708) green.
+- Voxology 0.64.0 (2026-11-18, Sonicology Beta 26): the Rack's Coach for a vocal (stage 3, vocals first; the page is
+  shared rack.js, see Mixology's RESUME-HERE). `vox/CoachPlan.h` / `src/CoachPlan.cpp` (namespace vox::coach):
+  regions (low 100-160, mud 200-400, boxy 500-800, honk 1-1.6k, harsh 2-5k, air 10-16k; over / under limits), issues
+  (regions vs the target, sibilance > aim + 2, swing > 9 dB (red > 12), noise in the gaps, clipping; red first, <= 8),
+  results (before -> after through the plan, <= 6), planJson (heard, issues, chain of 13 with each setting's reason,
+  bands before / after / target, results, first; shortens then drops texts to fit kPlanBytes 7600; always valid JSON).
+  vox/AutoEdit.h: toneTarget (style or reference, as Auto-Edit aims) and sibilanceTargetDb. AutoEditController:
+  startPlan (= start + plan mode), the job renders the take through the plan (VocalChain::render) and measures it
+  (analyseVocal), timerCallback keeps the plan instead of applying; applyPlan = apply (one UNDO snapshot); undo turns
+  applied back into ready; start / discardPlan clear it. applyRack: Change::coach (plan / apply / undo; refused in BEAT
+  mode and while Auto-Edit is busy); coachReport -> Unit::report (state, progress, hearing, style / intensity + names,
+  reference, canUndo, plan). RackUnit knobs aeStyle / aeIntensity (the page's STYLE / INTENSITY). Tests:
+  tests/test_coach.cpp (issues / results on a made-up take; a real synthetic take through Auto-Edit: valid JSON, 13
+  modules in order, squeezed still valid; a too-short take explains why). Manual: Quick start note + the Rack's COACH.

@@ -277,6 +277,7 @@ private:
     // Rack view is open anywhere, a faster timer serves them (the main one runs four times a second).
     std::string applyRack (const rack::Request&);
     std::string rackLock() const;
+    std::string coachReport (bool beat) const;   // the Rack's COACH page (rack::Unit::report)
     struct RackTimer final : juce::Timer
     {
         std::function<void()> tick;

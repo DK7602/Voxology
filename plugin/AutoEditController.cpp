@@ -1,5 +1,6 @@
 #include "AutoEditController.h"
 #include "Params.h"
+#include "vox/CoachPlan.h"
 
 #include <map>
 
@@ -69,6 +70,10 @@ bool AutoEditController::start()
 {
     if (stateFlag.load() == analysing || ! ensureBuffers())
         return false;
+    planMode = false;   // a new Auto-Edit: any Coach plan is gone
+    planState = planNone;
+    planResult.reset();
+    planJson.clear();
     ++session;
     written.store (0);
     voiced.store (0);
@@ -83,7 +88,39 @@ bool AutoEditController::start()
 void AutoEditController::cancel()
 {
     if (stateFlag.load() == listening)
+    {
         stateFlag.store (idle);
+        if (planMode) { planMode = false; planState = planNone; }
+    }
+}
+
+bool AutoEditController::startPlan()
+{
+    if (! start())
+        return false;
+    planMode = true;
+    planState = planListening;
+    planResult.reset();
+    planJson.clear();
+    return true;
+}
+
+bool AutoEditController::applyPlan()
+{
+    if (planState != planReady || planResult == nullptr || ! planResult->ok || stateFlag.load() == analysing)
+        return false;
+    apply (*planResult, planSettings);
+    planState = planApplied;
+    return true;
+}
+
+void AutoEditController::discardPlan()
+{
+    if (planMode && stateFlag.load() == listening) stateFlag.store (idle);
+    planMode = false;
+    planState = planNone;
+    planResult.reset();
+    planJson.clear();
 }
 
 float AutoEditController::getProgress() const noexcept
@@ -138,7 +175,21 @@ void AutoEditController::timerCallback()
         }
         if (resultSession == session && ! isCheck && stateFlag.load() == analysing)
         {
-            if (result != nullptr)
+            if (planMode)
+            {
+                // The Coach: keep the plan, change nothing (APPLY sets it).
+                std::string json;
+                {
+                    const juce::ScopedLock sl (resultLock);
+                    json = std::move (pendingPlanJson);
+                }
+                planSettings = pendingSettings;
+                planState = result != nullptr && result->ok ? planReady : planFailed;
+                planResult = std::move (result);
+                planJson = juce::String::fromUTF8 (json.data(), static_cast<int> (json.size()));
+                planMode = false;
+            }
+            else if (result != nullptr)
                 apply (*result, pendingSettings);
             stateFlag.store (idle);
         }
@@ -195,9 +246,13 @@ void AutoEditController::launchAnalysis()
     pendingRefName = ref != nullptr && ref->ok ? juce::String::fromUTF8 (ref->name.c_str()) : juce::String();
 
     const int thisSession = session;
-    pool.addJob ([this, audio = std::move (audio), sr, settings, thisSession, ref, beat]
+    const bool forPlan = planMode;
+    if (forPlan) planState = planWorking;
+    const std::string refName = pendingRefName.toStdString();
+    pool.addJob ([this, audio = std::move (audio), sr, settings, thisSession, ref, beat, forPlan, refName]
     {
         std::unique_ptr<vox::AutoEditResult> result;
+        std::string plan;
         try
         {
             auto s = settings;
@@ -205,6 +260,16 @@ void AutoEditController::launchAnalysis()
             s.beat = beat.get();
             s.cancel = &closing;
             result = std::make_unique<vox::AutoEditResult> (vox::autoEdit (audio, sr, s));
+            if (forPlan)
+            {
+                // The Coach: what Auto-Edit aims at, and the take played through the plan and measured again.
+                const auto target = vox::toneTarget (s.style, result->analysis.f0Median, s.reference);
+                const double sibAim = vox::sibilanceTargetDb (s.style, s.intensity, s.reference);
+                std::unique_ptr<vox::VocalAnalysis> after;
+                if (result->ok && ! closing.load())
+                    after = std::make_unique<vox::VocalAnalysis> (vox::analyseVocal (vox::VocalChain::render (audio, sr, result->params, &closing), sr));
+                plan = vox::coach::planJson (*result, after.get(), target, sibAim, s, refName, kPlanBytes);
+            }
         }
         catch (...)
         {
@@ -214,6 +279,7 @@ void AutoEditController::launchAnalysis()
         {
             const juce::ScopedLock sl (resultLock);
             pendingResult = std::move (result);
+            pendingPlanJson = std::move (plan);
             pendingNeeds.clear();
             pendingSession = thisSession;
             pendingIsCheck = false;
@@ -688,6 +754,7 @@ bool AutoEditController::undo()
     }
     undoSnapshot.clear();
     undoValid.store (false);
+    if (planState == planApplied && planResult != nullptr) planState = planReady;   // the Coach's plan can go on again
     if (stateFlag.load() == checking) { ++session; stateFlag.store (idle); }   // a check against what was just undone
     if (undoClearsReport) setReport ({});
     return true;

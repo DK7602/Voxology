@@ -336,6 +336,19 @@ std::string VoxologyAudioProcessor::rackLock() const
 
 std::string VoxologyAudioProcessor::applyRack (const rack::Request& r)
 {
+    if (r.change == rack::Change::coach)
+    {
+        // The Coach (ANALYZE & BUILD): Auto-Edit's plan, kept until APPLY (AutoEditController::startPlan).
+        if (isBeatMode()) return "This Voxology is in BEAT mode: the Coach works on vocals.";
+        if (r.control == "plan")
+            return autoEdit.startPlan() ? std::string() : std::string ("Auto-Edit is busy: try again in a moment.");
+        if (r.control == "apply")
+            return autoEdit.applyPlan() ? std::string() : std::string ("There's no plan to apply yet: press ANALYZE & BUILD and play the song.");
+        if (r.control == "undo")
+            return autoEdit.undo() ? std::string() : std::string ("Nothing to undo.");
+        if (r.control == "discard") { autoEdit.discardPlan(); return {}; }
+        return rack::host::cannot ("Voxology", r);
+    }
     if (r.change == rack::Change::save)
     {
         // The Rack's SAVE CHAIN: this setup in My Chains, named after the track and the time ("Lead Vox 17 Nov 22.41",
@@ -434,11 +447,52 @@ void VoxologyAudioProcessor::publishRack()
     u.latencyMs = rate > 0.0 ? static_cast<float> (getLatencySamples() * 1000.0 / rate) : 0.0f;
     u.modules = vox::rackunit::modules (st, full);
     if (full && playing && ! st.beat) u.spectrum = rackSpectrum();
+    if (full) u.report = coachReport (st.beat);
     if (! st.beat && levelByMixology (mixologyNow())) u.lines.push_back ({ rack::Level::ok, "Mixology sets this vocal's level against the beat (Voxology leaves it alone)." });
     if (st.beat && st.unmaskAmount >= 0.05f)
         u.lines.push_back ({ rack::Level::ok, "Unmask dips the beat only where the vocal sits, while the vocal sings (Amount "
                                               + std::to_string (juce::roundToInt (st.unmaskAmount)) + " %)." });
     rackPub.publish (std::move (u), now);
+}
+
+std::string VoxologyAudioProcessor::coachReport (bool beat) const
+{
+    // The Rack's COACH page: where Auto-Edit's plan stands, the choices it uses, and the plan itself (vox::coach).
+    auto choice = [this] (const char* id) { auto* p = parameters.getRawParameterValue (id); return p != nullptr ? juce::roundToInt (p->load()) : 0; };
+    const auto plan = autoEdit.getPlanState();
+    const auto st = autoEdit.getState();
+    const char* state = plan == AutoEditController::planListening || (plan != AutoEditController::planNone && st == AutoEditController::listening) ? "listening"
+                      : plan == AutoEditController::planWorking ? "working"
+                      : plan == AutoEditController::planReady ? "ready"
+                      : plan == AutoEditController::planApplied ? "applied"
+                      : plan == AutoEditController::planFailed ? "failed"
+                      : st == AutoEditController::listening || st == AutoEditController::analysing ? "busy"   // Auto-Edit from Voxology's own window
+                      : "idle";
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("state", juce::String (state));
+    o->setProperty ("progress", juce::roundToInt (autoEdit.getProgress() * 100.0f));
+    o->setProperty ("hearing", autoEdit.isHearingAudio());
+    o->setProperty ("style", juce::jlimit (0, vox::kStyles - 1, choice ("aeStyle")));
+    o->setProperty ("intensity", juce::jlimit (0, vox::kIntensities - 1, choice ("aeIntensity")));
+    juce::Array<juce::var> styles, intensities;
+    for (auto* n : vox::kStyleNames) styles.add (juce::String (n));
+    for (auto* n : vox::kIntensityNames) intensities.add (juce::String (n));
+    o->setProperty ("styles", styles);
+    o->setProperty ("intensities", intensities);
+    {
+        const auto ref = juce::JSON::parse (autoEdit.getReferenceJson());
+        o->setProperty ("reference", ref.getProperty ("name", juce::String()).toString());
+    }
+    o->setProperty ("canUndo", autoEdit.canUndo());
+    o->setProperty ("beat", beat);
+    o->setProperty ("honey", autoEdit.honeyTunesSource && autoEdit.honeyTunesSource());
+    auto text = juce::JSON::toString (juce::var (o), true).trimEnd();
+    const auto& json = autoEdit.getPlanJson();
+    if (json.isNotEmpty() && text.endsWithChar ('}')
+        && (plan == AutoEditController::planReady || plan == AutoEditController::planApplied || plan == AutoEditController::planFailed))
+        text = text.dropLastCharacters (1) + ",\"plan\":" + json + "}";   // (the plan is JSON already)
+    auto utf8 = text.toStdString();
+    return utf8.size() < rack::kReportBytes ? utf8 : std::string ("{\"state\":\"failed\",\"plan\":{\"ok\":false,\"summary\":\"The plan is too long for the Rack: see Voxology's own report.\"}}");
 }
 
 std::vector<float> VoxologyAudioProcessor::rackSpectrum()

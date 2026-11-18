@@ -60,6 +60,19 @@ public:
     void cancel();
     bool undo();
 
+    /** The Sonicology Rack's Coach (ANALYZE & BUILD): Auto-Edit listens and decides as start() does, then plays the take
+        through its plan and measures it again, and keeps the plan without changing anything (startPlan); APPLY sets it,
+        as a normal Auto-Edit (applyPlan: one UNDO step). The plan stays (after an UNDO it can be applied again) until
+        the next Auto-Edit or discardPlan(). Message thread. */
+    enum PlanState { planNone = 0, planListening, planWorking, planReady, planApplied, planFailed };
+    bool startPlan();
+    bool applyPlan();
+    void discardPlan();
+    PlanState getPlanState() const noexcept    { return planState; }
+    /** The plan as the Rack reads it (vox::coach::planJson), "" when there is none. */
+    const juce::String& getPlanJson() const noexcept { return planJson; }
+    static constexpr std::size_t kPlanBytes = 7600;   // (the Rack's report holds 8 KB, with the state around it)
+
     void onStateRestored (const juce::String& savedReport);
     juce::String getReportForSaving() const;
 
@@ -198,6 +211,14 @@ private:
     int pendingSession = -1;
     vox::AutoEditSettings pendingSettings;
     std::atomic<bool> resultReady { false };
+
+    // The Coach's plan (message thread, but pendingPlanJson: with pendingResult under resultLock)
+    bool planMode = false;
+    PlanState planState = planNone;
+    std::unique_ptr<vox::AutoEditResult> planResult;
+    vox::AutoEditSettings planSettings;
+    juce::String planJson;
+    std::string pendingPlanJson;
 
     // Auto Analyze
     struct Shown { juce::String key, note; juce::var changes; };   // changes: [{ id, module, from, to }]

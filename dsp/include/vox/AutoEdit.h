@@ -176,6 +176,14 @@ const std::vector<ReferenceProfile>& builtinReferences();
 /** A built-in reference by name; also finds the names used before v0.28 (saved in older projects). nullptr = none. */
 const ReferenceProfile* findBuiltinReference (const std::string& name);
 
+/** What Auto-Edit aims the tone at (dB per analysisBands(), vs the 500 Hz - 2 kHz average): the style's balance for a
+    voice of this pitch, or the reference's carried over to it (its low end from the style when it was split from a song).
+    The Rack's Coach compares the take with it before and after. */
+std::vector<double> toneTarget (int style, double f0Hz, const ReferenceProfile* reference);
+/** Where Auto-Edit aims the "s" sounds (dB vs the voice): the style's, a little lower on Strong, the reference's within
+    3 dB of it. */
+double sibilanceTargetDb (int style, int intensity, const ReferenceProfile* reference);
+
 /** Listens to the vocal, decides every module and explains each choice. */
 AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sampleRate, const AutoEditSettings& settings);
 

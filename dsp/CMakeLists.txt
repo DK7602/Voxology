@@ -16,6 +16,7 @@ add_library(vox_dsp STATIC
     src/Throws.cpp
     src/Listen.cpp
     src/OutputPeaks.cpp
+    src/CoachPlan.cpp
     src/VocalChain.cpp
     src/AutoEdit.cpp
     src/AutoAnalyze.cpp

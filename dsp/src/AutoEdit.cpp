@@ -2356,4 +2356,31 @@ AutoEditResult autoEdit (const std::vector<std::vector<float>>& audio, double sr
     }
 }
 
+std::vector<double> toneTarget (int style, double f0Hz, const ReferenceProfile* ref)
+{
+    if (ref == nullptr || ! ref->ok || ref->bandDb.size() != analysisBands().size())
+        return styleTarget (style, f0Hz);
+    // As Tone EQ's reference fit: below 630 Hz the reference's character carried over to this voice's pitch.
+    std::vector<double> want = ref->bandDb;
+    if (ref->f0Median > 0.0 && f0Hz > 0.0)
+    {
+        const auto mine = styleTarget (style, f0Hz), theirs = styleTarget (style, ref->f0Median);
+        for (size_t b = 0; b < want.size() && analysisBands()[b] < 630.0; ++b) want[b] += mine[b] - theirs[b];
+    }
+    if (ref->split || ref->lowFromStyle)
+    {
+        const auto st = styleTarget (style, f0Hz > 0.0 ? f0Hz : ref->f0Median);
+        for (size_t b = 0; b < want.size() && analysisBands()[b] < kSplitLowHz; ++b) want[b] = st[b];
+    }
+    return want;
+}
+
+double sibilanceTargetDb (int style, int intensity, const ReferenceProfile* ref)
+{
+    const auto& spec = kSpecs[static_cast<size_t> (std::clamp (style, 0, kStyles - 1))];
+    const double styleSibDb = spec.sibTarget - (intensity == 2 ? 1.0 : intensity == 0 ? -1.0 : 0.0);
+    if (ref == nullptr || ref->sibilanceDb <= -100.0) return styleSibDb;
+    return std::clamp (ref->sibilanceDb, std::max (-10.0, styleSibDb - kRefSibRangeDb), std::min (-2.0, styleSibDb + kRefSibRangeDb));
+}
+
 } // namespace vox
