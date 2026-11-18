@@ -2050,3 +2050,7 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   (the COACH page on the master, through Masterology; STOP while the Coach listens). applyRack: Coach steps refused
   with the lock while Auto-Edit runs from Voxology's own window (AutoEditController::isPlanMode()); new step "cancel"
   stops the Coach's own listen (discardPlan). Manual: the Coach on the master. (Mixology's RESUME-HERE has the rest.)
+- CI (2026-11-18): the ASan + UBSan job failed on Beta 28 (Beta 27's run was cancelled before reaching it): the Coach
+  tests aborted with alloc-dealloc-mismatch because test_realtime.cpp replaced operator new / delete but not the
+  no-throw new that std::stable_sort's buffer uses (ASan's new, our free). Test-only: the no-throw forms are replaced
+  too (reproduced and fixed in a small ASan program here). Not in any plug-in.

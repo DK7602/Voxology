@@ -31,6 +31,17 @@ void operator delete (void* p) noexcept { std::free (p); }
 void operator delete[] (void* p) noexcept { std::free (p); }
 void operator delete (void* p, std::size_t) noexcept { std::free (p); }
 void operator delete[] (void* p, std::size_t) noexcept { std::free (p); }
+// The no-throw forms too (std::stable_sort's buffer uses them): ours all come from malloc, so every delete must free
+// what one of these gave (else AddressSanitizer sees its own new freed with free()).
+void* operator new (std::size_t n, const std::nothrow_t&) noexcept
+{
+    if (counting.load (std::memory_order_relaxed))
+        allocations.fetch_add (1, std::memory_order_relaxed);
+    return std::malloc (n > 0 ? n : 1);
+}
+void* operator new[] (std::size_t n, const std::nothrow_t& t) noexcept { return ::operator new (n, t); }
+void operator delete (void* p, const std::nothrow_t&) noexcept { std::free (p); }
+void operator delete[] (void* p, const std::nothrow_t&) noexcept { std::free (p); }
 
 using namespace vox;
 
