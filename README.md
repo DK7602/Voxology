@@ -61,6 +61,8 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   the same plan again; the Coach now renders the take through the settings Voxology has now (what stands out, "before")
   and compares the plan with them (vox::coach::Now: "same" per module, "changes", "upToDate"). RACK is a word (no
   emblem).
+- Since v0.69 (Beta 31): shared rack.js / rack.css (WHAT TO FIX FIRST on the Rack's SESSION page; Mixology sends its
+  Mix Assistant's points). No Voxology code changed.
 - Since v0.65 (Beta 27): the analysis rests on purpose while the song plays (`vox/Pace.h`: a thread's `Scope` turns it
   on; `tick()` in the long loops sleeps 8 ms after every 20 ms of work; off by default, so tests and results are the
   same). Every AutoEditController job (Auto-Edit, the Coach, Auto Analyze, a reference) runs paced: the user heard the

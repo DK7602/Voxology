@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.68.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.69.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.68.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.69.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -552,8 +552,17 @@ module is off on the track you picked, **TURN ON HERE** switches it on there; **
 off.
 
 **The SESSION page:** every track in your project on one screen, each with what plays on it: one pill per module,
-grouped by plug-in (dim pills are off), and the number of warnings the Rack Coach has for it. Click a pill to open
-that module on the RACK page.
+grouped by plug-in (dim pills are off), and how many things on it are worth fixing. Click a pill to open that module on
+the RACK page.
+
+**WHAT TO FIX FIRST** (the SESSION page's right side): one list for the whole project, worst first, numbered. It puts
+together Mixology's setup check (things no mixing move fixes, such as a vocal without Mixology Link or two tracks with
+one name), what the plug-ins do together that works against you (two reverbs on one vocal, two tuners...), Mixology's
+**Mix Assistant** points from **Analyze Mix** (a buried vocal, a kick and 808 that clash, mud...; Mixology 0.39 or newer
+on your master channel), and a Link in the wrong insert slot. Each point names its tracks: click a track to open it on
+the RACK page, **COACH** to let the Coach build that track, or a one-click fix where there is one. "In Mixology:
+Balance" (or Clean Up, Polish, Vocal Pocket) names the smart tool that fixes it. Points a tool already fixed since
+Mixology listened come last, ticked. Until Analyze Mix has listened the list says so, with the Rack's own points.
 
 **The COACH page:** the Coach builds a track's whole chain for you, shows you why, and shows the result before you take
 it. It works through the plug-in that owns the track: a **vocal with Voxology** (0.64 or newer, not in BEAT mode)
