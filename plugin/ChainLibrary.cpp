@@ -97,6 +97,7 @@ bool ChainLibrary::save (const juce::String& rawName)
     doc->setProperty ("voxology", juce::String (JucePlugin_VersionString));
     doc->setProperty ("name", name);
     doc->setProperty ("values", juce::var (values));
+    doc->setProperty ("order", state.state.getProperty ("insertOrder", juce::String()));   // Beta 33 ("": Voxology's own)
     const auto f = fileFor (name);
     return f.getParentDirectory().createDirectory().wasOk() && f.replaceWithText (juce::JSON::toString (juce::var (doc), false));
 }
@@ -104,6 +105,7 @@ bool ChainLibrary::save (const juce::String& rawName)
 bool ChainLibrary::load (const juce::String& kind, const juce::String& name, bool keepKey)
 {
     std::vector<std::pair<juce::RangedAudioParameter*, float>> todo;
+    juce::String order;   // Beta 33: the chain's order of the movable inserts (a Quick Look, Fresh, an older chain: Voxology's own)
     if (kind == "look")
     {
         for (const auto& l : looks())
@@ -118,8 +120,10 @@ bool ChainLibrary::load (const juce::String& kind, const juce::String& name, boo
         {
             const auto f = fileFor (name);
             if (! f.existsAsFile()) return false;
-            values = juce::JSON::parse (f.loadFileAsString()).getProperty ("values", {});
+            const auto doc = juce::JSON::parse (f.loadFileAsString());
+            values = doc.getProperty ("values", {});
             if (! values.isObject()) return false;
+            order = doc.getProperty ("order", juce::String()).toString();
         }
         for (auto* p : state.processor.getParameters())
             if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
@@ -133,6 +137,7 @@ bool ChainLibrary::load (const juce::String& kind, const juce::String& name, boo
     if (todo.empty()) return false;
     if (beforeLoad) beforeLoad();
     for (auto& [p, v] : todo) set (*p, v);
+    if (setOrder) setOrder (order);
     return true;
 }
 

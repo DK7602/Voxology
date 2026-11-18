@@ -2,8 +2,95 @@
 #include "vox/Pace.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace vox {
+
+// ---- Beta 33: the movable inserts' order -----------------------------------------------------------------------------
+bool isMovable (int module) noexcept
+{
+    return std::find (kDefaultOrder.begin(), kDefaultOrder.end(), module) != kDefaultOrder.end();
+}
+
+bool validOrder (const InsertOrder& o) noexcept
+{
+    for (const int m : kDefaultOrder)
+        if (std::count (o.begin(), o.end(), m) != 1) return false;
+    return true;
+}
+
+InsertOrder movedTo (InsertOrder o, int module, int to) noexcept
+{
+    if (! validOrder (o)) o = kDefaultOrder;
+    const auto at = std::find (o.begin(), o.end(), module);
+    if (at == o.end()) return o;
+    std::array<int, kMovable - 1> rest {};
+    std::copy (o.begin(), at, rest.begin());
+    std::copy (at + 1, o.end(), rest.begin() + (at - o.begin()));
+    const int place = std::clamp (to, 0, kMovable - 1);
+    InsertOrder out {};
+    for (int i = 0, r = 0; i < kMovable; ++i)
+        out[static_cast<size_t> (i)] = i == place ? module : rest[static_cast<size_t> (r++)];
+    return out;
+}
+
+const char* insertKey (int module) noexcept
+{
+    switch (static_cast<Module> (module))
+    {
+        case Module::eq: return "eq";
+        case Module::dynEq: return "dyneq";
+        case Module::deEsser: return "deess";
+        case Module::rider: return "rider";
+        case Module::comp: return "comp";
+        case Module::saturation: return "sat";
+        default: return "";
+    }
+}
+
+std::uint32_t packOrder (const InsertOrder& o) noexcept
+{
+    std::uint32_t v = 0;
+    for (int i = 0; i < kMovable; ++i) v |= static_cast<std::uint32_t> (o[static_cast<size_t> (i)] & 15) << (4 * i);
+    return v;
+}
+
+InsertOrder unpackOrder (std::uint32_t v) noexcept
+{
+    InsertOrder o {};
+    for (int i = 0; i < kMovable; ++i) o[static_cast<size_t> (i)] = static_cast<int> ((v >> (4 * i)) & 15u);
+    return validOrder (o) ? o : kDefaultOrder;
+}
+
+std::string orderText (const InsertOrder& o)
+{
+    std::string s;
+    for (const int m : o)
+    {
+        if (! s.empty()) s += ',';
+        s += insertKey (m);
+    }
+    return s;
+}
+
+InsertOrder orderFromText (const std::string& text)
+{
+    InsertOrder o = kDefaultOrder;
+    std::size_t start = 0;
+    for (int i = 0; i < kMovable; ++i)
+    {
+        const auto comma = text.find (',', start);
+        const auto part = text.substr (start, comma == std::string::npos ? std::string::npos : comma - start);
+        int found = -1;
+        for (const int m : kDefaultOrder)
+            if (part == insertKey (m)) found = m;
+        if (found < 0) return kDefaultOrder;
+        o[static_cast<size_t> (i)] = found;
+        if (comma == std::string::npos) { if (i != kMovable - 1) return kDefaultOrder; break; }
+        start = comma + 1;
+    }
+    return validOrder (o) ? o : kDefaultOrder;
+}
 
 void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
 {
@@ -74,6 +161,8 @@ void VocalChain::reset() noexcept
     mixB = (params.bypass || params.listenOriginal) ? 0.0 : 1.0;
     gainA = fromDb (params.gainOriginalDb);
     gainB = fromDb (params.gainProcessedDb);
+    activeOrder = validOrder (params.order) ? params.order : kDefaultOrder;   // (a fresh start plays the order at once)
+    orderGain = 1.0;
     meters = {};
 }
 
@@ -219,16 +308,42 @@ void VocalChain::processChunk (int nch, int len) noexcept
         declick.process (ch.data(), nch, len, side.data());
         breaths.process (ch.data(), nch, len, side.data());
         if (lm == listen::cleanup) takenOut();
-        eq.process (ch.data(), nch, len);
-        if (lm == listen::dynEq) keep();
-        dynEq.process (ch.data(), nch, len);
-        if (lm == listen::dynEq) takenOut();
-        if (lm == listen::deEsser) keep();
-        deEsser.process (ch.data(), nch, len);
-        if (lm == listen::deEsser) takenOut();
-        rider.process (ch.data(), nch, len);
-        comp.process (ch.data(), nch, len);
-        saturation.process (ch.data(), nch, len);
+        // Beta 33: the movable inserts, in the order they play now (Voxology's own unless you moved one in the Rack).
+        for (const int m : activeOrder)
+        {
+            switch (static_cast<Module> (m))
+            {
+                case Module::eq: eq.process (ch.data(), nch, len); break;
+                case Module::dynEq:
+                    if (lm == listen::dynEq) keep();
+                    dynEq.process (ch.data(), nch, len);
+                    if (lm == listen::dynEq) takenOut();
+                    break;
+                case Module::deEsser:
+                    if (lm == listen::deEsser) keep();
+                    deEsser.process (ch.data(), nch, len);
+                    if (lm == listen::deEsser) takenOut();
+                    break;
+                case Module::rider: rider.process (ch.data(), nch, len); break;
+                case Module::comp: comp.process (ch.data(), nch, len); break;
+                case Module::saturation: saturation.process (ch.data(), nch, len); break;
+                default: break;
+            }
+        }
+        // A new order: this chunk fades the inserts' output out, they switch while silent, the next chunk fades in.
+        {
+            const bool change = validOrder (params.order) && params.order != activeOrder;
+            const double g0 = orderGain, g1 = change ? 0.0 : 1.0;
+            if (g0 != 1.0 || g1 != 1.0)
+                for (int i = 0; i < len; ++i)
+                {
+                    const double t = static_cast<double> (i + 1) / len;
+                    const double g = g0 + (g1 - g0) * (0.5 - 0.5 * std::cos (3.14159265358979323846 * t));
+                    for (int c = 0; c < nch; ++c) ch[static_cast<size_t> (c)][i] *= g;
+                }
+            orderGain = g1;
+            if (change) activeOrder = params.order;
+        }
 
         // Space: everything hears the mono vocal after the inserts.
         for (int i = 0; i < len; ++i)

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "ClipWatch.h"
+#include <array>
+#include <string>
 #include "DeClick.h"
 #include "Dimension.h"
 #include "Denoise.h"
@@ -23,6 +25,11 @@
 namespace vox {
 
 /** Every setting of the chain (the plug-in fills this from its parameters each block). */
+/** Beta 33: the inserts you can put in another order (from the Rack): Tone EQ, Dynamic EQ, De-Esser, Rider, Compressor,
+    Saturation (Module values, below). Noise / Room, Pitch and Cleanup stay first; the space and the Output after. */
+inline constexpr int kMovable = 6;
+using InsertOrder = std::array<int, kMovable>;   // Module values
+
 struct ChainParams
 {
     PitchParams pitch;
@@ -46,6 +53,7 @@ struct ChainParams
     bool listenOriginal = false;   // A/B: hear the untouched vocal (delayed to line up)
     double gainOriginalDb = 0.0, gainProcessedDb = 0.0;   // MATCH turn-downs (<= 0)
     int listenMode = listen::off;   // LISTEN (monitoring only, never offline): hear what one module takes out (Listen.h)
+    InsertOrder order { 2, 3, 4, 5, 6, 7 };   // Beta 33: the movable inserts in the order they play (Voxology's own: kDefaultOrder)
 };
 
 /** The modules in signal order, for the UI and the report. */
@@ -53,6 +61,25 @@ struct ChainParams
 // their meaning.)
 enum class Module { pitch = 0, cleanup, eq, dynEq, deEsser, rider, comp, saturation, doubler, delay, reverb, output, dimension, count };
 inline constexpr int kModules = static_cast<int> (Module::count);
+
+/** Beta 33: Voxology's own order of the movable inserts (Tone EQ -> Dynamic EQ -> De-Esser -> Rider -> Compressor ->
+    Saturation), and helpers for orders from the Rack and the plug-in's state. */
+inline constexpr InsertOrder kDefaultOrder { static_cast<int> (Module::eq), static_cast<int> (Module::dynEq), static_cast<int> (Module::deEsser),
+                                             static_cast<int> (Module::rider), static_cast<int> (Module::comp), static_cast<int> (Module::saturation) };
+bool isMovable (int module) noexcept;
+/** Each movable insert exactly once. */
+bool validOrder (const InsertOrder&) noexcept;
+/** `o` with `module` moved to place `to` (0 first, clamped); `o` unchanged when the module isn't movable. */
+InsertOrder movedTo (InsertOrder o, int module, int to) noexcept;
+/** "eq,dyneq,deess,rider,comp,sat" (the Rack's keys without "vox."), for the plug-in's state; and back (Voxology's own
+    order when the text is missing or damaged). */
+std::string orderText (const InsertOrder&);
+InsertOrder orderFromText (const std::string&);
+/** The Rack's key part of a movable insert ("eq", "dyneq", ...), "" for the others. */
+const char* insertKey (int module) noexcept;
+/** One number for an atomic (4 bits a place); back: Voxology's own order when it isn't a valid one. */
+std::uint32_t packOrder (const InsertOrder&) noexcept;
+InsertOrder unpackOrder (std::uint32_t) noexcept;
 
 /** What the meters read since the last takeMeters() call. */
 struct ChainMeters
@@ -167,6 +194,10 @@ private:
     std::vector<double> mono, side;
     double outGain = 1.0, outGlide = 0.0;
     double mixB = 1.0, gainA = 1.0, gainB = 1.0, abGlide = 0.0;
+    // Beta 33: the order the inserts play in now; a new order dips the inserts' output for a chunk, switches while silent,
+    // then comes back over the next chunk (no click; the space's tails carry on).
+    InsertOrder activeOrder = kDefaultOrder;
+    double orderGain = 1.0;
     ChainMeters meters;
 };
 

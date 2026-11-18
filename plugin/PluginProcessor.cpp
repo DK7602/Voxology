@@ -12,6 +12,9 @@ VoxologyAudioProcessor::VoxologyAudioProcessor()
       parameters (*this, nullptr, "VoxologyParams", createParameterLayout())
 {
     reader.attach (parameters);
+    reader.attachOrder (&insertOrder);
+    autoEdit.insertOrder = &insertOrder;
+    chains.setOrder = [this] (const juce::String& text) { setInsertOrder (vox::orderFromText (text.toStdString())); };
     levelMatchParam = parameters.getRawParameterValue ("levelMatch");
     modeParam = parameters.getRawParameterValue ("mode");
     umAmountParam = parameters.getRawParameterValue ("umAmount");
@@ -371,6 +374,19 @@ std::string VoxologyAudioProcessor::applyRack (const rack::Request& r)
         if (! chains.save (name)) return "Voxology couldn't save the chain (Documents/Voxology/Chains).";
         return {};
     }
+    if (r.change == rack::Change::order)
+    {
+        // Beta 33: a module moved in the Rack (control: its key; value: its place among the movable inserts), or RESET.
+        if (isBeatMode()) return "This Voxology is in BEAT mode: it has no vocal chain to put in another order.";
+        if (r.control == "reset") { setInsertOrder (vox::kDefaultOrder); return {}; }
+        const auto key = r.control.rfind ("vox.", 0) == 0 ? r.control.substr (4) : std::string();
+        int module = -1;
+        for (const int m : vox::kDefaultOrder)
+            if (! key.empty() && key == vox::insertKey (m)) module = m;
+        if (module < 0) return "That module stays where it is: Noise / Room, Pitch and Cleanup come first, the space and the Output last.";
+        setInsertOrder (vox::movedTo (vox::unpackOrder (insertOrder.load()), module, juce::roundToInt (r.value)));
+        return {};
+    }
     if (r.change == rack::Change::power)
     {
         // The Rack's BYPASS: Voxology's own (its delayed dry path: the timing never jumps).
@@ -400,6 +416,16 @@ std::string VoxologyAudioProcessor::applyRack (const rack::Request& r)
     if (p == nullptr) return rack::host::cannot ("Voxology", r);
     rack::host::set (*p, r.gesture, static_cast<float> (value));
     return {};
+}
+
+void VoxologyAudioProcessor::setInsertOrder (const vox::InsertOrder& o)
+{
+    const auto valid = vox::validOrder (o) ? o : vox::kDefaultOrder;
+    if (vox::packOrder (valid) == insertOrder.load()) return;
+    insertOrder.store (vox::packOrder (valid));
+    if (valid == vox::kDefaultOrder) parameters.state.removeProperty ("insertOrder", nullptr);
+    else parameters.state.setProperty ("insertOrder", juce::String (vox::orderText (valid)), nullptr);
+    updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));   // (the project has changed)
 }
 
 void VoxologyAudioProcessor::publishRack()
@@ -1124,6 +1150,8 @@ void VoxologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
             xml->removeAttribute ("midiLearned");
             xml->removeAttribute ("uiRed");
             parameters.replaceState (juce::ValueTree::fromXml (*xml));
+            // Beta 33: the movable inserts' order (a project from before it: Voxology's own).
+            insertOrder.store (vox::packOrder (vox::orderFromText (parameters.state.getProperty ("insertOrder").toString().toStdString())));
             // Auto-Edit's report, reference and Auto Analyze live on the message thread (its timer reads them):
             // a host loading the project on another thread hands them over.
             auto restoreAutoEdit = [this, savedReport, savedReference, watch] {

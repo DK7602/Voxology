@@ -367,6 +367,7 @@ void AutoEditController::launchAnalysis()
     {
         VoxParams::Reader reader;
         reader.attach (state);
+        reader.attachOrder (insertOrder);
         reader.read (nowParams, bpmSource ? bpmSource() : 120.0);
         nowBypassed = nowParams.bypass;
         nowParams.bypass = false;
@@ -406,7 +407,10 @@ void AutoEditController::launchAnalysis()
                 vox::coach::Now now;
                 if (result->ok && ! closing.load())
                 {
-                    after = std::make_unique<vox::VocalAnalysis> (vox::analyseVocal (vox::VocalChain::render (audio, sr, result->params, &closing), sr));
+                    // (through the plug-in's order of the inserts: what you would hear after APPLY)
+                    auto heard = result->params;
+                    heard.order = insertOrder != nullptr ? vox::unpackOrder (insertOrder->load()) : vox::kDefaultOrder;
+                    after = std::make_unique<vox::VocalAnalysis> (vox::analyseVocal (vox::VocalChain::render (audio, sr, heard, &closing), sr));
                     // Through the settings now (bypassed: the take as it comes in, Auto-Edit's own measurement).
                     if (! nowBypassed && ! closing.load())
                         nowSound = std::make_unique<vox::VocalAnalysis> (vox::analyseVocal (vox::VocalChain::render (audio, sr, nowParams, &closing), sr));

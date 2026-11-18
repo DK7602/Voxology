@@ -511,6 +511,30 @@ namespace vox::rackunit
             finish (m);
             if (out.back().state == rack::State::idle) out.back().summary = "0.0 dB";
         }
+
+        // Beta 33: the movable inserts (Tone EQ ... Saturation) in the order they play, marked so the Rack can move them.
+        {
+            const auto order = validOrder (p.order) ? p.order : kDefaultOrder;
+            auto keyOf = [] (int module) { return std::string ("vox.") + insertKey (module); };
+            std::vector<std::size_t> slots;
+            for (std::size_t i = 0; i < out.size(); ++i)
+                for (const int m : kDefaultOrder)
+                    if (out[i].key == keyOf (m)) slots.push_back (i);
+            if (slots.size() == static_cast<std::size_t> (kMovable))
+            {
+                std::vector<rack::Module> inOrder;
+                for (const int m : order)
+                    for (const auto i : slots)
+                        if (out[i].key == keyOf (m)) inOrder.push_back (out[i]);
+                for (std::size_t j = 0; j < slots.size() && j < inOrder.size(); ++j)
+                {
+                    auto& m = out[slots[j]];
+                    m = std::move (inOrder[j]);
+                    m.movable = true;
+                    m.moved = order[j] != kDefaultOrder[j];
+                }
+            }
+        }
         return out;
     }
 }

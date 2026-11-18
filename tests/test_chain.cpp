@@ -210,3 +210,93 @@ TEST_CASE ("Loudness meter: a NaN / inf sample is ignored (no stuck reading, no 
         CHECK (m.integratedLufs() == Approx (-23.0).margin (0.5));   // a -20 dBFS 1 kHz sine reads about -23 LUFS
     }
 }
+
+TEST_CASE ("Beta 33: the movable inserts' order (from the Rack): helpers, state text", "[chain][order]")
+{
+    CHECK (validOrder (kDefaultOrder));
+    CHECK (ChainParams {}.order == kDefaultOrder);
+    CHECK (orderText (kDefaultOrder) == "eq,dyneq,deess,rider,comp,sat");
+    CHECK (orderFromText ("eq,dyneq,deess,rider,comp,sat") == kDefaultOrder);
+    const auto compFirst = movedTo (kDefaultOrder, static_cast<int> (Module::comp), 0);
+    CHECK (orderText (compFirst) == "comp,eq,dyneq,deess,rider,sat");
+    CHECK (orderFromText (orderText (compFirst)) == compFirst);
+    CHECK (orderText (movedTo (kDefaultOrder, static_cast<int> (Module::eq), 99)) == "dyneq,deess,rider,comp,sat,eq");   // clamped: last
+    CHECK (orderText (movedTo (kDefaultOrder, static_cast<int> (Module::deEsser), -3)) == "deess,eq,dyneq,rider,comp,sat");
+    CHECK (movedTo (kDefaultOrder, static_cast<int> (Module::pitch), 0) == kDefaultOrder);   // Pitch stays first
+    CHECK (movedTo (InsertOrder { 2, 2, 2, 2, 2, 2 }, static_cast<int> (Module::comp), 1) == movedTo (kDefaultOrder, static_cast<int> (Module::comp), 1));
+    CHECK_FALSE (validOrder (InsertOrder { 2, 2, 4, 5, 6, 7 }));
+    CHECK_FALSE (validOrder (InsertOrder { 0, 3, 4, 5, 6, 7 }));   // (Pitch isn't movable)
+    for (const char* damaged : { "", "eq", "eq,dyneq,deess,rider,comp", "eq,dyneq,deess,rider,comp,sat,eq", "eq,eq,deess,rider,comp,sat", "EQ,dyneq,deess,rider,comp,sat" })
+    {
+        INFO (damaged);
+        CHECK (orderFromText (damaged) == kDefaultOrder);
+    }
+    CHECK (isMovable (static_cast<int> (Module::rider)));
+    CHECK_FALSE (isMovable (static_cast<int> (Module::reverb)));
+}
+
+TEST_CASE ("Beta 33: another order plays another sound; any block size the same; render plays it from the start", "[chain][order]")
+{
+    const auto x = testsig::vocal (kSr, 1.5, -60.0, -3.0);
+    auto p = busy();
+    p.eq.gainDb = { 0, 0, 0, 9, 9 };   // a big top boost: before or after the compressor and saturation sounds different
+    const auto own = process (p, x, 2, 512);
+    auto q = p;
+    q.order = movedTo (p.order, static_cast<int> (Module::eq), kMovable - 1);   // the EQ last
+    const auto moved = process (q, x, 2, 512);
+    double diff = 0.0, level = 0.0;
+    for (size_t i = kLat; i < x.size(); ++i)
+    {
+        diff = std::max (diff, std::abs (own[0][i] - moved[0][i]));
+        level = std::max (level, std::abs (own[0][i]));
+    }
+    CHECK (diff > 0.02 * level);
+    // block size doesn't matter (the order is taken at the start: no dip)
+    const auto moved7 = process (q, x, 2, 7);
+    double err = 0.0;
+    for (size_t i = 0; i < x.size(); ++i) err = std::max (err, std::abs (moved[0][i] - moved7[0][i]));
+    CHECK (err < 1.0e-9);
+    // render() = the same chain from the start
+    std::vector<std::vector<float>> in (2, x);
+    const auto r = VocalChain::render (in, kSr, q);
+    double rerr = 0.0;
+    for (size_t i = 0; i + kLat < x.size(); ++i) rerr = std::max (rerr, std::abs (static_cast<double> (r[0][i]) - moved[0][i + kLat]));
+    CHECK (rerr < 1.0e-5);
+}
+
+TEST_CASE ("Beta 33: moving an insert while it plays: a short dip, no click, then the new order", "[chain][order]")
+{
+    const auto x = testsig::vocal (kSr, 2.0, -60.0, -3.0);
+    auto p = busy();
+    p.eq.gainDb = { 0, 0, 0, 9, 9 };
+    p.doubler.amount = 0; p.delay.mix = 0; p.reverb.mix = 0;   // (no tails: the comparison below is exact enough)
+    auto q = p;
+    q.order = movedTo (p.order, static_cast<int> (Module::comp), 0);
+    VocalChain c;
+    c.setParams (p);
+    c.prepare (kSr, 2);
+    std::vector<std::vector<double>> y (2, std::vector<double> (x.begin(), x.end()));
+    const size_t at = 48000;   // the move, one second in
+    for (size_t s = 0; s < x.size(); s += 480)
+    {
+        if (s == at) c.setParams (q);
+        std::array<double*, 2> ptr { y[0].data() + s, y[1].data() + s };
+        c.process (ptr.data(), 2, static_cast<int> (std::min<size_t> (480, x.size() - s)));
+    }
+    double jumpBefore = 0.0, jumpAround = 0.0;
+    for (size_t i = 24000; i < at; ++i) jumpBefore = std::max (jumpBefore, std::abs (y[0][i] - y[0][i - 1]));
+    for (size_t i = at; i < at + 2000; ++i) jumpAround = std::max (jumpAround, std::abs (y[0][i] - y[0][i - 1]));
+    for (const auto& ch : y) for (double v : ch) REQUIRE (std::isfinite (v));
+    CHECK (jumpAround <= jumpBefore * 1.25 + 1.0e-6);   // no step bigger than the vocal makes itself
+    // Afterwards it plays the new order: much nearer the new order from the start than the old one (the Rider's and
+    // the compressor's levels carry on from before, so not exactly).
+    const auto fresh = process (q, x, 2, 480), old = process (p, x, 2, 480);
+    double toNew = 0.0, toOld = 0.0;
+    for (size_t i = at + 24000; i < at + 48000 && i < x.size(); ++i)
+    {
+        toNew += (y[0][i] - fresh[0][i]) * (y[0][i] - fresh[0][i]);
+        toOld += (y[0][i] - old[0][i]) * (y[0][i] - old[0][i]);
+    }
+    INFO ("toNew " << toNew << " toOld " << toOld);
+    CHECK (toNew < 0.25 * toOld);
+}

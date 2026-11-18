@@ -36,6 +36,8 @@ public:
     void remove (const juce::String& name);
 
     std::function<void()> beforeLoad;
+    /** Beta 33: a chain's order of the movable inserts (vox::orderText; "": Voxology's own), set when it loads. */
+    std::function<void (const juce::String&)> setOrder;
 
 private:
     struct Look

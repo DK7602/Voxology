@@ -211,6 +211,8 @@ public:
     std::function<void (vox::AutoEditSettings&)> liveKeySource;
     /** Honey Tune tunes this track (Pitch rests there): Auto-Edit leaves Pitch's settings as they are. */
     std::function<bool()> honeyTunesSource;
+    /** Beta 33: the plug-in's order of the movable inserts (the Coach measures the take through it); none: Voxology's own. */
+    const std::atomic<std::uint32_t>* insertOrder = nullptr;
     /** Is there a Voxology in BEAT mode in this project (Unmask can already make room)? (message thread) */
     std::function<bool()> unmaskOnBeatSource;
 private:

@@ -263,6 +263,10 @@ private:
     void updateHoneyLink();                       // Honey Tune on this track? (four times a second)
     HoneyView honey;                              // under styleLock
     std::atomic<bool> honeyAnyway { false };      // tune here although Honey Tune does (saved with the project)
+    // Beta 33: the movable inserts' order (vox::packOrder), set from the Rack; saved with the project as the state's
+    // "insertOrder" property (vox::orderText). The audio thread reads it through the Reader.
+    std::atomic<std::uint32_t> insertOrder { vox::packOrder (vox::kDefaultOrder) };
+    void setInsertOrder (const vox::InsertOrder&);   // message thread
     std::atomic<bool> pitchRests { false };       // read by the audio thread
     bool honeyPublished = false;
     std::uint64_t honeyActMs = 0;                 // when Honey Tune was last seen on this track (0 = not lately)

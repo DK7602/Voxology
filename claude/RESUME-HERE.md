@@ -2072,3 +2072,11 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   a loaded state resets the plan; a stale listening / working flag clears when the job is idle; locale-free num() in
   CoachPlan.cpp; the reference name cut to 60 characters. No unit test for the controller (it needs the plug-in);
   compiled against JUCE here. Manual: PREVIEW. (Mixology's RESUME-HERE has the rest.)
+- Voxology 0.71.0 (2026-11-18, Sonicology Beta 33): a chain you can reorder from the Rack. vox::InsertOrder (VocalChain.h:
+  kDefaultOrder, validOrder, movedTo, orderText / orderFromText, packOrder / unpackOrder, insertKey); ChainParams::order;
+  VocalChain runs the six movable inserts in activeOrder (LISTEN's keep / take-out with each module wherever it is) and
+  dips their output over one chunk to switch (reset() and render() take the order at once). Plug-in: insertOrder atomic
+  (Reader::attachOrder: the audio thread, publishRack and the Coach's job read it), the state's "insertOrder" property,
+  applyRack Change::order (refused in BEAT mode or for a fixed module), MY CHAINS save / load the order (a Quick Look or
+  Fresh: Voxology's own); the Coach measures the take through your order. RackUnit: movable / moved. Tests: test_chain
+  [order], test_rack_unit. Shared RackLink / rack.js. Manual: move a module. (Mixology's RESUME-HERE has the rest.)

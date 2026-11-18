@@ -421,3 +421,37 @@ TEST_CASE ("Rack unit (Honey Tune): a double-click puts a knob back to Honey Tun
     CHECK (s.drift == def.drift);
     CHECK_FALSE (honeyui::rackReset (s, "key"));
 }
+
+TEST_CASE ("Rack unit (Voxology): Beta 33, the movable inserts in the order they play, marked movable / moved", "[rack]")
+{
+    auto key = [] (const rack::Module& m) { return m.key; };
+    {
+        const auto ms = rackunit::modules (fresh(), true);
+        for (const auto& m : ms)
+        {
+            INFO (m.key);
+            const bool movable = m.key == "vox.eq" || m.key == "vox.dyneq" || m.key == "vox.deess" || m.key == "vox.rider" || m.key == "vox.comp" || m.key == "vox.sat";
+            CHECK (m.movable == movable);
+            CHECK_FALSE (m.moved);
+        }
+    }
+    auto st = fresh();
+    st.params.comp.ratio = 3.0;   // (some settings: they move with their module)
+    st.params.order = movedTo (kDefaultOrder, static_cast<int> (Module::comp), 0);
+    const auto ms = rackunit::modules (st, true);
+    REQUIRE (ms.size() == 13);
+    const char* order[] = { "vox.pitch", "vox.cleanup", "vox.comp", "vox.eq", "vox.dyneq", "vox.deess", "vox.rider", "vox.sat",
+                            "vox.voices", "vox.dimension", "vox.delay", "vox.reverb", "vox.output" };
+    for (std::size_t i = 0; i < ms.size(); ++i) CHECK (key (ms[i]) == order[i]);
+    CHECK (ms[2].moved);   // the compressor: first of the inserts now
+    CHECK (ms[3].moved);   // the EQ: one down
+    CHECK_FALSE (ms[7].moved);   // Saturation: still last
+    const auto& comp = ms[2];
+    CHECK_FALSE (comp.values.empty());
+    CHECK (comp.switchable);
+    // Beat mode: one cell, nothing to move
+    st.beat = true;
+    const auto beat = rackunit::modules (st, true);
+    REQUIRE (beat.size() == 1);
+    CHECK_FALSE (beat[0].movable);
+}

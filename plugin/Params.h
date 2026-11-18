@@ -325,8 +325,12 @@ namespace VoxParams
             for (const auto& id : comboIds()) add (s, id);
         }
 
+        /** Beta 33: the order of the movable inserts (the plug-in's, set from the Rack); none: Voxology's own. */
+        void attachOrder (const std::atomic<std::uint32_t>* packed) noexcept { order = packed; }
+
         void read (vox::ChainParams& p, double bpm) const noexcept
         {
+            p.order = order != nullptr ? vox::unpackOrder (order->load (std::memory_order_relaxed)) : vox::kDefaultOrder;
             auto on = [this] (Id id) { return v (id) > 0.5f; };
             auto d = [this] (Id id) { return static_cast<double> (v (id)); };
             auto idx = [this] (Id id, int hi) { return juce::jlimit (0, hi, juce::roundToInt (v (id))); };
@@ -420,6 +424,7 @@ namespace VoxParams
 
         std::array<std::atomic<float>*, idCount> ptr {};
         std::atomic<float> missing { 0.0f };   // (an id not in the layout: a bug, caught by the jassert)
+        const std::atomic<std::uint32_t>* order = nullptr;
         std::array<std::atomic<float>*, vox::kEqBands> eqGain {}, eqFreq {};
         std::array<std::atomic<float>*, vox::kDynBands> dqCut {}, dqFreq {};
         std::array<std::atomic<float>*, 12> removed {};
