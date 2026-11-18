@@ -2054,3 +2054,8 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   tests aborted with alloc-dealloc-mismatch because test_realtime.cpp replaced operator new / delete but not the
   no-throw new that std::stable_sort's buffer uses (ASan's new, our free). Test-only: the no-throw forms are replaced
   too (reproduced and fixed in a small ASan program here). Not in any plug-in.
+- Voxology 0.68.0 (2026-11-18, Sonicology Beta 30): the user's Coach on backup vocals gave the same plan after APPLY
+  (Auto-Edit decides from the raw take). AutoEditController's plan job now reads the settings now (VoxParams::Reader,
+  values + ranges per forEachValue id), renders the take through them, and passes vox::coach::Now to planJson
+  (issues / before through the settings now; "same" per module; "changes" = ids that differ; "upToDate"). RACK chip is
+  the word (no emblem). Manual: "After APPLY". (Mixology's RESUME-HERE has the rest.)

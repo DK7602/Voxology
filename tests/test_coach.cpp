@@ -193,6 +193,32 @@ TEST_CASE ("Coach: a real take, Auto-Edit's plan, measured through it", "[coach]
         CHECK (small.size() <= std::max<std::size_t> (room, 140));
     }
 
+    // Beta 30, after an APPLY: the same take gives the same plan, but the Coach compares it with the settings now.
+    // Already set as planned: nothing to change, and what stands out is measured through the plan (the "s" are fixed).
+    coach::Now done;
+    done.sound = &after;
+    done.compared = true;
+    const auto upToDate = coach::planJson (r, &after, target, sibAim, s, {}, 8191, &done);
+    INFO (upToDate);
+    CHECK (validJson (upToDate));
+    CHECK (upToDate.find ("\"upToDate\":true") != std::string::npos);
+    CHECK (upToDate.find ("\"changes\":0") != std::string::npos);
+    CHECK (upToDate.find ("\"beforeNow\":true") != std::string::npos);
+    CHECK (upToDate.find ("nothing to change") != std::string::npos);
+    CHECK (count (upToDate, "\"same\":true") == 13);
+    CHECK (upToDate.find ("\"key\":\"sibilance\"") == std::string::npos);   // fixed by the settings now
+    // A knob turned since: that module isn't "same", and it is the one change.
+    coach::Now turned = done;
+    turned.changedIds = { "cpThr" };
+    const auto one = coach::planJson (r, &after, target, sibAim, s, {}, 8191, &turned);
+    CHECK (one.find ("\"upToDate\":false") != std::string::npos);
+    CHECK (one.find ("\"changes\":1") != std::string::npos);
+    CHECK (count (one, "\"same\":true") == 12);
+    CHECK (std::string (coach::rackKeyOfParam ("cpThr")) == "vox.comp");
+    CHECK (std::string (coach::rackKeyOfParam ("eqGain3")) == "vox.eq");
+    CHECK (std::string (coach::rackKeyOfParam ("outGain")) == "vox.output");
+    CHECK (std::string (coach::rackKeyOfParam ("bypass")).empty());
+
     // A take too short to work with: why, and what to do.
     const auto shortTake = testsig::vocal (kSr, 1.0);
     const auto failed = autoEdit ({ shortTake }, kSr, s);

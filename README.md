@@ -57,6 +57,10 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
 - Since v0.67 (Beta 29): shared RackLink (the Coach's steps pass a unit's lock) and rack.js (the COACH page on the
   master, through Masterology; STOP while the Coach listens). Voxology: the Coach's steps refuse while Auto-Edit runs
   from Voxology's own window, and "cancel" stops the Coach's own listen.
+- Since v0.68 (Beta 30): the Coach after APPLY. Auto-Edit decides from the take as it comes in, so the same take gave
+  the same plan again; the Coach now renders the take through the settings Voxology has now (what stands out, "before")
+  and compares the plan with them (vox::coach::Now: "same" per module, "changes", "upToDate"). RACK is a word (no
+  emblem).
 - Since v0.65 (Beta 27): the analysis rests on purpose while the song plays (`vox/Pace.h`: a thread's `Scope` turns it
   on; `tick()` in the long loops sleeps 8 ms after every 20 ms of work; off by default, so tests and results are the
   same). Every AutoEditController job (Auto-Edit, the Coach, Auto Analyze, a reference) runs paced: the user heard the

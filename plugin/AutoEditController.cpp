@@ -250,7 +250,35 @@ void AutoEditController::launchAnalysis()
     const bool forPlan = planMode;
     if (forPlan) planState = planWorking;
     const std::string refName = pendingRefName.toStdString();
-    pool.addJob ([this, audio = std::move (audio), sr, settings, thisSession, ref, beat, forPlan, refName]
+
+    // The Coach (Beta 30): Auto-Edit decides from the take as it comes in, so after an APPLY the same take gives the
+    // same plan. The plan is compared with the settings Voxology has now, and the take is measured through them.
+    struct NowValue { float value = 0.0f; juce::NormalisableRange<float> range; bool steps = false; };
+    auto nowValues = std::make_shared<std::map<juce::String, NowValue>>();
+    vox::ChainParams nowParams;
+    bool nowBypassed = false, keyByHand = false;
+    if (forPlan)
+    {
+        VoxParams::Reader reader;
+        reader.attach (state);
+        reader.read (nowParams, bpmSource ? bpmSource() : 120.0);
+        nowBypassed = nowParams.bypass;
+        nowParams.bypass = false;
+        nowParams.listenOriginal = false;
+        if (auto* src = state.getRawParameterValue ("ptKeySrc")) keyByHand = juce::roundToInt (src->load()) != 0;
+        VoxParams::forEachValue (vox::ChainParams {}, [&] (const juce::String& id, float) {
+            if (auto* p = state.getParameter (id))
+            {
+                NowValue v;
+                v.range = p->getNormalisableRange();
+                v.value = v.range.convertFrom0to1 (p->getValue());
+                v.steps = v.range.interval >= 1.0f && v.range.end - v.range.start <= 40.0f;   // a switch or a choice
+                (*nowValues)[id] = v;
+            }
+        });
+    }
+
+    pool.addJob ([this, audio = std::move (audio), sr, settings, thisSession, ref, beat, forPlan, refName, nowValues, nowParams, nowBypassed, keyByHand]
     {
         const vox::pace::Scope gentle (kPaceWorkMs, kPaceRestMs);   // the song keeps playing: never hog a core
         std::unique_ptr<vox::AutoEditResult> result;
@@ -267,10 +295,32 @@ void AutoEditController::launchAnalysis()
                 // The Coach: what Auto-Edit aims at, and the take played through the plan and measured again.
                 const auto target = vox::toneTarget (s.style, result->analysis.f0Median, s.reference);
                 const double sibAim = vox::sibilanceTargetDb (s.style, s.intensity, s.reference);
-                std::unique_ptr<vox::VocalAnalysis> after;
+                std::unique_ptr<vox::VocalAnalysis> after, nowSound;
+                vox::coach::Now now;
                 if (result->ok && ! closing.load())
+                {
                     after = std::make_unique<vox::VocalAnalysis> (vox::analyseVocal (vox::VocalChain::render (audio, sr, result->params, &closing), sr));
-                plan = vox::coach::planJson (*result, after.get(), target, sibAim, s, refName, kPlanBytes);
+                    // Through the settings now (bypassed: the take as it comes in, Auto-Edit's own measurement).
+                    if (! nowBypassed && ! closing.load())
+                        nowSound = std::make_unique<vox::VocalAnalysis> (vox::analyseVocal (vox::VocalChain::render (audio, sr, nowParams, &closing), sr));
+                    now.sound = nowSound.get();
+                    now.compared = true;
+                    // The settings APPLY would change (as apply() sets them): a switch or choice that differs, a knob
+                    // more than 2 % of its range away (a fresh listen to the same song moves a knob a little).
+                    VoxParams::forEachValue (result->params, [&] (const juce::String& id, float v) {
+                        if (keyByHand && (id == "ptKey" || id == "ptScale")) return;
+                        if (s.honeyTunesTrack && id.startsWith ("pt")) return;
+                        const auto it = nowValues->find (id);
+                        if (it == nowValues->end()) return;
+                        const auto& cur = it->second;
+                        const float planned = juce::jlimit (cur.range.start, cur.range.end, v);
+                        const bool differs = cur.steps ? juce::roundToInt (planned) != juce::roundToInt (cur.value)
+                                                       : std::abs (cur.range.convertTo0to1 (planned) - cur.range.convertTo0to1 (cur.value)) > 0.02f;
+                        if (differs) now.changedIds.push_back (id.toStdString());
+                    });
+                    if (nowBypassed) now.changedIds.push_back ("bypass");
+                }
+                plan = vox::coach::planJson (*result, after.get(), target, sibAim, s, refName, kPlanBytes, &now);
             }
         }
         catch (...)

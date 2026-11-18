@@ -42,10 +42,25 @@ double regionOffset (const std::vector<double>& bandDb, const std::vector<double
 std::vector<Issue> issues (const VocalAnalysis& a, const std::vector<double>& target, double sibTargetDb, const std::string& aimName);
 std::vector<Result> results (const VocalAnalysis& before, const VocalAnalysis& after, const std::vector<double>& target, double sibTargetDb);
 
+/** Where Voxology stands now (Beta 30). Auto-Edit always decides from the take as it comes in, so after an APPLY the
+    same take gives the same plan; the Coach measures what the settings Voxology has now already do to it, and says
+    which settings the plan would still change. */
+struct Now
+{
+    const VocalAnalysis* sound = nullptr;   // the take through the settings Voxology has now (nullptr: not measured)
+    bool compared = false;                  // the plan was compared with the settings now
+    std::vector<std::string> changedIds;    // the plug-in parameter ids the plan would change (when compared)
+};
+
+/** The Rack's module key for one of Voxology's parameter ids ("eqGain2" -> "vox.eq"; "" for none). */
+const char* rackKeyOfParam (const std::string& id);
+
 /** The plan as the Rack reads it (a JSON object): heard, issues, the recommended chain with each module's reasons,
     bands (before / after / target), results, what to adjust first. At most `maxBytes` (texts shortened, then dropped,
-    to fit; always valid JSON). `after` may be nullptr (not measured: no results, no after curve). */
+    to fit; always valid JSON). `after` may be nullptr (not measured: no results, no after curve). With `now`: what
+    stands out and "before" are measured through the settings now, each module says whether it is already set as
+    planned ("same"), "changes" counts the settings the plan would change, and "upToDate" is true when there are none. */
 std::string planJson (const AutoEditResult& r, const VocalAnalysis* after, const std::vector<double>& target, double sibTargetDb,
-                      const AutoEditSettings& s, const std::string& reference, std::size_t maxBytes);
+                      const AutoEditSettings& s, const std::string& reference, std::size_t maxBytes, const Now* now = nullptr);
 
 } // namespace vox::coach

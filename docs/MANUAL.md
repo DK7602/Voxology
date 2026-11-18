@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.67.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.68.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.67.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.68.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -599,11 +599,16 @@ against your genre's masters (too much low end, not enough low mids, too much ai
 true peak, punch, stereo bass, each tone band against the aim). **APPLY TO MASTER** sets it all as one step in
 Masterology's UNDO; **UNDO** takes it back. Auto-Master in Masterology's own window still works as before.
 
+**After APPLY:** press **ANALYZE AGAIN** whenever you like. The Coach compares its plan with the settings the plug-in has
+now (and, for a vocal, measures your take through them): each module already set as planned says **Already set**, and
+when nothing is left to change it says so and the button reads **NOTHING TO CHANGE** (it no longer offers the same plan
+again).
+
 **Light or dark:** click the spinning cube at the top left. All three plug-ins remember your choice.
 
 **Good to know**
 - Honey Tune has no RACK button: it shows up in the Rack above Voxology on the track it tunes.
-- Mixology Link has a RACK button too (the spinning cube, top right of its window): the Rack opens on the Link's track.
+- Mixology Link has a RACK button too (top right of its window): the Rack opens on the Link's track.
 - The Rack costs nothing while it's closed: the plug-ins send their details only while a Rack is open.
 - **Locked for a moment:** while Voxology's Auto-Edit or Masterology's Auto-Master listens or works, the Rack can't
   change that plug-in (a lock and the reason show under its knobs). It can again as soon as it has finished.

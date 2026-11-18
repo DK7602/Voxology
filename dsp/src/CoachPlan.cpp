@@ -269,14 +269,37 @@ std::vector<Result> results (const VocalAnalysis& before, const VocalAnalysis& a
     return out;
 }
 
+const char* rackKeyOfParam (const std::string& id)
+{
+    static const std::pair<const char*, const char*> kPrefixes[] = {
+        { "pt", "vox.pitch" }, { "cl", "vox.cleanup" }, { "eq", "vox.eq" }, { "dq", "vox.dyneq" }, { "ds", "vox.deess" },
+        { "rd", "vox.rider" }, { "cp", "vox.comp" }, { "sa", "vox.sat" }, { "db", "vox.voices" }, { "hv", "vox.voices" },
+        { "dm", "vox.dimension" }, { "dl", "vox.delay" }, { "rv", "vox.reverb" }, { "out", "vox.output" },
+    };
+    for (const auto& [prefix, key] : kPrefixes)
+        if (id.rfind (prefix, 0) == 0) return key;
+    return "";
+}
+
 std::string planJson (const AutoEditResult& r, const VocalAnalysis* after, const std::vector<double>& target, double sibTargetDb,
-                      const AutoEditSettings& s, const std::string& reference, std::size_t maxBytes)
+                      const AutoEditSettings& s, const std::string& reference, std::size_t maxBytes, const Now* now)
 {
     const std::string styleName = kStyleNames[static_cast<size_t> (std::clamp (s.style, 0, kStyles - 1))];
     const std::string aim = reference.empty() ? styleName + "'s balance" : "the reference";
     const auto& a = r.analysis;
-    const auto found = issues (a, target, sibTargetDb, aim);
-    const auto measured = after != nullptr ? results (a, *after, target, sibTargetDb) : std::vector<Result> {};
+    // What stands out and "before": through the settings Voxology has now (after an APPLY: the plan's own sound).
+    const bool measuredNow = now != nullptr && now->sound != nullptr && now->sound->bandDb.size() == a.bandDb.size();
+    const auto& base = measuredNow ? *now->sound : a;
+    const auto found = issues (base, target, sibTargetDb, aim);
+    const auto measured = after != nullptr ? results (base, *after, target, sibTargetDb) : std::vector<Result> {};
+    const bool compared = now != nullptr && now->compared;
+    const bool upToDate = compared && now->changedIds.empty();
+    auto sameAsNow = [&] (const char* rackKey) {
+        if (! compared) return false;
+        for (const auto& id : now->changedIds)
+            if (std::string (rackKeyOfParam (id)) == rackKey) return false;
+        return true;
+    };
 
     // Shorter until it fits: fewer reasons per module (each kept whole as long as possible), then shorter, then none.
     for (int pass = 0; pass < 5; ++pass)
@@ -290,7 +313,9 @@ std::string planJson (const AutoEditResult& r, const VocalAnalysis* after, const
         j.key ("intensity"); j.str (kIntensityNames[static_cast<size_t> (std::clamp (s.intensity, 0, kIntensities - 1))]);
         j.key ("reference"); j.str (reference);
         j.key ("aim"); j.str (aim);
-        j.key ("summary"); j.str (cut (r.summary, pass < 4 ? 400 : 160));
+        j.key ("summary");
+        j.str (cut ((upToDate ? std::string ("Voxology is already set the way I'd set it for this take: nothing to change. ") : std::string())
+                    + r.summary, pass < 4 ? 400 : 160));
         if (! r.ok)
         {
             j.key ("tipTitle"); j.str (r.tipTitle);
@@ -351,13 +376,14 @@ std::string planJson (const AutoEditResult& r, const VocalAnalysis* after, const
             j.key ("caption"); j.str (step.caption);
             const auto mi = static_cast<size_t> (step.module);
             j.key ("kept"); j.o += mi < r.kept.size() && r.kept[mi] ? "true" : "false";
+            if (compared) { j.key ("same"); j.o += sameAsNow (step.rackKey) ? "true" : "false"; }
             j.key ("set");
             j.o.push_back ('[');
             std::size_t n = 0;
             for (const auto& x : r.reasons)
             {
                 if (x.module != step.reason) continue;
-                ++changes;
+                if (! compared) ++changes;
                 if (n++ >= perModule) continue;
                 j.item();
                 j.o.push_back ('{');
@@ -370,8 +396,11 @@ std::string planJson (const AutoEditResult& r, const VocalAnalysis* after, const
             j.o.push_back ('}');
         }
         j.o.push_back (']');
+        if (compared) changes = static_cast<int> (now->changedIds.size());
         j.key ("changes"); j.number (changes, 0);
         j.key ("modulesOn"); j.number (on, 0);
+        if (compared) { j.key ("upToDate"); j.o += upToDate ? "true" : "false"; }
+        if (measuredNow) { j.key ("beforeNow"); j.o += "true"; }
 
         // BEFORE vs PROPOSED: the take's tone before, through the plan, and the aim.
         if (pass < 4 && a.bandDb.size() == analysisBands().size() && target.size() == a.bandDb.size())
@@ -379,7 +408,7 @@ std::string planJson (const AutoEditResult& r, const VocalAnalysis* after, const
             j.key ("bands");
             j.o.push_back ('{');
             j.key ("hz"); j.array (analysisBands());
-            j.key ("before"); j.array (a.bandDb);
+            j.key ("before"); j.array (base.bandDb);
             if (after != nullptr && after->bandDb.size() == a.bandDb.size()) { j.key ("after"); j.array (after->bandDb); }
             j.key ("target"); j.array (target);
             j.o.push_back ('}');
