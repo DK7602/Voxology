@@ -2038,3 +2038,9 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   reference, canUndo, plan). RackUnit knobs aeStyle / aeIntensity (the page's STYLE / INTENSITY). Tests:
   tests/test_coach.cpp (issues / results on a made-up take; a real synthetic take through Auto-Edit: valid JSON, 13
   modules in order, squeezed still valid; a too-short take explains why). Manual: Quick start note + the Rack's COACH.
+- Voxology 0.65.0 (2026-11-18, Sonicology Beta 27): the user heard the song cut out a couple of times while the Coach
+  analysed. vox/Pace.h + src/Pace.cpp: per-thread Scope (work ms, rest ms), tick() in the long loops (checkCancel,
+  VocalChain::render's chunks, highPass stages, runComp / runBand frames, the De-Esser trials, the end-of-chain trial
+  blocks); every AutoEditController job runs under Scope (20, 8). Same decisions (tests/test_realtime.cpp, which also
+  shows the chain never allocates while it plays, with a replaced operator new). Manual: Quick start step 5 says it
+  works in bursts and takes about 10 - 30 s. (Mixology's RESUME-HERE has the rest of Beta 27.)

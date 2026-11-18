@@ -52,6 +52,11 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
   shared `plugin/RackHost.h`: a knob drag is one host gesture), locked while Auto-Edit listens or works; every knob
   names its parameter (`vox::rackunit::fromKnob` / `switchOf`). Honey Tune takes Snap / Drift / Vibrato
   (`honeyui::rackSet`), applied once where a drag stops.
+- Since v0.65 (Beta 27): the analysis rests on purpose while the song plays (`vox/Pace.h`: a thread's `Scope` turns it
+  on; `tick()` in the long loops sleeps 8 ms after every 20 ms of work; off by default, so tests and results are the
+  same). Every AutoEditController job (Auto-Edit, the Coach, Auto Analyze, a reference) runs paced: the user heard the
+  song cut out a couple of times while the Coach analysed. `tests/test_realtime.cpp`: the chain never allocates while
+  it plays (a replaced operator new counts), and a paced Auto-Edit decides exactly the same.
 - Since v0.64 (Beta 26): the Rack's COACH page for a vocal (stage 3). `vox/CoachPlan.h`: what stands out in the take
   against Auto-Edit's aim (`toneTarget` / `sibilanceTargetDb` in `vox/AutoEdit.h`), the take played through the plan
   (`VocalChain::render`) and measured again, and the plan as JSON for the Rack (`coach::planJson`, at most 7.6 KB).

@@ -1,4 +1,5 @@
 #include "vox/AutoEdit.h"
+#include "vox/Pace.h"
 #include "vox/ClipWatch.h"
 #include "vox/DeClick.h"
 
@@ -26,6 +27,7 @@ void checkCancel()
 {
     if (cancelFlag != nullptr && cancelFlag->load (std::memory_order_relaxed))
         throw Cancelled {};
+    pace::tick();   // (rests when the plug-in asked for it: vox/Pace.h)
 }
 struct CancelScope
 {
@@ -81,6 +83,7 @@ Signal highPass (const Signal& x, double hz, double sr, int stages = 1)
     Signal y = x;
     for (int s = 0; s < stages; ++s)
     {
+        pace::tick();
         Biquad f;
         design::apply (f, design::butterworth (true, hz, sr));
         for (auto& v : y) v = f.process (v);
@@ -366,6 +369,7 @@ CompRun runComp (const Signal& x, double sr, const CompParams& p, int hop)
     r.out = x;
     for (size_t s = 0; s < x.size(); s += static_cast<size_t> (hop))
     {
+        pace::tick();
         double* ptr = r.out.data() + s;
         const int len = static_cast<int> (std::min<size_t> (static_cast<size_t> (hop), x.size() - s));
         c.process (&ptr, 1, len);
@@ -1681,6 +1685,7 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
             size_t frame = 0;
             for (size_t s0 = 0; s0 < y.size(); s0 += static_cast<size_t> (f.hop), ++frame)
             {
+                pace::tick();
                 double* ptr = y.data() + s0;
                 de.process (&ptr, 1, static_cast<int> (std::min<size_t> (static_cast<size_t> (f.hop), y.size() - s0)));
                 const double c = -de.takeCutDb()[static_cast<size_t> (band)];
@@ -1811,6 +1816,7 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
             auto levelWith = [&] (double amount)
             {
                 d.amount = amount;
+                pace::tick();
                 DeEsser de;
                 de.prepare (sr, 1);
                 de.setParams (d);
@@ -2094,6 +2100,7 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
             Signal y = pre;
             for (size_t s0 = 0; s0 < y.size(); s0 += 512)
             {
+                pace::tick();
                 double* ptr = y.data() + s0;
                 const int len = static_cast<int> (std::min<size_t> (512, y.size() - s0));
                 de.process (&ptr, 1, len);

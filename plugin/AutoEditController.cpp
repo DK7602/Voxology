@@ -1,6 +1,7 @@
 #include "AutoEditController.h"
 #include "Params.h"
 #include "vox/CoachPlan.h"
+#include "vox/Pace.h"
 
 #include <map>
 
@@ -251,6 +252,7 @@ void AutoEditController::launchAnalysis()
     const std::string refName = pendingRefName.toStdString();
     pool.addJob ([this, audio = std::move (audio), sr, settings, thisSession, ref, beat, forPlan, refName]
     {
+        const vox::pace::Scope gentle (kPaceWorkMs, kPaceRestMs);   // the song keeps playing: never hog a core
         std::unique_ptr<vox::AutoEditResult> result;
         std::string plan;
         try
@@ -529,6 +531,7 @@ void AutoEditController::launchCheck()
     const int thisSession = session;
     pool.addJob ([this, audio = std::move (audio), sr, settings, thisSession, ref, beat, was, wasBeat, skip, byMixology]
     {
+        const vox::pace::Scope gentle (kPaceWorkMs, kPaceRestMs);
         std::unique_ptr<vox::AutoEditResult> result;
         std::vector<vox::AnalyzeNeed> found;
         try
@@ -823,6 +826,7 @@ void AutoEditController::loadReference (const juce::File& file)
     const int generation = ++refGeneration;
     pool.addJob ([this, file, generation]
     {
+        const vox::pace::Scope gentle (kPaceWorkMs, kPaceRestMs);
         auto profile = std::make_shared<vox::ReferenceProfile>();
         profile->name = file.getFileNameWithoutExtension().toStdString();
         juce::AudioFormatManager formats;

@@ -254,6 +254,10 @@ private:
 
     std::atomic<bool> closing { false };      // the plug-in is going: running jobs stop early
     // Last: destroyed (and joined) first. Low priority: the DAW and its audio come first.
+    // Auto-Edit, the Coach and Auto Analyze work while the song plays: at a low priority, and resting 8 ms after every
+    // 20 ms of work (vox/Pace.h), so they never keep a core and the memory busy for seconds on end (Beta 27: the song
+    // cut out a couple of times while the Coach analysed). About 1.4 x the time to finish.
+    static constexpr double kPaceWorkMs = 20.0, kPaceRestMs = 8.0;
     juce::ThreadPool pool { 1, 0, juce::Thread::Priority::low };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AutoEditController)

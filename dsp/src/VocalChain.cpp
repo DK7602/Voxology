@@ -1,4 +1,5 @@
 #include "vox/VocalChain.h"
+#include "vox/Pace.h"
 
 #include <algorithm>
 
@@ -337,6 +338,7 @@ std::vector<std::vector<float>> VocalChain::render (const std::vector<std::vecto
     {
         if (cancel != nullptr && cancel->load (std::memory_order_relaxed))
             break;
+        pace::tick();
         const int len = std::min (kChunk, total - start);
         for (int c = 0; c < nch; ++c)
             for (int i = 0; i < len; ++i)

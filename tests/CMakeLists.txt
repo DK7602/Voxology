@@ -36,7 +36,8 @@ add_executable(vox_tests
     test_listen.cpp
     test_character.cpp
     test_output_peaks.cpp
-    test_coach.cpp)
+    test_coach.cpp
+    test_realtime.cpp)
 
 target_link_libraries(vox_tests PRIVATE vox_dsp Catch2::Catch2WithMain)
 target_include_directories(vox_tests PRIVATE ${CMAKE_SOURCE_DIR}/honeytune)   # HoneyView.h (the editor's rules, no JUCE)

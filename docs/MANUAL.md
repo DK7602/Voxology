@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.64.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.65.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.64.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.65.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -40,7 +40,8 @@ Auto-Edit does the whole chain for you: pick a style, press one button, play the
 2. Click the **STYLE** pill and pick one (Trap Lead, Rap, Melodic, Robot, R&B, Pop, Folk, Natural Singer) and an **INTENSITY** (Light, Balanced, Strong).
 3. Optional: click the **REFERENCE** pill and pick a built-in pro vocal, or add a vocal you love (see References).
 4. Press **AUTO-EDIT**, then play a part of the song where you are rapping or singing.
-5. After about 12 seconds of voice it sets every module. The **LEARN** panel switches to the **AUTO-EDIT REPORT** and explains each choice.
+5. After about 12 seconds of voice it works out every module (keep the song playing: it works in short bursts with
+   pauses, so your playback stays smooth, and takes about 10 - 30 seconds) and sets them. The **LEARN** panel switches to the **AUTO-EDIT REPORT** and explains each choice.
 6. Turn on **MATCH**, then click **A** (your original) and **B** (Voxology) to compare at the same loudness.
 7. Don't like it? Press **UNDO** to get your old settings back.
 
