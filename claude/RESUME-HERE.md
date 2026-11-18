@@ -2061,3 +2061,14 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   the word (no emblem). Manual: "After APPLY". (Mixology's RESUME-HERE has the rest.)
 - Voxology 0.69.0 (2026-11-18, Sonicology Beta 31): shared rack.js / rack.css (WHAT TO FIX FIRST on the SESSION
   page). No Voxology code changed. Manual. (Mixology's RESUME-HERE has the rest.)
+- Voxology 0.70.0 (2026-11-18, Sonicology Beta 32): the Coach's PREVIEW and a review of Betas 26 - 31.
+  AutoEditController: startPreview / flipPreview / keepPreview / endPreview (the plan set without UNDO, yours kept as
+  normalised values and put back; the plan job also measures the gap: planGapDb = the plan's input LUFS minus yours,
+  from its renders); PluginProcessor: while a preview plays (realtime only) gainProcessedDb = previewGainDb() (the
+  louder side down, MATCH's place), coachReport adds "preview" / "previewGainDb" / "planGapDb", getStateInformation
+  writes yours into the PARAM children during a preview, publishRack ends it after 4 s without a Rack on the track.
+  Review fixes: a check's result is dropped once the plan was discarded; DISCARD while the job works stops it; APPLY
+  clears a running check; UNDO returns the plan to ready only when the last undo snapshot was the plan's (undoIsPlan);
+  a loaded state resets the plan; a stale listening / working flag clears when the job is idle; locale-free num() in
+  CoachPlan.cpp; the reference name cut to 60 characters. No unit test for the controller (it needs the plug-in);
+  compiled against JUCE here. Manual: PREVIEW. (Mixology's RESUME-HERE has the rest.)

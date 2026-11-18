@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -72,6 +73,24 @@ public:
     bool isPlanMode() const noexcept           { return planMode; }   // what listens or works now is the Coach's
     /** The plan as the Rack reads it (vox::coach::planJson), "" when there is none. */
     const juce::String& getPlanJson() const noexcept { return planJson; }
+
+    /** Beta 32, PREVIEW: hear the Coach's plan before APPLY. startPreview() puts the plan's settings in without an UNDO
+        step or a report and keeps yours; flipPreview() swaps between the plan and yours; keepPreview() is APPLY (one
+        UNDO step, from yours); endPreview() puts yours back. While one of them plays, the louder of the two is turned
+        down to the other (previewGainDb, from the Coach's own renders of the take: plan vs your settings then), so you
+        compare tone, not loudness. Message thread (previewGainDb: the audio thread). */
+    bool startPreview();
+    bool flipPreview();
+    bool keepPreview();
+    void endPreview();
+    bool isPreviewing() const noexcept         { return previewing.load (std::memory_order_relaxed); }
+    bool previewHearsPlan() const noexcept     { return previewOnPlan; }
+    float previewGainDb() const noexcept       { return previewGain.load (std::memory_order_relaxed); }
+    /** The plan minus your settings, loudness on the take (dB, + = the plan is louder); NaN: not measured. */
+    double planLoudnessGapDb() const noexcept  { return planGapDb; }
+    /** Your settings while a preview plays the plan (parameter id -> plain value): saved with the project instead of
+        the plan's, so a save during PREVIEW never keeps what you didn't apply. */
+    std::vector<std::pair<juce::String, float>> previewYoursPlain() const;
     static constexpr std::size_t kPlanBytes = 7600;   // (the Rack's report holds 8 KB, with the state around it)
 
     void onStateRestored (const juce::String& savedReport);
@@ -220,6 +239,17 @@ private:
     vox::AutoEditSettings planSettings;
     juce::String planJson;
     std::string pendingPlanJson;
+    double planGapDb = std::numeric_limits<double>::quiet_NaN(), pendingPlanGapDb = std::numeric_limits<double>::quiet_NaN();
+    bool pendingWasPlan = false;   // (under resultLock) the result in pendingResult is the Coach's
+    bool undoIsPlan = false;       // the UNDO snapshot is the Coach's APPLY
+    // PREVIEW (message thread; previewing / previewGain also read by the audio thread)
+    std::atomic<bool> previewing { false };
+    std::atomic<float> previewGain { 0.0f };
+    bool previewOnPlan = false;
+    std::vector<std::pair<juce::RangedAudioParameter*, float>> previewYours;   // normalised, as takeUndoSnapshot keeps them
+    void setPreviewPlan();
+    void setPreviewYours();
+    void previewGainFor (bool plan) noexcept;
 
     // Auto Analyze
     struct Shown { juce::String key, note; juce::var changes; };   // changes: [{ id, module, from, to }]

@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.69.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.70.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.69.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.70.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -612,6 +612,15 @@ Masterology's UNDO; **UNDO** takes it back. Auto-Master in Masterology's own win
 now (and, for a vocal, measures your take through them): each module already set as planned says **Already set**, and
 when nothing is left to change it says so and the button reads **NOTHING TO CHANGE** (it no longer offers the same plan
 again).
+
+**PREVIEW (hear it before you apply it):** when a plan is ready, press **PREVIEW**: the plan plays on the track (or the
+master), but nothing is kept yet and nothing goes into UNDO or Mixology's History. While the song plays, flip
+**PLAN / YOURS** to compare. The louder of the two is turned down to match the other, so you judge the sound, not the
+volume; the bottom bar says by how much (on a Mixology track it's an estimate from the plan's EQ and Tone Balance;
+Voxology and Masterology measure it). **KEEP PLAN** applies it, as APPLY does (one UNDO step); **BACK TO YOURS** puts
+your settings back. If no Rack shows the track for a few seconds, the preview ends by itself and your settings come
+back. Saving the project during a preview keeps your settings in Voxology and Masterology; on a Mixology track, press
+KEEP PLAN or BACK TO YOURS before you save.
 
 **Light or dark:** click the spinning cube at the top left. All three plug-ins remember your choice.
 

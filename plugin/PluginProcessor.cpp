@@ -343,6 +343,14 @@ std::string VoxologyAudioProcessor::applyRack (const rack::Request& r)
         // The Coach's steps go through the Rack's lock (Beta 29), so Auto-Edit started in Voxology's own window keeps it.
         if (const auto lock = rackLock(); ! lock.empty() && ! autoEdit.isPlanMode()) return lock;
         if (r.control == "cancel") { if (autoEdit.isPlanMode()) autoEdit.discardPlan(); return {}; }   // STOP while it listens
+        // Beta 32, PREVIEW: hear the plan before APPLY, flip with yours (same loudness), keep it or go back.
+        if (r.control == "preview")
+            return autoEdit.startPreview() ? std::string() : std::string ("There's no plan to hear yet: press ANALYZE & BUILD and play the song.");
+        if (r.control == "flip")
+            return autoEdit.flipPreview() ? std::string() : std::string ("PREVIEW isn't on: press PREVIEW first.");
+        if (r.control == "keep")
+            return autoEdit.keepPreview() ? std::string() : std::string ("PREVIEW isn't on: press PREVIEW first.");
+        if (r.control == "back") { autoEdit.endPreview(); return {}; }
         if (r.control == "plan")
             return autoEdit.startPlan() ? std::string() : std::string ("Auto-Edit is busy: try again in a moment.");
         if (r.control == "apply")
@@ -399,6 +407,13 @@ void VoxologyAudioProcessor::publishRack()
     const auto now = suite::nowMs();
     // Stage 2: knobs turned and modules switched in a Rack view (in any Sonicology plug-in), on this Voxology.
     rackPub.serve (now, rackLock(), [this] (const rack::Request& r) { return applyRack (r); });
+    // PREVIEW without a Rack showing this track for a while (closed, or another track picked): your settings back.
+    if (autoEdit.isPreviewing())
+    {
+        if (rackPub.shows (now, rackTrackHash(), rack::Role::vocal)) previewSeenMs = now;
+        else if (now - std::min (now, previewSeenMs) > 4000) autoEdit.endPreview();
+    }
+    else previewSeenMs = now;
     const auto due = rackPub.due (now, rackTrackHash(), rack::Role::vocal);
     if (due == rack::Publisher::Due::none) return;
     const bool full = due == rack::Publisher::Due::full;
@@ -484,9 +499,16 @@ std::string VoxologyAudioProcessor::coachReport (bool beat) const
     o->setProperty ("intensities", intensities);
     {
         const auto ref = juce::JSON::parse (autoEdit.getReferenceJson());
-        o->setProperty ("reference", ref.getProperty ("name", juce::String()).toString());
+        o->setProperty ("reference", ref.getProperty ("name", juce::String()).toString().substring (0, 60));   // (room for the plan)
     }
     o->setProperty ("canUndo", autoEdit.canUndo());
+    if (autoEdit.isPreviewing())
+    {
+        o->setProperty ("preview", autoEdit.previewHearsPlan() ? "plan" : "yours");
+        o->setProperty ("previewGainDb", std::round (autoEdit.previewGainDb() * 10.0f) / 10.0f);
+    }
+    if (const double gap = autoEdit.planLoudnessGapDb(); std::isfinite (gap))
+        o->setProperty ("planGapDb", std::round (gap * 10.0) / 10.0);   // the plan minus yours, loudness (+ = louder)
     o->setProperty ("beat", beat);
     o->setProperty ("honey", autoEdit.honeyTunesSource && autoEdit.honeyTunesSource());
     auto text = juce::JSON::toString (juce::var (o), true).trimEnd();
@@ -778,6 +800,12 @@ void VoxologyAudioProcessor::processAnyPrecision (juce::AudioBuffer<Sample>& buf
     levelMatch.update (inMeter.shortTermLufs(), outMeter.shortTermLufs() - (listeningB ? appliedMatchDb : 0.0), inputPeak, n, listeningB);
     chainParams.gainProcessedDb = matching ? levelMatch.gainForBDb() : 0.0;
     chainParams.gainOriginalDb = matching ? levelMatch.gainForADb() : 0.0;
+    if (autoEdit.isPreviewing() && ! isNonRealtime())
+    {
+        // The Coach's PREVIEW: the plan and your settings at the same loudness (its own match, exact for this take).
+        chainParams.gainProcessedDb = autoEdit.previewGainDb();
+        chainParams.gainOriginalDb = 0.0;
+    }
     appliedMatchDb = chainParams.gainProcessedDb;
     const bool wantUnmask = ! chainParams.bypass && ! chainParams.listenOriginal;   // A / B and bypass hear the beat untouched
     auto& link = vox::UnmaskLink::instance();
@@ -1028,6 +1056,11 @@ void VoxologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     if (auto xml = parameters.copyState().createXml())
     {
+        // The Coach's PREVIEW plays the plan for now: the project keeps your settings (nothing changes until APPLY).
+        if (autoEdit.isPreviewing() && juce::MessageManager::existsAndIsCurrentThread())
+            for (const auto& [id, value] : autoEdit.previewYoursPlain())
+                if (auto* e = xml->getChildByAttribute ("id", id))
+                    e->setAttribute ("value", value);
         xml->setAttribute ("aeReport", autoEdit.getReportForSaving());
         xml->setAttribute ("aeReference", autoEdit.getReferenceForSaving());
         xml->setAttribute ("umSource", getUnmaskSourceName());

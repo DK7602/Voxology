@@ -71,6 +71,7 @@ bool AutoEditController::start()
 {
     if (stateFlag.load() == analysing || ! ensureBuffers())
         return false;
+    endPreview();       // a PREVIEW playing: your settings back first
     planMode = false;   // a new Auto-Edit: any Coach plan is gone
     planState = planNone;
     planResult.reset();
@@ -110,18 +111,109 @@ bool AutoEditController::applyPlan()
 {
     if (planState != planReady || planResult == nullptr || ! planResult->ok || stateFlag.load() == analysing)
         return false;
+    endPreview();   // APPLY during PREVIEW: from your settings, so UNDO goes back to them
+    if (stateFlag.load() == checking) { ++session; stateFlag.store (idle); }   // a check against the settings before
     apply (*planResult, planSettings);
     planState = planApplied;
+    undoIsPlan = true;   // (UNDO now takes the plan back; a later step's snapshot clears this)
     return true;
 }
 
 void AutoEditController::discardPlan()
 {
+    endPreview();
     if (planMode && stateFlag.load() == listening) stateFlag.store (idle);
+    if (planMode && stateFlag.load() == analysing) { ++session; stateFlag.store (idle); }   // STOP while it works: its result is dropped
     planMode = false;
     planState = planNone;
     planResult.reset();
     planJson.clear();
+}
+
+// ---- PREVIEW (Beta 32) ------------------------------------------------------------------------------------------------
+
+bool AutoEditController::startPreview()
+{
+    if (previewing.load()) return true;
+    if (planState != planReady || planResult == nullptr || ! planResult->ok || stateFlag.load() == analysing)
+        return false;
+    // Yours, as UNDO keeps them (every setting but the session ones and Auto-Edit's own choices).
+    previewYours.clear();
+    for (auto* p : state.processor.getParameters())
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
+        {
+            const auto id = rp->getParameterID();
+            static const juce::StringArray session { "listenA", "levelMatch", "recMode", "mode", "umAmount", "umFocus", "ptKeySrc", "ptMidi" };
+            if (! id.startsWith ("ae") && ! session.contains (id))
+                previewYours.emplace_back (rp, rp->getValue());
+        }
+    previewing.store (true);
+    setPreviewPlan();
+    return true;
+}
+
+bool AutoEditController::flipPreview()
+{
+    if (! previewing.load()) return false;
+    if (previewOnPlan) setPreviewYours();
+    else setPreviewPlan();
+    return true;
+}
+
+bool AutoEditController::keepPreview()
+{
+    if (! previewing.load()) return false;
+    return applyPlan();   // (it puts yours back first: one UNDO step from them)
+}
+
+void AutoEditController::endPreview()
+{
+    if (! previewing.load()) return;
+    setPreviewYours();
+    previewing.store (false);
+    previewGain.store (0.0f);
+    previewYours.clear();
+}
+
+std::vector<std::pair<juce::String, float>> AutoEditController::previewYoursPlain() const
+{
+    std::vector<std::pair<juce::String, float>> out;
+    for (const auto& [p, v] : previewYours) out.emplace_back (p->getParameterID(), p->convertFrom0to1 (v));
+    return out;
+}
+
+void AutoEditController::setPreviewPlan()
+{
+    // As apply() sets them: Key on MANUAL stays yours, and Honey Tune's track keeps Pitch resting.
+    const bool keyByHand = juce::roundToInt (state.getRawParameterValue ("ptKeySrc")->load()) != 0;
+    setParam ("bypass", 0.0f);
+    VoxParams::forEachValue (planResult->params, [&] (const juce::String& id, float v) {
+        if (keyByHand && (id == "ptKey" || id == "ptScale")) return;
+        if (planSettings.honeyTunesTrack && id.startsWith ("pt")) return;
+        setParam (id, v);
+    });
+    previewOnPlan = true;
+    previewGainFor (true);
+}
+
+void AutoEditController::setPreviewYours()
+{
+    for (auto& [p, v] : previewYours)
+    {
+        if (std::abs (p->getValue() - v) < 1.0e-6f) continue;   // unchanged: no gesture for the host
+        p->beginChangeGesture();
+        p->setValueNotifyingHost (v);
+        p->endChangeGesture();
+    }
+    previewOnPlan = false;
+    previewGainFor (false);
+}
+
+void AutoEditController::previewGainFor (bool plan) noexcept
+{
+    // The louder one comes down to the other; never up (nothing can be pushed past its peaks).
+    const double gap = std::isfinite (planGapDb) ? std::clamp (planGapDb, -24.0, 24.0) : 0.0;
+    previewGain.store (static_cast<float> (plan ? -std::max (0.0, gap) : -std::max (0.0, -gap)));
 }
 
 float AutoEditController::getProgress() const noexcept
@@ -137,6 +229,14 @@ void AutoEditController::timerCallback()
 {
     if (heardAudio.exchange (false)) { hearingAudio = true; quietTicks = 0; }
     else if (++quietTicks > 20)       hearingAudio = false;
+
+    // The Coach listening or working while nothing listens or works (a state loaded off the message thread dropped
+    // its run): its plan is over, so the Rack never waits on "working" for good.
+    if ((planState == planListening || planState == planWorking) && stateFlag.load() == idle)
+    {
+        planMode = false;
+        planState = planNone;
+    }
 
     const int st = stateFlag.load();
     if (st == listening && getProgress() >= 1.0f)
@@ -166,17 +266,19 @@ void AutoEditController::timerCallback()
         std::unique_ptr<vox::AutoEditResult> result;
         std::vector<vox::AnalyzeNeed> found;
         int resultSession = -1;
-        bool isCheck = false;
+        bool isCheck = false, wasPlan = false;
         {
             const juce::ScopedLock sl (resultLock);
             result = std::move (pendingResult);
             found = std::move (pendingNeeds);
             resultSession = pendingSession;
             isCheck = pendingIsCheck;
+            wasPlan = pendingWasPlan;
         }
         if (resultSession == session && ! isCheck && stateFlag.load() == analysing)
         {
-            if (planMode)
+            if (wasPlan && ! planMode) {}   // the Coach's plan, stopped while it worked: nothing applies
+            else if (planMode)
             {
                 // The Coach: keep the plan, change nothing (APPLY sets it).
                 std::string json;
@@ -188,6 +290,10 @@ void AutoEditController::timerCallback()
                 planState = result != nullptr && result->ok ? planReady : planFailed;
                 planResult = std::move (result);
                 planJson = juce::String::fromUTF8 (json.data(), static_cast<int> (json.size()));
+                {
+                    const juce::ScopedLock sl (resultLock);
+                    planGapDb = pendingPlanGapDb;
+                }
                 planMode = false;
             }
             else if (result != nullptr)
@@ -283,6 +389,7 @@ void AutoEditController::launchAnalysis()
         const vox::pace::Scope gentle (kPaceWorkMs, kPaceRestMs);   // the song keeps playing: never hog a core
         std::unique_ptr<vox::AutoEditResult> result;
         std::string plan;
+        double gap = std::numeric_limits<double>::quiet_NaN();
         try
         {
             auto s = settings;
@@ -321,6 +428,10 @@ void AutoEditController::launchAnalysis()
                     if (nowBypassed) now.changedIds.push_back ("bypass");
                 }
                 plan = vox::coach::planJson (*result, after.get(), target, sibAim, s, refName, kPlanBytes, &now);
+                // PREVIEW's level match: the plan against your settings, both measured on this take.
+                const auto& yours = nowSound != nullptr ? *nowSound : result->analysis;
+                if (after != nullptr && after->inputLufs > -70.0 && yours.inputLufs > -70.0)
+                    gap = after->inputLufs - yours.inputLufs;
             }
         }
         catch (...)
@@ -332,6 +443,8 @@ void AutoEditController::launchAnalysis()
             const juce::ScopedLock sl (resultLock);
             pendingResult = std::move (result);
             pendingPlanJson = std::move (plan);
+            pendingPlanGapDb = gap;
+            pendingWasPlan = forPlan;
             pendingNeeds.clear();
             pendingSession = thisSession;
             pendingIsCheck = false;
@@ -767,6 +880,17 @@ juce::String AutoEditController::getWatchJson() const
 
 void AutoEditController::onStateRestored (const juce::String& savedReport)
 {
+    previewing.store (false);   // another state loaded: a PREVIEW is over (nothing to put back: the state is new)
+    previewGain.store (0.0f);
+    if (juce::MessageManager::existsAndIsCurrentThread()) previewYours.clear();   // (else the next PREVIEW starts afresh)
+    if (juce::MessageManager::existsAndIsCurrentThread())
+    {
+        // The Coach's plan was for the settings before (and one being worked out would wait on "working" for good).
+        planMode = false;
+        planState = planNone;
+        planResult.reset();
+        planJson.clear();
+    }
     undoValid.store (false);
     ++session;   // an Auto-Edit or check still running was for the state before: its result is thrown away
     if (const int st = stateFlag.load(); st == analysing || st == checking) stateFlag.store (idle);
@@ -781,6 +905,7 @@ juce::String AutoEditController::getReportForSaving() const
 
 void AutoEditController::takeUndoSnapshot (bool byAutoEdit)
 {
+    undoIsPlan = false;   // (applyPlan sets it again after its own snapshot)
     undoSnapshot.clear();
     undoValid.store (true);
     undoClearsReport = byAutoEdit;
@@ -796,6 +921,7 @@ void AutoEditController::takeUndoSnapshot (bool byAutoEdit)
 
 bool AutoEditController::undo()
 {
+    endPreview();   // (a PREVIEW playing: your settings back, then UNDO steps back from them)
     if (! canUndo())
         return false;
     for (auto& [p, v] : undoSnapshot)
@@ -807,7 +933,8 @@ bool AutoEditController::undo()
     }
     undoSnapshot.clear();
     undoValid.store (false);
-    if (planState == planApplied && planResult != nullptr) planState = planReady;   // the Coach's plan can go on again
+    if (undoIsPlan && planState == planApplied && planResult != nullptr) planState = planReady;   // the Coach's plan can go on again
+    undoIsPlan = false;
     if (stateFlag.load() == checking) { ++session; stateFlag.store (idle); }   // a check against what was just undone
     if (undoClearsReport) setReport ({});
     return true;

@@ -209,6 +209,7 @@ private:
     void switchChains (juce::AudioBuffer<Sample>& buffer, int nch, int n) noexcept;
     vox::ChainParams chainParams;
     VoxParams::Reader reader;
+    std::uint64_t previewSeenMs = 0;   // the Coach's PREVIEW: when a Rack last showed this track
     vox::LoudnessMeter inMeter, outMeter;
     vox::LevelMatch levelMatch;
     double appliedMatchDb = 0.0;
