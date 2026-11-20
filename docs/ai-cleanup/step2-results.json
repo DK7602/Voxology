@@ -1,0 +1,612 @@
+{
+ "note": "AI cleanup step 2 (2026-11-20). sisdr in dB against the clean dry vocal; dropouts = share of voiced 50 ms moments > 6 dB down; gaps_db = noise left between phrases vs the input; real = held-out recorded noise (DeepFilterNet repo noise_freesound_573577.wav) at 10 dB SNR. ai_sing = the retrained model v1 (BatchNorm recalibrated).",
+ "rows": [
+  {
+   "case": "fsung_noise",
+   "version": "input",
+   "sisdr": 14.72,
+   "dropouts": 0.0,
+   "gaps_db": 0.0,
+   "air_db": 1.1
+  },
+  {
+   "case": "fsung_noise",
+   "version": "classic",
+   "sisdr": 16.54,
+   "dropouts": 0.011,
+   "gaps_db": -4.1,
+   "air_db": -2.0
+  },
+  {
+   "case": "fsung_noise",
+   "version": "ai_orig",
+   "sisdr": 3.32,
+   "dropouts": 0.438,
+   "gaps_db": -15.6,
+   "air_db": 1.0
+  },
+  {
+   "case": "fsung_noise",
+   "version": "ai_sing",
+   "sisdr": 13.47,
+   "dropouts": 0.085,
+   "gaps_db": -19.9,
+   "air_db": -0.7
+  },
+  {
+   "case": "fsung_room",
+   "version": "input",
+   "sisdr": 1.69,
+   "dropouts": 0.0,
+   "gaps_db": 0.0,
+   "air_db": -1.0
+  },
+  {
+   "case": "fsung_room",
+   "version": "classic",
+   "sisdr": 0.86,
+   "dropouts": 0.196,
+   "gaps_db": -11.2,
+   "air_db": -1.4
+  },
+  {
+   "case": "fsung_room",
+   "version": "ai_orig",
+   "sisdr": -0.15,
+   "dropouts": 0.391,
+   "gaps_db": -54.3,
+   "air_db": 0.5
+  },
+  {
+   "case": "fsung_room",
+   "version": "ai_sing",
+   "sisdr": 1.91,
+   "dropouts": 0.256,
+   "gaps_db": -16.8,
+   "air_db": 1.2
+  },
+  {
+   "case": "fsung_both",
+   "version": "input",
+   "sisdr": 1.53,
+   "dropouts": 0.0,
+   "gaps_db": 0.0,
+   "air_db": -0.3
+  },
+  {
+   "case": "fsung_both",
+   "version": "classic",
+   "sisdr": 1.0,
+   "dropouts": 0.149,
+   "gaps_db": -6.9,
+   "air_db": -3.3
+  },
+  {
+   "case": "fsung_both",
+   "version": "ai_orig",
+   "sisdr": -5.86,
+   "dropouts": 0.605,
+   "gaps_db": -16.3,
+   "air_db": 0.4
+  },
+  {
+   "case": "fsung_both",
+   "version": "ai_sing",
+   "sisdr": 1.77,
+   "dropouts": 0.157,
+   "gaps_db": -21.0,
+   "air_db": 1.1
+  },
+  {
+   "case": "fsung_real",
+   "version": "input",
+   "sisdr": 9.71,
+   "dropouts": 0.0,
+   "gaps_db": 0.0,
+   "air_db": 4.1
+  },
+  {
+   "case": "fsung_real",
+   "version": "classic",
+   "sisdr": 9.58,
+   "dropouts": 0.0,
+   "gaps_db": 0.0,
+   "air_db": 4.1
+  },
+  {
+   "case": "fsung_real",
+   "version": "ai_orig",
+   "sisdr": 3.12,
+   "dropouts": 0.399,
+   "gaps_db": -2.2,
+   "air_db": 1.6
+  },
+  {
+   "case": "fsung_real",
+   "version": "ai_sing",
+   "sisdr": 8.24,
+   "dropouts": 0.146,
+   "gaps_db": -3.4,
+   "air_db": 5.3
+  },
+  {
+   "case": "msung_noise",
+   "version": "input",
+   "sisdr": 14.13,
+   "dropouts": 0.0,
+   "gaps_db": 0.0,
+   "air_db": 0.8
+  },
+  {
+   "case": "msung_noise",
+   "version": "classic",
+   "sisdr": 11.47,
+   "dropouts": 0.028,
+   "gaps_db": -13.6,
+   "air_db": -1.8
+  },
+  {
+   "case": "msung_noise",
+   "version": "ai_orig",
+   "sisdr": 6.87,
+   "dropouts": 0.146,
+   "gaps_db": -29.8,
+   "air_db": -3.9
+  },
+  {
+   "case": "msung_noise",
+   "version": "ai_sing",
+   "sisdr": 21.35,
+   "dropouts": 0.004,
+   "gaps_db": -38.8,
+   "air_db": -1.9
+  },
+  {
+   "case": "msung_room",
+   "version": "input",
+   "sisdr": 0.53,
+   "dropouts": 0.061,
+   "gaps_db": 0.0,
+   "air_db": -1.5
+  },
+  {
+   "case": "msung_room",
+   "version": "classic",
+   "sisdr": -0.28,
+   "dropouts": 0.175,
+   "gaps_db": -11.5,
+   "air_db": -2.1
+  },
+  {
+   "case": "msung_room",
+   "version": "ai_orig",
+   "sisdr": -0.85,
+   "dropouts": 0.22,
+   "gaps_db": -14.1,
+   "air_db": -3.8
+  },
+  {
+   "case": "msung_room",
+   "version": "ai_sing",
+   "sisdr": 2.04,
+   "dropouts": 0.069,
+   "gaps_db": -33.8,
+   "air_db": -1.2
+  },
+  {
+   "case": "msung_both",
+   "version": "input",
+   "sisdr": 0.38,
+   "dropouts": 0.057,
+   "gaps_db": 0.0,
+   "air_db": -0.9
+  },
+  {
+   "case": "msung_both",
+   "version": "classic",
+   "sisdr": -0.48,
+   "dropouts": 0.142,
+   "gaps_db": -12.9,
+   "air_db": -3.5
+  },
+  {
+   "case": "msung_both",
+   "version": "ai_orig",
+   "sisdr": -1.51,
+   "dropouts": 0.317,
+   "gaps_db": -25.4,
+   "air_db": -8.0
+  },
+  {
+   "case": "msung_both",
+   "version": "ai_sing",
+   "sisdr": 2.03,
+   "dropouts": 0.057,
+   "gaps_db": -39.2,
+   "air_db": -1.8
+  },
+  {
+   "case": "msung_real",
+   "version": "input",
+   "sisdr": 9.14,
+   "dropouts": 0.0,
+   "gaps_db": 0.0,
+   "air_db": 2.8
+  },
+  {
+   "case": "msung_real",
+   "version": "classic",
+   "sisdr": 6.96,
+   "dropouts": 0.028,
+   "gaps_db": -0.0,
+   "air_db": 2.7
+  },
+  {
+   "case": "msung_real",
+   "version": "ai_orig",
+   "sisdr": 4.63,
+   "dropouts": 0.183,
+   "gaps_db": -2.7,
+   "air_db": -1.4
+  },
+  {
+   "case": "msung_real",
+   "version": "ai_sing",
+   "sisdr": 15.81,
+   "dropouts": 0.0,
+   "gaps_db": -4.4,
+   "air_db": 3.1
+  },
+  {
+   "case": "frap_noise",
+   "version": "input",
+   "sisdr": 14.98,
+   "dropouts": 0.0,
+   "gaps_db": null,
+   "air_db": -0.0
+  },
+  {
+   "case": "frap_noise",
+   "version": "classic",
+   "sisdr": 13.18,
+   "dropouts": 0.047,
+   "gaps_db": null,
+   "air_db": -0.4
+  },
+  {
+   "case": "frap_noise",
+   "version": "ai_orig",
+   "sisdr": 18.55,
+   "dropouts": 0.01,
+   "gaps_db": null,
+   "air_db": 0.1
+  },
+  {
+   "case": "frap_noise",
+   "version": "ai_sing",
+   "sisdr": 18.5,
+   "dropouts": 0.013,
+   "gaps_db": null,
+   "air_db": -0.2
+  },
+  {
+   "case": "frap_room",
+   "version": "input",
+   "sisdr": 1.17,
+   "dropouts": 0.0,
+   "gaps_db": null,
+   "air_db": -0.4
+  },
+  {
+   "case": "frap_room",
+   "version": "classic",
+   "sisdr": 0.95,
+   "dropouts": 0.127,
+   "gaps_db": null,
+   "air_db": -2.1
+  },
+  {
+   "case": "frap_room",
+   "version": "ai_orig",
+   "sisdr": 2.14,
+   "dropouts": 0.01,
+   "gaps_db": null,
+   "air_db": 0.2
+  },
+  {
+   "case": "frap_room",
+   "version": "ai_sing",
+   "sisdr": 3.85,
+   "dropouts": 0.05,
+   "gaps_db": null,
+   "air_db": 0.5
+  },
+  {
+   "case": "frap_both",
+   "version": "input",
+   "sisdr": 1.0,
+   "dropouts": 0.0,
+   "gaps_db": null,
+   "air_db": -0.4
+  },
+  {
+   "case": "frap_both",
+   "version": "classic",
+   "sisdr": 0.62,
+   "dropouts": 0.11,
+   "gaps_db": null,
+   "air_db": -2.4
+  },
+  {
+   "case": "frap_both",
+   "version": "ai_orig",
+   "sisdr": 1.99,
+   "dropouts": 0.01,
+   "gaps_db": null,
+   "air_db": -0.3
+  },
+  {
+   "case": "frap_both",
+   "version": "ai_sing",
+   "sisdr": 3.71,
+   "dropouts": 0.057,
+   "gaps_db": null,
+   "air_db": 0.5
+  },
+  {
+   "case": "frap_real",
+   "version": "input",
+   "sisdr": 9.98,
+   "dropouts": 0.0,
+   "gaps_db": null,
+   "air_db": 0.1
+  },
+  {
+   "case": "frap_real",
+   "version": "classic",
+   "sisdr": 8.9,
+   "dropouts": 0.017,
+   "gaps_db": null,
+   "air_db": -0.4
+  },
+  {
+   "case": "frap_real",
+   "version": "ai_orig",
+   "sisdr": 12.73,
+   "dropouts": 0.01,
+   "gaps_db": null,
+   "air_db": -0.2
+  },
+  {
+   "case": "frap_real",
+   "version": "ai_sing",
+   "sisdr": 13.53,
+   "dropouts": 0.003,
+   "gaps_db": null,
+   "air_db": 0.6
+  },
+  {
+   "case": "mrap_noise",
+   "version": "input",
+   "sisdr": 15.0,
+   "dropouts": 0.0,
+   "gaps_db": null,
+   "air_db": 0.0
+  },
+  {
+   "case": "mrap_noise",
+   "version": "classic",
+   "sisdr": 13.03,
+   "dropouts": 0.017,
+   "gaps_db": null,
+   "air_db": -0.8
+  },
+  {
+   "case": "mrap_noise",
+   "version": "ai_orig",
+   "sisdr": -3.51,
+   "dropouts": 0.57,
+   "gaps_db": null,
+   "air_db": -4.2
+  },
+  {
+   "case": "mrap_noise",
+   "version": "ai_sing",
+   "sisdr": 6.67,
+   "dropouts": 0.123,
+   "gaps_db": null,
+   "air_db": 2.4
+  },
+  {
+   "case": "mrap_room",
+   "version": "input",
+   "sisdr": 1.66,
+   "dropouts": 0.0,
+   "gaps_db": null,
+   "air_db": -0.4
+  },
+  {
+   "case": "mrap_room",
+   "version": "classic",
+   "sisdr": 0.91,
+   "dropouts": 0.207,
+   "gaps_db": null,
+   "air_db": -1.2
+  },
+  {
+   "case": "mrap_room",
+   "version": "ai_orig",
+   "sisdr": -3.18,
+   "dropouts": 0.433,
+   "gaps_db": null,
+   "air_db": -1.4
+  },
+  {
+   "case": "mrap_room",
+   "version": "ai_sing",
+   "sisdr": 0.46,
+   "dropouts": 0.16,
+   "gaps_db": null,
+   "air_db": 3.8
+  },
+  {
+   "case": "mrap_both",
+   "version": "input",
+   "sisdr": 1.5,
+   "dropouts": 0.0,
+   "gaps_db": null,
+   "air_db": -0.4
+  },
+  {
+   "case": "mrap_both",
+   "version": "classic",
+   "sisdr": 0.8,
+   "dropouts": 0.103,
+   "gaps_db": null,
+   "air_db": -2.6
+  },
+  {
+   "case": "mrap_both",
+   "version": "ai_orig",
+   "sisdr": -5.15,
+   "dropouts": 0.58,
+   "gaps_db": null,
+   "air_db": -12.2
+  },
+  {
+   "case": "mrap_both",
+   "version": "ai_sing",
+   "sisdr": -0.18,
+   "dropouts": 0.22,
+   "gaps_db": null,
+   "air_db": 4.0
+  },
+  {
+   "case": "mrap_real",
+   "version": "input",
+   "sisdr": 10.0,
+   "dropouts": 0.0,
+   "gaps_db": null,
+   "air_db": 0.4
+  },
+  {
+   "case": "mrap_real",
+   "version": "classic",
+   "sisdr": 9.23,
+   "dropouts": 0.01,
+   "gaps_db": null,
+   "air_db": -1.1
+  },
+  {
+   "case": "mrap_real",
+   "version": "ai_orig",
+   "sisdr": -1.91,
+   "dropouts": 0.423,
+   "gaps_db": null,
+   "air_db": 1.7
+  },
+  {
+   "case": "mrap_real",
+   "version": "ai_sing",
+   "sisdr": 6.07,
+   "dropouts": 0.073,
+   "gaps_db": null,
+   "air_db": 2.6
+  }
+ ],
+ "ai_sing_strength_limited": [
+  {
+   "limit_db": 12,
+   "case": "fsung_noise",
+   "sisdr": 15.45,
+   "dropouts": 0.06
+  },
+  {
+   "limit_db": 12,
+   "case": "fsung_real",
+   "sisdr": 9.74,
+   "dropouts": 0.14
+  },
+  {
+   "limit_db": 12,
+   "case": "msung_noise",
+   "sisdr": 20.6,
+   "dropouts": 0
+  },
+  {
+   "limit_db": 12,
+   "case": "frap_noise",
+   "sisdr": 19.13,
+   "dropouts": 0
+  },
+  {
+   "limit_db": 12,
+   "case": "mrap_noise",
+   "sisdr": 10.22,
+   "dropouts": 0.04
+  },
+  {
+   "limit_db": 12,
+   "case": "mrap_real",
+   "sisdr": 7.88,
+   "dropouts": 0.01
+  },
+  {
+   "limit_db": 12,
+   "case": "msung_both",
+   "sisdr": 1.72,
+   "dropouts": 0.06
+  },
+  {
+   "limit_db": 18,
+   "case": "fsung_noise",
+   "sisdr": 14.51,
+   "dropouts": 0.08
+  },
+  {
+   "limit_db": 18,
+   "case": "fsung_real",
+   "sisdr": 9.05,
+   "dropouts": 0.15
+  },
+  {
+   "limit_db": 18,
+   "case": "msung_noise",
+   "sisdr": 21.28,
+   "dropouts": 0
+  },
+  {
+   "limit_db": 18,
+   "case": "frap_noise",
+   "sisdr": 19.01,
+   "dropouts": 0.01
+  },
+  {
+   "limit_db": 18,
+   "case": "mrap_noise",
+   "sisdr": 8.47,
+   "dropouts": 0.08
+  },
+  {
+   "limit_db": 18,
+   "case": "mrap_real",
+   "sisdr": 7.02,
+   "dropouts": 0.05
+  },
+  {
+   "limit_db": 18,
+   "case": "msung_both",
+   "sisdr": 1.9,
+   "dropouts": 0.06
+  }
+ ],
+ "training": {
+  "kernel": "sonicology-sing-cleanup-v3 (private)",
+  "gpu": "Tesla T4",
+  "start_utc": "17:31",
+  "end_utc": "23:02",
+  "steps": 32237,
+  "skipped_nonfinite": 20,
+  "train_loss": "23.6 -> ~7"
+ }
+}

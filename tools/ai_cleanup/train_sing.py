@@ -202,11 +202,14 @@ class Maker:
                 if r.random() < 0.3: nz = nz + proc_noise(r, L) * np.std(nz) / 3
             else:
                 nz = proc_noise(r, L)
-            act = target[: L // 2400 * 2400].reshape(-1, 2400); e = np.mean(act ** 2, 1); vr = np.sqrt(np.mean(e[e > e.max() * 1e-3]) + 1e-12)
+            # a vocal crop that is all digital silence has no active frames: mean of nothing is NaN, so give it a fixed level
+            act = target[: L // 2400 * 2400].reshape(-1, 2400); e = np.mean(act ** 2, 1); on = e[e > e.max() * 1e-3]
+            vr = np.sqrt(np.mean(on) + 1e-12) if on.size and e.max() > 0 else 0.05
             snr = r.choice([r.uniform(-5, 10), r.uniform(5, 25), r.uniform(15, 40)], p=[0.25, 0.5, 0.25])
             x = x + nz / (np.std(nz) + 1e-12) * vr * 10 ** (-snr / 20)
         pk = max(np.max(np.abs(x)), 1e-6); g = 10 ** (r.uniform(-30, -1) / 20) / pk
         x *= g; target *= g
+        if not (np.isfinite(x).all() and np.isfinite(target).all()): return self(r)   # never hand the model NaN / inf
         X = dfdsp.stft(x); fe, fs = dfdsp.features(X)
         spec = np.stack([X.real, X.imag], -1).astype(np.float32)
         return spec, fe, fs, x.astype(np.float32), target.astype(np.float32)
@@ -290,10 +293,14 @@ def main():
         frac = min((time.time() - t0) / max(budget, 1), 1.0)
         lr = LR * min(1.0, (step + 1) / 300) * (0.02 + 0.98 * 0.5 * (1 + math.cos(math.pi * frac)))
         for gp in opt.param_groups: gp["lr"] = lr
+        # BatchNorm running averages update during the forward pass, before the loss can be checked: keep a copy and put it
+        # back on a bad step, or one NaN batch poisons them for good (training still looks fine; eval / the plug-in break)
+        bn_keep = {k: v.clone() for k, v in model.state_dict().items() if "running_" in k or "num_batches" in k}
         y, t = run(batch); loss = mr_loss(y, t)
         opt.zero_grad(set_to_none=True); loss.backward()
         gn = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         if not (torch.isfinite(loss) and torch.isfinite(gn)):
+            model.load_state_dict(bn_keep, strict=False)
             skipped = globals().get("SKIPPED", 0) + 1; globals()["SKIPPED"] = skipped
             if skipped <= 20 or skipped % 100 == 0: log("skipped a non-finite step", skipped)
             continue

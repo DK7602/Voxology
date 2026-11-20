@@ -2108,3 +2108,13 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   with an epsilon; non-finite steps skipped). Old kernel deleted; NEW kernel davekingiii/sonicology-sing-cleanup-v3
   launched 17:31 UTC for 5.5 h (ends ~23:00). Mix: speech 30 %, packs 32 %, VocalSet 38 %.
   Kaggle CLI here: venv in scratch, KAGGLE_USERNAME + a dummy KAGGLE_KEY (the proxy adds the real one).
+  RESULT 23:02 (docs/ai-cleanup/STEP2.md, step2-results.json): the run finished, but BatchNorm running averages had
+  gone NaN (silent pack crops + noise -> NaN level -> NaN input; BN updates in the forward pass before the skip), so
+  every val after step 1000 read NaN and no best.pt was saved. Weights fine: tools/ai_cleanup/calib.py recomputed the
+  averages locally -> model v1, kept in the PRIVATE Kaggle dataset davekingiii/sonicology-ai-models (sing_v1.pt,
+  sing_v1.onnx). train_sing.py fixed (silent-crop level fallback, no-NaN maker, BN restored on a skipped step).
+  Retest: male singer 21.4 dB / 0 % dropouts (Voxology now 11.5), female rap 18.5 / 1 % (13.2): pass; female singer
+  13.5 / 8 % (16.5) and male chant 6.7 / 12 % (13.0): not yet. Far more noise removed; bedroom a little better.
+  Sent the user five 4-version MP3s (1-4 beeps). NEXT (user decides): a second training round (penalty for cutting the
+  voice, more female held notes / deep processed voices; ~5.5 GPU h), or build v1 into Cleanup with a strength
+  control, or stop.
