@@ -2084,3 +2084,6 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   where it's dropped: the new place was clamped to 0..1), rack.js (BACK fits a smaller Rack; "Mixology's" in the
   warnings). The Coach after APPLY: closeEnough (AutoEditController.cpp: 1.5 dB, 15 % Hz, 25 % ms, 8 points of a %)
   instead of 2 % of a knob's range, so ANALYZE AGAIN on the same take says already set. (Mixology's RESUME-HERE has more.)
+- Voxology 0.72.0 (2026-11-20, Sonicology Beta 35): shared rack.js / rack.css: GUIDED MIX on the Rack's SESSION page (a
+  first mix step by step; Mixology starts Analyze Mix for it). No Voxology code changed. Manual. (Mixology's
+  RESUME-HERE has the rest.)
