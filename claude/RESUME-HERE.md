@@ -2094,3 +2094,11 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   Cost fine (~3-5 % of a core, ~30 ms, 8.6 MB). Sent the user a listening page (file, not published: their songs are
   private). NEXT (user decides): fine-tune DF3 on singing (Kaggle GPU; VocalSet CC BY 4.0; check pack terms for AI
   training), or improve the classic Room.
+- 2026-11-20 AI cleanup STEP 2 (user: "teach the AI to handle singing and then lets retest"): fine-tune DeepFilterNet3
+  on VocalSet 1.1 + VCTK + MUSAN noise + procedural noise + simulated rooms (all CC BY 4.0 / generated; the user's songs
+  and packs only for the retest, never uploaded). tools/ai_cleanup/train_sing.py runs as the user's PRIVATE Kaggle
+  kernel davekingiii/sonicology-sing-cleanup (GPU T4, internet; inputs: private dataset davekingiii/sonicology-dfx =
+  model code + checkpoint, kynthesis/vctk-corpus, nhattruongdev/musan-noise; VocalSet downloaded from Zenodo in the
+  kernel, ~10 min). Version 2 launched 17:21 UTC for 5.5 h (v1 failed: loguru missing). Fetch: `kaggle kernels output
+  davekingiii/sonicology-sing-cleanup` (best.pt, latest.pt, val.json, log.txt); then retest.py <pt> sing, export_onnx.py.
+  Kaggle CLI here: venv in scratch, KAGGLE_USERNAME + a dummy KAGGLE_KEY (the proxy adds the real one).
