@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.71.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.71.1. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.71.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.71.1**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -536,7 +536,7 @@ Esc) brings you back, at the size the window had before.
 - **Rack Coach** (right): **How they work together** (green: fine, blue: good to know, red: fix it, for example two
   compressors on one vocal, Pitch and Honey Tune both tuning, two Masterologys, or Mixology's Limiter before
   Masterology), the chain overview, and what the picked module is for. Many red lines come with **one-click fixes**
-  (for example "Turn the Link's Compressor off" or "Turn Voxology's Compressor off"): click one and the plug-in that
+  (for example "Turn Mixology's Compressor off" or "Turn Voxology's Compressor off"): click one and the plug-in that
   owns that module switches it off; **UNDO** in the message switches it back on.
 - **Gain staging** (in the Rack Coach, for the track you picked): each plug-in's level going in and coming out (peaks,
   live) and how much it adds. It warns when one makes the track much louder (louder sounds better by itself, so

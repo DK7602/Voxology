@@ -2080,3 +2080,7 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   applyRack Change::order (refused in BEAT mode or for a fixed module), MY CHAINS save / load the order (a Quick Look or
   Fresh: Voxology's own); the Coach measures the take through your order. RackUnit: movable / moved. Tests: test_chain
   [order], test_rack_unit. Shared RackLink / rack.js. Manual: move a module. (Mixology's RESUME-HERE has the rest.)
+- Voxology 0.71.1 (2026-11-20, Sonicology Beta 34): the user's Beta 33 test. Shared RackLink (a moved module lands
+  where it's dropped: the new place was clamped to 0..1), rack.js (BACK fits a smaller Rack; "Mixology's" in the
+  warnings). The Coach after APPLY: closeEnough (AutoEditController.cpp: 1.5 dB, 15 % Hz, 25 % ms, 8 points of a %)
+  instead of 2 % of a knob's range, so ANALYZE AGAIN on the same take says already set. (Mixology's RESUME-HERE has more.)
