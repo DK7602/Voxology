@@ -82,6 +82,12 @@ def get_vctk():
     rng.shuffle(tr); rng.shuffle(va)
     return tr[:3500], va[:120]
 
+def get_packs():
+    # the user's licensed Cymatics / Looperman dry stems (AI training allowed, the user checked 2026-11-20); the retest's songs
+    # were never uploaded. Held out for validation: the song "Out_Of_Time".
+    fs = find("/kaggle/input/**/sonicology-packs/**/*.flac") or find(os.path.join(ENV.get("PACKS_DIR", "/nonexistent"), "**/*.flac"))
+    return [f for f in fs if "Out_Of_Time" not in f], [f for f in fs if "Out_Of_Time" in f]
+
 def get_musan():
     fs = find("/kaggle/input/**/musan/noise/**/*.wav")
     tr = [f for f in fs if "/sound-bible/" not in f]; va = [f for f in fs if "/sound-bible/" in f]   # sound-bible held out
@@ -171,11 +177,12 @@ def segment(r, bank, L, tries=6):
     return best[1]
 
 class Maker:
-    def __init__(self, sing, speech, noise, rirs):
-        self.sing, self.speech, self.noise, self.rirs = sing, speech, noise, rirs
+    def __init__(self, sing, speech, noise, rirs, packs=None):
+        self.sing, self.speech, self.noise, self.rirs, self.packs = sing, speech, noise, rirs, packs
     def __call__(self, r):
         L = SEG
-        src = self.sing if (self.speech is None or self.speech.n == 0 or r.random() < 0.65) else self.speech
+        u = r.random(); has_sp = self.speech is not None and self.speech.n > 0; has_pk = self.packs is not None and self.packs.n > 0
+        src = self.speech if (has_sp and u < 0.30) else self.packs if (has_pk and u < 0.62) else self.sing
         if r.random() < 0.3:   # pitch / speed change: deeper or higher voices
             st = r.uniform(-4, 3); ratio = 2 ** (-st / 12); Lr = int(L * ratio) + 8
             c = segment(r, src, Lr); c = resample_poly(c, 1000, int(round(1000 * ratio)))[:L]
@@ -212,18 +219,19 @@ def main():
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     log("device", dev, torch.cuda.get_device_name(0) if dev == "cuda" else "", "code", CODE)
     vs = get_vocalset(); vs_tr, vs_va = split_vocalset(vs)
-    vc_tr, vc_va = get_vctk(); mu_tr, mu_va = get_musan()
+    vc_tr, vc_va = get_vctk(); mu_tr, mu_va = get_musan(); pk_tr, pk_va = get_packs()
     if SMOKE: vs_tr, vs_va, vc_tr, mu_tr = vs_tr[:40], vs_va[:8], vc_tr[:20], mu_tr[:20]
-    log("files: vocalset", len(vs_tr), "/", len(vs_va), "vctk", len(vc_tr), "/", len(vc_va), "musan", len(mu_tr), "/", len(mu_va))
+    log("files: vocalset", len(vs_tr), "/", len(vs_va), "vctk", len(vc_tr), "/", len(vc_va), "musan", len(mu_tr), "/", len(mu_va), "packs", len(pk_tr), "/", len(pk_va))
+    packs = load_bank(pk_tr) if pk_tr else None; packs_va = load_bank(pk_va) if pk_va else None
     sing = load_bank(vs_tr); sing_va = load_bank(vs_va)
     speech = load_bank(vc_tr) if vc_tr else None; speech_va = load_bank(vc_va) if vc_va else None
     noise = load_bank(mu_tr, max_s=60) if mu_tr else None; noise_va = load_bank(mu_va, max_s=60) if mu_va else None
-    log("hours: sing %.1f speech %.1f noise %.1f" % (sing.seconds() / 3600, speech.seconds() / 3600 if speech else 0, noise.seconds() / 3600 if noise else 0))
+    log("hours: sing %.1f packs %.2f speech %.1f noise %.1f" % (sing.seconds() / 3600, packs.seconds() / 3600 if packs else 0, speech.seconds() / 3600 if speech else 0, noise.seconds() / 3600 if noise else 0))
     with Pool(4) as p: rirs = [x for x in p.map(make_rir, range(200 if SMOKE else 2500)) if x is not None]
     with Pool(4) as p: rirs_va = [x for x in p.map(make_rir, range(100000, 100060)) if x is not None]
     log("rooms", len(rirs), "val rooms", len(rirs_va), "%.0f s setup" % (time.time() - t_start))
 
-    maker = Maker(sing, speech, noise, rirs)
+    maker = Maker(sing, speech, noise, rirs, packs)
     class DS(IterableDataset):
         def __iter__(self):
             wi = torch.utils.data.get_worker_info(); r = np.random.default_rng((wi.id if wi else 0) * 7919 + int(time.time() * 1000) % 100000)
@@ -231,7 +239,7 @@ def main():
     dl = DataLoader(DS(), batch_size=BATCH, num_workers=WORKERS, persistent_workers=WORKERS > 0, prefetch_factor=4 if WORKERS > 0 else None)
 
     # fixed validation batch: held-out singers / speakers / noise / rooms
-    vmaker = Maker(sing_va, speech_va, noise_va, rirs_va); vr = np.random.default_rng(12345)
+    vmaker = Maker(sing_va, speech_va, noise_va, rirs_va, packs_va); vr = np.random.default_rng(12345)
     val = [vmaker(vr) for _ in range(8 if SMOKE else 96)]
 
     from load import load_df3
@@ -247,12 +255,13 @@ def main():
     def mr_loss(y, t):
         loss = 0.0
         for n, w in wins.items():
-            Y = torch.stft(y, n, n // 4, window=w, normalized=True, return_complex=True)
-            S = torch.stft(t, n, n // 4, window=w, normalized=True, return_complex=True)
-            Ya, Sa = Y.abs().clamp_min(1e-12).pow(0.3), S.abs().clamp_min(1e-12).pow(0.3)
+            # in real arithmetic with an epsilon: abs() / angle() of an exact zero (digital silence) have NaN gradients
+            Y = torch.view_as_real(torch.stft(y, n, n // 4, window=w, normalized=True, return_complex=True))
+            S = torch.view_as_real(torch.stft(t, n, n // 4, window=w, normalized=True, return_complex=True))
+            ym = ((Y ** 2).sum(-1) + 1e-12).sqrt(); sm = ((S ** 2).sum(-1) + 1e-12).sqrt()
+            Ya, Sa = ym.pow(0.3), sm.pow(0.3)
             loss = loss + F.mse_loss(Ya, Sa) * 500
-            Yc = Ya * torch.exp(1j * torch.angle(Y)); Sc = Sa * torch.exp(1j * torch.angle(S))
-            loss = loss + F.mse_loss(torch.view_as_real(Yc), torch.view_as_real(Sc)) * 500
+            loss = loss + F.mse_loss(Y / ym[..., None] * Ya[..., None], S / sm[..., None] * Sa[..., None]) * 500
         return loss
     def run(batch):
         spec, fe, fs, x, t = [torch.as_tensor(np.asarray(b)).to(dev) for b in batch]
@@ -283,7 +292,12 @@ def main():
         for gp in opt.param_groups: gp["lr"] = lr
         y, t = run(batch); loss = mr_loss(y, t)
         opt.zero_grad(set_to_none=True); loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step()
+        gn = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        if not (torch.isfinite(loss) and torch.isfinite(gn)):
+            skipped = globals().get("SKIPPED", 0) + 1; globals()["SKIPPED"] = skipped
+            if skipped <= 20 or skipped % 100 == 0: log("skipped a non-finite step", skipped)
+            continue
+        opt.step()
         step += 1; run_loss += loss.item()
         if step % 100 == 0 or SMOKE and step % 10 == 0:
             n = 100 if step % 100 == 0 else 10

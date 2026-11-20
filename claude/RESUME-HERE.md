@@ -2101,4 +2101,10 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   model code + checkpoint, kynthesis/vctk-corpus, nhattruongdev/musan-noise; VocalSet downloaded from Zenodo in the
   kernel, ~10 min). Version 2 launched 17:21 UTC for 5.5 h (v1 failed: loguru missing). Fetch: `kaggle kernels output
   davekingiii/sonicology-sing-cleanup` (best.pt, latest.pt, val.json, log.txt); then retest.py <pt> sing, export_onnx.py.
+  UPDATE 17:31: the user checked their Cymatics / Looperman terms: AI training allowed. Added 70 dry stems (88 min; no
+  wet stems; the retest's songs Make Me Crazy, No Good Reason, This Is Revolution, Dark Trap Hook and the beat-bleed /
+  effect files left out) as the PRIVATE dataset davekingiii/sonicology-packs (FLAC; "Out_Of_Time" held out for
+  validation). Also fixed NaN gradients on digital silence (abs / angle of exact zeros: loss now in real arithmetic
+  with an epsilon; non-finite steps skipped). Old kernel deleted; NEW kernel davekingiii/sonicology-sing-cleanup-v3
+  launched 17:31 UTC for 5.5 h (ends ~23:00). Mix: speech 30 %, packs 32 %, VocalSet 38 %.
   Kaggle CLI here: venv in scratch, KAGGLE_USERNAME + a dummy KAGGLE_KEY (the proxy adds the real one).
