@@ -2087,3 +2087,10 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
 - Voxology 0.72.0 (2026-11-20, Sonicology Beta 35): shared rack.js / rack.css: GUIDED MIX on the Rack's SESSION page (a
   first mix step by step; Mixology starts Analyze Mix for it). No Voxology code changed. Manual. (Mixology's
   RESUME-HERE has the rest.)
+- 2026-11-20 AI voice / room / noise cleanup, STEP 1 (feasibility, no plug-in code): docs/ai-cleanup/STEP1.md,
+  tools/ai_cleanup/. DeepFilterNet3 (MIT / Apache, ONNX + our numpy DSP, checked on speech: +9.6 dB SI-SDR) removes far
+  more noise than vox::Denoiser but cuts held sung notes and a deep trap chant (15-57 % of voiced moments down > 6 dB);
+  great on speech-like female rap. Room: nothing removes a bedroom (good de-reverb models are GPL / non-commercial).
+  Cost fine (~3-5 % of a core, ~30 ms, 8.6 MB). Sent the user a listening page (file, not published: their songs are
+  private). NEXT (user decides): fine-tune DF3 on singing (Kaggle GPU; VocalSet CC BY 4.0; check pack terms for AI
+  training), or improve the classic Room.
