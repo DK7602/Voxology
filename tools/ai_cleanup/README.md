@@ -10,6 +10,7 @@ Scratch tooling, not built by CMake. Paths inside point at the session scratch (
 | `retest.py` | Runs a checkpoint on the step 1 set plus a held-out real noise (`noise_freesound_573577.wav` from the DeepFilterNet repo). |
 | `export_onnx.py` | Exports a checkpoint to the same ONNX contract as `soniqo/DeepFilterNet3-ONNX` (`feat_erb`, `feat_spec` -> `erb_mask`, `df_coefs`); checked: the original exports bit-close to that graph. |
 | `calib.py` | Recomputes a trained model's BatchNorm running averages from fresh training-style clips (the v1 run's went NaN). |
+| `lossprobe.py` | Sizes of the loss terms for a model on fresh clips (to set round 2's `UNDER_W` / `LEVEL_W`). |
 | `compare.py`, `clips2.py` | Step 2: one table (input, Voxology now, original AI, retrained AI; same measures) and the 4-version listening MP3s (1-4 beeps). |
 | `libdf.py`, `load.py` | A pure-Python stand-in for DeepFilterNet's Rust `libdf` bits the model code needs, and the loader. |
 

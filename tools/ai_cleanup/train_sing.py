@@ -18,6 +18,14 @@ BATCH = int(ENV.get("BATCH", "4" if SMOKE else "32"))
 LR = float(ENV.get("LR", "2e-4"))
 SEG = 3 * 48000
 WORKERS = int(ENV.get("WORKERS", "0" if SMOKE else "4"))
+# round 2: start from a trained model, make cutting the voice cost more, weight the weak material
+INIT = ENV.get("INIT_PT") or next(iter(glob.glob("/kaggle/input/**/sing_v1.pt", recursive=True)), "")
+UNDER_W = float(ENV.get("UNDER_W", "0"))     # extra weight where the output is quieter than the target (a cut voice)
+LEVEL_W = float(ENV.get("LEVEL_W", "0"))     # extra weight on voiced moments turned down (the dropout measure, made smooth)
+P_SPEECH = float(ENV.get("P_SPEECH", "0.30")); P_PACKS = float(ENV.get("P_PACKS", "0.32"))
+P_PITCH = float(ENV.get("P_PITCH", "0.3")); PITCH_LO = float(ENV.get("PITCH_LO", "-4")); P_SAT = float(ENV.get("P_SAT", "0.12"))
+FEMALE_W = float(ENV.get("FEMALE_W", "1")); LONG_W = float(ENV.get("LONG_W", "1"))   # VocalSet: female singers, long tones
+SNAP_EVERY = int(ENV.get("SNAP_EVERY", "0"))
 os.makedirs(OUT, exist_ok=True); os.makedirs(WORK, exist_ok=True)
 sys.path.insert(0, CODE)
 import dfdsp  # noqa: E402
@@ -57,16 +65,21 @@ def _load(args):
 
 class Bank:
     """Many clips in one float16 array (fork-friendly)."""
-    def __init__(self, clips):
+    def __init__(self, clips, weights=None):
+        if weights is not None:
+            w = np.array([wt for c, wt in zip(clips, weights) if c is not None], np.float64); self.p = w / w.sum()
+        else: self.p = None
         clips = [c for c in clips if c is not None]
         self.off = np.cumsum([0] + [len(c) for c in clips]); self.n = len(clips)
         self.data = np.concatenate(clips) if clips else np.zeros(1, np.float16)
     def seconds(self): return len(self.data) / 48000
     def clip(self, i): return self.data[self.off[i]:self.off[i + 1]]
 
-def load_bank(paths, max_s=None, procs=4):
+def load_bank(paths, max_s=None, procs=4, weights=None):
     with Pool(procs) as p: clips = p.map(_load, [(f, 48000, max_s) for f in paths], chunksize=8)
-    return Bank(clips)
+    return Bank(clips, weights)
+def vocalset_weights(files):
+    return [(FEMALE_W if "/female" in f else 1.0) * (LONG_W if "long_tones" in f or "excerpts" in f else 1.0) for f in files]
 
 def split_vocalset(files):
     # held out for validation: singers female9 and male11
@@ -168,7 +181,7 @@ def eq_aug(r, x, fs=48000):
 def segment(r, bank, L, tries=6):
     best = None
     for _ in range(tries):
-        i = int(r.integers(bank.n)); c = bank.clip(i)
+        i = int(r.choice(bank.n, p=bank.p)) if getattr(bank, "p", None) is not None else int(r.integers(bank.n)); c = bank.clip(i)
         if len(c) <= L: s = np.zeros(L); s[:len(c)] = c; s = np.roll(s, int(r.integers(L)))
         else: o = int(r.integers(len(c) - L)); s = c[o:o + L].astype(np.float64)
         fr = s[: L // 2400 * 2400].reshape(-1, 2400); act = np.mean(np.mean(fr ** 2, 1) > np.max(np.mean(fr ** 2, 1)) * 1e-3)
@@ -182,15 +195,15 @@ class Maker:
     def __call__(self, r):
         L = SEG
         u = r.random(); has_sp = self.speech is not None and self.speech.n > 0; has_pk = self.packs is not None and self.packs.n > 0
-        src = self.speech if (has_sp and u < 0.30) else self.packs if (has_pk and u < 0.62) else self.sing
-        if r.random() < 0.3:   # pitch / speed change: deeper or higher voices
-            st = r.uniform(-4, 3); ratio = 2 ** (-st / 12); Lr = int(L * ratio) + 8
+        src = self.speech if (has_sp and u < P_SPEECH) else self.packs if (has_pk and u < P_SPEECH + P_PACKS) else self.sing
+        if r.random() < P_PITCH:   # pitch / speed change: deeper or higher voices
+            st = r.uniform(PITCH_LO, 3); ratio = 2 ** (-st / 12); Lr = int(L * ratio) + 8
             c = segment(r, src, Lr); c = resample_poly(c, 1000, int(round(1000 * ratio)))[:L]
             c = np.pad(c, (0, max(0, L - len(c))))
         else:
             c = segment(r, src, L)
         c = eq_aug(r, c)
-        if r.random() < 0.12: d = r.uniform(1.5, 6); c = np.tanh(c * d) / np.tanh(d)   # saturated / processed vocal
+        if r.random() < P_SAT: d = r.uniform(1.5, 6); c = np.tanh(c * d) / np.tanh(d)   # saturated / processed vocal
         clean_only = r.random() < 0.10
         x = c.copy(); target = c.copy()
         if not clean_only and self.rirs and r.random() < 0.45:
@@ -226,7 +239,7 @@ def main():
     if SMOKE: vs_tr, vs_va, vc_tr, mu_tr = vs_tr[:40], vs_va[:8], vc_tr[:20], mu_tr[:20]
     log("files: vocalset", len(vs_tr), "/", len(vs_va), "vctk", len(vc_tr), "/", len(vc_va), "musan", len(mu_tr), "/", len(mu_va), "packs", len(pk_tr), "/", len(pk_va))
     packs = load_bank(pk_tr) if pk_tr else None; packs_va = load_bank(pk_va) if pk_va else None
-    sing = load_bank(vs_tr); sing_va = load_bank(vs_va)
+    sing = load_bank(vs_tr, weights=vocalset_weights(vs_tr)); sing_va = load_bank(vs_va)
     speech = load_bank(vc_tr) if vc_tr else None; speech_va = load_bank(vc_va) if vc_va else None
     noise = load_bank(mu_tr, max_s=60) if mu_tr else None; noise_va = load_bank(mu_va, max_s=60) if mu_va else None
     log("hours: sing %.1f packs %.2f speech %.1f noise %.1f" % (sing.seconds() / 3600, packs.seconds() / 3600 if packs else 0, speech.seconds() / 3600 if speech else 0, noise.seconds() / 3600 if noise else 0))
@@ -246,7 +259,10 @@ def main():
     val = [vmaker(vr) for _ in range(8 if SMOKE else 96)]
 
     from load import load_df3
-    model = load_df3(CODE, os.path.join(CODE, "model_120.ckpt.best")).to(dev)
+    model = load_df3(CODE, os.path.join(CODE, "model_120.ckpt.best"))
+    if INIT: model.load_state_dict(torch.load(INIT, map_location="cpu")); log("start from", INIT)
+    model = model.to(dev)
+    log("settings: lr %g under_w %g level_w %g speech %.2f packs %.2f pitch %.2f from %g sat %.2f female_w %g long_w %g" % (LR, UNDER_W, LEVEL_W, P_SPEECH, P_PACKS, P_PITCH, PITCH_LO, P_SAT, FEMALE_W, LONG_W))
     model.train()
     W = torch.tensor(dfdsp.W, dtype=torch.float32, device=dev); N, H = dfdsp.N, dfdsp.H
     def istft(spec, n0):   # spec [B,T,F,2] -> [B,n0], same as dfdsp.istft
@@ -265,6 +281,14 @@ def main():
             Ya, Sa = ym.pow(0.3), sm.pow(0.3)
             loss = loss + F.mse_loss(Ya, Sa) * 500
             loss = loss + F.mse_loss(Y / ym[..., None] * Ya[..., None], S / sm[..., None] * Sa[..., None]) * 500
+            if UNDER_W: loss = loss + (F.relu(Sa - Ya) ** 2).mean() * 500 * UNDER_W   # quieter than the target: a cut voice
+            if LEVEL_W and n == 1024:
+                # per moment (1024-point frames, ~5 ms hop): voiced = target within 30 dB of its loudest; penalise the
+                # dB the output is down from the target beyond 1 dB (a smooth version of the dropout measure)
+                et = (sm ** 2).sum(1) + 1e-10; ey = (ym ** 2).sum(1) + 1e-10
+                v = (et > et.amax(-1, keepdim=True) * 1e-3).float()
+                down = F.relu(10 * torch.log10(et / ey) - 1.0)
+                loss = loss + LEVEL_W * (down * v).sum() / v.sum().clamp(min=1)
         return loss
     def run(batch):
         spec, fe, fs, x, t = [torch.as_tensor(np.asarray(b)).to(dev) for b in batch]
@@ -313,6 +337,7 @@ def main():
             v = evaluate(); hist.append({"step": step, "loss": v[0], "dropouts": v[1], "sisdr": v[2]})
             log("val step %d: loss %.3f dropouts %.3f sisdr %.2f" % (step, *v))
             torch.save(model.state_dict(), os.path.join(OUT, "latest.pt"))
+            if SNAP_EVERY and step % SNAP_EVERY == 0: torch.save(model.state_dict(), os.path.join(OUT, "snap_%d.pt" % step))
             if v[0] < best: best = v[0]; torch.save(model.state_dict(), os.path.join(OUT, "best.pt")); log("  best so far")
             json.dump(hist, open(os.path.join(OUT, "val.json"), "w"), indent=1)
         if frac >= 1.0: break

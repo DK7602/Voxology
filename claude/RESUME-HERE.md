@@ -2118,3 +2118,10 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   Sent the user five 4-version MP3s (1-4 beeps). NEXT (user decides): a second training round (penalty for cutting the
   voice, more female held notes / deep processed voices; ~5.5 GPU h), or build v1 into Cleanup with a strength
   control, or stop.
+  ROUND 2 (user: "Lets go with your recommendation option 1"): PRIVATE kernel davekingiii/sonicology-sing-cleanup-r2
+  launched 23:23 UTC for 5.5 h (ends ~05:05 UTC 11-21). Starts from sing_v1.pt (input dataset
+  davekingiii/sonicology-ai-models); settings in the kernel header: LR 1e-4, UNDER_W 2 (output quieter than the
+  target costs extra), LEVEL_W 2 (dB a voiced moment is down beyond 1 dB), speech 20 % / packs 36 % / VocalSet 44 %,
+  VocalSet female singers and long tones / excerpts x2, pitch change 35 % down to -7 semitones, saturation 22 %,
+  snapshots every 4000 steps. Loss sizes on v1 (lossprobe.py): base 10.7, under 1.9, level 2.0 per unit weight.
+  When done: kaggle kernels output -> retest.py best / latest / snaps, compare.py (add the r2 column), clips, report.
