@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 namespace vox {
 
@@ -492,6 +493,8 @@ std::vector<std::vector<float>> VocalChain::render (const std::vector<std::vecto
 
     const int lat = chain.latencySamples();
     const int total = n + lat;
+    std::optional<pace::Gentler> gentle;   // the AI in the chain: rest more (see AutoEdit's AI pass)
+    if (p.cleanup.enabled && p.cleanup.aiMode && p.cleanup.noiseDb >= 0.05) gentle.emplace (4.0, 4.0);
     for (int start = 0; start < total; start += kChunk)
     {
         if (cancel != nullptr && cancel->load (std::memory_order_relaxed))

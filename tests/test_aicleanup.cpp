@@ -446,3 +446,27 @@ TEST_CASE ("AI cleanup in the Rack: Cleanup shows Mode (switchable) within its 8
     CHECK (rackunit::fromKnob ("clMode", 0.0f, v));
     CHECK (v == 0.0);
 }
+
+TEST_CASE ("AI cleanup: digital silence costs nothing (the network waits), and the take after it is still cleaned", "[ai]")
+{
+    constexpr double sr = 48000.0;
+    // 2 s of a noisy vocal, 2 s of digital silence (between two clips), 3 s more.
+    const auto v = toDouble (testsig::vocal (sr, 5.0, -45.0));
+    std::vector<double> x (v.begin(), v.begin() + static_cast<std::ptrdiff_t> (2 * sr));
+    x.insert (x.end(), static_cast<size_t> (2 * sr), 0.0);
+    x.insert (x.end(), v.begin() + static_cast<std::ptrdiff_t> (2 * sr), v.end());
+    AiCleanup ai;
+    ai.prepare (sr, 1);
+    ai.setParams ({ true, AiCleanup::kFullDb });
+    const auto y = play (ai, x);
+    const long frames = static_cast<long> (x.size()) / (ai.frameSize() / 2);
+    INFO ("judged " << ai.framesJudged() << " of " << frames << " frames");
+    CHECK (ai.framesJudged() < frames - 150);   // the ~200 silent frames weren't judged
+    CHECK (ai.framesJudged() > frames - 260);
+    bool silent = true;   // what comes out of the silence is silence
+    for (size_t i = static_cast<size_t> (2.1 * sr); i < static_cast<size_t> (3.9 * sr); ++i) silent = silent && y[i] == 0.0;
+    CHECK (silent);
+    // After it: the second clip's breath gap (3.56 - 4.16 s of the vocal = 5.56 - 6.16 s here) is still cleaned.
+    const auto g0 = static_cast<size_t> (5.62 * sr), g1 = static_cast<size_t> (6.1 * sr);
+    CHECK (rmsDbOf (y, g0, g1) < rmsDbOf (x, g0, g1) - 15.0);
+}

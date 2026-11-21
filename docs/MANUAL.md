@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.73.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.73.1. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.73.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.73.1**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -163,7 +163,7 @@ styles (more on Strong, less on Light), none when you aim at a reference.
 
 - **Noise** learns your background noise by itself from the quiet moments (it needs about a second of the song), then turns it down, also under the words where the gate can't reach. 6 - 12 dB sounds natural; past 18 dB the quiet ends of words can turn watery. Measured on steady noise: 6 dB takes out 6, 12 takes out 12, 18 about 17, 24 about 22. A clean recording and long held notes are left exactly as they are.
 - **Room** shortens the echo of a bare room after your words (by up to about 5 dB), and leaves held notes alone. It isn't a full de-reverb, so a very echoey take still sounds roomy: try Mode **AI**, or record in a smaller space with soft things around you.
-- **Mode AI** (the **Mode** buttons, bottom right of Cleanup): an AI noise and room remover, trained on sung and rapped vocals. It takes steady and changing noise (fans, AC, traffic, a TV next door) and the room's echo out together, under the words too, and keeps held notes, even dark, very clean ones. In AI mode **Noise** sets how far it may turn the sound down (**AI full**, the top, takes out all it hears; lower leaves a little of the room and noise for a more natural sound) and **Room** is the AI's job (shown dimmed). It learns as it goes, so there's nothing to set up. Measured on test vocals: noise between phrases 20 - 27 dB down, no notes lost on clean takes. It uses more of your computer than Classic (about 4 - 8 % of one core per Voxology while it's on, spread evenly so small buffers don't crackle; nothing when it's off). When you switch to AI, the classic reducer keeps working for the 0.2 s the AI needs to start, so there's no gap. At a sample rate it can't use (for example 22.05 kHz), Mode AI uses the classic reducer. It works at 32, 44.1, 48, 88.2 and 96 kHz. Switching Mode by hand moves Noise to fit: to AI with Noise (nearly) off gives AI full; to Classic from above 15 dB gives 12 dB.
+- **Mode AI** (the **Mode** buttons, bottom right of Cleanup): an AI noise and room remover, trained on sung and rapped vocals. It takes steady and changing noise (fans, AC, traffic, a TV next door) and the room's echo out together, under the words too, and keeps held notes, even dark, very clean ones. In AI mode **Noise** sets how far it may turn the sound down (**AI full**, the top, takes out all it hears; lower leaves a little of the room and noise for a more natural sound) and **Room** is the AI's job (shown dimmed). It learns as it goes, so there's nothing to set up. Measured on test vocals: noise between phrases 20 - 27 dB down, no notes lost on clean takes. It uses more of your computer than Classic (about 4 - 8 % of one core per Voxology while your voice plays, spread evenly so small buffers don't crackle; next to nothing in the silence between clips or when it's off). When you switch to AI, the classic reducer keeps working for the 0.2 s the AI needs to start, so there's no gap. At a sample rate it can't use (for example 22.05 kHz), Mode AI uses the classic reducer. It works at 32, 44.1, 48, 88.2 and 96 kHz. Switching Mode by hand moves Noise to fit: to AI with Noise (nearly) off gives AI full; to Classic from above 15 dB gives 12 dB.
 - Auto-Edit sets them: when your gaps have noise less than about 42 dB under your voice (dry pro vocals: about 50 dB), or more than -34 dB rings on after your phrases (dry pro vocals: -37 dB or less), it picks **Mode AI** (Noise **AI full**; on Light a limit of 12 - 24 dB). A studio-quiet, dry take is left exactly as it is. If your vocal already has reverb on it, the AI shortens that too: set Mode to Classic (Room off) if it's on purpose. Mode **Classic** works as it always did, and projects from before keep Classic.
 - Together they add about 71 ms to Voxology's delay (the AI 50, the classic reducer 21), on or off and in either Mode, so the timing never changes (Cubase makes up for it automatically). Record mode leaves them out.
 

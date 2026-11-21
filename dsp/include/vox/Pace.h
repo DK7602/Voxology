@@ -19,6 +19,21 @@ private:
     double wasWork, wasRest;
 };
 
+/** Inside a paced stretch, for heavier work (the AI pass: it streams 8.5 MB of weights a frame, which the audio thread's
+    own AI shares the memory bus with): rest more while it lasts. Nothing when pacing is off. */
+class Gentler
+{
+public:
+    Gentler (double workMs, double restMs) noexcept;
+    ~Gentler();
+    Gentler (const Gentler&) = delete;
+    Gentler& operator= (const Gentler&) = delete;
+
+private:
+    bool active;
+    double wasWork, wasRest;
+};
+
 /** Called often in long loops: rests when this thread has worked `workMs` since its last rest (nothing when off). */
 void tick() noexcept;
 

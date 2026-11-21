@@ -36,6 +36,21 @@ Scope::~Scope()
     state.restMs = wasRest;
 }
 
+Gentler::Gentler (double workMs, double restMs) noexcept
+    : active (state.on), wasWork (state.workMs), wasRest (state.restMs)
+{
+    if (! active) return;
+    state.workMs = std::min (state.workMs, workMs);
+    state.restMs = std::max (state.restMs, restMs);
+}
+
+Gentler::~Gentler()
+{
+    if (! active) return;
+    state.workMs = wasWork;
+    state.restMs = wasRest;
+}
+
 void tick() noexcept
 {
     if (! state.on)

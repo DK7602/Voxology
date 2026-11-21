@@ -369,7 +369,8 @@ const Signal& aiCleaned (const Signal& x, double sr, double strength)
     const int lat = ai.latencySamples();
     Signal buf (x.size() + static_cast<size_t> (lat), 0.0);
     std::copy (x.begin(), x.end(), buf.begin());
-    constexpr int kBlock = 1024;   // (a few ms of work: then the cancel check and Pace's rest)
+    constexpr int kBlock = 512;   // (a ms or two of work: then the cancel check and Pace's rest)
+    const pace::Gentler gentle (4.0, 4.0);   // (while the song plays: half the time resting, the memory bus too)
     for (size_t s = 0; s < buf.size(); s += kBlock)
     {
         double* ptr = buf.data() + s;

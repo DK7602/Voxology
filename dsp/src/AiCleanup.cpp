@@ -613,19 +613,19 @@ void AiCleanup::prepare (double sampleRate, int numChannels)
         const double alpha = sw / (2.0 * kQ[i % 3]);
         hissHp[static_cast<size_t> (i)].setCoefficients ((1.0 + cw) / 2.0, -(1.0 + cw), (1.0 + cw) / 2.0, 1.0 + alpha, -2.0 * cw, 1.0 - alpha);
     }
-    rng = 0x9E3779B97F4A7C15ull; haveSpare = false;
+    // Its level for unit-power noise in: the impulse response's energy (exact, and no second of noise to make on every
+    // prepare: Auto-Edit's renders prepare a chain dozens of times).
     for (auto& f : hissHp) f.reset();
     double sum = 0.0;
-    const int measure = static_cast<int> (sr);
-    for (int i = 0; i < measure + 2000; ++i)
+    for (int i = 0, len = static_cast<int> (sr * 0.1); i < len; ++i)
     {
-        double v = nextGauss();
+        double v = i == 0 ? 1.0 : 0.0;
         for (auto& f : hissHp) v = f.process (v);
-        if (i >= 2000) sum += v * v;
+        sum += v * v;
     }
     // Unit power for 8 - 24 kHz as at 48 kHz: the same level per Hz at any rate.
     const double band = std::max (sr / 2.0 - kHissFromHz, 1000.0);
-    hissNorm = std::sqrt (band / (24000.0 - kHissFromHz)) / std::sqrt (std::max (sum / measure, 1e-30));
+    hissNorm = std::sqrt (band / (24000.0 - kHissFromHz)) / std::sqrt (std::max (sum, 1e-30));
     reset();
 }
 
@@ -648,6 +648,8 @@ void AiCleanup::reset() noexcept
     haveCoefs = stepping = false;
     nextStage = 0;
     passFrames = 0;
+    silentRun = 0;
+    judged = 0;
     goalAmount = 0.0;
     lastChannels = channels;
     net.reset();
@@ -702,10 +704,12 @@ void AiCleanup::process (double* const* ch, int nch, int len, double* const* rem
     for (int i = 0; i < len; ++i)
     {
         double mid = 0.0;
+        bool zero = true;
         for (int c = 0; c < nch; ++c)
         {
             const auto cs = static_cast<size_t> (c);
             const double x = ch[c][i];
+            zero = zero && x == 0.0;
             mid += x;
             hopIn[cs][static_cast<size_t> (pos)] = x;
             dry[cs][static_cast<size_t> (dryPos)] = x;
@@ -716,6 +720,7 @@ void AiCleanup::process (double* const* ch, int nch, int len, double* const* rem
             if (removed != nullptr) removed[c][i] = delayed - y;
         }
         hopMid[static_cast<size_t> (pos)] = mid / nch;
+        silentRun = zero ? std::min (silentRun + 1, 1 << 30) : 0;
         if (++dryPos >= dlen) dryPos = 0;
         if (++pos >= hop)
         {
@@ -839,7 +844,18 @@ void AiCleanup::frame() noexcept
         haveCoefs = true;
     }
     else haveCoefs = false;
-    if (state != State::idle)
+    if (state != State::idle && silentRun >= 10 * hop)
+    {
+        // Long digital silence: every spectrum in the ring and what's still adding up is zero, so the output is too
+        // (exactly what the FFTs would give, without them).
+        for (int c = 0; c < nch; ++c)
+        {
+            std::fill (outFifo[static_cast<size_t> (c)].begin(), outFifo[static_cast<size_t> (c)].end(), 0.0);
+            std::fill (ola[static_cast<size_t> (c)].begin(), ola[static_cast<size_t> (c)].end(), 0.0);
+        }
+        ++passFrames;
+    }
+    else if (state != State::idle)
     {
         const int K = ai::Net::kOrder;
         const int at = (specPos + K - 3) % K;
@@ -920,18 +936,21 @@ void AiCleanup::frame() noexcept
             break;
     }
 
-    // 3. This frame's spectra, over the oldest in the ring.
+    // 3. This frame's spectra, over the oldest in the ring (all digital silence: zero, without the FFT).
     for (int c = 0; c < nch; ++c)
     {
+        auto* X = spec[static_cast<size_t> (c)].data() + specPos * bins;
+        if (silentRun >= n) { std::fill (X, X + bins, std::complex<double> {}); continue; }
         const auto& f = frameIn[static_cast<size_t> (c)];
         for (size_t i = 0; i < N; ++i) cin[i] = { f[i] * window[i], 0.0 };
         fft.forward (cin.data(), cout.data());
-        auto* X = spec[static_cast<size_t> (c)].data() + specPos * bins;
         for (int k = 0; k < bins; ++k) X[k] = cout[static_cast<size_t> (k)] / static_cast<double> (n);
     }
 
-    // 4. What the network hears, and the first piece of its work (the rest over this hop: process()).
-    if (state == State::running || state == State::closing)
+    // 4. What the network hears, and the first piece of its work (the rest over this hop: process()). A frame of digital
+    //    silence (between the clips on a vocal track, the DAW stopped) has nothing to judge: the network and its running
+    //    averages wait (paused, not reset), and the frame costs nothing.
+    if ((state == State::running || state == State::closing) && silentRun < n)
     {
         features();
         if (netWarm < 2) ++netWarm;   // (as in training: its first two frames are never judged)
@@ -939,6 +958,7 @@ void AiCleanup::frame() noexcept
         {
             net.begin (featErb.data(), featDf.data());
             net.stage (0, mask.data(), coefs.data());
+            ++judged;
             nextStage = 1;
             stepping = true;
         }

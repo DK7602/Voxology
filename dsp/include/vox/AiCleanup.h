@@ -25,7 +25,8 @@
 
     Strength: how far it may turn the sound down (the processed and the untouched sound mixed so nothing goes more
     than that far down); kFullDb and up = no limit (how it was tested). Turning it on, off or changing it glides
-    over about 0.1 s. Off: the input passes exactly (bit for bit), delayed, and costs almost nothing.
+    over about 0.1 s. Off: the input passes exactly (bit for bit), delayed, and costs almost nothing; so does digital
+    silence while it's on (the network waits).
     Allocates only in prepare() (the network's weights once per process). */
 namespace vox::ai {
 
@@ -118,6 +119,7 @@ public:
     /** Start the network at once, full strength, as the Python reference does (no warm-up, no glide). */
     void startNowForTests() noexcept;
     int frameSize() const noexcept { return n; }
+    long framesJudged() const noexcept { return judged; }   // network steps since reset
 
 private:
     enum class State { idle, warming, running, closing };
@@ -142,6 +144,8 @@ private:
     std::array<std::vector<std::complex<double>>, kMaxChannels> spec;   // the last kOrder spectra, ring
     std::vector<std::complex<double>> cin, cout, featSpec;
     int specPos = 0, pos = 0, dryPos = 0, channelsNow = 1, lastChannels = 1, passFrames = 0, nextStage = 0;
+    int silentRun = 0;                         // exact zeros in a row on every channel (digital silence)
+    long judged = 0;
     bool haveCoefs = false, stepping = false;   // stepping: the network's frame is being worked on over this hop
     double goalAmount = 0.0;
 

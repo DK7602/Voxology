@@ -59,3 +59,17 @@ The user: "Yes, build it into Voxology" (round 3 + the safety net, with Auto-Edi
   (2 rates x 4 notes x 2 levels), noise -15 dB+ in the gaps with the voice kept, strength limit, block-size invariance,
   glide on / off back to bit-exact, stereo linked, chain latency constant and Record mode without it, Auto-Edit picks
   it (and not on a studio-quiet take). `test_realtime.cpp`: Auto-Edit's plan now includes the AI: no allocation.
+
+## Beta 36 test (2026-11-21): "sounds good", but the audio cut out twice while Mixology re-analysed the mix
+
+Not reproducible here (no DAW). Mixology is unchanged since Beta 35; the new load is the AI, so Voxology 0.73.1
+makes it lighter (Beta 37):
+- Digital silence (between clips, the DAW stopped) costs nothing: no network (paused, not reset) and, after 10 hops
+  of it, no FFTs either (exactly the zeros they'd give). AI stage alone, 48 kHz stereo, this cloud Xeon: on sound 7.5 %
+  of a core, on silence 1.1 % -> 0.06 %, off 0.03 %. Whole Voxology: Classic ~4.5 %, AI ~12 % (on sound).
+- Background work: the AI pass in Auto-Edit (and any chain render with the AI) rests half the time while paced
+  (pace::Gentler 4 ms work / 4 ms rest inside the usual 20 / 8): it reads 8.5 MB of weights a frame, sharing the
+  memory bus with the AI on the audio thread.
+- The hiss level is the filters' impulse-response energy (exact), not a second of noise made on every prepare
+  (Auto-Edit prepares a chain for each of its dozens of renders).
+Asked the user: did Beta 35 cut out on the same re-analysis, and how many tracks run Mode AI.
