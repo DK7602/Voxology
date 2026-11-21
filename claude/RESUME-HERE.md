@@ -2136,3 +2136,10 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   take + hiss above 8 kHz at -50 dBFS, mask on the real take (featdither.py): clean take 22 -> 0 %, others unchanged.
   Round 3 proposed (studio-clean voices, changing noise, new val checks); waiting for the user's go (Kaggle: 30 h
   left per `kaggle quota`, resets 2026-11-28 00:00 UTC; round 2 may still be charged).
+  ROUND 3 (user: "Yes start round 3"; nothing else of theirs was running on Kaggle): PRIVATE kernel
+  davekingiii/sonicology-sing-cleanup-r3 pushed 05:54 UTC (queued), 5.5 h. From sing_r2.pt; new in train_sing.py:
+  studio() (brick-wall low-pass 7-16 kHz, darker shelf, gated digital silence) on 30 % of voices (half clean-only),
+  clean-only 15 % of the rest, SNR up to 60 dB (SNR_P 0.22,0.43,0.22,0.13), noise_env() (on / dipped / off, jumps or
+  fades) on 35 % of noisy clips, knocks() 15 %; val adds 32 "dark" (studio-clean alone) + 32 "pulse" clips; best =
+  val loss + 20 x (dark + pulse dropouts). Round 2 on the dark check (smoke): 8 % dropouts. When done: retest with and
+  without featdither, compare (add r3), clips, report.

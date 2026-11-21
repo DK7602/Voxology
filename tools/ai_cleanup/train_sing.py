@@ -19,13 +19,20 @@ LR = float(ENV.get("LR", "2e-4"))
 SEG = 3 * 48000
 WORKERS = int(ENV.get("WORKERS", "0" if SMOKE else "4"))
 # round 2: start from a trained model, make cutting the voice cost more, weight the weak material
-INIT = ENV.get("INIT_PT") or next(iter(glob.glob("/kaggle/input/**/sing_v1.pt", recursive=True)), "")
+INIT = ENV.get("INIT_PT") or next(iter(glob.glob("/kaggle/input/**/" + ENV.get("INIT_NAME", "sing_v1.pt"), recursive=True)), "")
 UNDER_W = float(ENV.get("UNDER_W", "0"))     # extra weight where the output is quieter than the target (a cut voice)
 LEVEL_W = float(ENV.get("LEVEL_W", "0"))     # extra weight on voiced moments turned down (the dropout measure, made smooth)
 P_SPEECH = float(ENV.get("P_SPEECH", "0.30")); P_PACKS = float(ENV.get("P_PACKS", "0.32"))
 P_PITCH = float(ENV.get("P_PITCH", "0.3")); PITCH_LO = float(ENV.get("PITCH_LO", "-4")); P_SAT = float(ENV.get("P_SAT", "0.12"))
 FEMALE_W = float(ENV.get("FEMALE_W", "1")); LONG_W = float(ENV.get("LONG_W", "1"))   # VocalSet: female singers, long tones
 SNAP_EVERY = int(ENV.get("SNAP_EVERY", "0"))
+# round 3 (root cause, STEP2.md): voices with a dead top end (very clean / processed stems) and noise that changes
+P_STUDIO = float(ENV.get("P_STUDIO", "0"))     # share of voices made "studio-clean": brick-wall low-pass 7-16 kHz, gated pauses
+P_CLEAN = float(ENV.get("P_CLEAN", "0.10"))    # clean-only share of the other voices (studio-clean ones: half)
+P_NENV = float(ENV.get("P_NENV", "0"))         # noise that switches on / off, pulses, fades, jumps
+P_KNOCK = float(ENV.get("P_KNOCK", "0"))       # short loud knocks / clicks in the noise
+SNR_P = [float(v) for v in ENV.get("SNR_P", "0.25,0.5,0.25,0").split(",")]   # -5..10, 5..25, 15..40, 35..60 dB
+SEL_W = float(ENV.get("SEL_W", "0"))           # best model = val loss + SEL_W x (dark clean + pulsing noise dropouts)
 os.makedirs(OUT, exist_ok=True); os.makedirs(WORK, exist_ok=True)
 sys.path.insert(0, CODE)
 import dfdsp  # noqa: E402
@@ -189,13 +196,48 @@ def segment(r, bank, L, tries=6):
         if best is None or act > best[0]: best = (act, s)
     return best[1]
 
+def studio(r, x, fs=48000, cutoff=None, gate=None):
+    """A very clean, processed vocal: nothing above a brick-wall cutoff, sometimes darker, pauses gated to digital silence."""
+    n = len(x); X = np.fft.rfft(x); f = np.fft.rfftfreq(n, 1 / fs)
+    X[f > (cutoff or r.uniform(7000, 16000))] = 0
+    if r.random() < 0.5:   # darker: a smooth high shelf down 6-18 dB
+        fsh = r.uniform(2500, 6000); w = 1 / (1 + np.exp(-(f - fsh) / (fsh * 0.15))); X *= 1 + (10 ** (-r.uniform(6, 18) / 20) - 1) * w
+    x = np.fft.irfft(X, n)
+    if gate if gate is not None else r.random() < 0.7:
+        h = 480; m = n // h; env = np.sqrt(np.mean(x[:m * h].reshape(m, h) ** 2, 1) + 1e-20)
+        op = env > env.max() * 10 ** (-r.uniform(35, 55) / 20); op = np.convolve(op.astype(float), np.ones(7), "same") > 0
+        gm = np.pad(np.repeat(op.astype(float), h), (0, n - m * h)); k = np.hanning(481); gm = fftconvolve(gm, k / k.sum(), "same")
+        gm[gm < 1e-4] = 0; x = x * np.clip(gm, 0, 1)
+    return x
+
+def noise_env(r, n, fs=48000):
+    """Noise that does not sit still: stretches on, dipped 10-30 dB, or off, with jumps or fades between."""
+    env = np.ones(n); t = 0
+    while t < n:
+        dur = int(r.uniform(0.1, 1.2) * fs); g = [0.0, -r.uniform(10, 30), -90.0][r.choice(3, p=[0.45, 0.3, 0.25])]
+        env[t:t + dur] = 10 ** (g / 20); t += dur
+    if r.random() < 0.5:   # fades instead of jumps (one-pole both ways)
+        a = math.exp(-1 / (r.uniform(0.01, 0.2) * fs)); env = lfilter([1 - a], [1, -a], env); env = lfilter([1 - a], [1, -a], env[::-1])[::-1]
+    return env
+
+def knocks(r, nz, vr, fs=48000):
+    for _ in range(int(r.integers(1, 4))):
+        n = int(r.uniform(0.005, 0.04) * fs); p = int(r.integers(0, len(nz) - n))
+        b = r.standard_normal(n) * np.exp(-np.arange(n) / (n / 4))
+        b = sosfilt(butter(2, [r.uniform(80, 400), r.uniform(2000, 12000)], "bandpass", fs=fs, output="sos"), b)
+        nz[p:p + n] += b / (np.std(b) + 1e-12) * vr * 10 ** (r.uniform(-6, 12) / 20)
+    return nz
+
 class Maker:
     def __init__(self, sing, speech, noise, rirs, packs=None):
         self.sing, self.speech, self.noise, self.rirs, self.packs = sing, speech, noise, rirs, packs
-    def __call__(self, r):
+    def __call__(self, r, force=None):
+        # force: None (training mix), "dark" (a studio-clean voice alone), "pulse" (a voice in noise that comes and goes)
         L = SEG
         u = r.random(); has_sp = self.speech is not None and self.speech.n > 0; has_pk = self.packs is not None and self.packs.n > 0
         src = self.speech if (has_sp and u < P_SPEECH) else self.packs if (has_pk and u < P_SPEECH + P_PACKS) else self.sing
+        if force and has_pk: src = self.packs if r.random() < 0.5 else self.sing
+        elif force: src = self.sing
         if r.random() < P_PITCH:   # pitch / speed change: deeper or higher voices
             st = r.uniform(PITCH_LO, 3); ratio = 2 ** (-st / 12); Lr = int(L * ratio) + 8
             c = segment(r, src, Lr); c = resample_poly(c, 1000, int(round(1000 * ratio)))[:L]
@@ -204,12 +246,14 @@ class Maker:
             c = segment(r, src, L)
         c = eq_aug(r, c)
         if r.random() < P_SAT: d = r.uniform(1.5, 6); c = np.tanh(c * d) / np.tanh(d)   # saturated / processed vocal
-        clean_only = r.random() < 0.10
+        studio_clip = force == "dark" or (force is None and r.random() < P_STUDIO)
+        if studio_clip: c = studio(r, c, cutoff=r.uniform(7000, 10000) if force else None, gate=True if force else None)
+        clean_only = force == "dark" or (force is None and r.random() < (0.5 if studio_clip else P_CLEAN))
         x = c.copy(); target = c.copy()
-        if not clean_only and self.rirs and r.random() < 0.45:
+        if force is None and not clean_only and self.rirs and r.random() < 0.45:
             full, early = self.rirs[int(r.integers(len(self.rirs)))]
             x = fftconvolve(c, full)[:L]; target = fftconvolve(c, early)[:L]
-        if not clean_only and r.random() < 0.88:
+        if force == "pulse" or (not clean_only and r.random() < 0.88):
             if self.noise is not None and self.noise.n and r.random() < 0.55:
                 nz = segment(r, self.noise, L, tries=2)
                 if r.random() < 0.3: nz = nz + proc_noise(r, L) * np.std(nz) / 3
@@ -218,11 +262,15 @@ class Maker:
             # a vocal crop that is all digital silence has no active frames: mean of nothing is NaN, so give it a fixed level
             act = target[: L // 2400 * 2400].reshape(-1, 2400); e = np.mean(act ** 2, 1); on = e[e > e.max() * 1e-3]
             vr = np.sqrt(np.mean(on) + 1e-12) if on.size and e.max() > 0 else 0.05
-            snr = r.choice([r.uniform(-5, 10), r.uniform(5, 25), r.uniform(15, 40)], p=[0.25, 0.5, 0.25])
-            x = x + nz / (np.std(nz) + 1e-12) * vr * 10 ** (-snr / 20)
+            snrs = [r.uniform(-5, 10), r.uniform(5, 25), r.uniform(15, 40), r.uniform(35, 60)]
+            snr = r.uniform(5, 20) if force == "pulse" else snrs[r.choice(4, p=np.array(SNR_P) / sum(SNR_P))]
+            nzs = nz / (np.std(nz) + 1e-12) * vr * 10 ** (-snr / 20)
+            if force == "pulse" or r.random() < P_NENV: nzs = nzs * noise_env(r, L)
+            if (r.random() < 0.5) if force == "pulse" else (r.random() < P_KNOCK): nzs = knocks(r, nzs, vr)
+            x = x + nzs
         pk = max(np.max(np.abs(x)), 1e-6); g = 10 ** (r.uniform(-30, -1) / 20) / pk
         x *= g; target *= g
-        if not (np.isfinite(x).all() and np.isfinite(target).all()): return self(r)   # never hand the model NaN / inf
+        if not (np.isfinite(x).all() and np.isfinite(target).all()): return self(r, force)   # never hand the model NaN / inf
         X = dfdsp.stft(x); fe, fs = dfdsp.features(X)
         spec = np.stack([X.real, X.imag], -1).astype(np.float32)
         return spec, fe, fs, x.astype(np.float32), target.astype(np.float32)
@@ -257,12 +305,15 @@ def main():
     # fixed validation batch: held-out singers / speakers / noise / rooms
     vmaker = Maker(sing_va, speech_va, noise_va, rirs_va, packs_va); vr = np.random.default_rng(12345)
     val = [vmaker(vr) for _ in range(8 if SMOKE else 96)]
+    val_dark = [vmaker(vr, "dark") for _ in range(4 if SMOKE else 32)] if SEL_W else []
+    val_pulse = [vmaker(vr, "pulse") for _ in range(4 if SMOKE else 32)] if SEL_W else []
 
     from load import load_df3
     model = load_df3(CODE, os.path.join(CODE, "model_120.ckpt.best"))
     if INIT: model.load_state_dict(torch.load(INIT, map_location="cpu")); log("start from", INIT)
     model = model.to(dev)
     log("settings: lr %g under_w %g level_w %g speech %.2f packs %.2f pitch %.2f from %g sat %.2f female_w %g long_w %g" % (LR, UNDER_W, LEVEL_W, P_SPEECH, P_PACKS, P_PITCH, PITCH_LO, P_SAT, FEMALE_W, LONG_W))
+    log("round 3: studio %.2f clean %.2f noise_env %.2f knocks %.2f snr_p %s sel_w %g" % (P_STUDIO, P_CLEAN, P_NENV, P_KNOCK, SNR_P, SEL_W))
     model.train()
     W = torch.tensor(dfdsp.W, dtype=torch.float32, device=dev); N, H = dfdsp.N, dfdsp.H
     def istft(spec, n0):   # spec [B,T,F,2] -> [B,n0], same as dfdsp.istft
@@ -294,11 +345,13 @@ def main():
         spec, fe, fs, x, t = [torch.as_tensor(np.asarray(b)).to(dev) for b in batch]
         out = model(spec[:, None], fe[:, None], fs[:, None])[0][:, 0]
         return istft(out, t.shape[-1]), t
-    def evaluate():
+    def evaluate(vset=None):
+        vset = val if vset is None else vset
+        if not vset: return 0.0, 0.0, 0.0
         model.eval(); losses = []; drops = []; sdr = []
         with torch.no_grad():
-            for i in range(0, len(val), 8):
-                b = list(zip(*val[i:i + 8])); y, t = run(b); losses.append(mr_loss(y, t).item())
+            for i in range(0, len(vset), 8):
+                b = list(zip(*vset[i:i + 8])); y, t = run(b); losses.append(mr_loss(y, t).item())
                 y, t = y.cpu().numpy(), t.cpu().numpy()
                 for yy, tt in zip(y, t):
                     a = np.dot(yy, tt) / (np.dot(tt, tt) + 1e-12); sdr.append(10 * np.log10(np.sum((a * tt) ** 2) / (np.sum((yy - a * tt) ** 2) + 1e-12) + 1e-12))
@@ -308,8 +361,12 @@ def main():
                         gg = et[v].sum() / max(ey[v].sum(), 1e-20); drops.append(np.mean(10 * np.log10(ey[v] * gg / et[v] + 1e-20) < -6))
         model.train()
         return float(np.mean(losses)), float(np.mean(drops)), float(np.mean(sdr))
-    v0 = evaluate(); log("val before: loss %.3f dropouts %.3f sisdr %.2f" % v0)
-    best = v0[0]; hist = [{"step": 0, "loss": v0[0], "dropouts": v0[1], "sisdr": v0[2]}]
+    def checks():
+        v = evaluate(); dk = evaluate(val_dark); pu = evaluate(val_pulse)
+        return v, dk, pu, v[0] + SEL_W * (dk[1] + pu[1])
+    v0, dk0, pu0, sc0 = checks()
+    log("val before: loss %.3f dropouts %.3f sisdr %.2f" % v0, "| dark clean: dropouts %.3f | pulsing noise: dropouts %.3f sisdr %.2f | score %.3f" % (dk0[1], pu0[1], pu0[2], sc0))
+    best = sc0; hist = [{"step": 0, "loss": v0[0], "dropouts": v0[1], "sisdr": v0[2], "dark_dropouts": dk0[1], "pulse_dropouts": pu0[1], "pulse_sisdr": pu0[2], "score": sc0}]
     opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-3)
     budget = HOURS * 3600 - (time.time() - t_start); t0 = time.time(); step = 0; run_loss = 0.0
     eval_every = 50 if SMOKE else 1000
@@ -334,11 +391,12 @@ def main():
             n = 100 if step % 100 == 0 else 10
             log("step %d loss %.3f lr %.2e %.2f s/step" % (step, run_loss / n, lr, (time.time() - t0) / step)); run_loss = 0.0
         if step % eval_every == 0 or frac >= 1.0:
-            v = evaluate(); hist.append({"step": step, "loss": v[0], "dropouts": v[1], "sisdr": v[2]})
-            log("val step %d: loss %.3f dropouts %.3f sisdr %.2f" % (step, *v))
+            v, dk, pu, sc = checks()
+            hist.append({"step": step, "loss": v[0], "dropouts": v[1], "sisdr": v[2], "dark_dropouts": dk[1], "pulse_dropouts": pu[1], "pulse_sisdr": pu[2], "score": sc})
+            log("val step %d: loss %.3f dropouts %.3f sisdr %.2f" % (step, *v), "| dark clean: dropouts %.3f | pulsing noise: dropouts %.3f sisdr %.2f | score %.3f" % (dk[1], pu[1], pu[2], sc))
             torch.save(model.state_dict(), os.path.join(OUT, "latest.pt"))
             if SNAP_EVERY and step % SNAP_EVERY == 0: torch.save(model.state_dict(), os.path.join(OUT, "snap_%d.pt" % step))
-            if v[0] < best: best = v[0]; torch.save(model.state_dict(), os.path.join(OUT, "best.pt")); log("  best so far")
+            if sc < best: best = sc; torch.save(model.state_dict(), os.path.join(OUT, "best.pt")); log("  best so far")
             json.dump(hist, open(os.path.join(OUT, "val.json"), "w"), indent=1)
         if frac >= 1.0: break
     log("done", step, "steps")
