@@ -2125,3 +2125,8 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   VocalSet female singers and long tones / excerpts x2, pitch change 35 % down to -7 semitones, saturation 22 %,
   snapshots every 4000 steps. Loss sizes on v1 (lossprobe.py): base 10.7, under 1.9, level 2.0 per unit weight.
   When done: kaggle kernels output -> retest.py best / latest / snaps, compare.py (add the r2 column), clips, report.
+  ROUND 2 RESULT (STEP2.md "Round 2"): ran clean (0 skipped; val dropouts 4.9 -> 0.6 %). Fixed the chant (1 %), the
+  female singer in noise (0 %); male singer / rap still far ahead. STILL WRONG: the female singer's quieter held notes
+  on a CLEAN take (22 % cut 20-40 dB; the model's lsnr says "noise only"; DF's stage gating makes it worse). Round 2 is
+  gentler (less gap noise removed than round 1, still >= classic). sing_r2.pt / .onnx in the private dataset. Sent six
+  4-version MP3s (1-4 beeps: before, Voxology now, round 1, round 2). Waiting for the user's call.

@@ -75,3 +75,40 @@ Still not good enough to ship: it turns down some held female sung notes and par
 `train_sing.py` (Kaggle; `SMOKE=1` locally), `calib.py <latest.pt> <out.pt>` (only needed for the v1 model trained
 before the fix), `retest.py <pt> sing`, `retest.py - orig`, `compare.py`, `export_onnx.py <pt> <out.onnx>`,
 `clips2.py <dir>`. Paths point at the session scratch (`/tmp/claude-0/ai`).
+
+## Round 2 (2026-11-21)
+
+The user picked option 1. Round 2 started from v1 (`train_sing.py` settings in the kernel header): cutting the voice
+costs extra (`UNDER_W` 2: output quieter than the target; `LEVEL_W` 2: dB a voiced moment is down beyond 1 dB), more
+female singers and long tones, more pitched-down (to -7 semitones) and saturated voices, less speech (20 %).
+PRIVATE kernel `sonicology-sing-cleanup-r2`, 23:23-04:54 UTC (5.5 GPU hours, 29,171 steps, no bad steps; the check
+clips' dropouts 4.9 % -> 0.6 %). Kept as `sing_r2.pt` / `sing_r2.onnx` (best check, step 26000) in the same private
+dataset. New in the test: the **clean take alone**, which should come out untouched.
+
+| Voice | Case | Voxology now | Round 1 | **Round 2** |
+| --- | --- | --- | --- | --- |
+| Female sung | home noise | 16.5 (1 %) | 13.5 (8 %) | **16.4 (0 %)** |
+| | real noise | **9.6 (0 %)** | 8.2 (15 %) | 8.5 (14 %) |
+| | clean take | **26.1 (0 %)** | 12.7 (20 %) | 12.2 (22 %) |
+| Male sung | home noise | 11.5 (3 %) | 21.4 (0 %) | **20.6 (0 %)** |
+| | real noise | 7.0 (3 %) | 15.8 (0 %) | **14.7 (0 %)** |
+| | clean take | 12.7 (3 %) | 42.5 (0 %) | **40.8 (0 %)** |
+| Female rap | home noise | 13.2 (5 %) | 18.5 (1 %) | **18.0 (0 %)** |
+| | real noise | 8.9 (2 %) | 13.5 (0 %) | **13.7 (0 %)** |
+| Male trap chant | home noise | **13.0** (2 %) | 6.7 (12 %) | 10.9 (1 %) |
+| | real noise | 9.2 (1 %) | 6.1 (7 %) | **9.0 (0 %)** |
+| | clean take | **17.8** (1 %) | 8.5 (6 %) | 12.6 (0 %) |
+
+- **Fixed**: the chant (12 % -> 1 %), the female singer in steady home noise (8 % -> 0 %), the bedroom dropouts
+  (2 % on three voices; the female singer 19 %). The male singer and the rapper stay far ahead of Voxology now.
+- **Still wrong**: the female singer's quieter held notes on a **clean** take (22 %, 20-40 dB down at 2.1-2.4 s,
+  4.6-5.4 s, 6.7-7.5 s) and after the real noise drops away. The model's own local-SNR estimate reads those moments
+  as noise only (-15 dB, its floor), so DeepFilterNet's per-frame stage rule (`gated.py`) makes it worse (35 %),
+  not better. Her pitch is not unusually steady (off the semitone grid ~9 cents, like the male singer), so it is
+  not simply a tuned vocal. With steady noise around, the same notes are kept.
+- **Gentler**: round 2 leaves more noise between phrases than round 1 (female sung -8 dB, male -13 dB; round 1 -20 /
+  -39 dB). Still at or above Voxology now (-4 / -14 dB).
+- Listening: six clips, 1-4 beeps = before, Voxology now, round 1, round 2 (`clips2.py <dir> sing r2`).
+
+Verdict: much closer. It passes on three of four voices; the last failure is the worst kind for a vocal plug-in (a
+clean held note turned down), so not shippable yet.
