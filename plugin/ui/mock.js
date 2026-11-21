@@ -51,6 +51,7 @@
     rdSpeed: { choices: ["Slow", "Medium", "Fast"], value: 0.5 },
     saMode: { choices: ["Tape", "Tube", "Clip"], value: 0 },
     cpStyle: { choices: ["Clean", "FET", "Opto"], value: 0 },
+    clMode: { choices: ["Classic", "AI"], value: 0 },
     dlChar: { choices: ["Clean", "Tape", "Analog"], value: 0 },
     rvType: { choices: ["Plate", "Room", "Hall", "Chamber"], value: 0 },
     outPeaks: { choices: ["Off", "Clip", "Limit"], value: 0 },

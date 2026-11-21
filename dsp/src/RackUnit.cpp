@@ -71,7 +71,7 @@ namespace vox::rackunit
             { "ptTranspose", -12, 12, 0, 0 },
             { "clNoise", 0, Denoiser::kMaxNoiseDb, 0, 0 }, { "clRoom", 0, 100, 0, 0 }, { "clLowCut", 20, 400, 80, 0 },
             { "clPops", 0, 100, 0, 0 }, { "clClicks", 0, 100, 0, 0 }, { "clBreath", 0, BreathControl::kMaxReductionDb, 0, 0 },
-            { "clGateThr", -80, -20, 0, 0 }, { "clGateRange", 0, 30, 0, 0 },
+            { "clGateThr", -80, -20, 0, 0 }, { "clGateRange", 0, 30, 0, 0 }, { "clMode", 0, 1, 0, 2 },
             { "eqGain1", -kEqMaxDb, kEqMaxDb, 0, 0 }, { "eqGain2", -kEqMaxDb, kEqMaxDb, 0, 0 }, { "eqGain3", -kEqMaxDb, kEqMaxDb, 0, 0 },
             { "eqGain4", -kEqMaxDb, kEqMaxDb, 0, 0 }, { "eqGain5", -kEqMaxDb, kEqMaxDb, 0, 0 },
             { "dqCut1", 0, kDynMaxCutDb, 0, 0 }, { "dqCut2", 0, kDynMaxCutDb, 0, 0 }, { "dqCut3", 0, kDynMaxCutDb, 0, 0 },
@@ -277,16 +277,26 @@ namespace vox::rackunit
             const auto& c = p.cleanup;
             auto m = cell ("vox.cleanup", c.enabled, cleanupIdle (c));
             const bool lowCut = c.lowCutHz > Cleanup::kLowCutOffHz;
-            add (m, "Noise", cut (c.noiseDb), "clNoise", c.noiseDb);
-            add (m, "Room", offOr (c.roomPct, pct (c.roomPct)), "clRoom", c.roomPct);
+            // AI mode: Noise is how far the AI may turn the sound down (the top: no limit); it takes out the room too.
+            const bool aiFull = c.aiMode && c.noiseDb >= AiCleanup::kFullDb - 0.05;
+            add (m, "Noise", c.aiMode && c.noiseDb >= 0.05 ? (aiFull ? std::string ("AI full") : "AI " + cut (c.noiseDb)) : cut (c.noiseDb), "clNoise", c.noiseDb);
+            add (m, "Room", c.aiMode ? std::string ("by the AI") : offOr (c.roomPct, pct (c.roomPct)), "clRoom", c.roomPct);
             add (m, "Low Cut", lowCut ? hz (c.lowCutHz) : "Off", "clLowCut", c.lowCutHz);
             add (m, "Pops", offOr (c.popAmount, pct (c.popAmount)), "clPops", c.popAmount);
             add (m, "Clicks", offOr (c.clickAmount, pct (c.clickAmount)), "clClicks", c.clickAmount);
             add (m, "Breaths", cut (c.breathDb), "clBreath", c.breathDb);
             add (m, "Gate", db (c.gateThrDb), "clGateThr", c.gateThrDb);
             add (m, "Gate Range", offOr (c.gateRangeDb, db (c.gateRangeDb)), "clGateRange", c.gateRangeDb);
-            if (c.noiseDb >= 0.05) join (m.summary, "Noise " + cut (c.noiseDb));
-            if (c.roomPct >= 0.05) join (m.summary, "Room " + pct (c.roomPct));
+            add (m, "Mode", c.aiMode ? "AI" : "Classic", "clMode", c.aiMode ? 1.0 : 0.0);
+            if (c.aiMode)
+            {
+                if (c.noiseDb >= 0.05) join (m.summary, aiFull ? std::string ("AI noise + room") : "AI noise + room " + cut (c.noiseDb));
+            }
+            else
+            {
+                if (c.noiseDb >= 0.05) join (m.summary, "Noise " + cut (c.noiseDb));
+                if (c.roomPct >= 0.05) join (m.summary, "Room " + pct (c.roomPct));
+            }
             if (lowCut) join (m.summary, "Low cut " + hz (c.lowCutHz));
             if (c.popAmount >= 0.05) join (m.summary, "Pops " + pct (c.popAmount));
             if (c.clickAmount >= 0.05) join (m.summary, "Clicks " + pct (c.clickAmount));

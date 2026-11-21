@@ -1,4 +1,5 @@
 #include "vox/AutoEdit.h"
+#include "vox/AiCleanup.h"
 #include "vox/Pace.h"
 #include "vox/ClipWatch.h"
 #include "vox/DeClick.h"
@@ -330,8 +331,65 @@ double rangeDb (const Signal& x, double sr, double activeThr, double* median = n
 }
 
 // --- rendering helpers ---------------------------------------------------------------------------
+/** The AI cleanup is first in the chain and the heaviest part (about 1 s per 10 s of vocal on a slow core), and every
+    render after Auto-Edit picks it starts from the same take: so the take goes through it once, and the renders after
+    that start from what came out with the AI off (the same sound: nothing before it in the chain). Per Auto-Edit run. */
+struct AiPass
+{
+    const double* data = nullptr;
+    size_t size = 0;
+    double sr = 0.0, strength = -1.0, check = 0.0;
+    Signal out;
+};
+thread_local AiPass aiPass;
+struct AiPassScope
+{
+    AiPassScope() { aiPass = {}; }
+    ~AiPassScope() { aiPass = {}; }
+    AiPassScope (const AiPassScope&) = delete;
+    AiPassScope& operator= (const AiPassScope&) = delete;
+};
+
+double fingerprint (const Signal& x)
+{
+    double s = 0.0;
+    const size_t step = std::max<size_t> (1, x.size() / 64);
+    for (size_t i = 0; i < x.size(); i += step) s += x[i] * static_cast<double> (i % 7 + 1);
+    return s;
+}
+
+const Signal& aiCleaned (const Signal& x, double sr, double strength)
+{
+    const double check = fingerprint (x);
+    if (aiPass.data == x.data() && aiPass.size == x.size() && aiPass.sr == sr && aiPass.strength == strength && aiPass.check == check)
+        return aiPass.out;
+    AiCleanup ai;
+    ai.prepare (sr, 1);
+    ai.setParams ({ true, strength });
+    const int lat = ai.latencySamples();
+    Signal buf (x.size() + static_cast<size_t> (lat), 0.0);
+    std::copy (x.begin(), x.end(), buf.begin());
+    constexpr int kBlock = 1024;   // (a few ms of work: then the cancel check and Pace's rest)
+    for (size_t s = 0; s < buf.size(); s += kBlock)
+    {
+        double* ptr = buf.data() + s;
+        ai.process (&ptr, 1, static_cast<int> (std::min<size_t> (kBlock, buf.size() - s)));
+        checkCancel();
+    }
+    aiPass = { x.data(), x.size(), sr, strength, check, Signal (buf.begin() + lat, buf.end()) };
+    return aiPass.out;
+}
+
 Signal renderMono (const Signal& x, double sr, const ChainParams& p)
 {
+    if (p.cleanup.enabled && p.cleanup.aiMode && p.cleanup.noiseDb >= 0.05 && AiCleanup::supports (sr))
+    {
+        const Signal& cleaned = aiCleaned (x, sr, p.cleanup.noiseDb);
+        ChainParams q = p;
+        q.cleanup.aiMode = false;
+        q.cleanup.noiseDb = q.cleanup.roomPct = 0.0;
+        return renderMono (cleaned, sr, q);
+    }
     std::vector<std::vector<float>> in (1, std::vector<float> (x.size()));
     for (size_t i = 0; i < x.size(); ++i) in[0][i] = static_cast<float> (x[i]);
     const auto out = VocalChain::render (in, sr, p, cancelFlag);
@@ -1114,6 +1172,7 @@ void vocalFit (AutoEditResult& r, const std::vector<float>& beatAudio, const Sig
 /** Auto-Edit's work (autoEdit() below runs it, and stops it early when asked). */
 AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, double sr, const AutoEditSettings& settings)
 {
+    const AiPassScope aiScope;   // (the AI pass belongs to this run)
     AutoEditResult r;
     const int style = std::clamp (settings.style, 0, kStyles - 1);
     const int intensity = std::clamp (settings.intensity, 0, kIntensities - 1);
@@ -1329,6 +1388,42 @@ AutoEditResult listenAndDecide (const std::vector<std::vector<float>>& audio, do
             reason ("cleanup", "Room", "Off", tail <= -100.0 ? "Auto-Edit couldn't hear clear phrase endings, so Room stays off."
                                               : tail <= kRoomTailFrom ? "After your phrases end, almost nothing rings on (" + num (-tail, 0) + " dB down), like a dry studio take."
                                                                       : "What rings on after your phrases is mostly noise, not the room, so Room stays off.");
+
+        // The AI (Cleanup's AI mode) instead, when there's noise or room to take out: trained on sung and rapped vocals,
+        // it takes both out together, under the words too, and keeps held notes (docs/ai-cleanup/STEP2.md). How far it may
+        // turn the sound down: no limit (how it was tested) on Balanced and Strong; Light leaves a little more of the room.
+        const bool noiseOn = p.cleanup.noiseDb >= 0.05, roomOn = p.cleanup.roomPct >= 0.05;
+        if (settings.allowAi && (noiseOn || roomOn) && AiCleanup::supports (sr))
+        {
+            const double need = (kNoiseTargetSnr - snr0) * kk;
+            const double strength = intensity == 0 ? std::clamp (std::round (std::max (need, 6.0) + 6.0), 12.0, AiCleanup::kFullDb) : AiCleanup::kFullDb;
+            const bool full = strength >= AiCleanup::kFullDb;
+            for (auto it = r.reasons.begin(); it != r.reasons.end();)
+                it = it->module == "cleanup" && (it->control == "Noise" || it->control == "Room") ? r.reasons.erase (it) : it + 1;
+            p.cleanup.aiMode = true;
+            p.cleanup.noiseDb = strength;
+            p.cleanup.roomPct = 0.0;
+            reason ("cleanup", "Mode", "AI", std::string ("Your take has ")
+                        + (noiseOn && roomOn ? "steady noise and room echo" : noiseOn ? "steady noise" : "room echo")
+                        + " to take out. The AI cleanup (trained on sung and rapped vocals) takes noise and the room's echo out together, "
+                          "under the words too, and keeps held notes. Switch Mode to Classic for the older noise reducer.");
+            reason ("cleanup", "Noise", full ? "AI, full" : "AI, \xE2\x88\x92" + db (strength) + " at most",
+                    (noiseOn ? "Your gaps have steady noise (fan, AC, hiss or hum) " + num (snr0, 0) + " dB under your voice; dry pro vocals have about " + num (kNoiseTargetSnr + 2.0, 0) + " dB. "
+                             : std::string ("The noise in your gaps is already low. "))
+                        + (full ? std::string ("The AI takes out as much as it hears.")
+                                : "Light: the AI turns the sound down " + num (strength, 0) + " dB at most, so a little of the room stays."));
+            reason ("cleanup", "Room", "By the AI",
+                    roomOn ? "After your phrases end, the room rings on " + num (-tail, 0) + " dB down (dry pro vocals: " + num (-kRoomTailFrom - 3.0, 0) +
+                                 " dB or less). The AI shortens that with the noise, so the reverb you add later is the only space you hear."
+                           : std::string ("Almost nothing rings on after your phrases; the AI leaves the voice as it is there."));
+            for (auto& note : r.notes)
+                if (note.rfind ("ALREADY ECHOEY", 0) == 0)
+                    note = "ALREADY ECHOEY: what rings on after your phrases is only " + num (-tail, 0) + " dB down, more like a reverb than a room. If you added reverb or delay "
+                           "before Voxology (or the vocal came with it), the AI cleanup is shortening it."
+                           "\nNEED: Only if that reverb is on purpose."
+                           "\nSTEP: Set the Cleanup module's Mode to Classic (Room stays off), or move your reverb after Voxology (Voxology has its own Reverb and Delay)."
+                           "\nSTEP: Next take: record in a smaller space with soft things around you (a closet of clothes works).";
+        }
     }
 
     // ---------------------------------------------------------------------------------------- 02 Cleanup

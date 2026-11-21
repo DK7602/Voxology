@@ -2150,3 +2150,13 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   (-23 dB); nothing worse. Left: her darkest notes without the net (-84 dBFS above 8 kHz), and the chant on steady
   noise 10.4 vs classic 13.0. Sent six MP3s (1-4 beeps: before, Voxology now, round 2, round 3 + net). Candidate for
   step 3 = sing_r3 + featdither in Voxology's Cleanup, ONLY if the user says so. Waiting for the user.
+
+## v0.73.0 AI cleanup in Voxology (2026-11-21, AI step 3; the user: "Yes, build it into Voxology")
+- docs/ai-cleanup/STEP3.md has it all. Cleanup's Mode (clMode: Classic / AI, default Classic) -> vox::AiCleanup
+  (dsp/include/vox/AiCleanup.h, src/AiCleanup.cpp + generated AiCleanupWeights.cpp from tools/ai_cleanup/export_cpp.py,
+  round-3 model sing_r3.pt): first in the chain (before the Denoiser, which keeps Smooth), Noise = its strength (24 =
+  "AI full" = no limit), Room = the AI's. Latency +40 ms constant (chain ~96 ms at 48 kHz; Record mode without it).
+  Safety-net hiss 28 dB under the voice's running level; 44.1 kHz top bins mirrored in its features. Auto-Edit picks AI
+  when the classic rules want Noise or Room (full on Balanced / Strong; allowAi false = classic); AiPass caches the AI on
+  the capture per run. UI: Mode seg as the 10th Cleanup cell (the empty slot; nothing moved), Room dimmed in AI mode.
+  Manual updated (Noise and Room section, REC delay ~95 ms). Tests: tests/test_aicleanup.cpp (+ tests/data/ai_ref_48k.f32).

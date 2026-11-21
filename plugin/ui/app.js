@@ -141,7 +141,7 @@ const SLIDERS = ["ptAmount", "ptSpeed", "ptHumanize", "ptFormant", "ptVibrato", 
   ...[1, 2, 3, 4, 5].flatMap((b) => ["eqGain" + b, "eqFreq" + b]), "dqSens", "dqSmooth", ...[1, 2, 3, 4].flatMap((b) => ["dqCut" + b, "dqFreq" + b])];
 const PT_RM = NOTES_C.map((_, k) => "ptRm" + k);
 const TOGGLES = [...PT_RM, "recMode", "bypass", "listenA", "levelMatch", "ptOn", "clOn", "eqOn", "dqOn", "dsOn", "rdOn", "cpOn", "saOn", "dbOn", "dlOn", "dlPing", "rvOn", "hvMidi", "dmOn"];
-const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "dlChar", "rvType", "outPeaks", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode"];
+const COMBOS = ["aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "dlChar", "rvType", "outPeaks", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode", "clMode"];
 const P = {};
 for (const id of SLIDERS) P[id] = Juce.getSliderState(id);
 for (const id of TOGGLES) P[id] = Juce.getToggleState(id);
@@ -482,6 +482,40 @@ function voicesCells() {
 }
 
 /** Pitch page: dims the knobs the chosen mode ignores (Robot: Retune / Humanize / Vibrato; Classic: Vibrato). */
+/** Cleanup: Noise / Room by the classic reducer or the AI (Mode, the last cell). In AI mode Noise is how far the AI may
+    turn the sound down (the top: Full, no limit) and Room is the AI's too (shown inactive). */
+const aiCleanup = () => choice("clMode") === 1;
+function cleanupCells() {
+  const fmtNoise = (v) => (v < 0.05 ? "Off" : aiCleanup() ? (v >= 23.95 ? "AI full" : `AI ${MINUS}${v.toFixed(0)} dB`) : `${MINUS}${v.toFixed(1)} dB`);
+  const noise = knob("clNoise", "Noise", "hiss & hum down", fmtNoise, 0);
+  const room = knob("clRoom", "Room", "echo after words", (v) => (aiCleanup() ? "by the AI" : v < 0.05 ? "Off" : fmtPct(v)), 0);
+  const mode = seg("clMode", "Mode", "noise & room", ["Classic", "AI"]);
+  const show = () => {
+    const ai = aiCleanup();
+    room.classList.toggle("inactive", ai);
+    noise.querySelector(".cell-sub").textContent = ai ? "AI: noise & room" : "hiss & hum down";
+    noise.refresh(); room.refresh();
+  };
+  P.clMode.valueChangedEvent.addListener(show);   // (Auto-Edit, the host, the Rack)
+  mode.addEventListener("click", () => setTimeout(show, 0));   // (a click here: the value is set before the host echoes it)
+  const modeRefresh = mode.refresh;
+  mode.refresh = () => { modeRefresh(); show(); };
+  show();
+  return [
+    noise, room,
+    knob("clLowCut", "Low Cut", "rumble below", (v) => (v <= 20.5 ? "Off" : fmtHz(v)), 20),
+    knob("clPops", "Pops", "p & b thumps", (v) => (v < 0.05 ? "Off" : fmtPct(v)), 0),
+    knob("clClicks", "Clicks", "mouth & lip", (v) => (v < 0.05 ? "Off" : fmtPct(v)), 0),
+    knob("clBreath", "Breaths", "turned down", (v) => (v < 0.05 ? "Off" : `${MINUS}${v.toFixed(1)} dB`), 0),
+    knob("clGateThr", "Gate", "opens above", fmtDb, -60),
+    knob("clGateRange", "Gate Range", "gaps turned down", (v) => (v < 0.05 ? "Off" : fmtDb(v)), 0),
+    multiMeter("Working", "right now", [["N", () => M.noise, 24, () => val("clNoise") >= 0.05 || (!aiCleanup() && val("clRoom") >= 0.05)],
+      ["P", () => M.pops, 24, () => val("clPops") >= 0.05], ["C", () => M.click, 30, () => val("clClicks") >= 0.05], ["B", () => M.breath, 24, () => val("clBreath") >= 0.05],
+      ["G", () => M.gate, 30, () => val("clGateRange") >= 0.05]]),
+    mode,
+  ];
+}
+
 function pitchCells() {
   const tag = (cell, cls) => { cell.classList.add(cls); return cell; };
   const cells = [
@@ -555,20 +589,8 @@ const MODULES = [
     stat: () => (honeyRests() ? ["resting", false] : val("ptAmount") < 0.05 ? ["idle", false] : M.pitchTarget >= 0 ? [`\u2192 ${noteName(M.pitchTarget)}`, true]
       : [`${NOTES[M.keyUsed]} ${SCALES_SHORT[M.scaleUsed].split(" ")[0].toLowerCase()} · ${PITCH_MODES[choice("ptMode")].toLowerCase()}`, true]) },
   { key: "cleanup", name: "CLEANUP", onId: "clOn", listen: 1, listenWhat: "what Cleanup takes out",
-    what: "noise, room, low cut, pops, clicks, breaths and gate: the recording cleaned up",
-    cells: () => [
-      knob("clNoise", "Noise", "hiss & hum down", (v) => (v < 0.05 ? "Off" : `${MINUS}${v.toFixed(1)} dB`), 0),
-      knob("clRoom", "Room", "echo after words", (v) => (v < 0.05 ? "Off" : fmtPct(v)), 0),
-      knob("clLowCut", "Low Cut", "rumble below", (v) => (v <= 20.5 ? "Off" : fmtHz(v)), 20),
-      knob("clPops", "Pops", "p & b thumps", (v) => (v < 0.05 ? "Off" : fmtPct(v)), 0),
-      knob("clClicks", "Clicks", "mouth & lip", (v) => (v < 0.05 ? "Off" : fmtPct(v)), 0),
-      knob("clBreath", "Breaths", "turned down", (v) => (v < 0.05 ? "Off" : `${MINUS}${v.toFixed(1)} dB`), 0),
-      knob("clGateThr", "Gate", "opens above", fmtDb, -60),
-      knob("clGateRange", "Gate Range", "gaps turned down", (v) => (v < 0.05 ? "Off" : fmtDb(v)), 0),
-      multiMeter("Working", "right now", [["N", () => M.noise, 24, () => val("clNoise") >= 0.05 || val("clRoom") >= 0.05],
-        ["P", () => M.pops, 24, () => val("clPops") >= 0.05], ["C", () => M.click, 30, () => val("clClicks") >= 0.05], ["B", () => M.breath, 24, () => val("clBreath") >= 0.05],
-        ["G", () => M.gate, 30, () => val("clGateRange") >= 0.05]]),
-    ],
+    what: "noise, room (classic or AI), low cut, pops, clicks, breaths and gate: the recording cleaned up",
+    cells: cleanupCells,
     stat: () => {
       if (M.clipNow >= 1) return ["clipped in!", true];
       if (M.overNow >= 1) return ["too hot in!", true];
@@ -576,8 +598,8 @@ const MODULES = [
       if (M.click < -3) return ["click fixed", true];
       if (M.breath < -1) return [`breath ${fmtNum(M.breath, 0)} dB`, true];
       if (M.gate < -0.5) return [`gate ${fmtNum(M.gate, 0)} dB`, true];
-      const parts = [val("clLowCut") > 20.5, val("clPops") >= 0.05, val("clBreath") >= 0.05, val("clGateRange") >= 0.05, val("clNoise") >= 0.05, val("clRoom") >= 0.05, val("clClicks") >= 0.05].filter(Boolean).length;
-      if (val("clNoise") >= 0.05) return [`noise ${MINUS}${fmtNum(val("clNoise"), 0)} dB`, true];
+      const parts = [val("clLowCut") > 20.5, val("clPops") >= 0.05, val("clBreath") >= 0.05, val("clGateRange") >= 0.05, val("clNoise") >= 0.05, !aiCleanup() && val("clRoom") >= 0.05, val("clClicks") >= 0.05].filter(Boolean).length;
+      if (val("clNoise") >= 0.05) return aiCleanup() ? [val("clNoise") >= 23.95 ? "AI full" : `AI ${MINUS}${fmtNum(val("clNoise"), 0)} dB`, true] : [`noise ${MINUS}${fmtNum(val("clNoise"), 0)} dB`, true];
       return parts ? [val("clLowCut") > 20.5 ? `cut ${fmtHz(val("clLowCut"))}` : "ready", true] : ["idle", false];
     } },
   { key: "eq", name: "TONE EQ", onId: "eqOn", what: "body, mud, nasal, presence, air",
@@ -1467,7 +1489,8 @@ const LEARN = {
     } },
   cleanup: {
     does: "Cleans up the recording before anything else. It also watches the vocal coming in and warns you if it arrives clipped or too hot. Noise turns down steady background noise (fans, AC, hiss, computer hum): it learns the noise by itself from the quiet moments, so there's nothing to set up, and it never touches a held note. Room shortens the echo of your room after words (what a bare bedroom adds), and leaves held notes alone. Clicks takes out mouth noises: lip smacks, tongue clicks and the sticky sound of a dry mouth, a few milliseconds each, without touching \"t\", \"k\" or \"s\". Low Cut removes rumble, hum and mic-stand bumps under the voice. Pops catches the low thump of \"p\" and \"b\" hitting the mic and cuts it for just those few hundredths of a second. Breaths turns your breaths down (they get louder later, when the compressor works) without touching the words. The gate turns the gaps between phrases down, so room noise and headphone bleed don't creep up.",
-    how: ["Noise: 6 - 12 dB is clean and natural; past 18 dB the quiet ends of words can start to sound watery. It needs about a second of the song to learn the noise.",
+    how: ["Mode (bottom right): Classic is the noise reducer Voxology always had. AI is a noise and room remover trained on sung and rapped vocals: it takes steady and changing noise and the room's echo out together, under the words too, and keeps held notes. In AI mode Noise sets how far it may turn the sound down (AI full: as much as it hears; Auto-Edit's choice) and Room is the AI's job.",
+      "Noise: 6 - 12 dB is clean and natural; past 18 dB the quiet ends of words can start to sound watery. It needs about a second of the song to learn the noise. (AI mode: it learns as it goes; full is clean and natural.)",
       "Room: 30 - 60 % for a bare room. It shortens the echo by up to about 5 dB; it isn't a full de-reverb, so a very echoey take still sounds roomy.",
       "Clicks: 40 - 60 % catches most mouth clicks. Higher is more sensitive and deeper; if a word's start sounds nicked, come down. Off in Record mode.",
       "Low Cut: raise it until the voice starts to thin, then back off 10 - 20 Hz. Deep voices sit around 70 - 90 Hz, higher voices 100 - 150 Hz.",
@@ -1481,7 +1504,7 @@ const LEARN = {
       t.push(...inputTips());
       if (val("clGateRange") >= 20) t.push(tip("DEEP GATE", `The gaps go down ${fmtNum(val("clGateRange"), 0)} dB. Breaths vanish completely, which can sound robotic.`, "calm",
         { need: "Optional. Fine if you like it dead-quiet between lines.", steps: ["Lower Gate Range to about 12 dB, and use Breaths at 8 - 10 dB instead for a cleaner but natural sound."] }));
-      if (val("clNoise") >= 18) t.push(tip("DEEP NOISE CUT", `Noise goes down ${fmtNum(val("clNoise"), 0)} dB. That deep, the quiet ends of words and soft breaths can sound watery or swirly.`, "calm",
+      if (!aiCleanup() && val("clNoise") >= 18) t.push(tip("DEEP NOISE CUT", `Noise goes down ${fmtNum(val("clNoise"), 0)} dB. That deep, the quiet ends of words and soft breaths can sound watery or swirly.`, "calm",
         { need: "Optional. Listen to the ends of quiet words with the beat muted.", steps: ["Try 10 - 12 dB and compare with A / B.", "If the noise is still loud, record the next take with the fan / AC off and closer to the mic."] }));
       if (val("clBreath") >= 16) t.push(tip("NO AIR", `Breaths go down ${fmtNum(val("clBreath"), 0)} dB, so they're almost gone. Some breath keeps a vocal human, especially on sung parts.`, "calm",
         { need: "Optional: your call. Rap ad-libs often sound good this tight.", steps: ["Try 8 - 10 dB and compare with A / B."] }));

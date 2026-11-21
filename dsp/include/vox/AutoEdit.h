@@ -67,6 +67,7 @@ struct AutoEditSettings
     bool unmaskOnBeat = false;            // a Voxology in BEAT mode is in the project (Unmask can already make room)
     bool honeyTunesTrack = false;         // Honey Tune tunes this track: Pitch rests there (Auto-Edit leaves it as it is)
     const std::atomic<bool>* cancel = nullptr;  // set it (another thread) to stop early: the plug-in is closing (result: not ok)
+    bool allowAi = true;                  // Noise / Room by the AI (Cleanup's AI mode) when the take needs them; false: the classic reducer
 };
 
 /** One explained decision: which module and control, the value chosen and why (plain language). */

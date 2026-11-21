@@ -105,4 +105,7 @@ UI preview in a browser (no DAW): copy JUCE's `modules/juce_gui_extra/native/jav
 ## Third-party
 - CREPE "tiny" pitch model weights (`dsp/src/CrepeWeights.cpp`, from github.com/marl/crepe), MIT License,
   (c) 2018 Jong Wook Kim: see `dsp/third_party/CREPE-LICENSE.txt`. Used by Honey Tune's AI pitch check.
+- DeepFilterNet3 (github.com/Rikorose/DeepFilterNet, MIT OR Apache-2.0, (c) 2021 Hendrik Schroeter), fine-tuned here for
+  sung and rapped vocals (`docs/ai-cleanup/STEP2.md`; VocalSet, VCTK, MUSAN: CC BY 4.0): Cleanup's AI mode
+  (`dsp/src/AiCleanup.cpp`, weights `dsp/src/AiCleanupWeights.cpp`). See `dsp/third_party/DeepFilterNet-LICENSE.txt`.
 - JUCE (AGPLv3 / commercial), ARA SDK (Apache 2.0), Catch2 (BSL-1.0): fetched at build time.

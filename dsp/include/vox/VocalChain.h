@@ -5,6 +5,7 @@
 #include <string>
 #include "DeClick.h"
 #include "Dimension.h"
+#include "AiCleanup.h"
 #include "Denoise.h"
 #include "Listen.h"
 #include "DynamicEq.h"
@@ -105,17 +106,23 @@ struct ChainMeters
 };
 
 /** Voxology's vocal chain:
-      Noise / Room reduction (Cleanup's, first so everything after hears the cleaner vocal) ->
+      AI cleanup (Cleanup's AI mode) -> Noise / Room reduction (Cleanup's classic mode, and the Dynamic EQ's Smooth; first so
+      everything after hears the cleaner vocal) ->
       Pitch -> Cleanup (low cut, gate, pops, mouth clicks, breaths) -> Tone EQ -> Dynamic EQ -> De-Esser -> Rider -> Compressor -> Saturation      (inserts, linked)
       -> Doubler -> Delay -> Reverb (added to the vocal, stereo) -> Output gain
-    Constant latency (the noise reducer's frame + Pitch look-ahead + Saturation oversampling; Record mode: no noise reducer). Framework-free: the plug-in, Auto-Edit and the
+    Constant latency (the AI's 2 frames + the noise reducer's frame + Pitch look-ahead + Saturation oversampling; Record mode: no
+    AI or noise reducer). Framework-free: the plug-in, Auto-Edit and the
     tests all run this same class. prepare() allocates; process() never does (any block size). */
 class VocalChain
 {
 public:
     static constexpr int kChunk = 256;
-    /** The noise reducer's frame + Pitch's look-ahead + Saturation's oversampling; constant for a given sample rate. */
-    int latencySamples() const noexcept { return (pitch.isLowLatency() ? 0 : denoise.latencySamples()) + pitch.latencySamples() + Saturation::kLatency; }
+    /** The AI's 2 frames + the noise reducer's frame + Pitch's look-ahead + Saturation's oversampling; constant for a given
+        sample rate (on or off). */
+    int latencySamples() const noexcept
+    {
+        return (pitch.isLowLatency() ? 0 : ai.latencySamples() + denoise.latencySamples()) + pitch.latencySamples() + Saturation::kLatency;
+    }
 
     /** lowLatency: Record mode (~6 ms instead of ~33): Pitch's low-latency shifter; harmony voices and
         Formant are off (they need the normal look-ahead). */
@@ -164,6 +171,7 @@ private:
     double sr = 48000.0;
     int chanCount = 2;
     ClipWatch clipWatch;   // watches the input (read-only)
+    AiCleanup ai;          // Cleanup's AI mode (first)
     Denoiser denoise;
     PitchCorrector pitch;
     Cleanup cleanup;
@@ -188,6 +196,9 @@ private:
     // modules took out, then Saturation's (lateLine), so it lines up with the vocal it replaces.
     std::array<std::vector<double>, kMaxChannels> earlyLine, lateLine;
     int earlyPos = 0, latePos = 0;
+    // LISTEN in AI mode: what the AI took out waits the noise reducer's frame to join what that took out.
+    std::array<std::vector<double>, kMaxChannels> aiLine;
+    int aiPos = 0;
     std::array<std::vector<double>, kMaxChannels> work;
     std::array<std::vector<double>, kMaxChannels> dryLine;   // latency-delayed input (bypass / A)
     int dryPos = 0;

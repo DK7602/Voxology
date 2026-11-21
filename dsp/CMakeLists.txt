@@ -8,6 +8,8 @@ add_library(vox_dsp STATIC
     src/DynamicEq.cpp
     src/PopBreath.cpp
     src/Denoise.cpp
+    src/AiCleanup.cpp
+    src/AiCleanupWeights.cpp
     src/DeClick.cpp
     src/Unmask.cpp
     src/Voices.cpp
@@ -43,9 +45,9 @@ else()
     target_compile_options(vox_dsp PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion)
 endif()
 
-# The AI pitch check (CREPE) is the heaviest loop: full optimisation even in Release builds that use -O2.
+# The AI pitch check (CREPE) and the AI cleanup (DeepFilterNet3) are the heaviest loops: full optimisation even in Release builds that use -O2.
 if(NOT MSVC)
-    set_source_files_properties(src/Crepe.cpp PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>")
+    set_source_files_properties(src/Crepe.cpp src/AiCleanup.cpp PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Release>:-O3>")
 endif()
 find_package(Threads REQUIRED)
 target_link_libraries(vox_dsp PUBLIC Threads::Threads)

@@ -37,7 +37,8 @@ add_executable(vox_tests
     test_character.cpp
     test_output_peaks.cpp
     test_coach.cpp
-    test_realtime.cpp)
+    test_realtime.cpp
+    test_aicleanup.cpp)
 
 target_link_libraries(vox_tests PRIVATE vox_dsp Catch2::Catch2WithMain)
 target_include_directories(vox_tests PRIVATE ${CMAKE_SOURCE_DIR}/honeytune)   # HoneyView.h (the editor's rules, no JUCE)
@@ -46,6 +47,7 @@ target_compile_definitions(vox_tests PRIVATE
     VOX_UI_INDEX="${CMAKE_SOURCE_DIR}/plugin/ui/index.html"
     VOX_PARAMS_PATH="${CMAKE_SOURCE_DIR}/plugin/Params.h"
     VOX_UI_STYLES="${CMAKE_SOURCE_DIR}/plugin/ui/mixstyles.js"
+    VOX_TEST_DATA="${CMAKE_SOURCE_DIR}/tests/data"
     VOX_VERSION="${PROJECT_VERSION}")
 set_target_properties(vox_tests PROPERTIES FOLDER "Voxology")
 

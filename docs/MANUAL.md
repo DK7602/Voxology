@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.72.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.73.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.72.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.73.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -67,7 +67,7 @@ The top bar holds everything you need for a quick mix; the panels below are for 
 | UNDO | Puts back the settings from before the last Auto-Edit, chain or Quick Look | If you don't like the result |
 | A / B | A = your original vocal, B = through Voxology | Checking it really is better |
 | MATCH | A and B play at the same loudness | Always on while comparing (louder always sounds better) |
-| REC | Record mode: about 6 ms delay instead of about 55 ms, so you hear yourself tuned while recording. A little rougher; Voices, Formant, Noise, Room, Clicks and Smooth are off | On while recording, off for mixing |
+| REC | Record mode: about 6 ms delay instead of about 95 ms, so you hear yourself tuned while recording. A little rougher; Voices, Formant, Noise, Room, Clicks and Smooth are off | On while recording, off for mixing |
 | Bypass | Use your DAW's power button on the plug-in window (Cubase: the button at the top left of the window). Voxology has no button of its own; if a project was saved with Voxology's own bypass on, the bottom bar says BYPASSED: click it to switch Voxology back on | Quick before / after (or use A / B with MATCH) |
 
 The round **?** next to LEARN opens this manual (Esc or CLOSE to go back). The bottom bar shows **IN** and **OUT** loudness (LUFS) and peak level, your **DAW** and the version number.
@@ -94,7 +94,7 @@ Every knob:
 | # | Module | What it does | Main controls |
 | --- | --- | --- | --- |
 | 01 | Pitch | Auto-tune, from natural to the hard robot effect | Mode (Natural, Classic, Robot), Amount, Retune (speed), Vibrato, Humanize (long notes stay live), Formant, Key (Auto / Manual + note), Scale, Notes (MIDI off / notes / learn), Transpose |
-| 02 | Cleanup | Cleans the recording | Noise (steady hiss, fan, AC or hum turned down, even under the words), Room (the echo of your room after words, shortened), Low Cut (rumble), Pops (p and b thumps), Clicks (mouth clicks and lip smacks), Breaths (turned down), Gate + Gate Range (quiets the gaps). Warns "clipped in!" if the recording itself is distorted |
+| 02 | Cleanup | Cleans the recording | Mode (Classic or AI: who takes noise and room out), Noise (steady hiss, fan, AC or hum turned down, even under the words), Room (the echo of your room after words, shortened), Low Cut (rumble), Pops (p and b thumps), Clicks (mouth clicks and lip smacks), Breaths (turned down), Gate + Gate Range (quiets the gaps). Warns "clipped in!" if the recording itself is distorted |
 | 03 | Tone EQ | Shapes the tone: body, mud, nasal, presence, air | 5 bands, each Gain + Frequency. Or drag the 5 points on the spectrum (double-click a point = flat) |
 | 04 | Dynamic EQ | Cuts boom, mud, honk and harshness only when they jump out; Smooth tames ringing resonances | 4 bands, each Max Cut + Frequency, Sensitivity, Smooth |
 | 05 | De-Esser | Tames sharp s, t, sh and ch | Amount, Sensitivity, Frequency |
@@ -162,9 +162,10 @@ styles (more on Strong, less on Light), none when you aim at a reference.
 **Noise and Room (Cleanup)** work before anything else in the chain, so Pitch and the gate already hear the cleaner vocal.
 
 - **Noise** learns your background noise by itself from the quiet moments (it needs about a second of the song), then turns it down, also under the words where the gate can't reach. 6 - 12 dB sounds natural; past 18 dB the quiet ends of words can turn watery. Measured on steady noise: 6 dB takes out 6, 12 takes out 12, 18 about 17, 24 about 22. A clean recording and long held notes are left exactly as they are.
-- **Room** shortens the echo of a bare room after your words (by up to about 5 dB), and leaves held notes alone. It isn't a full de-reverb (that needs an AI model), so a very echoey take still sounds roomy: record in a smaller space with soft things around you.
-- Auto-Edit sets both: Noise when the noise in your gaps is less than about 42 dB under your voice (dry pro vocals: about 50 dB), so it takes out at least 6 dB, Room when more than -34 dB rings on after your phrases (dry pro vocals: -37 dB or less). If your vocal already has reverb on it, Room shortens that too: turn Room off if it's on purpose.
-- They add about 21 ms to Voxology's delay, on or off, so the timing never changes (Cubase makes up for it automatically). Record mode leaves them out.
+- **Room** shortens the echo of a bare room after your words (by up to about 5 dB), and leaves held notes alone. It isn't a full de-reverb, so a very echoey take still sounds roomy: try Mode **AI**, or record in a smaller space with soft things around you.
+- **Mode AI** (the **Mode** buttons, bottom right of Cleanup): an AI noise and room remover, trained on sung and rapped vocals. It takes steady and changing noise (fans, AC, traffic, a TV next door) and the room's echo out together, under the words too, and keeps held notes, even dark, very clean ones. In AI mode **Noise** sets how far it may turn the sound down (**AI full**, the top, takes out all it hears; lower leaves a little of the room and noise for a more natural sound) and **Room** is the AI's job (shown dimmed). It learns as it goes, so there's nothing to set up. Measured on test vocals: noise between phrases 20 - 27 dB down, no notes lost on clean takes. It uses more of your computer than Classic (about 4 - 8 % of one core per Voxology while it's on; nothing when it's off). It works at 32, 44.1, 48, 88.2 and 96 kHz.
+- Auto-Edit sets them: when your gaps have noise less than about 42 dB under your voice (dry pro vocals: about 50 dB), or more than -34 dB rings on after your phrases (dry pro vocals: -37 dB or less), it picks **Mode AI** (Noise **AI full**; on Light a limit of 12 - 24 dB). A studio-quiet, dry take is left exactly as it is. If your vocal already has reverb on it, the AI shortens that too: set Mode to Classic (Room off) if it's on purpose. Mode **Classic** works as it always did, and projects from before keep Classic.
+- Together they add about 61 ms to Voxology's delay (the AI 40, the classic reducer 21), on or off and in either Mode, so the timing never changes (Cubase makes up for it automatically). Record mode leaves them out.
 
 **Clicks (Cleanup)** takes out mouth noises: lip smacks, tongue clicks and the sticky "tk" of a dry mouth, each a few milliseconds long. Voxology hears each one coming (it listens a little ahead), checks it's really a click and not a consonant, and turns just those milliseconds down.
 
@@ -681,7 +682,7 @@ KEEP PLAN or BACK TO YOURS before you save.
 | Auto Analyze says "Run Auto-Edit first" | It compares every part with what Auto-Edit heard. Run Auto-Edit once, then it starts listening |
 | Auto Analyze never adds a card | Good news: every part so far fits your settings ("this part fits your settings"). It also needs the window open and the song playing |
 | A hard tune sounds wobbly, not robotic | Use **Robot** mode (or Classic with Retune at 0). Natural keeps your vibrato on purpose, and a Retune of 10 - 20 ms leaves a lot of your own wobble in |
-| The tuned vocal is late against the beat in an export | Voxology delays the vocal about 55 ms (REC: about 6 ms) and tells your DAW, which plays the track that much earlier to make up for it. If it still comes out late, your DAW didn't make up for it: in Cubase switch **Constrain Delay Compensation** off (toolbar), and don't switch REC on or off just before exporting |
+| The tuned vocal is late against the beat in an export | Voxology delays the vocal about 95 ms (REC: about 6 ms) and tells your DAW, which plays the track that much earlier to make up for it. If it still comes out late, your DAW didn't make up for it: in Cubase switch **Constrain Delay Compensation** off (toolbar), and don't switch REC on or off just before exporting |
 | With the DAW's power button, the bypassed vocal sat early (and a mono vocal only on the left) | Fixed in 0.52: the bypassed vocal now stays in time, on both sides. Before, it played about 55 ms early, so a bypassed export didn't line up with one through Voxology |
 | B always sounds better than A | Turn on MATCH so both play at the same loudness |
 | Mixology doesn't show the VOX tag on your vocal | Update Voxology (0.47+) and Mixology (0.8+). The tag follows the track's name: if two tracks share a name, rename one |

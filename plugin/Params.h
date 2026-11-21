@@ -33,7 +33,7 @@ namespace VoxParams
         for (int k = 0; k < 12; ++k) ids.add ("ptRm" + juce::String (k));   // Pitch: notes switched off (C .. B)
         return ids;
     }
-    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "dlChar", "rvType", "outPeaks", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode" }; }
+    inline juce::StringArray comboIds() { return { "aeStyle", "aeIntensity", "ptKey", "ptScale", "ptMode", "ptKeySrc", "ptMidi", "rdSpeed", "cpStyle", "saMode", "dlTime", "dlChar", "rvType", "outPeaks", "mode", "umFocus", "hv1", "hv2", "hvStack", "dmMode", "clMode" }; }
 
     inline void addTo (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
     {
@@ -119,6 +119,8 @@ namespace VoxParams
                 [] (float v, int) { return v < 0.05f ? String ("Off") : String (roundToInt (v)) + " %"; });
         slider ("clNoise", "Noise Reduction", NormalisableRange<float> (0.0f, static_cast<float> (vox::Denoiser::kMaxNoiseDb), 0.1f), 0.0f, "dB",
                 [] (float v, int) { return v < 0.05f ? String ("Off") : String (-v, 1) + " dB"; });
+        // Noise and Room by the classic reducer or the AI (Classic: sessions from before keep their sound).
+        choice ("clMode", "Noise Mode", { "Classic", "AI" }, 0);
         slider ("clRoom", "Room Reduction", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%",
                 [] (float v, int) { return v < 0.05f ? String ("Off") : String (roundToInt (v)) + " %"; });
 
@@ -253,6 +255,7 @@ namespace VoxParams
         set ("clNoise", static_cast<float> (p.cleanup.noiseDb));
         set ("clClicks", static_cast<float> (p.cleanup.clickAmount));
         set ("clRoom", static_cast<float> (p.cleanup.roomPct));
+        set ("clMode", p.cleanup.aiMode ? 1.0f : 0.0f);
         set ("eqOn", 1.0f);
         for (int b = 0; b < vox::kEqBands; ++b)
         {
@@ -351,6 +354,7 @@ namespace VoxParams
             p.voices.crew = d (hvCrew);
             p.voices.width = d (dbWidth);
             p.cleanup = { on (clOn), d (clLowCut), d (clGateThr), d (clGateRange), d (clPops), d (clBreath), d (clNoise), d (clRoom), d (clClicks) };
+            p.cleanup.aiMode = idx (clMode, 1) == 1;
             p.eq.enabled = on (eqOn);
             for (size_t b = 0; b < static_cast<size_t> (vox::kEqBands); ++b)
             {
@@ -410,7 +414,7 @@ namespace VoxParams
                         dqSens, dqSmooth, dsOn, dsAmount, dsSens, dsFreq, rdOn, rdTarget, rdRange, rdSpeed, cpOn,
                         cpPeak, cpThr, cpRatio, cpMakeup, cpMix, saOn, saMode, saDrive, saMix, dbOn, dbAmount, dmOn,
                         dmMode, dmAmount, dmRate, dmWidth, dlOn, dlTime, dlFeedback, dlMix, dlTone, dlDuck, dlPing,
-                        rvOn, rvDecay, rvPredelay, rvMix, rvTone, rvDuck, dlThrow, rvThrow, outGain, cpStyle, saAir, dlChar, rvType, outPeaks, outCeil, idCount };
+                        rvOn, rvDecay, rvPredelay, rvMix, rvTone, rvDuck, dlThrow, rvThrow, outGain, cpStyle, saAir, dlChar, rvType, outPeaks, outCeil, clMode, idCount };
         static constexpr std::array<const char*, idCount> kIds { "bypass", "listenA", "ptOn", "ptAmount", "ptKey",
             "ptScale", "ptSpeed", "ptHumanize", "ptFormant", "ptMode", "ptVibrato", "ptTranspose", "hv1", "hv2",
             "hvLevel", "hvFormant", "hvStack", "hvMidi", "hvCrew", "dbWidth", "clOn", "clLowCut", "clGateThr",
@@ -419,7 +423,7 @@ namespace VoxParams
             "cpPeak", "cpThr", "cpRatio", "cpMakeup", "cpMix", "saOn", "saMode", "saDrive", "saMix", "dbOn",
             "dbAmount", "dmOn", "dmMode", "dmAmount", "dmRate", "dmWidth", "dlOn", "dlTime", "dlFeedback", "dlMix",
             "dlTone", "dlDuck", "dlPing", "rvOn", "rvDecay", "rvPredelay", "rvMix", "rvTone", "rvDuck", "dlThrow",
-            "rvThrow", "outGain", "cpStyle", "saAir", "dlChar", "rvType", "outPeaks", "outCeil" };
+            "rvThrow", "outGain", "cpStyle", "saAir", "dlChar", "rvType", "outPeaks", "outCeil", "clMode" };
         float v (Id id) const noexcept { return ptr[static_cast<size_t> (id)]->load(); }
 
         std::array<std::atomic<float>*, idCount> ptr {};

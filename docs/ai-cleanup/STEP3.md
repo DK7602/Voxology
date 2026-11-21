@@ -1,0 +1,45 @@
+# AI voice / room / noise cleanup: step 3 (in Voxology), 2026-11-21
+
+The user: "Yes, build it into Voxology" (round 3 + the safety net, with Auto-Edit using it). Voxology 0.73.0.
+
+## What it is
+
+- **Cleanup's Mode: Classic or AI** (`clMode`, default Classic: projects from before keep their sound). In AI mode the
+  network takes noise and the room's echo out together; **Noise** = how far it may turn the sound down (24 dB, the top,
+  shows "AI full" = no limit, how it was tested), **Room** is the AI's (dimmed, "by the AI"). The classic reducer is off
+  in AI mode; the Dynamic EQ's Smooth still rides on its spectra.
+- **Engine**: `dsp/include/vox/AiCleanup.h`, `dsp/src/AiCleanup.cpp`, no framework (like Honey Tune's CREPE). The round-3
+  model (`sing_r3.pt`) exported by `tools/ai_cleanup/export_cpp.py` to `dsp/src/AiCleanupWeights.cpp` (2.13 M float16
+  weights, 15 MB of source, 4.3 MB in the binary; unpacked once per process to 8.5 MB of floats, shared by every
+  instance). License: `dsp/third_party/DeepFilterNet-LICENSE.txt` (MIT).
+- **Any sample rate with 50 Hz bins**: 20 ms frames, 10 ms hop at the host's rate (960 points at 48 kHz, 882 at 44.1,
+  1920 at 96), a mixed-radix FFT; 32 / 44.1 / 48 / 88.2 / 96 kHz (`AiCleanup::supports`). Below 48 kHz the missing top
+  bins (44.1: 22 - 24 kHz) are mirrored in what the network hears (never in the sound): left empty, it took out about
+  half as much noise in the gaps (male singer: -12 dB at 44.1 against -20 at 48; mirrored: -17).
+- **Latency**: 2 frames, 40 ms, constant (on or off, either Mode): the chain's total is about 96 ms at 48 kHz (was 56).
+  Record mode leaves it out. Off: bit-exact delay, the network and FFTs idle. On / off / strength glide over ~0.1 s
+  (6 pass-through frames, then 10 frames of glide).
+- **Safety net, as tested, plus one fix**: the network hears a Gaussian hiss above 8 kHz (6th-order Butterworth twice,
+  as the tested filtfilt) added to the take; mask and filter go on the real take. The hiss is **28 dB under the
+  voice's running level** (frames within 30 dB of the recent peak, ~2 s average), not a fixed -50 dBFS: with a fixed
+  level a take 12 - 24 dB quieter lost 1 - 6 dB of air (top end); relative, within 1 dB at -24 / -12 / 0 / +8 dB, notes
+  kept the same. A fixed power floor instead of the random hiss does NOT work (`featfloor.py`: 9 % cut on the clean take).
+- **CPU**: ~0.7 ms per 10 ms frame on this 2.1 GHz cloud Xeon (7 - 9 % of a core), most of it the GRUs and reading the
+  weights; a desktop should be about half. Auto-Edit runs the AI once per run on its capture (`AiPass` in AutoEdit.cpp:
+  renders after that start from the cleaned take with the AI off, the same sound): +1.4 s on a 14 s take (14.4 -> 15.8 s).
+- **Auto-Edit**: when the take needs Noise or Room (the classic rules), Mode AI, Noise 24 (full) on Balanced / Strong;
+  Light: noise need + 6 dB, 12 - 24. Reasons: Mode "AI", Noise "AI, full", Room "By the AI". `AutoEditSettings::allowAi`
+  = false keeps the classic reducer. The Coach, PREVIEW and Auto Analyze carry clMode like any setting (forEachValue).
+- **LISTEN** (Cleanup) hears what the AI takes out too (delayed by the classic reducer's frame to line up).
+- **Rack**: Cleanup shows Noise "AI full" / "AI -N dB", Room "by the AI", and a Mode value (clMode, 2 steps).
+
+## Checked
+
+- C++ vs PyTorch (the same float16 weights): 1e-8 abs (-135 dB) frame for frame; `tests/data/ai_ref_48k.f32`.
+- The C++ engine on the whole test set, live (warm-up, glide, voice-relative hiss), 48 kHz: clean takes 0 % notes lost,
+  real noise 6 % (Python + net 5 %), every case within ~1 dB SI-SDR of Python; 44.1 kHz: 0 % / 4 %. The user's three
+  takes: 0 % at both rates.
+- `tests/test_aicleanup.cpp`: weights load, FFT vs a plain DFT, off = bit-exact delay at 5 rates, dark held notes kept
+  (2 rates x 4 notes x 2 levels), noise -15 dB+ in the gaps with the voice kept, strength limit, block-size invariance,
+  glide on / off back to bit-exact, stereo linked, chain latency constant and Record mode without it, Auto-Edit picks
+  it (and not on a studio-quiet take). `test_realtime.cpp`: Auto-Edit's plan now includes the AI: no allocation.

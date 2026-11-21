@@ -97,6 +97,7 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
     sr = sampleRate;
     chanCount = std::clamp (numChannels, 1, kMaxChannels);
     clipWatch.prepare (chanCount);
+    ai.prepare (sr, chanCount);
     denoise.prepare (sr, chanCount);
     pitch.prepare (sr, chanCount, lowLatency);
     // The gate, pops and breaths listen to the chain's input, which is Pitch's latency ahead of them: free look-ahead.
@@ -124,6 +125,7 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
     peaks.prepare (sr);
     for (auto& l : earlyLine) l.assign (static_cast<size_t> (pitch.latencySamples() + 1), 0.0);
     for (auto& l : lateLine) l.assign (static_cast<size_t> (Saturation::kLatency + 1), 0.0);
+    for (auto& l : aiLine) l.assign (static_cast<size_t> (denoise.latencySamples() + 1), 0.0);
     outGlide = design::onePole (0.020, sr);
     abGlide = design::onePole (0.020, sr);
     setParams (params);
@@ -133,6 +135,7 @@ void VocalChain::prepare (double sampleRate, int numChannels, bool lowLatency)
 void VocalChain::reset() noexcept
 {
     clipWatch.reset();
+    ai.reset();
     denoise.reset();
     pitch.reset();
     cleanup.reset();
@@ -172,8 +175,11 @@ void VocalChain::setParams (const ChainParams& p) noexcept
     pitch.setParams (p.pitch);
     cleanup.setParams (p.cleanup);
     {
+        // Noise / Room: the AI (AI mode: Noise = how far it may turn the sound down) or the classic reducer.
+        const bool aiMode = p.cleanup.enabled && p.cleanup.aiMode;
+        ai.setParams ({ aiMode, aiMode ? p.cleanup.noiseDb : 0.0 });
         DenoiseParams d;
-        if (p.cleanup.enabled) { d.noiseDb = p.cleanup.noiseDb; d.roomPct = p.cleanup.roomPct; }
+        if (p.cleanup.enabled && ! aiMode) { d.noiseDb = p.cleanup.noiseDb; d.roomPct = p.cleanup.roomPct; }
         if (p.dynEq.enabled) d.smoothPct = p.dynEq.smoothPct;   // (the Dynamic EQ's Smooth rides on the same spectra)
         denoise.setParams (d);
     }
@@ -210,14 +216,15 @@ void VocalChain::clearListenLines() noexcept
 {
     for (auto& l : earlyLine) std::fill (l.begin(), l.end(), 0.0);
     for (auto& l : lateLine) std::fill (l.begin(), l.end(), 0.0);
-    earlyPos = latePos = 0;
+    for (auto& l : aiLine) std::fill (l.begin(), l.end(), 0.0);
+    earlyPos = latePos = aiPos = 0;
 }
 
 ChainMeters VocalChain::takeMeters() noexcept
 {
     ChainMeters m = meters;
     m.gateDb = cleanup.takeGateDb();
-    m.noiseDb = denoise.takeReductionDb();
+    m.noiseDb = std::min (denoise.takeReductionDb(), ai.takeReductionDb());   // (one of them works: classic or AI)
     m.smoothDb = denoise.takeSmoothDb();
     m.popDb = pops.takeCutDb();
     m.clickDb = declick.takeCutDb();
@@ -282,10 +289,33 @@ void VocalChain::processChunk (int nch, int len) noexcept
                 late[static_cast<size_t> (c)][static_cast<size_t> (i)] += before[static_cast<size_t> (c)][static_cast<size_t> (i)] - ch[static_cast<size_t> (c)][i];
     };
 
-    // Noise / room reduction first (Cleanup's): Pitch, the side-chain below and everything else hear the cleaner
-    // vocal. It always runs (a constant delay, and no stale frame when B comes back); not in Record mode.
+    // Noise / room reduction first (Cleanup's, the AI or the classic reducer): Pitch, the side-chain below and everything
+    // else hear the cleaner vocal. Both always run (a constant delay, and no stale frame when B comes back; the AI costs
+    // almost nothing while it's off); not in Record mode.
     if (! pitch.isLowLatency())
+    {
+        std::array<std::array<double, kChunk>, kMaxChannels> aiOut {};
+        std::array<double*, kMaxChannels> aiPtr {};
+        for (int c = 0; c < nch; ++c) aiPtr[static_cast<size_t> (c)] = aiOut[static_cast<size_t> (c)].data();
+        const bool aiListen = lm == listen::cleanup && ai.working();
+        ai.process (ch.data(), nch, len, aiListen ? aiPtr.data() : nullptr);
         denoise.process (ch.data(), nch, len, lm != listen::off ? earlyPtr.data() : nullptr);
+        if (aiListen)   // what the AI took out, a noise-reducer frame later (in line with what that took out)
+        {
+            const int aLen = static_cast<int> (aiLine[0].size());
+            for (int i = 0; i < len; ++i)
+            {
+                for (int c = 0; c < nch; ++c)
+                {
+                    const auto cs = static_cast<size_t> (c);
+                    auto& al = aiLine[cs];
+                    al[static_cast<size_t> (aiPos)] = aiOut[cs][static_cast<size_t> (i)];
+                    early[cs][static_cast<size_t> (i)] += al[static_cast<size_t> ((aiPos + 1) % aLen)];
+                }
+                aiPos = (aiPos + 1) % aLen;
+            }
+        }
+    }
 
     // The input, before Pitch delays it: the gate / pops / breaths side-chain.
     cleanup.listen (ch.data(), nch, len);

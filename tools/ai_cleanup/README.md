@@ -15,6 +15,9 @@ Scratch tooling, not built by CMake. Paths inside point at the session scratch (
 | `rootcause.py`, `hfcheck.py`, `featdither.py` | Root cause of the remaining cuts: one change at a time; how often training material has a dead top end; the plug-in safety net (the AI looks at the take plus a faint hiss above 8 kHz). |
 | `compare.py`, `clips2.py` | Step 2: one table (input, Voxology now, original AI, retrained AI; same measures) and the 4-version listening MP3s (1-4 beeps). |
 | `retest3.py` | Round 3 retest: every case, the clean take included, with and without the hiss safety net (writes `results3_<tag>.json`). |
+| `export_cpp.py` | Step 3: the model for Voxology's C++ engine (`dsp/src/AiCleanupWeights.cpp`: BatchNorm folded, GRU weights input-major, float16) and a numpy copy of the network in the same layout, checked against PyTorch (1e-6). |
+| `ref16.py`, `make_ref.py` | The model as the C++ holds it (folded, float16) in PyTorch; `tests/data/ai_ref_48k.f32` for `tests/test_aicleanup.cpp`. |
+| `cpp_retest.py`, `featfloor.py` | The C++ engine (a local harness) on the whole test set at 48 / 44.1 kHz; a fixed-floor safety net tried instead of the hiss (worse: 9 % cut on the clean take). |
 | `libdf.py`, `load.py` | A pure-Python stand-in for DeepFilterNet's Rust `libdf` bits the model code needs, and the loader. |
 
 The model code (`df/`: `config.py`, `deepfilternet3.py`, `model.py`, `modules.py`, `multiframe.py`, `utils.py`) comes unchanged

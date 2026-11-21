@@ -38,6 +38,8 @@ struct CleanupParams
     double noiseDb = 0.0;       // noise reduction: how far steady noise goes down, 0..24 dB (Denoiser, first in the chain); 0 = off
     double roomPct = 0.0;       // room reduction: how much of the room's echo after words is taken out, 0..100 % (Denoiser)
     double clickAmount = 0.0;   // mouth de-click, 0..100 % (DeClick); 0 = off
+    bool aiMode = false;        // Noise + Room by the AI (AiCleanup, first in the chain): noiseDb = how far it may turn the
+                                // sound down (AiCleanup::kFullDb: no limit), roomPct unused (it takes out the room too)
 };
 
 class Cleanup
