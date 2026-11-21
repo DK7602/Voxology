@@ -245,3 +245,38 @@ TEST_CASE ("Auto-Edit: noise reduction on a noisy take, off on a clean one; Room
     CHECK (rn.params.cleanup.roomPct == 0.0);
     CHECK (reasonOf (rn, "Room") == "Off");
 }
+
+TEST_CASE ("Denoise: digital silence first (the DAW stopped, the AI's delay) doesn't hold back learning the noise", "[denoise]")
+{
+    // Before, the smoothed level crept up from the silence, read as the quietest moment of the last 5 s, and nothing was
+    // learned for ~5 s after every stop. Now 50 ms or 2 s of silence first change nothing once the take has come in.
+    const auto v = testsig::vocal (kSr, 6.0, -45.0);
+    auto run = [&] (size_t lead, double noiseDb)
+    {
+        std::vector<double> x (lead, 0.0);
+        x.insert (x.end(), v.begin(), v.end());
+        Denoiser d;
+        d.prepare (kSr, 1);
+        d.setParams ({ noiseDb, 0.0 });
+        for (size_t s = 0; s < x.size(); s += 256)
+        {
+            double* p = x.data() + s;
+            d.process (&p, 1, static_cast<int> (std::min<size_t> (256, x.size() - s)));
+        }
+        return std::vector<double> (x.begin() + static_cast<std::ptrdiff_t> (lead), x.end());
+    };
+    const auto plain = run (0, 12.0), dry = run (0, 0.0);
+    for (const size_t lead : { size_t (2400), size_t (96000) })
+    {
+        INFO ("silence first: " << lead << " samples");
+        const auto y = run (lead, 12.0);
+        const auto from = static_cast<size_t> (kSr * 1.5);
+        double reducedPlain = 0.0, reducedLead = 0.0;
+        for (size_t i = from; i < y.size(); ++i)
+        {
+            reducedPlain += (plain[i] - dry[i]) * (plain[i] - dry[i]);
+            reducedLead += (y[i] - dry[i]) * (y[i] - dry[i]);
+        }
+        CHECK (reducedLead > 0.8 * reducedPlain);   // (it works as without the silence)
+    }
+}

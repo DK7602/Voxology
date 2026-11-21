@@ -18,6 +18,7 @@ constexpr double kDecisionDirected = 0.98;  // Ephraim & Malah: how much of the 
 constexpr double kMinPrioriSnr = 0.003;     // -25 dB: keeps the gain from collapsing on a quiet frame
 constexpr double kQuietRatio = 15.85;       // 12 dB: a frame this close to the quietest of the last ~5 s counts as quiet
 constexpr double kLevelWindowSeconds = 5.0;
+constexpr double kSilentLevel = 1.0e-15;   // a frame's level (FFT power, 100 Hz - 8 kHz) at or under this: digital silence
 constexpr double kTailPeakSeconds = 0.15;
 constexpr double kRoomOverSubtract = 3.0;   // in a fading tail the decay model alone under-counts the echo
 constexpr double kTailRatioOff = 0.7, kTailRatioFull = 0.4;
@@ -176,26 +177,37 @@ void Denoiser::processFrame (int nch) noexcept
         for (size_t k = 0; k < ub; ++k) power[k] += std::norm (s[k]) / nch;
     }
 
+    // Digital silence (the DAW stopped, nothing recorded there, a delay line still filling: the AI's in front of it) is
+    // neither a quiet moment nor the floor, and the smoothing starts afresh after it: before, the smoothed level crept up
+    // from zero when sound came, those frames read as "the quietest of the last 5 s", nothing else was quiet, and no
+    // noise was learned for ~5 s (every playback start after a stop; every render with the AI in front).
+    double raw = 0.0;
+    for (size_t k = loBin; k <= hiBin && k < ub; ++k) raw += power[k];
+    const bool silent = raw <= kSilentLevel;
+    if (silent) warm = false;
     for (size_t k = 0; k < ub; ++k)
         smooth[k] = warm ? kSmoothing * smooth[k] + (1.0 - kSmoothing) * power[k] : power[k];
-    warm = true;
+    warm = ! silent;
 
     // Quiet moments: the frame's level (100 Hz - 8 kHz) within kQuietDb of the quietest of the last ~5 s. Only those
     // teach it the noise, so a long held note (or a voice that never pauses) is never taken for noise.
     double level = 0.0;
     for (size_t k = loBin; k <= hiBin && k < ub; ++k) level += smooth[k];
-    lvlCurMin = std::min (lvlCurMin, level);
-    if (++lvlCount >= lvlSubFrames)
+    if (! silent)
     {
-        lvlSubMin[static_cast<size_t> (lvlIndex)] = lvlCurMin;
-        lvlIndex = (lvlIndex + 1) % kSubWindows;
-        lvlCount = 0;
-        lvlCurMin = level;
-        ++lvlFilled;
+        lvlCurMin = std::min (lvlCurMin, level);
+        if (++lvlCount >= lvlSubFrames)
+        {
+            lvlSubMin[static_cast<size_t> (lvlIndex)] = lvlCurMin;
+            lvlIndex = (lvlIndex + 1) % kSubWindows;
+            lvlCount = 0;
+            lvlCurMin = level;
+            ++lvlFilled;
+        }
     }
     double quietest = lvlCurMin;
     for (double m : lvlSubMin) quietest = std::min (quietest, m);
-    const bool quiet = lvlFilled >= 2 && level <= kQuietRatio * quietest;   // (after ~1 s of listening)
+    const bool quiet = ! silent && lvlFilled >= 2 && level <= kQuietRatio * quietest;   // (after ~1 s of listening)
 
     // Noise: over the quiet moments, the minimum of the smoothed level of the last ~1.5 s of them (sub-window
     // minima), bias corrected. Nothing (no reduction) until the first quiet moment.

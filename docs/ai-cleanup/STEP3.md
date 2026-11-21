@@ -40,6 +40,11 @@ The user: "Yes, build it into Voxology" (round 3 + the safety net, with Auto-Edi
   before); a channel coming back starts clean; Classic -> AI: the classic reducer keeps its settings until the AI is
   fully on (no 0.2 s gap of noise). UI: switching Mode by hand moves Noise to fit (to AI from nearly off: full; to
   Classic from over 15 dB: 12). Vocal Fit's "your vocal is in the beat" now counts the raw-vocal check too.
+- **Found on the way, an older bug in the classic reducer** (`Denoise.cpp`): after digital silence its smoothed level
+  crept up from zero, those frames read as the quietest of the last 5 s, so nothing was quiet and no noise was learned
+  for ~5 s. It hit every playback start after a stop in the DAW, and every render with the AI's delay line in front
+  (Classic Noise did nothing for the first 5 s). Now silence is neither a quiet moment nor the floor and the smoothing
+  starts afresh after it; normal audio is unchanged (identical numbers). Test: "Denoise: digital silence first".
 
 ## Checked
 

@@ -2163,3 +2163,4 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   Manual updated (Noise and Room section, REC delay ~105 ms). Tests: tests/test_aicleanup.cpp (+ tests/data/ai_ref_48k.f32).
   Fresh-eyes review (subagent) fixes: staged network, Rack Mode (gate as one value: 8 max), unsupported rate -> classic,
   LISTEN line always moving, channel growth cleared, classic covers the AI's warm-up, UI Noise follows a Mode switch.
+  Also fixed an older classic-reducer bug: after digital silence (DAW stopped) it learned no noise for ~5 s.
