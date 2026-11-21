@@ -2143,3 +2143,10 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   fades) on 35 % of noisy clips, knocks() 15 %; val adds 32 "dark" (studio-clean alone) + 32 "pulse" clips; best =
   val loss + 20 x (dark + pulse dropouts). Round 2 on the dark check (smoke): 8 % dropouts. When done: retest with and
   without featdither, compare (add r3), clips, report.
+  ROUND 3 DONE (06:05-11:35 UTC, 30,908 steps, no bad steps; GPU used 5.52 h, 24.5 h left to 2026-11-28): own checks
+  dark 6 -> 0 %, pulse SI-SDR 16.7 -> 20.3. sing_r3.pt / .onnx in the private dataset (ONNX parity ~1e-6). Retest
+  (retest3.py, STEP2.md "Round 3"): alone, female clean take 22 -> 13 % cut, bedroom+noise 6 -> 1 %; WITH the net
+  every clean take 0 %, real noise 5 % (r2+net 10 %), female clean 32.8 SI-SDR (classic 26.1); male cleaner gaps
+  (-23 dB); nothing worse. Left: her darkest notes without the net (-84 dBFS above 8 kHz), and the chant on steady
+  noise 10.4 vs classic 13.0. Sent six MP3s (1-4 beeps: before, Voxology now, round 2, round 3 + net). Candidate for
+  step 3 = sing_r3 + featdither in Voxology's Cleanup, ONLY if the user says so. Waiting for the user.

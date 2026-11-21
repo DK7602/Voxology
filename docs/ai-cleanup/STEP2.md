@@ -150,3 +150,46 @@ examples (clean-only 10 -> 20 %, SNR up to 60 dB); (b) noise that changes: on / 
 10-30 dB and short loud knocks in about a third of the noisy clips; (c) checks for a dark clean take and a pulsing
 noise in the validation, used to pick the best model; (d) keep the round 2 penalties. The safety net stays in the
 plug-in either way.
+
+## Round 3 (2026-11-21)
+
+The user said go. Round 3 started from round 2 with the plan above (`train_sing.py` round 3 settings in the kernel
+header: `P_STUDIO` 0.3 studio-clean voices with a brick-wall low-pass at 7-16 kHz, dark EQ and gated digital
+silence; `P_CLEAN` 0.15; `P_NENV` 0.35 noise that switches, pulses, fades or jumps; `P_KNOCK` 0.15; SNR up to 60 dB;
+`SEL_W` 20: the dark-clean and pulsing-noise checks pick the best model). PRIVATE kernel `sonicology-sing-cleanup-r3`,
+06:05-11:35 UTC (5.5 GPU hours, 30,908 steps, no bad steps). Its own checks: dark clean take 6 % -> 0 % notes lost,
+pulsing noise SI-SDR 16.7 -> 20.3. Kept as `sing_r3.pt` / `sing_r3.onnx` (best check: the last step) in the same
+private dataset. Test: `retest3.py` (every case with and without the safety net), `compare.py`.
+
+SI-SDR (notes lost); "+ net" = with the hiss safety net (`featdither.py`), which is how it would go in the plug-in.
+
+| Voice | Case | Voxology now | Round 2 | Round 2 + net | Round 3 | **Round 3 + net** |
+| --- | --- | --- | --- | --- | --- | --- |
+| Female sung | home noise | 16.5 (1 %) | 16.4 (0 %) | 16.5 (0 %) | 17.0 (0 %) | **17.2 (0 %)** |
+| | bedroom | 0.9 (20 %) | 2.0 (19 %) | 2.5 (1 %) | 2.1 (16 %) | **2.5 (1 %)** |
+| | bedroom + noise | 1.0 (15 %) | 2.2 (6 %) | 2.2 (6 %) | 2.4 (1 %) | **2.4 (1 %)** |
+| | real noise | 9.6 (0 %) | 8.5 (14 %) | 9.8 (10 %) | 9.2 (12 %) | **11.5 (5 %)** |
+| | clean take | 26.1 (0 %) | 12.2 (22 %) | 27.8 (0 %) | 13.4 (13 %) | **32.8 (0 %)** |
+| Male sung | home noise | 11.5 (3 %) | 20.6 (0 %) | 20.6 (0 %) | 20.8 (0 %) | **20.8 (0 %)** |
+| | real noise | 7.0 (3 %) | 14.7 (0 %) | 15.5 (0 %) | 16.6 (0 %) | **16.9 (0 %)** |
+| | clean take | 12.7 (3 %) | 40.8 (0 %) | 35.6 (0 %) | 44.1 (0 %) | **37.0 (0 %)** |
+| Female rap | home noise | 13.2 (5 %) | 18.0 (0 %) | 17.9 (0 %) | 18.0 (0 %) | **18.0 (0 %)** |
+| | real noise | 8.9 (2 %) | 13.7 (0 %) | 12.9 (0 %) | 13.8 (0 %) | **13.0 (0 %)** |
+| Male trap chant | home noise | 13.0 (2 %) | 10.9 (1 %) | 10.6 (1 %) | 10.5 (1 %) | **10.4 (1 %)** |
+| | real noise | 9.2 (1 %) | 9.0 (0 %) | 9.0 (0 %) | 9.9 (0 %) | **9.1 (0 %)** |
+| | clean take | 17.8 (1 %) | 12.6 (0 %) | 13.5 (0 %) | 12.9 (0 %) | **13.4 (0 %)** |
+
+- **Better**: on its own, round 3 cut the female singer's clean-take losses 22 -> 13 % and bedroom + noise 6 -> 1 %;
+  with the safety net, real noise 10 -> 5 % and the clean take 27.8 -> 32.8 SI-SDR (Voxology now 26.1). The male
+  singer cleans deeper between phrases (home noise -13 -> -23 dB), the female singer the same (-8 dB). Nothing got
+  worse by more than 1 dB / 1 %. The user's three takes: 0 % cut, with or without the net.
+- **Left without the net**: the same held notes as before (2.1-2.4, 4.55-5.4, 7.35-7.55 s). They are her darkest
+  notes: -84 dBFS above 8 kHz against -48 for the rest of the take, and 10 dB darker at 2-8 kHz too; round 3 trained
+  dark voices, but not that dark. The net fixes every one (0 %).
+- **Left with the net**: the female singer after the real noise drops away (5 %), and the chant still trails
+  Voxology now on steady home noise (10.4 against 13.0 SI-SDR; 1 % notes lost either way).
+- Listening: six clips, 1-4 beeps = before, Voxology now, round 2, round 3 + net (`clips2.py <dir> r2 r3fd`).
+
+Verdict: round 3 + the safety net passes on every voice and case for cut notes (5 % at worst, on the hardest
+real-noise case; 0 % on every clean take and on the user's takes). It is the candidate for step 3, if the user
+wants it in the plug-in.
