@@ -43,8 +43,11 @@ The user: "Yes, build it into Voxology" (round 3 + the safety net, with Auto-Edi
 - **Found on the way, an older bug in the classic reducer** (`Denoise.cpp`): after digital silence its smoothed level
   crept up from zero, those frames read as the quietest of the last 5 s, so nothing was quiet and no noise was learned
   for ~5 s. It hit every playback start after a stop in the DAW, and every render with the AI's delay line in front
-  (Classic Noise did nothing for the first 5 s). Now silence is neither a quiet moment nor the floor and the smoothing
-  starts afresh after it; normal audio is unchanged (identical numbers). Test: "Denoise: digital silence first".
+  (Classic Noise did nothing for the first 5 s). Now digital silence (32+ exact zeros in a row) and any frame still
+  holding some of it are left out of the quiet-moment trackers, a frame that's all silence restarts the smoothing, and
+  a quiet moment also needs something 6 dB louder in the same ~5 s (so a held note after silence still isn't learned as
+  noise: the silence used to protect it). Normal audio unchanged (identical numbers). Test: "Denoise: digital silence
+  first"; the held-note test still passes.
 
 ## Checked
 

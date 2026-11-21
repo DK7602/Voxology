@@ -18,7 +18,8 @@ constexpr double kDecisionDirected = 0.98;  // Ephraim & Malah: how much of the 
 constexpr double kMinPrioriSnr = 0.003;     // -25 dB: keeps the gain from collapsing on a quiet frame
 constexpr double kQuietRatio = 15.85;       // 12 dB: a frame this close to the quietest of the last ~5 s counts as quiet
 constexpr double kLevelWindowSeconds = 5.0;
-constexpr double kSilentLevel = 1.0e-15;   // a frame's level (FFT power, 100 Hz - 8 kHz) at or under this: digital silence
+constexpr int kSilentRun = 32;             // this many exact zeros in a row: digital silence
+constexpr double kRangeRatio = 3.98;       // quiet moments need something 6 dB louder in the same ~5 s
 constexpr double kTailPeakSeconds = 0.15;
 constexpr double kRoomOverSubtract = 3.0;   // in a fading tail the decay model alone under-counts the echo
 constexpr double kTailRatioOff = 0.7, kTailRatioFull = 0.4;
@@ -109,6 +110,8 @@ void Denoiser::reset() noexcept
     std::fill (curMin.begin(), curMin.end(), std::numeric_limits<double>::max());
     std::fill (lvlSubMin.begin(), lvlSubMin.end(), std::numeric_limits<double>::max());
     lvlCurMin = std::numeric_limits<double>::max();
+    std::fill (lvlSubMax.begin(), lvlSubMax.end(), 0.0);
+    lvlCurMax = 0.0;
     lvlIndex = lvlCount = lvlFilled = 0;
     for (auto& h : history) std::fill (h.begin(), h.end(), 0.0);
     std::fill (levelHistory.begin(), levelHistory.end(), 0.0);
@@ -117,6 +120,8 @@ void Denoiser::reset() noexcept
     smoothDeepest = 0.0;
     count = delayPos = subIndex = subCount = histPos = levelPos = 0;
     warm = false;
+    zeroRun = 0;
+    sinceSilence = 1 << 30;
     sumIn = sumOut = 0.0;
 }
 
@@ -142,10 +147,12 @@ void Denoiser::process (double* const* ch, int nch, int len, double* const* remo
     const bool listening = removed != nullptr && listenWhat != 0 && ! neutral;
     for (int i = 0; i < len; ++i)
     {
+        bool zero = true;
         for (int c = 0; c < nch; ++c)
         {
             const auto cs = static_cast<size_t> (c);
             const double x = ch[c][i];
+            zero = zero && x == 0.0;
             inBuf[cs][static_cast<size_t> (n - hop + count)] = x;
             const double delayed = delay[cs][static_cast<size_t> (delayPos)];
             delay[cs][static_cast<size_t> (delayPos)] = x;
@@ -153,6 +160,9 @@ void Denoiser::process (double* const* ch, int nch, int len, double* const* remo
             ch[c][i] = neutral ? delayed : outBuf[cs][static_cast<size_t> (count)];
             if (removed != nullptr) removed[c][i] = listening ? remBuf[cs][static_cast<size_t> (count)] : 0.0;
         }
+        // Digital silence: kSilentRun exact zeros in a row (a single zero is just a crossing in 16-bit audio).
+        zeroRun = zero ? std::min (zeroRun + 1, kSilentRun) : 0;   // (capped: no overflow after hours)
+        sinceSilence = zeroRun >= kSilentRun ? 0 : std::min (sinceSilence + 1, 1 << 30);
         if (++delayPos >= n) delayPos = 0;
         if (++count >= hop)
         {
@@ -178,16 +188,18 @@ void Denoiser::processFrame (int nch) noexcept
     }
 
     // Digital silence (the DAW stopped, nothing recorded there, a delay line still filling: the AI's in front of it) is
-    // neither a quiet moment nor the floor, and the smoothing starts afresh after it: before, the smoothed level crept up
-    // from zero when sound came, those frames read as "the quietest of the last 5 s", nothing else was quiet, and no
-    // noise was learned for ~5 s (every playback start after a stop; every render with the AI in front).
+    // neither a quiet moment nor the floor, and the smoothing starts afresh after it: before, the frames with silence in
+    // them (and the smoothed level creeping up from it) read as "the quietest of the last 5 s", nothing else was quiet,
+    // and no noise was learned for ~5 s (every playback start after a stop; every render with the AI in front).
+    // (A frame that still holds some of the silence is left out of the quiet-moment trackers: its level is part
+    // silence, lower than anything real. A frame that's all silence restarts the smoothing.)
+    const bool silent = sinceSilence < n;
     double raw = 0.0;
     for (size_t k = loBin; k <= hiBin && k < ub; ++k) raw += power[k];
-    const bool silent = raw <= kSilentLevel;
-    if (silent) warm = false;
+    if (raw <= 0.0) warm = false;
     for (size_t k = 0; k < ub; ++k)
         smooth[k] = warm ? kSmoothing * smooth[k] + (1.0 - kSmoothing) * power[k] : power[k];
-    warm = ! silent;
+    warm = raw > 0.0;
 
     // Quiet moments: the frame's level (100 Hz - 8 kHz) within kQuietDb of the quietest of the last ~5 s. Only those
     // teach it the noise, so a long held note (or a voice that never pauses) is never taken for noise.
@@ -196,18 +208,23 @@ void Denoiser::processFrame (int nch) noexcept
     if (! silent)
     {
         lvlCurMin = std::min (lvlCurMin, level);
+        lvlCurMax = std::max (lvlCurMax, level);
         if (++lvlCount >= lvlSubFrames)
         {
             lvlSubMin[static_cast<size_t> (lvlIndex)] = lvlCurMin;
+            lvlSubMax[static_cast<size_t> (lvlIndex)] = lvlCurMax;
             lvlIndex = (lvlIndex + 1) % kSubWindows;
             lvlCount = 0;
-            lvlCurMin = level;
+            lvlCurMin = lvlCurMax = level;
             ++lvlFilled;
         }
     }
-    double quietest = lvlCurMin;
+    double quietest = lvlCurMin, loudest = lvlCurMax;
     for (double m : lvlSubMin) quietest = std::min (quietest, m);
-    const bool quiet = ! silent && lvlFilled >= 2 && level <= kQuietRatio * quietest;   // (after ~1 s of listening)
+    for (double m : lvlSubMax) loudest = std::max (loudest, m);
+    // Quiet = near the quietest, and the last ~5 s also had something clearly louder (words over gaps): a long held
+    // note with nothing around it (after silence, say) is never its own "quiet moment".
+    const bool quiet = ! silent && lvlFilled >= 2 && level <= kQuietRatio * quietest && loudest >= kRangeRatio * quietest;   // (after ~1 s)
 
     // Noise: over the quiet moments, the minimum of the smoothed level of the last ~1.5 s of them (sub-window
     // minima), bias corrected. Nothing (no reduction) until the first quiet moment.

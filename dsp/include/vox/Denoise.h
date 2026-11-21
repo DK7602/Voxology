@@ -96,11 +96,12 @@ private:
     std::vector<double> levelHistory;          // the overall level of the last ~150 ms (is the sound dying away?)
     int levelPos = 0;
     int subFrames = 36, subIndex = 0, subCount = 0, histPos = 0, roomFrames = 9, delayPos = 0;
-    std::array<double, 8> lvlSubMin {};   // the frame level's sub-window minima (the "quiet moments" test)
-    double lvlCurMin = 0.0;
+    std::array<double, 8> lvlSubMin {}, lvlSubMax {};   // the frame level's sub-window minima / maxima (the "quiet moments" test)
+    double lvlCurMin = 0.0, lvlCurMax = 0.0;
     int lvlSubFrames = 117, lvlIndex = 0, lvlCount = 0, lvlFilled = 0;
     size_t loBin = 3, hiBin = 170;
     bool warm = false;
+    int zeroRun = 0, sinceSilence = 1 << 30;   // digital silence: exact zeros in a row; samples since the last run
     double sumIn = 0.0, sumOut = 0.0;
 };
 

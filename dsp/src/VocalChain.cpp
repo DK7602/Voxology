@@ -136,6 +136,7 @@ void VocalChain::reset() noexcept
 {
     clipWatch.reset();
     ai.reset();
+    aiSettledFor = 0;
     denoise.reset();
     pitch.reset();
     cleanup.reset();
@@ -302,11 +303,13 @@ void VocalChain::processChunk (int nch, int len) noexcept
         for (int c = 0; c < nch; ++c) aiPtr[static_cast<size_t> (c)] = aiOut[static_cast<size_t> (c)].data();
         const bool aiListen = lm == listen::cleanup;   // (idle, what it takes out is exactly 0: the line keeps moving)
         ai.process (ch.data(), nch, len, aiListen ? aiPtr.data() : nullptr);
-        // Switching to AI: the classic reducer keeps working (as it was) until the AI is fully on (~0.2 s), so there's no
-        // gap of noise while it warms up. (Back to Classic: the classic one starts at once, the AI glides off.)
+        // Switching to AI: the classic reducer keeps working (as it was) until the AI has been fully on for half a second
+        // (~0.7 s in all: it warms up, glides in, then its running averages settle), so there's no gap of noise. (Back to
+        // Classic: the classic one starts at once, the AI glides off.)
         {
+            aiSettledFor = aiModeNow && ai.settled() ? std::min (aiSettledFor + len, 1 << 30) : 0;
             DenoiseParams d = denoiseNow;
-            if (aiModeNow && ! ai.settled()) { d.noiseDb = denoiseClassic.noiseDb; d.roomPct = denoiseClassic.roomPct; }
+            if (aiModeNow && aiSettledFor < static_cast<int> (0.5 * sr)) { d.noiseDb = denoiseClassic.noiseDb; d.roomPct = denoiseClassic.roomPct; }
             denoise.setParams (d);
         }
         denoise.process (ch.data(), nch, len, lm != listen::off ? earlyPtr.data() : nullptr);

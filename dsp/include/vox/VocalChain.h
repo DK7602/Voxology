@@ -201,6 +201,7 @@ private:
     int aiPos = 0;
     // Noise / Room now; the classic reducer's last settings (it covers the AI's warm-up when you switch to AI).
     bool aiModeNow = false;
+    int aiSettledFor = 0;   // samples the AI has been fully on
     DenoiseParams denoiseNow {}, denoiseClassic {};
     std::array<std::vector<double>, kMaxChannels> work;
     std::array<std::vector<double>, kMaxChannels> dryLine;   // latency-delayed input (bypass / A)
