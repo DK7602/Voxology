@@ -2165,4 +2165,9 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   LISTEN line always moving, channel growth cleared, classic covers the AI's warm-up, UI Noise follows a Mode switch.
   Also fixed an older classic-reducer bug: after digital silence (DAW stopped) it learned no noise for ~5 s.
   All 239 engine tests pass (c52e350; CI green: Windows tests, pluginval 10, VST3 validator, ASan + UBSan).
-  Installer: Sonicology Beta 36 (Mixology run 44925218071, 0.36.0), green. Waiting for the user's test.
+  Installer: Sonicology Beta 36 (Mixology run 44925218071, 0.36.0), green.
+- Voxology 0.73.1 (2026-11-21, Beta 37): the user's Beta 36 test: "sounds good", but the audio cut out twice while
+  Mixology re-analysed the mix. Not reproducible here; the new load is the AI, so it's lighter: no network / FFTs on
+  digital silence (silence 0.06 % of a core), the background AI pass and AI renders rest half the time (pace::Gentler),
+  the hiss level computed exactly (no noise made per prepare). STEP3.md "Beta 36 test". 240 engine tests pass.
+  Asked the user: did Beta 35 cut out on the same re-analysis; how many tracks run Mode AI.
