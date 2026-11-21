@@ -2130,3 +2130,9 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   on a CLEAN take (22 % cut 20-40 dB; the model's lsnr says "noise only"; DF's stage gating makes it worse). Round 2 is
   gentler (less gap noise removed than round 1, still >= classic). sing_r2.pt / .onnx in the private dataset. Sent six
   4-version MP3s (1-4 beeps: before, Voxology now, round 1, round 2). Waiting for the user's call.
+  ROOT CAUSE (user asked; STEP2.md "Root cause"): (1) dead top end: her dark clean held notes have nothing above 8 kHz
+  -> top ERB features far below their running mean -> lsnr "noise only"; training has it in 0.2-1.5 % of voiced
+  moments (noise fills the rest). (2) noise that jumps / drops: ~0.3 s cuts after. SAFETY NET proven: features from
+  take + hiss above 8 kHz at -50 dBFS, mask on the real take (featdither.py): clean take 22 -> 0 %, others unchanged.
+  Round 3 proposed (studio-clean voices, changing noise, new val checks); waiting for the user's go (Kaggle: 30 h
+  left per `kaggle quota`, resets 2026-11-28 00:00 UTC; round 2 may still be charged).

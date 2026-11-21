@@ -12,6 +12,7 @@ Scratch tooling, not built by CMake. Paths inside point at the session scratch (
 | `calib.py` | Recomputes a trained model's BatchNorm running averages from fresh training-style clips (the v1 run's went NaN). |
 | `lossprobe.py` | Sizes of the loss terms for a model on fresh clips (to set round 2's `UNDER_W` / `LEVEL_W`). |
 | `gated.py` | DeepFilterNet's own per-frame stages (local SNR > 30 dB pass through, > 20 dB no deep filter, < -10 dB silence), to test. |
+| `rootcause.py`, `hfcheck.py`, `featdither.py` | Root cause of the remaining cuts: one change at a time; how often training material has a dead top end; the plug-in safety net (the AI looks at the take plus a faint hiss above 8 kHz). |
 | `compare.py`, `clips2.py` | Step 2: one table (input, Voxology now, original AI, retrained AI; same measures) and the 4-version listening MP3s (1-4 beeps). |
 | `libdf.py`, `load.py` | A pure-Python stand-in for DeepFilterNet's Rust `libdf` bits the model code needs, and the loader. |
 

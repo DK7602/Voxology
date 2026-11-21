@@ -112,3 +112,41 @@ dataset. New in the test: the **clean take alone**, which should come out untouc
 
 Verdict: much closer. It passes on three of four voices; the last failure is the worst kind for a vocal plug-in (a
 clean held note turned down), so not shippable yet.
+
+## Root cause of the remaining cuts (2026-11-21, no GPU)
+
+The user asked what would make a third round more effective, and for the root cause. One change at a time on the
+female singer's clean take (`rootcause.py`, round 2 model; notes lost = dropouts):
+
+| Change | Notes lost |
+| --- | --- |
+| none | 22 % |
+| level -20 to +12 dB | 11-23 % |
+| what comes before the note (silence, her singing, noise) | no change |
+| vibrato +-15 / +-40 cents | 21 / 17 % |
+| pitch +-1 / +-3 semitones | 18-23 % / 6 % |
+| steady pink noise at 40 / 30 / 20 dB SNR | 16 / 12 / 1 % |
+| low-pass 8 kHz | 8 % |
+| a faint hiss above 8 kHz at -70 / -60 / -50 dBFS | 16 / 8 / **0 %** |
+
+1. **Dead top end.** In the cut moments her voice has nothing above 8 kHz (8-12 kHz 60 dB below the frame, 12-16
+   kHz ~104 dB: digital silence; her stem is cut off and very clean). The model's top ERB features then drop far below
+   their running average (about -0.4 against ~0 when kept), a state it never learned as "voice": its local SNR reads
+   "noise only". Training material almost never has it (`hfcheck.py`: voiced moments with a dead 8-16 kHz band:
+   VocalSet 1.5 %, the packs 0.2 %, against 17 % in the test singer; and 88 % of training clips add noise, which fills
+   the top end). Real home takes always have some mic hiss up there (the user's takes: 0 % cut).
+2. **Noise that changes suddenly.** What is left on the real noise after fixing 1 (10 %) sits right after the noise
+   jumps or falls away (5.1-5.4 s after a -17 dB burst, 6.7-6.9 s and 7.2-7.5 s as it drops by 15-30 dB): the model
+   cuts the voice for ~0.3 s. Training noise is steady within each 3 s clip.
+
+**Safety net, proven** (`featdither.py`): the AI looks at the take plus a faint hiss above 8 kHz at -50 dBFS; its
+mask and filter go on the real take, so nothing is added to the sound. Female singer clean take 22 % -> **0 %**
+(SI-SDR 12.2 -> 27.8, above Voxology now's 26.1), bedroom 19 -> 1 %, real noise 14 -> 10 %; every other case the same
+(within 1 dB / 1 %).
+
+**Round 3, aimed at both causes** (proposed, waiting for the user): start from round 2; (a) "studio-clean" voices:
+a random brick-wall low-pass at 7-16 kHz, gated digital silence in pauses, dark EQ, and more clean or near-clean
+examples (clean-only 10 -> 20 %, SNR up to 60 dB); (b) noise that changes: on / off, pulses, fades, sudden jumps of
+10-30 dB and short loud knocks in about a third of the noisy clips; (c) checks for a dark clean take and a pulsing
+noise in the validation, used to pick the best model; (d) keep the round 2 penalties. The safety net stays in the
+plug-in either way.
