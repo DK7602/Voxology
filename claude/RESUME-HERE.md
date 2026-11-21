@@ -2164,4 +2164,5 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   Fresh-eyes review (subagent) fixes: staged network, Rack Mode (gate as one value: 8 max), unsupported rate -> classic,
   LISTEN line always moving, channel growth cleared, classic covers the AI's warm-up, UI Noise follows a Mode switch.
   Also fixed an older classic-reducer bug: after digital silence (DAW stopped) it learned no noise for ~5 s.
-  All 239 engine tests pass locally (c52e350). Installer: Sonicology Beta 36 (Mixology run 44925218071, 0.36.0).
+  All 239 engine tests pass (c52e350; CI green: Windows tests, pluginval 10, VST3 validator, ASan + UBSan).
+  Installer: Sonicology Beta 36 (Mixology run 44925218071, 0.36.0), green. Waiting for the user's test.
