@@ -74,6 +74,9 @@ TEST_CASE ("Listen: what plays is exactly what the module took out", "[listen]")
     { ChainParams p; p.cleanup.noiseDb = 15; p.cleanup.roomPct = 60; cases.push_back ({ "Noise + Room", listen::cleanup, p }); }
     { ChainParams p; p.cleanup.noiseDb = 10; p.cleanup.lowCutHz = 150; p.cleanup.gateThrDb = -30; p.cleanup.gateRangeDb = 12;
       p.cleanup.breathDb = 8; p.cleanup.popAmount = 60; cases.push_back ({ "all of Cleanup", listen::cleanup, p }); }
+    { ChainParams p; p.cleanup.aiMode = true; p.cleanup.noiseDb = 24; cases.push_back ({ "AI cleanup", listen::cleanup, p }); }
+    { ChainParams p; p.cleanup.aiMode = true; p.cleanup.noiseDb = 12; p.cleanup.gateThrDb = -30; p.cleanup.gateRangeDb = 12;
+      p.cleanup.breathDb = 8; cases.push_back ({ "AI cleanup (12 dB) + gate + breaths", listen::cleanup, p }); }
     { ChainParams p; p.dynEq.smoothPct = 90; cases.push_back ({ "Smooth", listen::dynEq, p }); }
     { ChainParams p; p.dynEq.maxCutDb = { 6, 6, 6, 9 }; p.dynEq.sensitivity = 80; p.dynEq.smoothPct = 60;
       cases.push_back ({ "Dynamic EQ bands + Smooth", listen::dynEq, p }); }

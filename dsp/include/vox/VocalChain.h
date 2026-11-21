@@ -110,14 +110,14 @@ struct ChainMeters
       everything after hears the cleaner vocal) ->
       Pitch -> Cleanup (low cut, gate, pops, mouth clicks, breaths) -> Tone EQ -> Dynamic EQ -> De-Esser -> Rider -> Compressor -> Saturation      (inserts, linked)
       -> Doubler -> Delay -> Reverb (added to the vocal, stereo) -> Output gain
-    Constant latency (the AI's 2 frames + the noise reducer's frame + Pitch look-ahead + Saturation oversampling; Record mode: no
+    Constant latency (the AI's 2 frames and a hop + the noise reducer's frame + Pitch look-ahead + Saturation oversampling; Record mode: no
     AI or noise reducer). Framework-free: the plug-in, Auto-Edit and the
     tests all run this same class. prepare() allocates; process() never does (any block size). */
 class VocalChain
 {
 public:
     static constexpr int kChunk = 256;
-    /** The AI's 2 frames + the noise reducer's frame + Pitch's look-ahead + Saturation's oversampling; constant for a given
+    /** The AI's 2 frames and a hop + the noise reducer's frame + Pitch's look-ahead + Saturation's oversampling; constant for a given
         sample rate (on or off). */
     int latencySamples() const noexcept
     {
@@ -199,6 +199,9 @@ private:
     // LISTEN in AI mode: what the AI took out waits the noise reducer's frame to join what that took out.
     std::array<std::vector<double>, kMaxChannels> aiLine;
     int aiPos = 0;
+    // Noise / Room now; the classic reducer's last settings (it covers the AI's warm-up when you switch to AI).
+    bool aiModeNow = false;
+    DenoiseParams denoiseNow {}, denoiseClassic {};
     std::array<std::vector<double>, kMaxChannels> work;
     std::array<std::vector<double>, kMaxChannels> dryLine;   // latency-delayed input (bypass / A)
     int dryPos = 0;

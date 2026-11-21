@@ -15,7 +15,8 @@
     Every 10 ms a 20 ms frame (Vorbis window, 50 Hz bins at any sample rate: 960 points at 48 kHz, 882 at 44.1 kHz)
     gives the network 32 band levels (ERB bands, dB, minus their 1 s running average) and the lowest 96 bins
     (0 - 4.8 kHz, divided by their running level). It returns a gain per band (0..1) and a 5-tap complex filter per
-    low bin that reaches 2 frames ahead; so the output is 2 frames late, 40 ms in all (latencySamples()).
+    low bin that reaches 2 frames ahead; so the output is 2 frames late, plus the hop over which the network's work is
+    spread (6 pieces, so no audio callback carries a whole frame of it): 50 ms in all (latencySamples()).
     Channels are linked: the network hears the mid, its gains and filter go on each channel.
 
     Safety net (STEP2.md "Root cause"): the network judges a faint hiss above 8 kHz added to what it hears (never
@@ -57,11 +58,16 @@ public:
     void reset() noexcept;
     /** erb: kErb features; spec: kDf (re, im) pairs -> mask: kErb gains (0..1); coefs: kDf x kOrder (re, im). */
     void step (const float* erb, const float* spec, float* mask, float* coefs) noexcept;
+    /** The same in pieces, so one frame's work spreads over the next 10 ms of audio callbacks (none takes it all):
+        begin() then stage (0 .. kStages - 1) in order; stage 3 writes mask, the last stage coefs. */
+    static constexpr int kStages = 6;
+    void begin (const float* erb, const float* spec) noexcept;
+    void stage (int k, float* mask, float* coefs) noexcept;
 
 private:
     // History of the inputs the convolutions look back over (frame rings), and the five GRU layers' states.
     std::vector<float> erbHist, specHist, c0Hist;
-    int erbPos = 0, specPos = 0, c0Pos = 0;
+    int erbPos = 0, specPos = 0, c0Pos = 0, erbAt = 0, specAt = 0, c0At = 0;
     std::array<std::vector<float>, 5> h;
     // Work buffers.
     std::vector<float> e0, e1, e2, e3, c0, c1, tmp, tmp2, flat, emb, x256, gi, gh, y512, t3, t2, t1, cp, dfo;
@@ -90,7 +96,7 @@ public:
     void prepare (double sampleRate, int numChannels);
     void reset() noexcept;
     void setParams (const AiCleanupParams& p) noexcept { params = p; }
-    /** Constant (2 frames, 40 ms), on or off, so the chain's timing never changes. */
+    /** Constant (2 frames + a hop, 50 ms), on or off, so the chain's timing never changes. */
     int latencySamples() const noexcept { return latency; }
 
     /** removed (optional): what it takes out (the input, latencySamples() late, minus the output). */
@@ -100,6 +106,10 @@ public:
     double takeReductionDb() noexcept;
     /** Working (on, or still gliding off)? */
     bool working() const noexcept { return state != State::idle; }
+    /** Fully on at the strength asked for (or not asked to work): the chain hands over from the classic reducer then. */
+    bool settled() const noexcept { return ! (params.on && params.strengthDb >= 0.05 && supported) || (state == State::running && amount >= goalAmount - 1e-9 && goalAmount > 0.0); }
+    /** It can work here (a supported sample rate, the weights loaded). */
+    bool available() const noexcept { return supported; }
 
     // For the tests.
     bool netOk() const noexcept { return net.ok(); }
@@ -131,8 +141,9 @@ private:
     std::vector<double> hissFrame, hopMid;
     std::array<std::vector<std::complex<double>>, kMaxChannels> spec;   // the last kOrder spectra, ring
     std::vector<std::complex<double>> cin, cout, featSpec;
-    int specPos = 0, pos = 0, dryPos = 0, channelsNow = 1, passFrames = 0;
-    bool haveCoefs = false;
+    int specPos = 0, pos = 0, dryPos = 0, channelsNow = 1, lastChannels = 1, passFrames = 0, nextStage = 0;
+    bool haveCoefs = false, stepping = false;   // stepping: the network's frame is being worked on over this hop
+    double goalAmount = 0.0;
 
     // Features (the running averages start where DeepFilterNet's do) and the network's in / out.
     std::vector<double> erbEma, unitEma;

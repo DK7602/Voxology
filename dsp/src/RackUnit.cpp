@@ -285,8 +285,8 @@ namespace vox::rackunit
             add (m, "Pops", offOr (c.popAmount, pct (c.popAmount)), "clPops", c.popAmount);
             add (m, "Clicks", offOr (c.clickAmount, pct (c.clickAmount)), "clClicks", c.clickAmount);
             add (m, "Breaths", cut (c.breathDb), "clBreath", c.breathDb);
-            add (m, "Gate", db (c.gateThrDb), "clGateThr", c.gateThrDb);
-            add (m, "Gate Range", offOr (c.gateRangeDb, db (c.gateRangeDb)), "clGateRange", c.gateRangeDb);
+            // (8 values at most: the gate as one, its range on the knob and its threshold in the text; then Mode.)
+            add (m, "Gate", c.gateRangeDb >= 0.05 ? db (-c.gateRangeDb) + " under " + db (c.gateThrDb) : std::string ("Off"), "clGateRange", c.gateRangeDb);
             add (m, "Mode", c.aiMode ? "AI" : "Classic", "clMode", c.aiMode ? 1.0 : 0.0);
             if (c.aiMode)
             {

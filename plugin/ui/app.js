@@ -497,7 +497,20 @@ function cleanupCells() {
     noise.refresh(); room.refresh();
   };
   P.clMode.valueChangedEvent.addListener(show);   // (Auto-Edit, the host, the Rack)
-  mode.addEventListener("click", () => setTimeout(show, 0));   // (a click here: the value is set before the host echoes it)
+  // A click here (the value is set before the host echoes it). Switching by hand, Noise follows the new meaning: to AI
+  // with Noise (nearly) off -> AI full; to Classic from a deep AI setting -> 12 dB (deeper sounds watery there).
+  let before = null;   // the Mode before this click (capture phase: before the button sets it)
+  mode.addEventListener("click", () => { before = choice("clMode"); }, true);
+  mode.addEventListener("click", () => setTimeout(() => {
+    const now = choice("clMode");
+    if (before !== null && now !== before) {
+      const s = P.clNoise, v = val("clNoise");
+      const to = now === 1 ? (v < 6 ? 24 : null) : (v > 15 ? 12 : null);
+      if (to !== null) { s.sliderDragStarted(); s.setNormalisedValue(scaledToNorm(s, to)); s.sliderDragEnded(); anyEdited(); }
+    }
+    before = null;
+    show();
+  }, 0));
   const modeRefresh = mode.refresh;
   mode.refresh = () => { modeRefresh(); show(); };
   show();

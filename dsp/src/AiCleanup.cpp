@@ -361,12 +361,8 @@ void Net::reset() noexcept
     erbPos = specPos = c0Pos = 0;
 }
 
-void Net::step (const float* erb, const float* specIn, float* maskOut, float* coefsOut) noexcept
+void Net::begin (const float* erb, const float* specIn) noexcept
 {
-    const Weights& ws = weights();
-    if (! ws.ok) return;
-    const W& w = ws.w;
-
     // History: the newest frame goes in at pos; frame t (0 = oldest of K) is at (pos + 1 + t) % K.
     std::copy (erb, erb + kErb, erbHist.data() + erbPos * kErb);
     for (int k = 0; k < kDf; ++k)
@@ -374,132 +370,172 @@ void Net::step (const float* erb, const float* specIn, float* maskOut, float* co
         specHist[static_cast<size_t> ((specPos * 2) * kDf + k)] = specIn[2 * k];
         specHist[static_cast<size_t> ((specPos * 2 + 1) * kDf + k)] = specIn[2 * k + 1];
     }
-    const int erbAt = erbPos, specAt = specPos;
+    erbAt = erbPos;
+    specAt = specPos;
     erbPos = (erbPos + 1) % 3;
     specPos = (specPos + 1) % 3;
+}
 
-    // ---- encoder
-    // erb_conv0: 1 -> 64 channels, kernel 3 (time) x 3 (freq) over the last 3 frames.
-    for (int o = 0; o < C; ++o)
+void Net::stage (int piece, float* maskOut, float* coefsOut) noexcept
+{
+    const Weights& ws = weights();
+    if (! ws.ok) return;
+    const W& w = ws.w;
+    switch (piece)
     {
-        float* yo = e0.data() + o * 32;
-        std::fill (yo, yo + 32, w.erb0b[o]);
-        for (int t = 0; t < 3; ++t)
+        case 0:   // the encoder's convolutions
         {
-            const float* x = erbHist.data() + ((erbAt + 1 + t) % 3) * kErb;
-            const float* k3 = w.erb0w + (o * 3 + t) * 3;
-            for (int f = 0; f < 32; ++f)
+            // ---- encoder
+            // erb_conv0: 1 -> 64 channels, kernel 3 (time) x 3 (freq) over the last 3 frames.
+            for (int o = 0; o < C; ++o)
             {
-                float s = k3[1] * x[f];
-                if (f > 0) s += k3[0] * x[f - 1];
-                if (f < 31) s += k3[2] * x[f + 1];
-                yo[f] += s;
+                float* yo = e0.data() + o * 32;
+                std::fill (yo, yo + 32, w.erb0b[o]);
+                for (int t = 0; t < 3; ++t)
+                {
+                    const float* x = erbHist.data() + ((erbAt + 1 + t) % 3) * kErb;
+                    const float* k3 = w.erb0w + (o * 3 + t) * 3;
+                    for (int f = 0; f < 32; ++f)
+                    {
+                        float s = k3[1] * x[f];
+                        if (f > 0) s += k3[0] * x[f - 1];
+                        if (f < 31) s += k3[2] * x[f + 1];
+                        yo[f] += s;
+                    }
+                }
             }
-        }
-    }
-    reluAll (e0.data(), C * 32);
-    depthwise (e0.data(), C, 32, w.erb1dw, 2, tmp.data());  pointwise64 (tmp.data(), C, 16, w.erb1pw, w.erb1b, e1.data()); reluAll (e1.data(), C * 16);
-    depthwise (e1.data(), C, 16, w.erb2dw, 2, tmp.data());  pointwise64 (tmp.data(), C, 8, w.erb2pw, w.erb2b, e2.data());  reluAll (e2.data(), C * 8);
-    depthwise (e2.data(), C, 8, w.erb3dw, 1, tmp.data());   pointwise64 (tmp.data(), C, 8, w.erb3pw, w.erb3b, e3.data());  reluAll (e3.data(), C * 8);
+            reluAll (e0.data(), C * 32);
+            depthwise (e0.data(), C, 32, w.erb1dw, 2, tmp.data());  pointwise64 (tmp.data(), C, 16, w.erb1pw, w.erb1b, e1.data()); reluAll (e1.data(), C * 16);
+            depthwise (e1.data(), C, 16, w.erb2dw, 2, tmp.data());  pointwise64 (tmp.data(), C, 8, w.erb2pw, w.erb2b, e2.data());  reluAll (e2.data(), C * 8);
+            depthwise (e2.data(), C, 8, w.erb3dw, 1, tmp.data());   pointwise64 (tmp.data(), C, 8, w.erb3pw, w.erb3b, e3.data());  reluAll (e3.data(), C * 8);
 
-    // df_conv0: 2 -> 64 channels in 2 groups (real -> 0..31, imaginary -> 32..63), 3 x 3, then pointwise.
-    for (int o = 0; o < C; ++o)
-    {
-        float* yo = tmp.data() + o * kDf;
-        std::fill (yo, yo + kDf, 0.0f);
-        const int part = o / 32;
-        for (int t = 0; t < 3; ++t)
+            // df_conv0: 2 -> 64 channels in 2 groups (real -> 0..31, imaginary -> 32..63), 3 x 3, then pointwise.
+            for (int o = 0; o < C; ++o)
+            {
+                float* yo = tmp.data() + o * kDf;
+                std::fill (yo, yo + kDf, 0.0f);
+                const int part = o / 32;
+                for (int t = 0; t < 3; ++t)
+                {
+                    const float* x = specHist.data() + (((specAt + 1 + t) % 3) * 2 + part) * kDf;
+                    const float* k3 = w.df0g + (o * 3 + t) * 3;
+                    for (int f = 0; f < kDf; ++f)
+                    {
+                        float s = k3[1] * x[f];
+                        if (f > 0) s += k3[0] * x[f - 1];
+                        if (f < kDf - 1) s += k3[2] * x[f + 1];
+                        yo[f] += s;
+                    }
+                }
+            }
+            pointwise64 (tmp.data(), C, kDf, w.df0pw, w.df0b, c0.data()); reluAll (c0.data(), C * kDf);
+            depthwise (c0.data(), C, kDf, w.df1dw, 2, tmp.data()); pointwise64 (tmp.data(), C, 48, w.df1pw, w.df1b, c1.data()); reluAll (c1.data(), C * 48);
+
+            // Embedding: c1 as [freq][channel] -> grouped linear 3072 -> 512 (+ ReLU), added to e3 as [freq][channel].
+            for (int c = 0; c < C; ++c)
+                for (int f = 0; f < 48; ++f) flat[static_cast<size_t> (f * C + c)] = c1[static_cast<size_t> (c * 48 + f)];
+            grouped (flat.data(), 32, 96, 16, w.dfFcEmb, emb.data());
+            reluAll (emb.data(), 512);
+            for (int c = 0; c < C; ++c)
+                for (int f = 0; f < 8; ++f) emb[static_cast<size_t> (f * C + c)] += e3[static_cast<size_t> (c * 8 + f)];
+            break;
+        }
+        case 1:   // the encoder's GRU
         {
-            const float* x = specHist.data() + (((specAt + 1 + t) % 3) * 2 + part) * kDf;
-            const float* k3 = w.df0g + (o * 3 + t) * 3;
+            grouped (emb.data(), 16, 32, 16, w.encIn, x256.data()); reluAll (x256.data(), HID);
+            gru (x256.data(), w.encWih, w.encWhh, w.encBih, w.encBhh, h[0].data(), gi.data(), gh.data());
+            grouped (h[0].data(), 16, 16, 32, w.encOut, emb.data()); reluAll (emb.data(), 512);   // emb: the encoder's output
+
+            break;
+        }
+        case 2:   // the ERB decoder's first GRU layer
+        {
+            // ---- ERB decoder: the band gains
+            grouped (emb.data(), 16, 32, 16, w.erbIn, x256.data()); reluAll (x256.data(), HID);
+            gru (x256.data(), w.erbWih0, w.erbWhh0, w.erbBih0, w.erbBhh0, h[1].data(), gi.data(), gh.data());
+            break;
+        }
+        case 3:   // its second, then up to the band gains
+        {
+            gru (h[1].data(), w.erbWih1, w.erbWhh1, w.erbBih1, w.erbBhh1, h[2].data(), gi.data(), gh.data());
+            grouped (h[2].data(), 16, 16, 32, w.erbOut, y512.data()); reluAll (y512.data(), 512);
+            // Pathways (per-channel scale + bias + ReLU) added to what comes up.
+            const auto path = [] (const float* e, int f, const float* pw, const float* pb, float* out) noexcept
+            {
+                for (int c = 0; c < C; ++c)
+                    for (int k = 0; k < f; ++k) out[c * f + k] = relu (pw[c] * e[c * f + k] + pb[c]);
+            };
+            path (e3.data(), 8, w.p3w, w.p3b, tmp.data());
+            for (int c = 0; c < C; ++c)
+                for (int f = 0; f < 8; ++f) tmp[static_cast<size_t> (c * 8 + f)] += y512[static_cast<size_t> (f * C + c)];
+            depthwise (tmp.data(), C, 8, w.t3dw, 1, tmp2.data()); pointwise64 (tmp2.data(), C, 8, w.t3pw, w.t3b, t3.data()); reluAll (t3.data(), C * 8);
+            path (e2.data(), 8, w.p2w, w.p2b, tmp.data());
+            for (int i = 0; i < C * 8; ++i) tmp[static_cast<size_t> (i)] += t3[static_cast<size_t> (i)];
+            depthwiseUp (tmp.data(), C, 8, w.t2dw, tmp2.data()); pointwise64 (tmp2.data(), C, 16, w.t2pw, w.t2b, t2.data()); reluAll (t2.data(), C * 16);
+            path (e1.data(), 16, w.p1w, w.p1b, tmp.data());
+            for (int i = 0; i < C * 16; ++i) tmp[static_cast<size_t> (i)] += t2[static_cast<size_t> (i)];
+            depthwiseUp (tmp.data(), C, 16, w.t1dw, tmp2.data()); pointwise64 (tmp2.data(), C, 32, w.t1pw, w.t1b, t1.data()); reluAll (t1.data(), C * 32);
+            path (e0.data(), 32, w.p0w, w.p0b, tmp.data());
+            for (int i = 0; i < C * 32; ++i) tmp[static_cast<size_t> (i)] += t1[static_cast<size_t> (i)];
+            for (int f = 0; f < kErb; ++f)
+            {
+                float s = w.outB[0];
+                for (int c = 0; c < C; ++c)
+                {
+                    const float* x = tmp.data() + c * 32;
+                    const float* k3 = w.outW + c * 3;
+                    s += k3[1] * x[f];
+                    if (f > 0) s += k3[0] * x[f - 1];
+                    if (f < 31) s += k3[2] * x[f + 1];
+                }
+                maskOut[f] = sigm (s);
+            }
+
+            break;
+        }
+        case 4:   // the DF decoder's first GRU layer
+        {
+            // ---- DF decoder: the low bins' filter taps
+            std::copy (c0.begin(), c0.end(), c0Hist.begin() + c0Pos * C * kDf);
+            c0At = c0Pos;
+            c0Pos = (c0Pos + 1) % 5;
+            grouped (emb.data(), 8, 64, 32, w.dfIn, x256.data()); reluAll (x256.data(), HID);
+            gru (x256.data(), w.dfWih0, w.dfWhh0, w.dfBih0, w.dfBhh0, h[3].data(), gi.data(), gh.data());
+            break;
+        }
+        default:  // its second, then the filter taps
+        {
+            gru (h[3].data(), w.dfWih1, w.dfWhh1, w.dfBih1, w.dfBhh1, h[4].data(), gi.data(), gh.data());
+            grouped (emb.data(), 16, 32, 16, w.dfSkip, x256.data());
+            for (int k = 0; k < HID; ++k) x256[static_cast<size_t> (k)] += h[4][static_cast<size_t> (k)];
+            // df_convp: 64 -> 10 channels in 2 groups (32 in, 5 out each), 5 frames x 1 bin, then pointwise.
+            for (int o = 0; o < 10; ++o)
+            {
+                float* __restrict yo = tmp.data() + o * kDf;
+                std::fill (yo, yo + kDf, 0.0f);
+                const int base = (o / 5) * 32;
+                for (int i = 0; i < 32; ++i)
+                    for (int t = 0; t < 5; ++t)
+                    {
+                        const float wv = w.dfpG[(o * 32 + i) * 5 + t];
+                        const float* __restrict x = c0Hist.data() + ((c0At + 1 + t) % 5) * C * kDf + (base + i) * kDf;
+                        for (int f = 0; f < kDf; ++f) yo[f] += wv * x[f];
+                    }
+            }
+            pointwise (tmp.data(), 10, kDf, w.dfpPw, w.dfpB, 10, cp.data()); reluAll (cp.data(), 10 * kDf);
+            grouped (x256.data(), 16, 16, 60, w.dfOut, dfo.data());
             for (int f = 0; f < kDf; ++f)
-            {
-                float s = k3[1] * x[f];
-                if (f > 0) s += k3[0] * x[f - 1];
-                if (f < kDf - 1) s += k3[2] * x[f + 1];
-                yo[f] += s;
-            }
+                for (int j = 0; j < 10; ++j)
+                    coefsOut[f * 10 + j] = std::tanh (dfo[static_cast<size_t> (f * 10 + j)]) + cp[static_cast<size_t> (j * kDf + f)];
+            break;
         }
     }
-    pointwise64 (tmp.data(), C, kDf, w.df0pw, w.df0b, c0.data()); reluAll (c0.data(), C * kDf);
-    depthwise (c0.data(), C, kDf, w.df1dw, 2, tmp.data()); pointwise64 (tmp.data(), C, 48, w.df1pw, w.df1b, c1.data()); reluAll (c1.data(), C * 48);
+}
 
-    // Embedding: c1 as [freq][channel] -> grouped linear 3072 -> 512 (+ ReLU), added to e3 as [freq][channel].
-    for (int c = 0; c < C; ++c)
-        for (int f = 0; f < 48; ++f) flat[static_cast<size_t> (f * C + c)] = c1[static_cast<size_t> (c * 48 + f)];
-    grouped (flat.data(), 32, 96, 16, w.dfFcEmb, emb.data());
-    reluAll (emb.data(), 512);
-    for (int c = 0; c < C; ++c)
-        for (int f = 0; f < 8; ++f) emb[static_cast<size_t> (f * C + c)] += e3[static_cast<size_t> (c * 8 + f)];
-    grouped (emb.data(), 16, 32, 16, w.encIn, x256.data()); reluAll (x256.data(), HID);
-    gru (x256.data(), w.encWih, w.encWhh, w.encBih, w.encBhh, h[0].data(), gi.data(), gh.data());
-    grouped (h[0].data(), 16, 16, 32, w.encOut, emb.data()); reluAll (emb.data(), 512);   // emb: the encoder's output
-
-    // ---- ERB decoder: the band gains
-    grouped (emb.data(), 16, 32, 16, w.erbIn, x256.data()); reluAll (x256.data(), HID);
-    gru (x256.data(), w.erbWih0, w.erbWhh0, w.erbBih0, w.erbBhh0, h[1].data(), gi.data(), gh.data());
-    gru (h[1].data(), w.erbWih1, w.erbWhh1, w.erbBih1, w.erbBhh1, h[2].data(), gi.data(), gh.data());
-    grouped (h[2].data(), 16, 16, 32, w.erbOut, y512.data()); reluAll (y512.data(), 512);
-    // Pathways (per-channel scale + bias + ReLU) added to what comes up.
-    const auto path = [] (const float* e, int f, const float* pw, const float* pb, float* out) noexcept
-    {
-        for (int c = 0; c < C; ++c)
-            for (int k = 0; k < f; ++k) out[c * f + k] = relu (pw[c] * e[c * f + k] + pb[c]);
-    };
-    path (e3.data(), 8, w.p3w, w.p3b, tmp.data());
-    for (int c = 0; c < C; ++c)
-        for (int f = 0; f < 8; ++f) tmp[static_cast<size_t> (c * 8 + f)] += y512[static_cast<size_t> (f * C + c)];
-    depthwise (tmp.data(), C, 8, w.t3dw, 1, tmp2.data()); pointwise64 (tmp2.data(), C, 8, w.t3pw, w.t3b, t3.data()); reluAll (t3.data(), C * 8);
-    path (e2.data(), 8, w.p2w, w.p2b, tmp.data());
-    for (int i = 0; i < C * 8; ++i) tmp[static_cast<size_t> (i)] += t3[static_cast<size_t> (i)];
-    depthwiseUp (tmp.data(), C, 8, w.t2dw, tmp2.data()); pointwise64 (tmp2.data(), C, 16, w.t2pw, w.t2b, t2.data()); reluAll (t2.data(), C * 16);
-    path (e1.data(), 16, w.p1w, w.p1b, tmp.data());
-    for (int i = 0; i < C * 16; ++i) tmp[static_cast<size_t> (i)] += t2[static_cast<size_t> (i)];
-    depthwiseUp (tmp.data(), C, 16, w.t1dw, tmp2.data()); pointwise64 (tmp2.data(), C, 32, w.t1pw, w.t1b, t1.data()); reluAll (t1.data(), C * 32);
-    path (e0.data(), 32, w.p0w, w.p0b, tmp.data());
-    for (int i = 0; i < C * 32; ++i) tmp[static_cast<size_t> (i)] += t1[static_cast<size_t> (i)];
-    for (int f = 0; f < kErb; ++f)
-    {
-        float s = w.outB[0];
-        for (int c = 0; c < C; ++c)
-        {
-            const float* x = tmp.data() + c * 32;
-            const float* k3 = w.outW + c * 3;
-            s += k3[1] * x[f];
-            if (f > 0) s += k3[0] * x[f - 1];
-            if (f < 31) s += k3[2] * x[f + 1];
-        }
-        maskOut[f] = sigm (s);
-    }
-
-    // ---- DF decoder: the low bins' filter taps
-    std::copy (c0.begin(), c0.end(), c0Hist.begin() + c0Pos * C * kDf);
-    const int c0At = c0Pos;
-    c0Pos = (c0Pos + 1) % 5;
-    grouped (emb.data(), 8, 64, 32, w.dfIn, x256.data()); reluAll (x256.data(), HID);
-    gru (x256.data(), w.dfWih0, w.dfWhh0, w.dfBih0, w.dfBhh0, h[3].data(), gi.data(), gh.data());
-    gru (h[3].data(), w.dfWih1, w.dfWhh1, w.dfBih1, w.dfBhh1, h[4].data(), gi.data(), gh.data());
-    grouped (emb.data(), 16, 32, 16, w.dfSkip, x256.data());
-    for (int k = 0; k < HID; ++k) x256[static_cast<size_t> (k)] += h[4][static_cast<size_t> (k)];
-    // df_convp: 64 -> 10 channels in 2 groups (32 in, 5 out each), 5 frames x 1 bin, then pointwise.
-    for (int o = 0; o < 10; ++o)
-    {
-        float* __restrict yo = tmp.data() + o * kDf;
-        std::fill (yo, yo + kDf, 0.0f);
-        const int base = (o / 5) * 32;
-        for (int i = 0; i < 32; ++i)
-            for (int t = 0; t < 5; ++t)
-            {
-                const float wv = w.dfpG[(o * 32 + i) * 5 + t];
-                const float* __restrict x = c0Hist.data() + ((c0At + 1 + t) % 5) * C * kDf + (base + i) * kDf;
-                for (int f = 0; f < kDf; ++f) yo[f] += wv * x[f];
-            }
-    }
-    pointwise (tmp.data(), 10, kDf, w.dfpPw, w.dfpB, 10, cp.data()); reluAll (cp.data(), 10 * kDf);
-    grouped (x256.data(), 16, 16, 60, w.dfOut, dfo.data());
-    for (int f = 0; f < kDf; ++f)
-        for (int j = 0; j < 10; ++j)
-            coefsOut[f * 10 + j] = std::tanh (dfo[static_cast<size_t> (f * 10 + j)]) + cp[static_cast<size_t> (j * kDf + f)];
+void Net::step (const float* erb, const float* specIn, float* maskOut, float* coefsOut) noexcept
+{
+    begin (erb, specIn);
+    for (int k = 0; k < kStages; ++k) stage (k, maskOut, coefsOut);
 }
 
 } // namespace vox::ai
@@ -532,7 +568,7 @@ void AiCleanup::prepare (double sampleRate, int numChannels)
     n = supports (sr) ? static_cast<int> (std::lround (sr / 50.0)) : 2 * static_cast<int> (std::lround (sr / 100.0));
     hop = n / 2;
     bins = n / 2 + 1;
-    latency = 2 * n;
+    latency = 2 * n + n / 2;   // 2 frames + the hop the network takes to think
     fft.prepare (n);
     window.resize (static_cast<size_t> (n));
     for (int i = 0; i < n; ++i)
@@ -609,7 +645,11 @@ void AiCleanup::reset() noexcept
     state = State::idle;
     stateFrames = netWarm = 0;
     amount = 0.0;
-    haveCoefs = false;
+    haveCoefs = stepping = false;
+    nextStage = 0;
+    passFrames = 0;
+    goalAmount = 0.0;
+    lastChannels = channels;
     net.reset();
     rng = 0x9E3779B97F4A7C15ull; haveSpare = false;
     for (auto& f : hissHp) f.reset();
@@ -648,6 +688,16 @@ double AiCleanup::takeReductionDb() noexcept
 void AiCleanup::process (double* const* ch, int nch, int len, double* const* removed) noexcept
 {
     nch = std::clamp (nch, 1, channels);
+    if (nch > lastChannels)   // a channel coming back: nothing stale from before in it
+    {
+        for (int c = lastChannels; c < nch; ++c)
+        {
+            const auto cs = static_cast<size_t> (c);
+            for (auto* v : { &frameIn[cs], &hopIn[cs], &ola[cs], &outFifo[cs], &dry[cs] }) std::fill (v->begin(), v->end(), 0.0);
+            std::fill (spec[cs].begin(), spec[cs].end(), std::complex<double> {});
+        }
+    }
+    lastChannels = nch;
     const int dlen = latency + 1;
     for (int i = 0; i < len; ++i)
     {
@@ -673,6 +723,8 @@ void AiCleanup::process (double* const* ch, int nch, int len, double* const* rem
             channelsNow = nch;
             frame();
         }
+        else if (stepping && nextStage < ai::Net::kStages && pos >= nextStage * hop / ai::Net::kStages)
+            net.stage (nextStage++, mask.data(), coefs.data());   // (one piece of the network's frame per stretch of the hop)
     }
 }
 
@@ -680,7 +732,8 @@ void AiCleanup::startNet() noexcept
 {
     net.reset();
     netWarm = 0;
-    haveCoefs = false;
+    haveCoefs = stepping = false;
+    nextStage = 0;
     amount = 0.0;
     for (int b = 0; b < ai::Net::kErb; ++b) erbEma[static_cast<size_t> (b)] = -60.0 - 30.0 * b / (ai::Net::kErb - 1);
     for (int k = 0; k < ai::Net::kDf; ++k) unitEma[static_cast<size_t> (k)] = 0.001 - 0.0009 * k / (ai::Net::kDf - 1);
@@ -698,7 +751,7 @@ void AiCleanup::startNowForTests() noexcept
 {
     state = State::running;
     startNet();
-    amount = 1.0;
+    amount = goalAmount = 1.0;
 }
 
 void AiCleanup::features() noexcept
@@ -776,8 +829,78 @@ void AiCleanup::frame() noexcept
         if (pDb > peakDb - 30.0 && pDb > -80.0) voicePow += (1.0 - std::exp (-0.01 / 2.0)) * (p - voicePow);
     }
 
+    // 1. The network's frame from the last hop (its pieces ran in that hop's callbacks): finish it, then the frame it
+    //    judges goes out: 3 back (the network looks 2 ahead, and took a hop to think), band gains above 4.8 kHz, the
+    //    5-tap filter below. The ring holds the last 5 spectra; this frame's goes in after, over the oldest.
+    if (stepping)
+    {
+        while (nextStage < ai::Net::kStages) net.stage (nextStage++, mask.data(), coefs.data());
+        stepping = false;
+        haveCoefs = true;
+    }
+    else haveCoefs = false;
+    if (state != State::idle)
+    {
+        const int K = ai::Net::kOrder;
+        const int at = (specPos + K - 3) % K;
+        const bool apply = haveCoefs && amount > 0.0;
+        const int have = std::min (bins, kModelBins);
+        double eIn = 0.0, eOut = 0.0;
+        for (int c = 0; c < nch; ++c)
+        {
+            const auto& S = spec[static_cast<size_t> (c)];
+            const auto* Xt = S.data() + at * bins;
+            for (int k = 0; k < bins; ++k)
+            {
+                std::complex<double> y = Xt[k];
+                if (apply)
+                {
+                    std::complex<double> e;
+                    if (k < ai::Net::kDf)
+                    {
+                        e = {};
+                        for (int t = 0; t < K; ++t)   // tap t: 5 - t frames back from this one's spectrum (t = 4: the newest)
+                        {
+                            const auto& x = S[static_cast<size_t> (((specPos + t) % K) * bins + k)];
+                            const float* cf = coefs.data() + (k * K + t) * 2;
+                            e += x * std::complex<double> (cf[0], cf[1]);
+                        }
+                    }
+                    else e = Xt[k] * static_cast<double> (mask[static_cast<size_t> (k < have ? bandOf[static_cast<size_t> (k)] : ai::Net::kErb - 1)]);
+                    y = (1.0 - amount) * Xt[k] + amount * e;
+                }
+                eIn += std::norm (Xt[k]);
+                eOut += std::norm (y);
+                // The inverse via the forward FFT: conjugate in, real part out (the full, Hermitian spectrum).
+                cin[static_cast<size_t> (k)] = std::conj (y);
+                if (k > 0 && k < n - k) cin[N - static_cast<size_t> (k)] = y;
+            }
+            fft.forward (cin.data(), cout.data());
+            auto& o = ola[static_cast<size_t> (c)];
+            for (size_t i = 0; i < N; ++i) o[i] += cout[i].real() * window[i];
+            std::copy (o.begin(), o.begin() + static_cast<std::ptrdiff_t> (H), outFifo[static_cast<size_t> (c)].begin());
+            std::copy (o.begin() + static_cast<std::ptrdiff_t> (H), o.end(), o.begin());
+            std::fill (o.begin() + static_cast<std::ptrdiff_t> (N - H), o.end(), 0.0);
+        }
+        passFrames = apply ? 0 : passFrames + 1;
+        // The meter: how far this frame went down (dB, a lift counts as 0), averaged until it's read.
+        if (eIn > 1e-12)
+        {
+            sumIn += std::min (0.0, 10.0 * std::log10 (std::max (eOut, 1e-30) / eIn));
+            sumOut += 1.0;
+        }
+        // Glide toward the strength asked for (only once the network is judging; closing glides to the input).
+        if (haveCoefs || state == State::closing)
+        {
+            const double goal = state == State::closing ? 0.0 : goalAmount;
+            amount += std::clamp (goal - amount, -1.0 / kGlideFrames, 1.0 / kGlideFrames);
+            if (amount < 1e-9) amount = 0.0;
+        }
+    }
+
+    // 2. On, off, warming up.
     const bool want = supported && params.on && params.strengthDb >= 0.05;
-    const double target = ! want ? 0.0 : params.strengthDb >= kFullDb ? 1.0 : 1.0 - std::pow (10.0, -params.strengthDb / 20.0);
+    goalAmount = ! want ? 0.0 : params.strengthDb >= kFullDb ? 1.0 : 1.0 - std::pow (10.0, -params.strengthDb / 20.0);
     switch (state)
     {
         case State::idle:
@@ -797,7 +920,7 @@ void AiCleanup::frame() noexcept
             break;
     }
 
-    // This frame's spectra.
+    // 3. This frame's spectra, over the oldest in the ring.
     for (int c = 0; c < nch; ++c)
     {
         const auto& f = frameIn[static_cast<size_t> (c)];
@@ -807,77 +930,19 @@ void AiCleanup::frame() noexcept
         for (int k = 0; k < bins; ++k) X[k] = cout[static_cast<size_t> (k)] / static_cast<double> (n);
     }
 
-    const bool netOn = state == State::running || state == State::closing;
-    if (netOn)
+    // 4. What the network hears, and the first piece of its work (the rest over this hop: process()).
+    if (state == State::running || state == State::closing)
     {
         features();
-        if (netWarm < 2) { ++netWarm; haveCoefs = false; }   // (as in training: its first two frames are never judged)
+        if (netWarm < 2) ++netWarm;   // (as in training: its first two frames are never judged)
         else
         {
-            net.step (featErb.data(), featDf.data(), mask.data(), coefs.data());
-            haveCoefs = true;
+            net.begin (featErb.data(), featDf.data());
+            net.stage (0, mask.data(), coefs.data());
+            nextStage = 1;
+            stepping = true;
         }
     }
-    else haveCoefs = false;
-
-    // The frame 2 back (the network looks 2 ahead): band gains above 4.8 kHz, the 5-tap filter below.
-    const int K = ai::Net::kOrder;
-    const int at = (specPos - ai::Net::kLookahead + K) % K;
-    const bool apply = haveCoefs && amount > 0.0;
-    const int have = std::min (bins, kModelBins);
-    double eIn = 0.0, eOut = 0.0;
-    for (int c = 0; c < nch; ++c)
-    {
-        const auto& S = spec[static_cast<size_t> (c)];
-        const auto* Xt = S.data() + at * bins;
-        for (int k = 0; k < bins; ++k)
-        {
-            std::complex<double> y = Xt[k];
-            if (apply)
-            {
-                std::complex<double> e;
-                if (k < ai::Net::kDf)
-                {
-                    e = {};
-                    for (int t = 0; t < K; ++t)   // tap t: the frame 4 - t before this one (t = 4: the newest)
-                    {
-                        const auto& x = S[static_cast<size_t> (((specPos - (K - 1) + t + K) % K) * bins + k)];
-                        const float* cf = coefs.data() + (k * K + t) * 2;
-                        e += x * std::complex<double> (cf[0], cf[1]);
-                    }
-                }
-                else e = Xt[k] * static_cast<double> (mask[static_cast<size_t> (k < have ? bandOf[static_cast<size_t> (k)] : ai::Net::kErb - 1)]);
-                y = (1.0 - amount) * Xt[k] + amount * e;
-            }
-            eIn += std::norm (Xt[k]);
-            eOut += std::norm (y);
-            // The inverse via the forward FFT: conjugate in, real part out (the full, Hermitian spectrum).
-            cin[static_cast<size_t> (k)] = std::conj (y);
-            if (k > 0 && k < n - k) cin[N - static_cast<size_t> (k)] = y;
-        }
-        fft.forward (cin.data(), cout.data());
-        auto& o = ola[static_cast<size_t> (c)];
-        for (size_t i = 0; i < N; ++i) o[i] += cout[i].real() * window[i];
-        std::copy (o.begin(), o.begin() + static_cast<std::ptrdiff_t> (H), outFifo[static_cast<size_t> (c)].begin());
-        std::copy (o.begin() + static_cast<std::ptrdiff_t> (H), o.end(), o.begin());
-        std::fill (o.begin() + static_cast<std::ptrdiff_t> (N - H), o.end(), 0.0);
-    }
-    passFrames = apply ? 0 : passFrames + 1;
-    // The meter: how far this frame went down (dB, a lift counts as 0), averaged until it's read.
-    if (eIn > 1e-12)
-    {
-        sumIn += std::min (0.0, 10.0 * std::log10 (std::max (eOut, 1e-30) / eIn));
-        sumOut += 1.0;
-    }
-
-    // Glide toward the strength asked for (only once the network is judging; closing glides to the input).
-    if (haveCoefs || state == State::closing)
-    {
-        const double goal = state == State::closing ? 0.0 : target;
-        amount += std::clamp (goal - amount, -1.0 / kGlideFrames, 1.0 / kGlideFrames);
-        if (amount < 1e-9) amount = 0.0;
-    }
-    specPos = (specPos + 1) % K;
+    specPos = (specPos + 1) % ai::Net::kOrder;
 }
-
 } // namespace vox

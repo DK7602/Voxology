@@ -1,5 +1,6 @@
 // Noise and room reduction (Cleanup's Noise / Room, v0.35): first in the chain, a constant one-frame delay.
 #include "Signals.h"
+#include "vox/AiCleanup.h"
 #include "vox/AutoEdit.h"
 #include "vox/Denoise.h"
 #include "vox/VocalChain.h"
@@ -204,7 +205,8 @@ TEST_CASE ("Denoise in the chain: first, constant latency, not in Record mode; s
     PitchCorrector p, pr;
     p.prepare (kSr, 2);
     pr.prepare (kSr, 2, true);
-    CHECK (chain.latencySamples() == Denoiser::frameSize (kSr) + p.latencySamples() + Saturation::kLatency);
+    AiCleanup aiStage; aiStage.prepare (kSr, 2);   // (Cleanup's AI mode: first, a constant delay on or off)
+    CHECK (chain.latencySamples() == aiStage.latencySamples() + Denoiser::frameSize (kSr) + p.latencySamples() + Saturation::kLatency);
     CHECK (rec.latencySamples() == pr.latencySamples() + Saturation::kLatency);
 
     Denoiser d;
@@ -229,7 +231,9 @@ TEST_CASE ("Auto-Edit: noise reduction on a noisy take, off on a clean one; Room
         return "?";
     };
     const auto noisy = testsig::vocal (kSr, 14.0, -50.0, -14.0), clean = testsig::vocal (kSr, 14.0, -90.0, -14.0);
-    const auto rn = autoEdit ({ noisy }, kSr, { 0, 1, 140.0 }), rc = autoEdit ({ clean }, kSr, { 0, 1, 140.0 });
+    AutoEditSettings classic { 0, 1, 140.0 };
+    classic.allowAi = false;   // (the classic reducer's choices; the AI's: test_aicleanup.cpp)
+    const auto rn = autoEdit ({ noisy }, kSr, classic), rc = autoEdit ({ clean }, kSr, classic);
     REQUIRE (rn.ok);
     REQUIRE (rc.ok);
     INFO ("noisy: noise " << rn.params.cleanup.noiseDb << ", room " << rn.params.cleanup.roomPct);

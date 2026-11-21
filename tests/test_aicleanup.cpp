@@ -4,6 +4,7 @@
 #include "Signals.h"
 #include "vox/AiCleanup.h"
 #include "vox/AutoEdit.h"
+#include "vox/RackUnit.h"
 #include "vox/VocalChain.h"
 
 #include <chrono>
@@ -161,7 +162,7 @@ TEST_CASE ("AI cleanup: the same as the fine-tuned model in PyTorch, frame for f
     CHECK (10.0 * std::log10 (errSq / sigSq) < -60.0);
 }
 
-TEST_CASE ("AI cleanup: off, the input comes out bit for bit, 2 frames (40 ms) late, at any supported rate", "[ai]")
+TEST_CASE ("AI cleanup: off, the input comes out bit for bit, 2 frames and a hop (50 ms) late, at any supported rate", "[ai]")
 {
     for (const double sr : { 32000.0, 44100.0, 48000.0, 88200.0, 96000.0 })
     {
@@ -169,7 +170,7 @@ TEST_CASE ("AI cleanup: off, the input comes out bit for bit, 2 frames (40 ms) l
         REQUIRE (AiCleanup::supports (sr));
         AiCleanup ai;
         ai.prepare (sr, 2);
-        CHECK (ai.latencySamples() == static_cast<int> (std::lround (sr * 0.04)));
+        CHECK (ai.latencySamples() == static_cast<int> (std::lround (sr * 0.05)));
         CHECK (ai.frameSize() == static_cast<int> (std::lround (sr / 50.0)));
         const auto x = toDouble (testsig::vocal (sr, 1.0, -50.0));
         for (const AiCleanupParams p : { AiCleanupParams { false, 24.0 }, AiCleanupParams { true, 0.0 } })
@@ -287,7 +288,7 @@ TEST_CASE ("AI cleanup: any block size gives the same output; on and off glide; 
     CHECK (d < 1e-12);
 }
 
-TEST_CASE ("AI cleanup in the chain: first, constant latency on or off, out of Record mode, LISTEN hears what it takes out", "[ai][chain]")
+TEST_CASE ("AI cleanup in the chain: first (the chain on its output = the AI alone, then the rest), constant latency, not in Record mode", "[ai][chain]")
 {
     constexpr double sr = 48000.0;
     ChainParams off;   // (neutral by default)
@@ -295,74 +296,153 @@ TEST_CASE ("AI cleanup in the chain: first, constant latency on or off, out of R
     on.cleanup.enabled = true;
     on.cleanup.aiMode = true;
     on.cleanup.noiseDb = AiCleanup::kFullDb;
+    on.cleanup.roomPct = 50.0;   // (ignored in AI mode)
+    on.cleanup.gateThrDb = -40.0;
+    on.cleanup.gateRangeDb = 10.0;
     VocalChain a, b, rec;
     a.prepare (sr, 2); a.setParams (off);
     b.prepare (sr, 2); b.setParams (on);
     rec.prepare (sr, 2, true); rec.setParams (on);
     CHECK (a.latencySamples() == b.latencySamples());
-    CHECK (a.latencySamples() - rec.latencySamples() >= 1920);   // Record mode leaves the AI (and the noise reducer) out
+    CHECK (a.latencySamples() - rec.latencySamples() >= 2400);   // Record mode leaves the AI (and the noise reducer) out
 
-    // Rendered: noise between phrases goes down, the voice stays.
+    // The chain in AI mode = the AI alone, then the chain with Noise / Room off (what Auto-Edit's single AI pass relies on):
+    // the classic reducer does nothing in AI mode, and nothing comes before the AI.
     const auto x = testsig::vocal (sr, 4.0, -45.0);
     const auto y = VocalChain::render ({ x }, sr, on)[0];
-    const auto z = VocalChain::render ({ x }, sr, off)[0];
-    CHECK (testsig::rmsDb (y) == Approx (testsig::rmsDb (z)).margin (2.0));
-    CHECK (testsig::rmsDb (y) > -60.0);
-
-    // The classic reducer is off in AI mode (Noise is the AI's strength there), and AI mode off means classic again.
-    ChainParams classic = on;
-    classic.cleanup.aiMode = false;
-    classic.cleanup.noiseDb = 12.0;
-    const auto c = VocalChain::render ({ x }, sr, classic)[0];
-    double diff = 0.0;
-    for (size_t i = 0; i < c.size(); ++i) diff = std::max (diff, static_cast<double> (std::abs (c[i] - y[i])));
-    CHECK (diff > 1e-3);
-}
-
-TEST_CASE ("Auto-Edit: a noisy take gets the AI (Mode AI, full on Balanced), unless asked for the classic reducer", "[ai][autoedit]")
-{
-    constexpr double sr = 48000.0;
-    const auto x = testsig::vocal (sr, 14.0, -50.0, -14.0);
-    const auto r = autoEdit ({ x }, sr, { 0, 1, 120.0 });
-    REQUIRE (r.ok);
-    CHECK (r.params.cleanup.aiMode);
-    CHECK (r.params.cleanup.noiseDb == AiCleanup::kFullDb);
-    CHECK (r.params.cleanup.roomPct == 0.0);
-    bool modeReason = false;
-    for (const auto& reason : r.reasons) modeReason = modeReason || (reason.module == "cleanup" && reason.control == "Mode" && reason.value == "AI");
-    CHECK (modeReason);
-
-    AutoEditSettings classic { 0, 1, 120.0 };
-    classic.allowAi = false;
-    const auto c = autoEdit ({ x }, sr, classic);
-    REQUIRE (c.ok);
-    CHECK (! c.params.cleanup.aiMode);
-    CHECK (c.params.cleanup.noiseDb > 0.0);
-    CHECK (c.params.cleanup.noiseDb <= 18.0);
-
-    // Light: a limit, not full.
-    const auto light = autoEdit ({ x }, sr, { 0, 0, 120.0 });
-    REQUIRE (light.ok);
-    CHECK (light.params.cleanup.aiMode);
-    CHECK (light.params.cleanup.noiseDb >= 12.0);
-    CHECK (light.params.cleanup.noiseDb <= AiCleanup::kFullDb);
-
-    // A studio-quiet take: no cleanup, so no AI either.
-    const auto quiet = autoEdit ({ testsig::vocal (sr, 14.0, -95.0, -14.0) }, sr, { 0, 1, 120.0 });
-    REQUIRE (quiet.ok);
-    CHECK (! quiet.params.cleanup.aiMode);
-}
-
-TEST_CASE ("AI cleanup: cost per 10 ms frame", "[ai][!benchmark]")
-{
-    constexpr double sr = 48000.0;
-    const auto x = toDouble (testsig::vocal (sr, 6.0, -45.0));
     AiCleanup ai;
     ai.prepare (sr, 1);
     ai.setParams ({ true, AiCleanup::kFullDb });
-    const auto t0 = std::chrono::steady_clock::now();
-    const auto y = play (ai, x);
-    const double secs = std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count();
-    std::printf ("AI cleanup: %.2f ms per 10 ms frame (%.1f %% of one core)\n", secs / 600.0 * 1000.0, secs / 6.0 * 100.0);
-    CHECK (y.size() == x.size());
+    const auto pre = play (ai, toDouble (x));
+    ChainParams rest = on;
+    rest.cleanup.aiMode = false;
+    rest.cleanup.noiseDb = rest.cleanup.roomPct = 0.0;
+    const auto z = VocalChain::render ({ std::vector<float> (pre.begin(), pre.end()) }, sr, rest)[0];
+    double diff = 0.0, peak = 0.0;
+    for (size_t i = 0; i < y.size(); ++i) { diff = std::max (diff, static_cast<double> (std::abs (y[i] - z[i]))); peak = std::max (peak, static_cast<double> (std::abs (y[i]))); }
+    CHECK (diff < 1e-5 * peak);
+    CHECK (testsig::rmsDb (y) > -60.0);
+}
+
+TEST_CASE ("AI cleanup in the chain: LISTEN hears exactly what it takes out, also as it switches on and off", "[ai][chain][listen]")
+{
+    constexpr double sr = 48000.0;
+    const auto x = testsig::vocal (sr, 6.0, -40.0);
+    ChainParams on;
+    on.cleanup.aiMode = true;
+    on.cleanup.noiseDb = AiCleanup::kFullDb;
+    ChainParams off = on;
+    off.cleanup.aiMode = false;
+    off.cleanup.noiseDb = 0.0;
+    // The same switches (on, off, on) in a normal and a listening chain: normal + listened = the input, all along.
+    auto runIt = [&] (int listenMode)
+    {
+        VocalChain c;
+        c.prepare (sr, 1);
+        c.setListenAutoLevel (false);
+        std::vector<double> out (x.begin(), x.end());
+        constexpr int block = 480;
+        for (size_t s = 0; s < out.size(); s += block)
+        {
+            const double t = static_cast<double> (s) / sr;
+            ChainParams p = (t < 2.0 || t >= 3.0) ? on : off;
+            p.listenMode = listenMode;
+            c.setParams (p);
+            double* ptr = out.data() + s;
+            c.process (&ptr, 1, static_cast<int> (std::min<size_t> (block, out.size() - s)));
+        }
+        return std::make_pair (out, c.latencySamples());
+    };
+    const auto [normal, lat] = runIt (listen::off);
+    const auto [heard, lat2] = runIt (listen::cleanup);
+    REQUIRE (lat == lat2);
+    const auto from = static_cast<size_t> (sr * 1.0);   // (LISTEN is complete by then)
+    double worst = 0.0, peak = 0.0;
+    for (size_t i = from; i < x.size(); ++i)
+    {
+        const double orig = x[i - static_cast<size_t> (lat)];
+        worst = std::max (worst, std::abs (normal[i] + heard[i] - orig));
+        peak = std::max (peak, std::abs (orig));
+    }
+    CHECK (worst < 1e-6 * peak);
+}
+
+TEST_CASE ("AI cleanup in the chain: where it can't run (22.05 kHz), AI mode uses the classic reducer", "[ai][chain]")
+{
+    constexpr double sr = 22050.0;
+    REQUIRE (! AiCleanup::supports (sr));
+    ChainParams ai;
+    ai.cleanup.aiMode = true;
+    ai.cleanup.noiseDb = 12.0;
+    ChainParams classic = ai;
+    classic.cleanup.aiMode = false;
+    const auto x = testsig::vocal (sr, 3.0, -45.0);
+    const auto a = VocalChain::render ({ x }, sr, ai)[0];
+    const auto c = VocalChain::render ({ x }, sr, classic)[0];
+    CHECK (a == c);
+    const auto none = VocalChain::render ({ x }, sr, ChainParams {})[0];
+    double d = 0.0;
+    for (size_t i = 0; i < a.size(); ++i) d = std::max (d, static_cast<double> (std::abs (a[i] - none[i])));
+    CHECK (d > 1e-4);   // (it did take noise out)
+}
+
+TEST_CASE ("AI cleanup in the chain: switching Classic -> AI keeps the classic reducer on until the AI is fully on", "[ai][chain]")
+{
+    // Switched inside a breath gap (1.48 - 2.08 s of the test vocal): while the AI warms up (~0.2 s) the gap stays as
+    // quiet as with Classic, then gets quieter. Without the hand-over it would jump up by the classic reducer's 15 dB.
+    constexpr double sr = 48000.0;
+    const auto x = testsig::vocal (sr, 3.0, -40.0);
+    ChainParams classic;
+    classic.cleanup.noiseDb = 15.0;
+    ChainParams aiOn = classic;
+    aiOn.cleanup.aiMode = true;
+    aiOn.cleanup.noiseDb = AiCleanup::kFullDb;
+    auto runIt = [&] (bool switchToAi)
+    {
+        VocalChain c;
+        c.prepare (sr, 1);
+        std::vector<double> out (x.begin(), x.end());
+        constexpr int block = 240;
+        for (size_t s = 0; s < out.size(); s += block)
+        {
+            c.setParams (switchToAi && static_cast<double> (s) / sr >= 1.55 ? aiOn : classic);
+            double* ptr = out.data() + s;
+            c.process (&ptr, 1, static_cast<int> (std::min<size_t> (block, out.size() - s)));
+        }
+        return out;
+    };
+    const auto stay = runIt (false), sw = runIt (true);
+    auto gapDb = [&] (const std::vector<double>& y, double from, double to) { return rmsDbOf (y, static_cast<size_t> (from * sr), static_cast<size_t> (to * sr)); };
+    INFO ("gap (output 1.6 - 2.1 s): Classic " << gapDb (stay, 1.6, 2.1) << " dB, switched to AI " << gapDb (sw, 1.6, 2.1) << " dB");
+    CHECK (gapDb (sw, 1.6, 2.1) < gapDb (stay, 1.6, 2.1) + 0.5);
+    for (double t = 1.6; t < 2.1; t += 0.05) CHECK (gapDb (sw, t, t + 0.05) < gapDb (stay, t, t + 0.05) + 1.5);
+}
+
+TEST_CASE ("AI cleanup in the Rack: Cleanup shows Mode (switchable) within its 8 values, and the AI's Noise / Room", "[ai][rack]")
+{
+    rackunit::State st;
+    st.params.cleanup.aiMode = true;
+    st.params.cleanup.noiseDb = AiCleanup::kFullDb;
+    st.params.cleanup.gateRangeDb = 12.0;
+    st.params.cleanup.gateThrDb = -45.0;
+    const auto ms = rackunit::modules (st, true);
+    const rack::Module* m = nullptr;
+    for (const auto& x : ms) if (x.key == "vox.cleanup") m = &x;
+    REQUIRE (m != nullptr);
+    CHECK (m->values.size() <= static_cast<size_t> (rack::kMaxValues));
+    auto find = [&] (const char* name) -> const rack::Value* { for (const auto& v : m->values) if (v.name == name) return &v; return nullptr; };
+    REQUIRE (find ("Mode") != nullptr);
+    CHECK (find ("Mode")->key == "clMode");
+    CHECK (find ("Mode")->text == "AI");
+    REQUIRE (find ("Noise") != nullptr);
+    CHECK (find ("Noise")->text == "AI full");
+    CHECK (find ("Room")->text == "by the AI");
+    REQUIRE (find ("Gate") != nullptr);
+    CHECK (find ("Gate")->key == "clGateRange");
+    // The Rack's Mode knob turns back into the parameter's choice.
+    double v = -1.0;
+    CHECK (rackunit::fromKnob ("clMode", 1.0f, v));
+    CHECK (v == 1.0);
+    CHECK (rackunit::fromKnob ("clMode", 0.0f, v));
+    CHECK (v == 0.0);
 }

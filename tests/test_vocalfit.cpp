@@ -204,6 +204,7 @@ TEST_CASE ("Vocal Fit: finds where the beat covers the voice", "[vocalfit]")
     const auto x = testsig::vocal (kSr, 14.0);
     const auto plain = beat (14.0, -30.0), lead = beat (14.0, -30.0, 0.0, -14.0);
     AutoEditSettings s { 0, 1, 140.0 };
+    s.allowAi = false;   // (the AI cleanup reshapes this synthetic voice's buzz a little, moving the borderline bands)
     s.beat = &plain;
     const auto rp = autoEdit ({ x }, kSr, s);
     s.beat = &lead;

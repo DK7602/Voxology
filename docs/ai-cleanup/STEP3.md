@@ -16,7 +16,9 @@ The user: "Yes, build it into Voxology" (round 3 + the safety net, with Auto-Edi
   1920 at 96), a mixed-radix FFT; 32 / 44.1 / 48 / 88.2 / 96 kHz (`AiCleanup::supports`). Below 48 kHz the missing top
   bins (44.1: 22 - 24 kHz) are mirrored in what the network hears (never in the sound): left empty, it took out about
   half as much noise in the gaps (male singer: -12 dB at 44.1 against -20 at 48; mirrored: -17).
-- **Latency**: 2 frames, 40 ms, constant (on or off, either Mode): the chain's total is about 96 ms at 48 kHz (was 56).
+- **Latency**: 2 frames + a hop, 50 ms, constant (on or off, either Mode): the chain's total is about 106 ms at 48 kHz
+  (was 56). The hop: the network's work for a frame is spread over the next hop's callbacks in 6 pieces (`Net::stage`),
+  so no audio callback carries a whole frame (the review measured 1.64 ms in one 32-sample callback, budget 0.67 ms).
   Record mode leaves it out. Off: bit-exact delay, the network and FFTs idle. On / off / strength glide over ~0.1 s
   (6 pass-through frames, then 10 frames of glide).
 - **Safety net, as tested, plus one fix**: the network hears a Gaussian hiss above 8 kHz (6th-order Butterworth twice,
@@ -31,7 +33,13 @@ The user: "Yes, build it into Voxology" (round 3 + the safety net, with Auto-Edi
   Light: noise need + 6 dB, 12 - 24. Reasons: Mode "AI", Noise "AI, full", Room "By the AI". `AutoEditSettings::allowAi`
   = false keeps the classic reducer. The Coach, PREVIEW and Auto Analyze carry clMode like any setting (forEachValue).
 - **LISTEN** (Cleanup) hears what the AI takes out too (delayed by the classic reducer's frame to line up).
-- **Rack**: Cleanup shows Noise "AI full" / "AI -N dB", Room "by the AI", and a Mode value (clMode, 2 steps).
+- **Rack**: Cleanup shows Noise "AI full" / "AI -N dB", Room "by the AI", and Mode (clMode, 2 steps): the Rack draws 8
+  values at most, so the gate is one value there ("Gate": its range on the knob, "-12 dB under -45 dB").
+- **Fresh-eyes review fixes** (same day): the staged network (above); Mode in the Rack (was cut off as a 9th value); AI
+  mode at an unsupported rate falls back to Classic; LISTEN keeps the AI's line moving when it switches off (stale audio
+  before); a channel coming back starts clean; Classic -> AI: the classic reducer keeps its settings until the AI is
+  fully on (no 0.2 s gap of noise). UI: switching Mode by hand moves Noise to fit (to AI from nearly off: full; to
+  Classic from over 15 dB: 12). Vocal Fit's "your vocal is in the beat" now counts the raw-vocal check too.
 
 ## Checked
 

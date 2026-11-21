@@ -175,12 +175,15 @@ void VocalChain::setParams (const ChainParams& p) noexcept
     pitch.setParams (p.pitch);
     cleanup.setParams (p.cleanup);
     {
-        // Noise / Room: the AI (AI mode: Noise = how far it may turn the sound down) or the classic reducer.
-        const bool aiMode = p.cleanup.enabled && p.cleanup.aiMode;
-        ai.setParams ({ aiMode, aiMode ? p.cleanup.noiseDb : 0.0 });
+        // Noise / Room: the AI (AI mode: Noise = how far it may turn the sound down) or the classic reducer. Where the AI
+        // can't run (a sample rate without 50 Hz bins, e.g. 22.05 kHz), AI mode falls back to the classic reducer.
+        aiModeNow = p.cleanup.enabled && p.cleanup.aiMode && ai.available();
+        ai.setParams ({ aiModeNow, aiModeNow ? p.cleanup.noiseDb : 0.0 });
         DenoiseParams d;
-        if (p.cleanup.enabled && ! aiMode) { d.noiseDb = p.cleanup.noiseDb; d.roomPct = p.cleanup.roomPct; }
+        if (p.cleanup.enabled && ! aiModeNow) { d.noiseDb = p.cleanup.noiseDb; d.roomPct = p.cleanup.roomPct; }
         if (p.dynEq.enabled) d.smoothPct = p.dynEq.smoothPct;   // (the Dynamic EQ's Smooth rides on the same spectra)
+        denoiseNow = d;
+        if (! aiModeNow) denoiseClassic = d;
         denoise.setParams (d);
     }
     pops.setParams ({ p.cleanup.enabled ? p.cleanup.popAmount : 0.0 });
@@ -297,8 +300,15 @@ void VocalChain::processChunk (int nch, int len) noexcept
         std::array<std::array<double, kChunk>, kMaxChannels> aiOut {};
         std::array<double*, kMaxChannels> aiPtr {};
         for (int c = 0; c < nch; ++c) aiPtr[static_cast<size_t> (c)] = aiOut[static_cast<size_t> (c)].data();
-        const bool aiListen = lm == listen::cleanup && ai.working();
+        const bool aiListen = lm == listen::cleanup;   // (idle, what it takes out is exactly 0: the line keeps moving)
         ai.process (ch.data(), nch, len, aiListen ? aiPtr.data() : nullptr);
+        // Switching to AI: the classic reducer keeps working (as it was) until the AI is fully on (~0.2 s), so there's no
+        // gap of noise while it warms up. (Back to Classic: the classic one starts at once, the AI glides off.)
+        {
+            DenoiseParams d = denoiseNow;
+            if (aiModeNow && ! ai.settled()) { d.noiseDb = denoiseClassic.noiseDb; d.roomPct = denoiseClassic.roomPct; }
+            denoise.setParams (d);
+        }
         denoise.process (ch.data(), nch, len, lm != listen::off ? earlyPtr.data() : nullptr);
         if (aiListen)   // what the AI took out, a noise-reducer frame later (in line with what that took out)
         {

@@ -1058,6 +1058,7 @@ void vocalFit (AutoEditResult& r, const std::vector<float>& beatAudio, const Sig
     for (size_t i = 0; i < processed.size(); ++i) voice[0][i] = static_cast<float> (processed[i]);
     const BeatAnalysis b = analyseBeat (beatAudio, voice, sr);
     r.beat = b;
+    if (fit.yourVocal) r.beat.hasYourVocal = true;   // (heard against the raw vocal: the cleaned one can match a little less)
     if (b.seconds < 1.0)
     {
         r.notes.push_back ("BEAT SILENT: Voxology's side-chain is on, but no beat came in while Auto-Edit listened, so Vocal Fit couldn't compare your vocal with it."
