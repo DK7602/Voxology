@@ -14,6 +14,7 @@ Scratch tooling, not built by CMake. Paths inside point at the session scratch (
 | `gated.py` | DeepFilterNet's own per-frame stages (local SNR > 30 dB pass through, > 20 dB no deep filter, < -10 dB silence), to test. |
 | `rootcause.py`, `hfcheck.py`, `featdither.py` | Root cause of the remaining cuts: one change at a time; how often training material has a dead top end; the plug-in safety net (the AI looks at the take plus a faint hiss above 8 kHz). |
 | `compare.py`, `clips2.py` | Step 2: one table (input, Voxology now, original AI, retrained AI; same measures) and the 4-version listening MP3s (1-4 beeps). |
+| `retest3.py` | Round 3 retest: every case, the clean take included, with and without the hiss safety net (writes `results3_<tag>.json`). |
 | `libdf.py`, `load.py` | A pure-Python stand-in for DeepFilterNet's Rust `libdf` bits the model code needs, and the loader. |
 
 The model code (`df/`: `config.py`, `deepfilternet3.py`, `model.py`, `modules.py`, `multiframe.py`, `utils.py`) comes unchanged
