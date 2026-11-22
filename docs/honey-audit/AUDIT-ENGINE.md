@@ -252,6 +252,11 @@ instead of 4x squeezes.
 *Melodyne:* the blob includes its sibilant (drawn hatched) and moves with it. Melodyne 5 also detects sibilants separately
 *(believed)*.
 
+**Fixed in Beta 40** (timeMap with the track; warp's drift): the sound next to each moving note goes with it 1:1, only
+silence / breath stretches. Same measure: +80 ms s 82 ms (as sung), t 1 peak 4.5 ms; +150 ms s 82 ms, t 1 peak, B on time,
+C identical; -60 ms t 1 peak, s 42 ms (no silence to take the squeeze; was 49). #7 (a stretch crushing the next note)
+was already closed in Beta 38: the editor keeps a stretched note before its neighbour.
+
 ### 6. Note starts are 20-35 ms late (and the cause of half of #1 and #5)
 
 **Measured.** Engine note start minus the true voice onset: +35 ms at 82 Hz, +31 at 97-110 Hz, +27 at 131, +23 at 220,

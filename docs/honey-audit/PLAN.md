@@ -78,9 +78,27 @@ Measured with the engine review's own tools (scratch: /tmp/claude-0/audit-eng-wo
   the same step; time: as far as the nearest unselected note lets them), keys, the menu and the bottom bar act on all,
   one undo step (Model::setEdits, HoneyDocumentController::setEdits).
 
+## Beta 40 (Voxology 0.76.0; the user: "go ahead with Beta 40")
+
+- Split / join notes (AUDIT-FEATURES.md: Melodyne's note separation): vox::honey::Layout (splits / joins in seconds,
+  outliving a re-analysis), reshape() on findNotes()'s notes (each part's pitch from its own singing), addSplit /
+  addJoin (each undoes the other where they meet), carryEdits (a part keeps the move as a step from its own pitch and
+  its timing), changedRegion for a different note count (only around them), applyEdits lets notes sung touching stay
+  touching. Plug-in: layout per clip, in undo steps and archive HNY5; Alt + double-click splits (a line shows where
+  while Alt is held), J joins (the selected neighbours, or with the next), both in the right-click menu.
+- Hear a note while stopped: HoneyEditorRenderer (ARA editor renderer) plays a stretch of the clip on its own track,
+  the host's playhead left alone; the document controller picks the renderer serving the event shown; after an edit it
+  waits for the render (SourceState done >= wanted). Click a note = hear it; drags, arrows, Snap / Steady / resets =
+  hear the result; Esc stops; the right-click menu turns it off. Not testable here (no ARA host): check in Cubase.
+- AUDIT-ENGINE.md #5 consonants: timeMap (with the track) maps the sound next to each moving note 1:1 (its consonant
+  before / ending after: within 32 dB of the singing, up to 150 ms, closures inside), only silence / breath between
+  stretches; meeting in a gap: split at its quietest 10 ms; no room: only the 20 ms next to each note stays whole. warp:
+  no drift carried out of unvoiced grains (a squeeze over a breath made the next note's attack late). Measured: +80 ms
+  s 124 -> 82 ms (as sung), t one 4.5 ms burst (was 2 peaks, 9 ms); +150 ms B on time (was 40 ms late), s 159 -> 82,
+  the next note identical (was -30 dB off); -60 ms t whole, s 42 ms (was 50: no silence to squeeze there).
+- AUDIT-ENGINE.md #13 octave errors (high / breathy / raspy voices): see its "Fixed in Beta 40".
+
 ## Next (in order; proposed to the user on 2026-11-22, no objection yet)
-1. Beta 40: split / merge notes (saved, undoable); hear a note while stopped (ARA editor renderer); a consonant moves
-   with its note in time (AUDIT-ENGINE.md #5); high / breathy voices' octave errors (#13).
-2. Beta 41: note level and mute (+ blob height), "notes to check" finder (amber dot, N next, D fix), time edits snap
+1. Beta 41: note level and mute (+ blob height), "notes to check" finder (amber dot, N next, D fix), time edits snap
    to the beat (Alt free), key extras (click a key to add / remove a scale note; the beat's A4 tuning from Voxology).
-3. Later: several clips at once and copies tuned independently (ARA audio modifications), MIDI export, tighten timing.
+2. Later: several clips at once and copies tuned independently (ARA audio modifications), MIDI export, tighten timing.
