@@ -82,6 +82,10 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     undoBtn.onClick = [this] { if (model != nullptr && model->undo()) { roll.refresh(); refresh(); } };
     redoBtn.onClick = [this] { if (model != nullptr && model->redo()) { roll.refresh(); refresh(); } };
     roll.onUndo = [this] (bool back) { if (back) undoBtn.onClick(); else redoBtn.onClick(); };
+    roll.onWantTuned = [this] { if (model != nullptr && model->isOriginal()) { model->setOriginal (false); showOriginal (false); } };
+    roll.onToggleOriginal = [this] { (original.getToggleState() ? tuned : original).triggerClick(); };
+    roll.onPlayFrom = [this] (double t) { if (model != nullptr) model->playFrom (t); };
+    roll.onLoop = [this] (double a, double b) { if (model != nullptr) model->loop (a, b); };
     // A / B switch: the lit side is what you see and hear (your edits are kept either way).
     original.setTooltip ("Hear and see the clip as recorded");
     tuned.setTooltip ("Hear and see it with your edits");
@@ -96,7 +100,7 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     auto ab = [this]
     {
         if (model != nullptr) model->setOriginal (original.getToggleState());
-        roll.repaint();
+        refresh();
     };
     original.onClick = ab;
     tuned.onClick = ab;
@@ -105,10 +109,11 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     for (auto* s : { &snap, &drift, &vibrato }) s->onDragEnd = [this] { applySettings(); };
     for (auto* s : { &snap, &drift, &vibrato })
         s->onValueChange = [this, s] { if (! s->isMouseButtonDown()) applySettings(); };   // typed values
+    // Each slider sets only its own value: the note's other values keep following the clip-wide settings.
     for (auto* s : { &noteDrift, &noteVibrato, &noteFormant })
     {
-        s->onDragEnd = [this] { applyNoteEdit(); };
-        s->onValueChange = [this, s] { if (! s->isMouseButtonDown()) applyNoteEdit(); };
+        s->onDragEnd = [this, s] { applyNoteEdit (s); };
+        s->onValueChange = [this, s] { if (! s->isMouseButtonDown()) applyNoteEdit (s); };
     }
 
     snapNote.onClick = [this]
@@ -134,7 +139,8 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
         model->resetAllEdits();
         refresh();
     };
-    fit.onClick = [this] { roll.fitAll(); };   // also undoes your zoom
+    fit.onClick = [this] { roll.fitButton(); };   // the whole clip; again: back to the close-up view
+    fit.setTooltip ("Fit the whole clip (F); click again for the close-up view");
     roll.onSelectionChanged = [this] { updateNoteControls(); };
     roll.onSeek = [this] (double t)
     {
@@ -207,6 +213,12 @@ void HoneyPanel::refresh()
         case 4: status = "This clip is too long for Honey Tune (not enough memory to hold it): split it into shorter clips."; break;
         default: status = model == nullptr ? howToOpen() : "Waiting for the clip's audio..."; break;
     }
+    // Listening to the Original: what plays (and what an export bakes in) is the untuned take. Said first, in red.
+    if (s.status == 2 && model != nullptr && model->isOriginal())
+    {
+        status = "ORIGINAL: you hear (and an export gets) the take untuned. Switch to Tuned (B) for your edits  |  " + status;
+        statusWarning = true;
+    }
     // On Auto, SCALE shows the key Auto uses ("Auto: F Minor"; it used to read "Chromatic" whatever Auto found). The
     // status line says where it came from. (KEY is too narrow for it.)
     if (model != nullptr)
@@ -238,7 +250,7 @@ juce::String HoneyPanel::howToOpen()
 void HoneyPanel::showOriginal (bool o)
 {
     (o ? original : tuned).setToggleState (true, dontSendNotification);
-    roll.repaint();
+    refresh();
 }
 
 void HoneyPanel::setPlayhead (double seconds, bool playing)
@@ -301,16 +313,50 @@ void HoneyPanel::updateNoteControls()
     repaint();
 }
 
-void HoneyPanel::applyNoteEdit()
+void HoneyPanel::applyNoteEdit (const Slider* which)
 {
     const int i = roll.getSelected();
     if (i < 0 || model == nullptr) return;
-    auto e = roll.getSnapshot().notes[static_cast<size_t> (i)].edit;
-    e.drift = noteDrift.getValue() / 100.0;
-    e.vibrato = noteVibrato.getValue() / 100.0;
-    e.formant = noteFormant.getValue();
+    const auto& v = roll.getSnapshot().notes[static_cast<size_t> (i)];
+    auto e = v.edit;
+    if (which == &noteDrift)
+    {
+        if (std::abs (noteDrift.getValue() / 100.0 - v.note.drift) < 0.005) return;   // (unchanged: still following the clip's)
+        e.drift = noteDrift.getValue() / 100.0;
+    }
+    if (which == &noteVibrato)
+    {
+        if (std::abs (noteVibrato.getValue() / 100.0 - v.note.vibrato) < 0.005) return;
+        e.vibrato = noteVibrato.getValue() / 100.0;
+    }
+    if (which == &noteFormant) e.formant = noteFormant.getValue();
+    if (e == v.edit) return;
+    if (model->isOriginal()) { model->setOriginal (false); showOriginal (false); }   // you hear what you change
     model->setEdit (i, e);
     refresh();
+}
+
+void HoneyPanel::mouseDown (const MouseEvent& e)
+{
+    // SNAP TO NOTE's label: one-click starting points for the clip-wide amounts.
+    if (snapLabel.getBounds().contains (e.getPosition()) && model != nullptr)
+    {
+        PopupMenu m;
+        m.addSectionHeader ("Starting points (every note you haven't changed)");
+        struct Preset { const char* name; double snap, drift, vibrato; };
+        for (const auto& p : { Preset { "Natural: fixes what sounds wrong, keeps the life", 0.6, 1.0, 1.0 },
+                               Preset { "Polished: in tune, natural movement", 0.85, 0.7, 1.0 },
+                               Preset { "Tight: modern pop, steady notes", 1.0, 0.3, 0.7 },
+                               Preset { "Hard: the tuned effect, no movement", 1.0, 0.0, 0.0 } })
+            m.addItem (p.name, [this, p]
+            {
+                snap.setValue (p.snap * 100.0, dontSendNotification);
+                drift.setValue (p.drift * 100.0, dontSendNotification);
+                vibrato.setValue (p.vibrato * 100.0, dontSendNotification);
+                applySettings();
+            });
+        m.showMenuAsync (PopupMenu::Options().withTargetComponent (this).withTargetScreenArea (localAreaToGlobal (snapLabel.getBounds())));
+    }
 }
 
 //==============================================================================
@@ -343,9 +389,10 @@ void HoneyPanel::paint (Graphics& g)
         g.drawImageAt (scaled, 0, 0);
     }
 
-    // Control labels on the marble, in embossed gold.
+    // Control labels on the marble, in embossed gold (SNAP TO NOTE opens the starting points: a small arrow says so).
     for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
-        drawCaps (g, l->getText(), l->getBounds().toFloat(), FontOptions (12.5f, Font::bold), Justification::centredLeft);
+        drawCaps (g, l->getText() + (l == &snapLabel ? String (CharPointer_UTF8 ("  \xe2\x96\xbe")) : String()), l->getBounds().toFloat(),
+                  FontOptions (12.5f, Font::bold), Justification::centredLeft);
 
     // Legend (left out when the window is too narrow for it)
     if (! legendArea.isEmpty())

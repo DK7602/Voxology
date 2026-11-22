@@ -93,19 +93,27 @@ void aiCheck (Track& t, const std::vector<float>& mono, double sr, const std::at
     std::vector<size_t> todo;
     for (size_t k = 0; k < times.size(); ++k) if (levels[k] > loudest - 40.0) todo.push_back (k);
     std::vector<crepe::Estimate> est (times.size());
-    const unsigned threads = std::max (1u, std::min (8u, std::thread::hardware_concurrency()));
-    std::vector<std::thread> pool;
-    for (unsigned w = 0; w < threads; ++w)
-        pool.emplace_back ([&, w]
+    // Half the cores at most (the DAW and its audio come first), each taking every n-th check. A thread that can't be
+    // started leaves its share to this one (never an exception out of here).
+    const unsigned threads = std::max (1u, std::min (8u, std::thread::hardware_concurrency() / 2));
+    auto work = [&] (unsigned w, unsigned of)
+    {
+        crepe::Tiny net;
+        for (size_t j = w; j < todo.size(); j += of)
         {
-            crepe::Tiny net;
-            for (size_t j = w; j < todo.size(); j += threads)
-            {
-                if (cancel != nullptr && cancel->load (std::memory_order_relaxed)) return;
-                const auto c = static_cast<size_t> (times[todo[j]] * crepe::kRate);
-                est[todo[j]] = net.run (x.data() + c - 512);
-            }
-        });
+            if (cancel != nullptr && cancel->load (std::memory_order_relaxed)) return;
+            const auto c = static_cast<size_t> (times[todo[j]] * crepe::kRate);
+            est[todo[j]] = net.run (x.data() + c - 512);
+        }
+    };
+    std::vector<std::thread> pool;
+    std::vector<unsigned> mine { 0 };   // the shares this thread works itself
+    for (unsigned w = 1; w < threads; ++w)
+    {
+        try { pool.emplace_back (work, w, threads); }
+        catch (...) { mine.push_back (w); }
+    }
+    for (unsigned w : mine) work (w, threads);
     for (auto& th : pool) th.join();
     t.aiChecked = static_cast<int> (todo.size());
 
@@ -425,11 +433,20 @@ Movement movementOf (const Track& t, const Note& note)
     return m;
 }
 
-/** How much of a note's own movement changes at reading i (semitones): faded in / out over 20 ms at its edges. */
+/** How much of a note's own movement changes at reading i (semitones): eased in / out over its edges
+    (steadyEdgeSeconds), so its scoop in and fall off stay as sung. */
 double movementChange (const Movement& m, const Note& note, size_t i, size_t a0, size_t b0, double edgeReadings)
 {
-    const double fade = std::min ({ 1.0, static_cast<double> (i - a0 + 1) / edgeReadings, static_cast<double> (b0 - i) / edgeReadings });
+    const double x = std::min ({ 1.0, static_cast<double> (i - a0 + 1) / edgeReadings, static_cast<double> (b0 - i) / edgeReadings });
+    const double fade = 0.5 - 0.5 * std::cos (std::numbers::pi * x);
     return fade * (m.drift[i - a0] * (note.drift - 1.0) + m.vibrato[i - a0] * (note.vibrato - 1.0));
+}
+
+/** The edge of a note in readings (steadyEdgeSeconds). */
+double edgeOf (const Track& t, const Note& note)
+{
+    const double hop = hopOf (t);
+    return std::max (1.0, steadyEdgeSeconds ((note.end - note.start) / t.sampleRate) / hop);
 }
 
 /** The shift (semitones) per reading for these notes. */
@@ -440,17 +457,17 @@ std::vector<double> planShift (const Track& t, const std::vector<Note>& notes, d
     // vibrato change inside the note (not smoothed: it IS the fast part), faded in / out at note edges.
     std::vector<double> base (n, 0.0), detail (n, 0.0);
     const double hopSec = hopOf (t);
-    const auto edge = std::max (1.0, 0.02 / hopSec);
     for (const auto& note : notes)
     {
         const auto a0 = static_cast<size_t> (std::max (0, note.firstReading));
         const size_t b0 = std::min (n, static_cast<size_t> (std::max (0, note.lastReading)) + 1);
         const bool shaped = std::abs (note.drift - 1.0) > 1.0e-9 || std::abs (note.vibrato - 1.0) > 1.0e-9;
         const auto m = shaped ? movementOf (t, note) : Movement {};
+        const double noteEdge = edgeOf (t, note);
         for (size_t i = a0; i < b0; ++i)
         {
             base[i] = note.target - note.pitch;
-            if (shaped && t.midi[i] > 0.0) detail[i] = movementChange (m, note, i, a0, b0, edge);
+            if (shaped && t.midi[i] > 0.0) detail[i] = movementChange (m, note, i, a0, b0, noteEdge);
         }
     }
     // Smooth the note moves (forward + backward, so it doesn't lag).
@@ -561,8 +578,11 @@ TimeMap timeMap (const std::vector<Note>& notes, double clip, double sr)
     for (const auto& n : notes)
     {
         if (n.start <= lastIn + 1.0 || n.end > clip - 1.0) continue;
+        // Keep the order: never before the last note's end, never past the clip's end. A note that no longer fits there
+        // (the editor keeps notes between their neighbours, so only a damaged edit) ends the map: the rest follows the
+        // last segment, and the knots keep rising.
+        if (lastOut + minGap + minLen > clip - minGap) break;
         if (n.timeMoved()) m.identity = false;
-        // Keep the order: never before the last note's end, never past the clip's end.
         const double sOut = std::clamp (n.soundStart(), lastOut + minGap, clip - minGap - minLen);
         const double eOut = std::clamp (n.soundEnd(), sOut + minLen, clip - minGap);
         m.in.push_back (n.start); m.out.push_back (sOut);
@@ -668,7 +688,7 @@ std::vector<double> soundingLine (const Track& t, const Note& note)
     line.assign (b0 - a0, 0.0);
     const bool shaped = std::abs (note.drift - 1.0) > 1.0e-9 || std::abs (note.vibrato - 1.0) > 1.0e-9;
     const auto m = shaped ? movementOf (t, note) : Movement {};
-    const double edge = std::max (1.0, 0.02 / hopOf (t));
+    const double edge = edgeOf (t, note);
     for (size_t i = a0; i < b0; ++i)
         if (t.midi[i] > 0.0)
             line[i - a0] = t.midi[i] + (note.target - note.pitch) + (shaped ? movementChange (m, note, i, a0, b0, edge) : 0.0);
@@ -678,8 +698,8 @@ std::vector<double> soundingLine (const Track& t, const Note& note)
 double movementCents (const Track& t, const Note& note)
 {
     const auto line = soundingLine (t, note);
-    // Inside the note (its first and last 40 ms are its attack and release), around its median.
-    const auto skip = static_cast<size_t> (0.04 / hopOf (t));
+    // Inside the note (its first and last 40 ms are its attack and release, and steadying spares its edges), around its median.
+    const auto skip = static_cast<size_t> (std::max (0.04, steadyEdgeSeconds ((note.end - note.start) / t.sampleRate)) / hopOf (t));
     std::vector<double> v;
     for (size_t i = skip; i + skip < line.size(); ++i) if (line[i] > 0.0) v.push_back (line[i]);
     if (v.size() < 4) return 0.0;
@@ -727,22 +747,55 @@ bool changedRegion (const std::vector<Note>& before, const std::vector<Note>& af
             timing = timing || std::abs (before[i].soundStart() - after[i].soundStart()) >= 0.5 || std::abs (before[i].soundEnd() - after[i].soundEnd()) >= 0.5;
         }
     if (first < 0) { from = to = 0.0; return true; }   // nothing changed
-    // A move / stretch re-times the gaps up to the neighbouring notes: they come along.
-    if (timing) { first = std::max (0, first - 1); last = std::min (static_cast<int> (after.size()) - 1, last + 1); }
-    // Grow over neighbours sung in one breath (gaps under 0.15 s: the note moves are smoothed across them).
+    const auto count = static_cast<int> (after.size());
+    if (timing)
+    {
+        // A note moved onto (or past) a neighbour, or past the clip's ends, before or after the edit: the time map
+        // squeezes the notes it runs into, wherever they are: render it all.
+        auto fits = [&] (const std::vector<Note>& list, int i)
+        {
+            const auto& n = list[static_cast<size_t> (i)];
+            return n.soundStart() >= 0.0 && n.soundEnd() <= clipSamples
+                   && (i == 0 || n.soundStart() >= list[static_cast<size_t> (i - 1)].soundEnd())
+                   && (i + 1 >= count || n.soundEnd() <= list[static_cast<size_t> (i + 1)].soundStart());
+        };
+        for (int i = first; i <= last; ++i)
+            if (! same (before[static_cast<size_t> (i)], after[static_cast<size_t> (i)]) && (! fits (before, i) || ! fits (after, i)))
+                return false;
+        // A move / stretch re-times the gaps up to the neighbouring notes: they come along.
+        first = std::max (0, first - 1);
+        last = std::min (count - 1, last + 1);
+    }
+    // Grow over neighbours sung in one breath (gaps under 0.15 s: the note moves are smoothed across them), as they were
+    // before the edit and as they are now.
     const double tight = 0.15 * sr;
-    auto gapBefore = [&] (int i) { return std::min (after[static_cast<size_t> (i)].soundStart() - after[static_cast<size_t> (i - 1)].soundEnd(),
-                                                    after[static_cast<size_t> (i)].start - after[static_cast<size_t> (i - 1)].end); };
-    while (first > 0 && gapBefore (first) < tight) --first;
-    while (last + 1 < static_cast<int> (after.size()) && gapBefore (last + 1) < tight) ++last;
-    // From / to: the middle of the gaps around them (quiet: the old and new render join there). Outside
-    // [first, last] nothing moved, so these output times are also the input times there.
-    from = first > 0 ? 0.5 * (after[static_cast<size_t> (first - 1)].soundEnd() + after[static_cast<size_t> (first)].soundStart()) : 0.0;
-    to = last + 1 < static_cast<int> (after.size()) ? 0.5 * (after[static_cast<size_t> (last)].soundEnd() + after[static_cast<size_t> (last + 1)].soundStart()) : clipSamples;
-    if (timing && first > 0)
-        from = std::min (from, 0.5 * (after[static_cast<size_t> (first - 1)].end + after[static_cast<size_t> (first)].start));
-    if (timing && last + 1 < static_cast<int> (after.size()))
-        to = std::max (to, 0.5 * (after[static_cast<size_t> (last)].end + after[static_cast<size_t> (last + 1)].start));
+    auto gapBefore = [&] (const std::vector<Note>& l, int i)
+    {
+        return std::min (l[static_cast<size_t> (i)].soundStart() - l[static_cast<size_t> (i - 1)].soundEnd(),
+                         l[static_cast<size_t> (i)].start - l[static_cast<size_t> (i - 1)].end);
+    };
+    auto tightBefore = [&] (int i) { return gapBefore (after, i) < tight || gapBefore (before, i) < tight; };
+    while (first > 0 && tightBefore (first)) --first;
+    while (last + 1 < count && tightBefore (last + 1)) ++last;
+    // From / to: the middle of the gaps around them (quiet: the old and new render join there), where the notes sound
+    // now, where they sounded before the edit and where they were sung. Outside [first, last] nothing moved, so these
+    // output times are also the input times there.
+    from = 0.0;
+    to = clipSamples;
+    if (first > 0)
+    {
+        const auto& a0 = after[static_cast<size_t> (first - 1)];
+        const auto& a1 = after[static_cast<size_t> (first)];
+        const auto& b1 = before[static_cast<size_t> (first)];
+        from = std::min ({ 0.5 * (a0.soundEnd() + a1.soundStart()), 0.5 * (a0.soundEnd() + b1.soundStart()), 0.5 * (a0.end + a1.start) });
+    }
+    if (last + 1 < count)
+    {
+        const auto& a0 = after[static_cast<size_t> (last)];
+        const auto& b0 = before[static_cast<size_t> (last)];
+        const auto& a1 = after[static_cast<size_t> (last + 1)];
+        to = std::max ({ 0.5 * (a0.soundEnd() + a1.soundStart()), 0.5 * (b0.soundEnd() + a1.soundStart()), 0.5 * (a0.end + a1.start) });
+    }
     return true;
 }
 

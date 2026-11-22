@@ -2172,3 +2172,17 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   the hiss level computed exactly (no noise made per prepare). STEP3.md "Beta 36 test". 240 engine tests pass.
   Asked the user: did Beta 35 cut out on the same re-analysis; how many tracks run Mode AI.
   Beta 37 installer green (Mixology run 44938605290). 2026-11-22, user: "i re analyzed and no cut out". Waiting.
+
+## v0.74.0 Honey Tune audit 3 + new look (2026-11-22, Beta 38)
+- User: "thoroughly audit honey tune ... as good as the best or better. i dont want melodyne touching it!" + look:
+  no drips, cream marble, notes as waveforms (24k gold / light blue, red glow off-key), more defined, quieter rows
+  outside the key, the pitch line black and running on between notes (no connectors), playhead stays when stopped.
+  Asked mid-way about the gold bars (-> sand-gold lanes + hairlines, as Melodyne / VariAudio shade them) and the cream
+  marble (left as is; the honeycomb lines softened instead).
+- Everything is in docs/honey-audit/: PLAN.md (what's done, what's next), AUDIT-CODE.md, AUDIT-FEATURES.md,
+  AUDIT-ENGINE.md (sound measurements: when that review lands). Reproducers: tools/audit/honey-repro/.
+- Look commit a1a1e34; then the fixes and quick wins (PLAN.md "Beta 38"). Preview: HoneyPreview (build dir
+  /tmp/claude-0/hp: -DVOX_BUILD_PLUGIN=ON -DVOX_HONEY_PREVIEW=ON with FETCHCONTENT_SOURCE_DIR_JUCE=/tmp/claude-0/juce,
+  _ARA_SDK=/tmp/claude-0/ara); env HONEY_PLAYHEAD / HONEY_STOPPED new. Screens sent to the user.
+- Proposed next betas (PLAN.md "Next"): 39 multi-select + split / merge + hear a note while stopped + sound fixes;
+  40 note level / mute, notes-to-check finder, beat grid, key extras; later multi-clip / per-copy edits.

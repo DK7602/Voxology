@@ -2,6 +2,7 @@
 
 #include "PitchCorrector.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <string>
@@ -90,6 +91,10 @@ double centsOff (const Note& n, int key, int scale);
     vibrato, the wobble of a shaky voice). Note.drift / Note.vibrato say how much of each it keeps; keeping neither
     makes it a steady note. The split: a Gaussian average of the sung pitch, this wide (one standard deviation). */
 inline constexpr double kDriftSigmaSeconds = 0.075;
+
+/** Steadying (drift / vibrato kept under 100 %) eases in from a note's start and out to its end over this long, so its
+    scoop in and fall off stay as sung (flattening them is what sounds robotic): a fifth of the note, 20 - 60 ms. */
+inline double steadyEdgeSeconds (double noteSeconds) { return std::clamp (0.2 * noteSeconds, 0.02, 0.06); }
 
 /** The note's pitch line as it will sound: one value per reading from note.firstReading to note.lastReading (MIDI; 0
     where no pitch was heard): the sung line moved to note.target, its drift and vibrato kept as the note says (the same

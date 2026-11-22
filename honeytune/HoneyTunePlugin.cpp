@@ -27,8 +27,9 @@ namespace
 {
     constexpr int64 kArchiveV2 = 0x484e5932;   // "HNY2"
     constexpr int64 kArchiveV3 = 0x484e5933;   // "HNY3": edits also hold timing, length and formant
+    constexpr int64 kArchiveV4 = 0x484e5934;   // "HNY4": note starts in seconds (were samples: wrong after a rate change)
 
-    /** A hand edit as saved: tied to the note's start, so it finds its note again after re-analysis. */
+    /** A hand edit as saved: tied to the note's start (seconds), so it finds its note again after re-analysis. */
     struct SavedEdit { double start = 0.0; NoteEdit edit; };
 
     using Audio = std::vector<std::vector<float>>;   // per channel
@@ -49,8 +50,10 @@ namespace
         double sampleRate = 48000.0;
         std::shared_ptr<const Audio> original;            // the recording (also what plays as `recorded`: one copy)
         std::vector<vox::honey::Note> renderedNotes;      // what the current render was made from
-        const vox::honey::Track* renderedTrack = nullptr;
-        std::vector<std::shared_ptr<const Audio>> retired;   // swapped out, freed once no block is playing them
+        std::shared_ptr<const vox::honey::Track> renderedTrack;   // ... and its analysis (held: an address can be reused)
+        CriticalSection retiredLock;
+        std::vector<std::shared_ptr<const Audio>> retired;   // swapped out, freed once no block is playing them (retiredLock)
+        std::atomic<int> listens { 0 };                      // listen() calls: an analysis of older samples gives way
 
         // Shared (dataLock)
         CriticalSection dataLock;
@@ -95,45 +98,51 @@ namespace
             return nullptr;
         }
 
-        /** Background thread: puts `next` in `slot` (rendered / recorded). The one it replaces is kept until no block
-            plays it: freeing a whole take (tens of MB) inside the lock made the audio thread's try fail (silence),
-            and the audio thread could end up freeing it itself. */
+        /** Puts `next` in `slot` (rendered / recorded). The one it replaces is kept until no block plays it: freeing a
+            whole take (tens of MB) inside the lock made the audio thread's try fail (silence), and the audio thread
+            could end up freeing it itself. (Message or background thread.) */
         void swapIn (std::shared_ptr<const Audio>& slot, std::shared_ptr<const Audio> next)
         {
             {
                 const SpinLock::ScopedLockType sl (lock);
                 std::swap (slot, next);
             }
+            const ScopedLock rl (retiredLock);
             if (next != nullptr) retired.push_back (std::move (next));
             // Free those only held here now (once swapped out, nothing can pick them up again).
             retired.erase (std::remove_if (retired.begin(), retired.end(), [] (const auto& a) { return a.use_count() == 1; }), retired.end());
         }
 
         /** Hand edits re-attached to the notes by start time (within 30 ms). Call with dataLock held. */
-        // Undo / redo (dataLock): whole edit lists. One step per gesture: edits of the same note less than
-        // 0.7 s apart (a drag) count as one.
-        std::vector<std::vector<NoteEdit>> undoStack, redoStack;
+        // Undo / redo (dataLock): whole edit lists, with the clip-wide settings (Key, Scale, Snap, Drift, Vibrato) as
+        // they were then. One step per gesture: changes to the same note (or to the settings) less than 0.7 s apart
+        // (a drag, typing) count as one. kSettingsStep: the index a settings change pushes with.
+        static constexpr int kSettingsStep = -2;
+        struct UndoStep { std::vector<NoteEdit> edits; Settings settings; };
+        std::vector<UndoStep> undoStack, redoStack;
         uint32 lastPushMs = 0;
         int lastPushIndex = -1;
-        void pushUndo (int index, bool force = false)
+        void pushUndo (int index, const Settings& now, bool force = false)
         {
-            const auto now = Time::getMillisecondCounter();
-            if (force || index != lastPushIndex || now - lastPushMs > 700)
+            const auto ms = Time::getMillisecondCounter();
+            if (force || index != lastPushIndex || ms - lastPushMs > 700)
             {
-                undoStack.push_back (edits);
+                undoStack.push_back ({ edits, now });
                 if (undoStack.size() > 100) undoStack.erase (undoStack.begin());
                 redoStack.clear();
             }
-            lastPushMs = now;
+            lastPushMs = ms;
             lastPushIndex = force ? -1 : index;
         }
-        bool step (bool back)
+        /** current: the settings now; on return, the ones to put back. */
+        bool step (bool back, Settings& current)
         {
             auto& from = back ? undoStack : redoStack;
             auto& to = back ? redoStack : undoStack;
-            if (from.empty() || from.back().size() != edits.size()) return false;
-            to.push_back (edits);
-            edits = from.back();
+            if (from.empty() || from.back().edits.size() != edits.size()) return false;
+            to.push_back ({ edits, current });
+            edits = from.back().edits;
+            current = from.back().settings;
             from.pop_back();
             lastPushIndex = -1;
             return true;
@@ -144,13 +153,13 @@ namespace
             undoStack.clear();
             redoStack.clear();
             edits.assign (notes.size(), {});
-            const double tolerance = 0.03 * (track != nullptr ? track->sampleRate : 48000.0);
+            const double sr = track != nullptr ? track->sampleRate : 48000.0;
             for (const auto& s : saved)
             {
                 int best = -1;
-                double bestDist = tolerance;
+                double bestDist = 0.03;   // seconds
                 for (size_t i = 0; i < notes.size(); ++i)
-                    if (const double d = std::abs (notes[i].start - s.start); d <= bestDist) { bestDist = d; best = static_cast<int> (i); }
+                    if (const double d = std::abs (notes[i].start / sr - s.start); d <= bestDist) { bestDist = d; best = static_cast<int> (i); }
                 if (best >= 0) edits[static_cast<size_t> (best)] = s.edit;
             }
         }
@@ -161,7 +170,7 @@ namespace
             if (track == nullptr) return pending;
             std::vector<SavedEdit> out;
             for (size_t i = 0; i < notes.size() && i < edits.size(); ++i)
-                if (! edits[i].isDefault()) out.push_back ({ notes[i].start, edits[i] });
+                if (! edits[i].isDefault()) out.push_back ({ notes[i].start / track->sampleRate, edits[i] });
             return out;
         }
     };
@@ -550,12 +559,17 @@ public:
         return snap;
     }
 
-    void setEdit (const std::shared_ptr<SourceState>& st, int index, const NoteEdit& e)
+    /** forTrack: the analysis the editor's note numbers come from (a newer one: the edit is dropped, not put on
+        whichever note now has that number). */
+    void setEdit (const std::shared_ptr<SourceState>& st, int index, const NoteEdit& e, const vox::honey::Track* forTrack = nullptr)
     {
+        const auto s = getSettings();
         {
             const ScopedLock sl (st->dataLock);
             if (index < 0 || index >= static_cast<int> (st->edits.size())) return;
-            st->pushUndo (index);
+            if (forTrack != nullptr && st->track.get() != forTrack) return;
+            if (st->edits[static_cast<size_t> (index)] == e) return;   // nothing changes: no undo step (redo stays)
+            st->pushUndo (index, s);
             st->edits[static_cast<size_t> (index)] = e;
         }
         requestRender (st);
@@ -563,21 +577,39 @@ public:
 
     void resetAllEdits (const std::shared_ptr<SourceState>& st)
     {
+        const auto s = getSettings();
         {
             const ScopedLock sl (st->dataLock);
-            st->pushUndo (-1, true);
+            if (std::all_of (st->edits.begin(), st->edits.end(), [] (const NoteEdit& e) { return e.isDefault(); })) return;
+            st->pushUndo (-1, s, true);
             st->edits.assign (st->notes.size(), {});
         }
         requestRender (st);
     }
 
-    bool undoRedo (const std::shared_ptr<SourceState>& st, bool back)
+    /** The clip-wide settings changed in the editor: an undo step on the clip it shows (they're undone from there). */
+    void changeSettings (const std::shared_ptr<SourceState>& st, const Settings& next)
     {
+        const auto now = getSettings();
+        if (next == now) return;
+        if (st != nullptr)
         {
             const ScopedLock sl (st->dataLock);
-            if (! st->step (back)) return false;
+            st->pushUndo (SourceState::kSettingsStep, now);
         }
+        setSettings (next);
+    }
+
+    bool undoRedo (const std::shared_ptr<SourceState>& st, bool back)
+    {
+        auto s = getSettings();
+        {
+            const ScopedLock sl (st->dataLock);
+            if (! st->step (back, s)) return false;
+        }
+        setSettings (s);   // (re-renders every clip when they changed)
         requestRender (st);
+        changes.sendChangeMessage();
         return true;
     }
 
@@ -617,6 +649,9 @@ protected:
     void didEndEditing (ARADocument*) override
     {
         refreshHostKey();   // musical contexts added / removed
+        // New samples while access stayed on (a host that doesn't switch it off and on around the change): read them now.
+        for (auto* src : sources())
+            if (src->state->samplesChanged && src->isSampleAccessEnabled()) listen (src);
     }
 
     ARAAudioSource* doCreateAudioSource (ARADocument* document, ARA::ARAAudioSourceHostRef hostRef) noexcept override
@@ -631,6 +666,15 @@ protected:
     {
         if (scopeFlags.affectSamples())
             static_cast<HoneyAudioSource*> (audioSource)->state->samplesChanged = true;
+    }
+
+    void didUpdateAudioSourceProperties (ARAAudioSource* audioSource) override
+    {
+        // A new sample rate, length or channel count: the samples read before no longer fit (read again at the next
+        // access, or now if it's on).
+        auto* src = static_cast<HoneyAudioSource*> (audioSource);
+        src->state->samplesChanged = true;
+        if (src->isSampleAccessEnabled()) listen (src);
     }
 
     void didEnableAudioSourceSamplesAccess (ARAAudioSource* audioSource, bool enable) override
@@ -656,7 +700,8 @@ protected:
     bool doRestoreObjectsFromStream (ARAInputStream& input, const ARARestoreObjectsFilter* filter) noexcept override
     {
         const auto first = input.readInt64();
-        const bool v3 = first == kArchiveV3;
+        const bool v4 = first == kArchiveV4;
+        const bool v3 = first == kArchiveV3 || v4;
         const bool v2 = first == kArchiveV2 || v3;
         Settings s;
         const auto key = v2 ? input.readInt64() : first, scale = input.readInt64();
@@ -697,6 +742,7 @@ protected:
                 if (std::isfinite (se.start) && se.start >= 0.0)
                     saved.push_back (se);
             }
+            const bool inSamples = ! v4;   // (HNY2 / HNY3: samples at the recording's rate, converted below)
             HoneyAudioSource* target = nullptr;
             if (filter != nullptr)
                 target = filter->getAudioSourceToRestoreStateWithID<HoneyAudioSource> (id.c_str());
@@ -706,6 +752,8 @@ protected:
             if (target == nullptr)
                 continue;
             auto st = target->state;
+            if (inSamples)
+                for (auto& se : saved) se.start /= std::max (1.0, target->getSampleRate());
             {
                 const ScopedLock sl (st->dataLock);
                 if (st->track != nullptr) st->attach (saved);
@@ -719,7 +767,7 @@ protected:
     bool doStoreObjectsToStream (ARAOutputStream& output, const ARAStoreObjectsFilter* filter) noexcept override
     {
         const auto s = getSettings();
-        bool ok = output.writeInt64 (kArchiveV3) && output.writeInt64 (s.key) && output.writeInt64 (s.scale)
+        bool ok = output.writeInt64 (kArchiveV4) && output.writeInt64 (s.key) && output.writeInt64 (s.scale)
                && output.writeDouble (s.snap) && output.writeDouble (s.drift) && output.writeDouble (s.vibrato);
         std::vector<const HoneyAudioSource*> toStore;
         if (filter != nullptr)
@@ -787,16 +835,28 @@ private:
             changes.sendChangeMessage();
             return;
         }
+        // The take plays as recorded straight away (until its tuned render is ready), not silence while the analysis
+        // waits for its turn behind other clips'. A render of older samples stops being played.
+        std::shared_ptr<const Audio> take (std::move (chans));
+        state->swapIn (state->recorded, take);
+        state->swapIn (state->rendered, nullptr);
+        const int listenNo = ++state->listens;
         changes.sendChangeMessage();
-        pool.addJob ([this, state, chans = std::shared_ptr<const Audio> (std::move (chans)), sr = src->getSampleRate()]
+        pool.addJob ([this, state, take, listenNo, sr = src->getSampleRate()]
         {
+            if (state->listens != listenNo) return;   // newer samples were read meanwhile: their own job analyses them
             try
             {
-                analyseClip (state, chans, sr);
+                analyseClip (state, take, sr);
             }
             catch (const std::bad_alloc&)
             {
                 state->status = 4;   // (the analysis of a very long take)
+                changes.sendChangeMessage();
+            }
+            catch (...)
+            {
+                state->status = 3;   // (no thread for the AI check, say: never let it take the host down)
                 changes.sendChangeMessage();
             }
         });
@@ -806,7 +866,6 @@ private:
     {
         state->sampleRate = sr;
         state->original = chans;
-        state->swapIn (state->recorded, chans);
         // The detector hears the clip in mono (a mono take as it is: no copy).
         std::vector<float> mixed;
         if (chans->size() > 1)
@@ -831,6 +890,7 @@ private:
             state->attach (keep);
             state->pending.clear();
         }
+        changes.sendChangeMessage();   // the editor's note numbers change now (it refreshes before you can edit them)
         requestRender (state);
     }
 
@@ -854,6 +914,7 @@ private:
                     state->status = 4;
                     changes.sendChangeMessage();
                 }
+                catch (...) {}   // (never into the host)
                 if (closing) return;
                 state->done = asked;
                 state->waitedOut = false;
@@ -878,7 +939,7 @@ private:
             int key = 0, scale = 0;
             honeyui::resolveKey (s, st.guess, key, scale, getHostKey (st));
             track = st.track;
-            notes = honeyui::applyEdits (st.notes, st.edits, s, key, scale, st.sampleRate);
+            notes = honeyui::applyEdits (st.notes, st.edits, s, key, scale, st.sampleRate, static_cast<double> (st.original->front().size()));
         }
         // An edit to a few notes: re-render only around them (from the gap before to the gap after),
         // on top of the current render. A new analysis, the key / settings moving most notes: all of it.
@@ -890,7 +951,8 @@ private:
         const auto& original = *st.original;
         const double clip = static_cast<double> (original.front().size());
         double from = 0.0, to = 0.0;
-        const bool part = current != nullptr && current->size() == original.size() && st.renderedTrack == track.get()
+        const bool part = current != nullptr && current->size() == original.size() && st.renderedTrack == track
+                          && current->front().size() == original.front().size()
                           && vox::honey::changedRegion (st.renderedNotes, notes, clip, st.sampleRate, from, to) && to - from < 0.6 * clip;
         if (part && to <= from) { st.status = 2; return true; }   // nothing changed
         auto out = std::make_shared<Audio>();
@@ -906,7 +968,7 @@ private:
         }
         if (closing) return false;   // (stopped part way: thrown away)
         st.renderedNotes = notes;
-        st.renderedTrack = track.get();
+        st.renderedTrack = track;
         current.reset();   // (so the old render can be freed right away, if no block is playing it)
         st.swapIn (st.rendered, std::move (out));
         st.status = 2;
@@ -1060,15 +1122,24 @@ private:
     {
         if (dc == nullptr || state == nullptr) return {};
         auto snap = dc->snapshot (state);
+        if (auto* r = shownRegion())
+            snap.timeline = buildTimeline (r, snap.seconds);
+        return snap;
+    }
+
+    /** The clip's place in the song: the event you selected in the host (if it's still there), else its first. */
+    ARAPlaybackRegion* shownRegion() const
+    {
+        ARAPlaybackRegion* first = nullptr;
         for (auto* src : dc->sources())
             if (src->state == state)
                 for (auto* mod : src->getAudioModifications())
-                    if (! mod->getPlaybackRegions().empty())
+                    for (auto* r : mod->getPlaybackRegions())
                     {
-                        snap.timeline = buildTimeline (mod->getPlaybackRegions().front(), snap.seconds);
-                        return snap;
+                        if (r == picked) return r;
+                        if (first == nullptr) first = r;
                     }
-        return snap;
+        return first;
     }
 
     /** The song's bars and beats over this clip, from the host's tempo map and time signatures. */
@@ -1096,8 +1167,11 @@ private:
         return tl;
     }
     Settings getSettings() override { return dc != nullptr ? dc->getSettings() : Settings {}; }
-    void setSettings (const Settings& s) override { if (dc != nullptr) dc->setSettings (s); }
-    void setEdit (int i, const NoteEdit& e) override { if (dc != nullptr && state != nullptr) { toTuned(); dc->setEdit (state, i, e); } }
+    void setSettings (const Settings& s) override { if (dc != nullptr) dc->changeSettings (state, s); }
+    void setEdit (int i, const NoteEdit& e) override
+    {
+        if (dc != nullptr && state != nullptr) { toTuned(); dc->setEdit (state, i, e, panel.roll.getSnapshot().track.get()); }
+    }
     void resetAllEdits() override { if (dc != nullptr && state != nullptr) { toTuned(); dc->resetAllEdits (state); } }
     bool undo() override { return stepEdits (true); }
     bool redo() override { return stepEdits (false); }
@@ -1126,6 +1200,34 @@ private:
             playback->requestSetPlaybackPosition (heldSong);
     }
 
+    ARA::PlugIn::HostPlaybackController* hostPlayback() const
+    {
+        return dc != nullptr ? dc->getDocumentController()->getHostPlaybackController() : nullptr;
+    }
+    void playFrom (double clipSeconds) override
+    {
+        auto* pb = hostPlayback();
+        if (pb == nullptr || state == nullptr) return;
+        if (clipSeconds < 0.0)
+        {
+            if (panel.roll.isPlaying()) pb->requestStopPlayback();
+            else pb->requestStartPlayback();
+            return;
+        }
+        seek (clipSeconds);
+        pb->requestStartPlayback();
+    }
+    void loop (double from, double to) override
+    {
+        auto* pb = hostPlayback();
+        if (pb == nullptr || state == nullptr || to <= from) return;
+        const double offset = panel.roll.getSnapshot().timeline.songOffset;
+        pb->requestSetCycleRange (from + offset, to - from);
+        pb->requestEnableCycle (true);
+        seek (from);
+        pb->requestStartPlayback();
+    }
+
     void onNewSelection (const ARAViewSelection& sel) override
     {
         pickSource (sel.getPlaybackRegions<ARAPlaybackRegion>());
@@ -1136,16 +1238,21 @@ private:
         if (dc == nullptr) return;
         std::shared_ptr<SourceState> next;
         if (! regions.empty())
+        {
+            picked = regions.front();   // (its bars and song position: the event you selected)
             next = static_cast<HoneyAudioSource*> (regions.front()->getAudioModification()->getAudioSource())->state;
+        }
         else if (state == nullptr || ! state->alive)
             if (const auto all = dc->sources(); ! all.empty())
                 next = all.front()->state;
         if (next != nullptr && next != state)
         {
             state = next;
-            panel.roll.setSelected (-1);
+            panel.roll.resetView();   // another clip: fitted afresh
             panel.refresh();
         }
+        else if (! regions.empty())
+            panel.refresh();   // the same take, another of its events: its bars
     }
 
     void changeListenerCallback (ChangeBroadcaster*) override
@@ -1196,6 +1303,7 @@ private:
     int slowTicks = 0;
     double heldSong = 0.0;   // the playhead's last known song position (seconds)
     bool haveHeld = false;
+    ARAPlaybackRegion* picked = nullptr;   // the event selected in the host (only compared: shownRegion() checks it's alive)
 };
 
 AudioProcessorEditor* HoneyProcessor::createEditor() { return new HoneyEditor (*this); }

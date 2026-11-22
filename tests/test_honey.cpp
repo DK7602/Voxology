@@ -447,10 +447,12 @@ TEST_CASE ("Honey Tune: the line drawn in a note is what it will play", "[honey]
         else REQUIRE (kept[k] == 0.0);
     }
     CHECK (movementCents (t, n) > 15.0);
-    // Drift and vibrato at 0: flat on the target (away from the 20 ms edges).
+    // Drift and vibrato at 0: flat on the target (away from the edges, which keep the scoop and fall as sung).
     n.drift = n.vibrato = 0.0;
     const auto flat = soundingLine (t, n);
-    const auto edge = static_cast<size_t> (0.03 * kSr / ((t.time.back() - t.time.front()) / static_cast<double> (t.time.size() - 1)));
+    const auto edge = static_cast<size_t> ((steadyEdgeSeconds ((n.end - n.start) / kSr) + 0.002) * kSr
+                                           / ((t.time.back() - t.time.front()) / static_cast<double> (t.time.size() - 1)));
+    CHECK (steadyEdgeSeconds ((n.end - n.start) / kSr) == Approx (0.06));   // (a long note: 60 ms each end)
     for (size_t k = edge; k + edge < flat.size(); ++k)
         if (flat[k] > 0.0) REQUIRE (flat[k] == Approx (n.target).margin (0.005));
     CHECK (movementCents (t, n) < 1.0);
@@ -490,4 +492,63 @@ TEST_CASE ("Honey Tune: the waveform outline the editor draws the notes with", "
     CHECK (levelOver (t, noteMid (1), noteMid (1)) > 0.0f);
     CHECK (levelOver (t, -1.0, -0.5) == 0.0f);
     CHECK (levelOver (t, 1.0e3, 1.1e3) == 0.0f);
+}
+
+TEST_CASE ("Honey Tune: a note moved in time re-renders the stretch it left and the stretch it went to; undo too", "[honey]")
+{
+    // A3 C4 E4 D4, 0.4 s each with 0.3 s breaths. Note 1 (C4) moved 0.12 s later (still between its neighbours), then
+    // moved back (undo): each time the quick re-render on top of the last render plays what a full render plays.
+    const auto x = sing ({ { 57, 0.4, 0.3 }, { 60, 0.4, 0.3 }, { 64, 0.4, 0.3 }, { 62, 0.4, 0.3 } });
+    const auto t = analyse (x, kSr);
+    const auto sung = findNotes (t);
+    REQUIRE (sung.size() == 4);
+    auto moved = sung;
+    moved[1].outStart = sung[1].start + 0.12 * kSr;
+    moved[1].outEnd = sung[1].end + 0.12 * kSr;
+    auto pitchAt = [&] (const std::vector<float>& y, double a, double b) { return midiOf (hzAt (y, a + 0.06, b - a - 0.12)); };
+    const double clip = static_cast<double> (x.size());
+    for (const auto& [before, after] : { std::pair { sung, moved }, std::pair { moved, sung } })
+    {
+        auto prev = render (x, kSr, t, before);
+        double from = 0.0, to = 0.0;
+        REQUIRE (changedRegion (before, after, clip, kSr, from, to));
+        // The region covers where the note was and where it is now (and the neighbours whose gaps changed).
+        CHECK (from <= std::min (before[1].soundStart(), after[1].soundStart()));
+        CHECK (to >= std::max (before[1].soundEnd(), after[1].soundEnd()));
+        renderPart (x, kSr, t, after, prev, from, to);
+        const auto full = render (x, kSr, t, after);
+        for (size_t k = 0; k < after.size(); ++k)
+        {
+            const double a = after[k].soundStart() / kSr, b = after[k].soundEnd() / kSr;
+            INFO ("note " << k << " at " << a << " - " << b << " s");
+            CHECK (pitchAt (prev, a, b) == Approx (pitchAt (full, a, b)).margin (0.05));
+            CHECK (pitchAt (prev, a, b) == Approx (after[k].pitch).margin (0.1));
+        }
+    }
+}
+
+TEST_CASE ("Honey Tune: a note pushed into its neighbour or past the clip's end never crushes other notes", "[honey]")
+{
+    const auto x = sing ({ { 57, 0.4, 0.3 }, { 60, 0.4, 0.3 }, { 64, 0.4, 0.3 }, { 62, 0.4, 0.3 } });
+    const auto t = analyse (x, kSr);
+    const auto sung = findNotes (t);
+    REQUIRE (sung.size() == 4);
+    const double clip = static_cast<double> (x.size());
+    // A move onto the next note: the quick re-render isn't trusted, it renders all of it.
+    auto onto = sung;
+    onto[1].outStart = sung[2].start;
+    onto[1].outEnd = sung[2].end;
+    double from = 0.0, to = 0.0;
+    CHECK_FALSE (changedRegion (sung, onto, clip, kSr, from, to));
+    CHECK_FALSE (changedRegion (onto, sung, clip, kSr, from, to));   // (its undo too)
+    // A damaged edit (a note 20 s late, a stretch far past the end): the map's knots still rise, nothing undefined.
+    for (int k = 0; k < 2; ++k)
+    {
+        auto bad = sung;
+        if (k == 0) { bad[0].outStart = sung[0].start + 20.0 * kSr; bad[0].outEnd = bad[0].outStart + (sung[0].end - sung[0].start); }
+        else { bad[1].outStart = sung[1].start; bad[1].outEnd = sung[1].end + 10.0 * kSr; }
+        const auto map = timeMap (bad, clip, kSr);
+        for (size_t i = 1; i < map.out.size(); ++i) { REQUIRE (map.out[i] >= map.out[i - 1]); REQUIRE (map.in[i] >= map.in[i - 1]); }
+        CHECK (map.out.back() == clip);
+    }
 }

@@ -55,31 +55,44 @@ void HoneyRoll::setSelected (int index)
     if (onSelectionChanged) onSelectionChanged();
 }
 
-bool HoneyRoll::fitAll()
+bool HoneyRoll::fitAll (bool whole)
 {
-    userZoomed = false;
-    // Opens on the first ~6 seconds of singing (cells big enough to grab), the clip's main range
-    // in height (the middle 90 % of its notes, so one stray high note doesn't shrink everything).
+    userZoomed = whole;
+    wholeView = whole;
+    // The working view (on opening): the first ~6 seconds of singing (notes big enough to grab), the clip's main range
+    // in height (the middle 90 % of its notes, so one stray high note doesn't shrink everything). The whole clip (Fit):
+    // all of it in time, every note in height.
     const auto grid = gridArea();
     if (grid.getWidth() < 10.0f || grid.getHeight() < 40.0f || snap.seconds <= 0.0) return false;
     const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
     const double firstNote = snap.notes.empty() ? 0.0 : snap.notes.front().note.start / sr;
-    pixelsPerSecond = defaultZoom();
-    viewStart = std::max (0.0, firstNote - 0.5);
+    if (whole)
+    {
+        pixelsPerSecond = grid.getWidth() / std::max (0.5, snap.seconds * 1.02);
+        viewStart = 0.0;
+    }
+    else
+    {
+        pixelsPerSecond = defaultZoom();
+        // Around the playhead when it's in this clip (where you are), else the first note.
+        viewStart = playhead >= 0.0 ? std::max (0.0, playhead - 1.0) : std::max (0.0, firstNote - 0.5);
+    }
     std::vector<double> pitches;
     for (const auto& n : snap.notes) { pitches.push_back (n.note.pitch); pitches.push_back (n.note.target); }
     double lo = 48.0, hi = 72.0;
     if (! pitches.empty())
     {
         std::sort (pitches.begin(), pitches.end());
-        lo = pitches[pitches.size() / 20];
-        hi = pitches[pitches.size() - 1 - pitches.size() / 20];
+        const size_t trim = whole ? 0 : pitches.size() / 20;
+        lo = pitches[trim];
+        hi = pitches[pitches.size() - 1 - trim];
     }
     lo -= 2.0; hi += 2.0;
-    rowHeight = jlimit (16.0, 30.0, grid.getHeight() / (hi - lo + 1.0));
+    rowHeight = jlimit (whole ? kMinRow : 16.0, 30.0, grid.getHeight() / (hi - lo + 1.0));
     const double rows = grid.getHeight() / rowHeight;
-    // Centre on where most of the singing is (each note weighted by its length).
+    // Centre on where most of the singing is (each note weighted by its length); the whole range when it all shows.
     double centre = (hi + lo) / 2.0;
+    if (! whole)
     {
         std::vector<std::pair<double, double>> w;
         double total = 0.0;
@@ -88,10 +101,32 @@ bool HoneyRoll::fitAll()
         double acc = 0.0;
         for (const auto& [p, d] : w) { acc += d; if (acc >= total / 2.0) { centre = p; break; } }
     }
-    topMidi = jlimit (kLowestMidi + rows, kHighestMidi, centre + rows / 2.0);
+    topMidi = clampTop (centre + rows / 2.0);
     updateScrollBars();
     repaint();
     return true;
+}
+
+void HoneyRoll::fitButton()
+{
+    // Fit: the whole clip; again: back to the working view (around the playhead).
+    fitAll (! wholeView);
+    following = true;
+}
+
+void HoneyRoll::resetView()
+{
+    fitted = false;
+    userZoomed = wholeView = false;
+    selected = hovered = -1;
+    following = true;
+    refresh();
+}
+
+double HoneyRoll::clampTop (double top) const
+{
+    const double rows = gridArea().getHeight() / rowHeight;
+    return jlimit (std::min (kLowestMidi + rows, kHighestMidi), kHighestMidi, top);
 }
 
 void HoneyRoll::setPlayhead (double seconds, bool isPlaying)
@@ -101,13 +136,15 @@ void HoneyRoll::setPlayhead (double seconds, bool isPlaying)
     const auto grid = gridArea();
     auto area = [&] (double t) { return Rectangle<float> (xOf (t) - 12.0f, 0.0f, 24.0f, (float) getHeight()); };
     if (playhead >= 0.0) repaint (area (playhead).toNearestInt());
+    if (isPlaying && ! playing) following = true;   // it starts playing: follow it again
     playhead = seconds;
     playing = isPlaying;
     if (playhead < 0.0) return;
-    // Keep it in view: page along when it reaches the right edge (or is out of view), unless you're dragging a note.
+    // Keep it in view: page along when it reaches the right edge (or is out of view), unless you're dragging a note or
+    // looked elsewhere while it plays (scrolled or zoomed: until it plays again, or you click the ruler / press F).
     // Stopped, it pages only when it moved there (the host's cursor), so you can scroll around a stopped song.
     const double visible = grid.getWidth() / pixelsPerSecond;
-    if (! dragging && moved && (playhead > viewStart + visible * 0.92 || playhead < viewStart))
+    if (! dragging && moved && (! playing || following) && (playhead > viewStart + visible * 0.92 || playhead < viewStart))
     {
         viewStart = std::max (0.0, playhead - visible * 0.08);
         updateScrollBars();
@@ -167,7 +204,7 @@ void HoneyRoll::updateScrollBars()
 
 void HoneyRoll::scrollBarMoved (ScrollBar* bar, double start)
 {
-    if (bar == &hBar) viewStart = start;
+    if (bar == &hBar) { viewStart = start; if (playing) following = false; }   // looking elsewhere: stop paging along
     else topMidi = kHighestMidi - start;
     repaint();
 }
@@ -181,13 +218,15 @@ void HoneyRoll::resized()
     bool justFitted = false;
     if (! fitted && snap.status == 2 && ! snap.notes.empty())
         fitted = justFitted = fitAll();   // hosts open the editor small, then enlarge it: fit once there's room
+    else if (wholeView)
+        fitAll (true);
     else if (! userZoomed)
         pixelsPerSecond = defaultZoom();
     if (fitted && ! justFitted && lastGridHeight > 0.0f && gridArea().getHeight() > 0.0f)
     {
         // Keep the same pitch in the middle when the window changes size (hosts resize the editor).
         const double rowsBefore = lastGridHeight / rowHeight, rowsNow = gridArea().getHeight() / rowHeight;
-        topMidi = jlimit (kLowestMidi + rowsNow, kHighestMidi, topMidi - rowsBefore / 2.0 + rowsNow / 2.0);
+        topMidi = clampTop (topMidi - rowsBefore / 2.0 + rowsNow / 2.0);
     }
     lastGridHeight = gridArea().getHeight();
     updateScrollBars();
@@ -200,12 +239,21 @@ std::pair<double, double> HoneyRoll::span (int index) const
     const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
     if (model != nullptr && model->isOriginal()) return { n.start / sr, n.end / sr };
     double a = n.soundStart() / sr, b = n.soundEnd() / sr;
-    if (dragging && index == selected)
+    if (dragging && index == selected && dragMode != Drag::pitch && dragMode != Drag::undecided)
     {
-        // Never before the clip's start (there it would mean "not moved": the note jumped back where it was sung).
-        if (dragMode == Drag::time) { const double d = std::max (dragSeconds, -a); a += d; b += d; }
-        if (dragMode == Drag::leftEdge) a = std::max (0.0, std::min (a + dragSeconds, b - 0.03));
-        if (dragMode == Drag::rightEdge) b = std::max (b + dragSeconds, a + 0.03);
+        // Between the neighbours as they sound (a note can't be moved into another) and inside the clip.
+        const auto count = static_cast<int> (snap.notes.size());
+        const double gap = honeyui::kTimeGapSeconds, minLen = honeyui::kMinNoteSeconds;
+        const double lo = index > 0 ? snap.notes[static_cast<size_t> (index - 1)].note.soundEnd() / sr + gap : 0.0;
+        const double hi = std::max (lo + minLen, index + 1 < count ? snap.notes[static_cast<size_t> (index + 1)].note.soundStart() / sr - gap
+                                                                   : snap.seconds - gap);
+        if (dragMode == Drag::time)
+        {
+            const double d = std::clamp (dragSeconds, std::min (0.0, lo - a), std::max (0.0, hi - b));
+            a += d; b += d;
+        }
+        if (dragMode == Drag::leftEdge) a = std::clamp (a + dragSeconds, std::min (a, lo), b - minLen);
+        if (dragMode == Drag::rightEdge) b = std::clamp (b + dragSeconds, a + minLen, std::max (b, hi));
     }
     return { a, b };
 }
@@ -280,12 +328,18 @@ HoneyRoll::Wave HoneyRoll::wavePaths (int index, double midi) const
     return { mirrored (peak), mirrored (body) };
 }
 
+double HoneyRoll::shownPitch (int i) const
+{
+    const auto& v = snap.notes[static_cast<size_t> (i)];
+    if (model != nullptr && model->isOriginal()) return v.note.pitch;   // Original: where it was sung
+    return (dragging && i == selected) ? dragTarget : v.note.target;
+}
+
 int HoneyRoll::noteAt (Point<float> pt) const
 {
     for (int i = static_cast<int> (snap.notes.size()); --i >= 0;)
     {
-        const double m = (dragging && i == selected) ? dragTarget : snap.notes[static_cast<size_t> (i)].note.target;
-        if (cellPath (i, m).contains (pt)) return i;
+        if (cellPath (i, shownPitch (i)).contains (pt)) return i;
     }
     return -1;
 }
@@ -709,14 +763,22 @@ void HoneyRoll::drawRuler (Graphics& g)
 void HoneyRoll::mouseDown (const MouseEvent& e)
 {
     grabKeyboardFocus();
-    // Click (or drag) on the ruler: move the host's playhead there.
+    // Click (or drag) on the ruler: move the host's playhead there (and follow it again).
     if (e.position.y < (float) kRulerHeight && e.position.x >= gridArea().getX())
     {
         seeking = true;
+        following = true;
         if (onSeek) onSeek (std::max (0.0, secondsAt (e.position.x)));
         return;
     }
     const int hit = noteAt (e.position);
+    if (e.mods.isPopupMenu())
+    {
+        // Right-click: a menu, never a drag.
+        if (hit >= 0) setSelected (hit);
+        showMenu (hit, e.position);
+        return;
+    }
     setSelected (hit);
     if (hit >= 0)
     {
@@ -725,9 +787,11 @@ void HoneyRoll::mouseDown (const MouseEvent& e)
         dragStartY = e.position.y;
         dragStartX = e.position.x;
         dragSeconds = 0.0;
-        const auto b = cellPath (hit, dragTarget).getBounds();
+        const auto b = cellPath (hit, shownPitch (hit)).getBounds();
         const float grab = std::min (7.0f, b.getWidth() * 0.2f);
         dragMode = e.position.x < b.getX() + grab ? Drag::leftEdge : e.position.x > b.getRight() - grab ? Drag::rightEdge : Drag::undecided;
+        pendingEdge = dragMode;
+        dragMode = Drag::undecided;   // (an edge drag starts once it moves: a click on an edge only selects)
     }
 }
 
@@ -738,19 +802,25 @@ void HoneyRoll::mouseDrag (const MouseEvent& e)
         if (onSeek) onSeek (std::max (0.0, secondsAt (jmax (gridArea().getX(), e.position.x))));
         return;
     }
-    if (! dragging || selected < 0) return;
+    if (! dragging || selected < 0 || e.mods.isPopupMenu()) return;
     const float dx = e.position.x - dragStartX, dy = e.position.y - dragStartY;
     if (dragMode == Drag::undecided && std::max (std::abs (dx), std::abs (dy)) > 6.0f)
-        dragMode = std::abs (dx) > std::abs (dy) ? Drag::time : Drag::pitch;
+    {
+        dragMode = pendingEdge != Drag::undecided ? pendingEdge : std::abs (dx) > std::abs (dy) ? Drag::time : Drag::pitch;
+        // An edit while you look at the Original: switch to Tuned (you hear and see what you do), then edit as tuned.
+        if (model != nullptr && model->isOriginal() && onWantTuned) onWantTuned();
+    }
     if (dragMode == Drag::pitch)
     {
-        const double moved = -dy / rowHeight;
-        dragTarget = e.mods.isAltDown() ? dragStartTarget + moved                       // free (cents)
-                                        : std::round (dragStartTarget + moved);          // whole notes
+        const double raw = dragStartTarget - dy / rowHeight;
+        // Whole notes of the key (Shift: any semitone; Alt: free, in cents).
+        dragTarget = e.mods.isAltDown() ? raw
+                   : (e.mods.isShiftDown() || snap.scale == 0) ? std::round (raw)
+                                                                : honeyui::keyNote (raw, snap.key, snap.scale);
         dragTarget = jlimit (kLowestMidi, kHighestMidi, dragTarget);
     }
     else if (dragMode != Drag::undecided)
-        dragSeconds = dx / pixelsPerSecond;   // time / ends: free (hold nothing), in seconds
+        dragSeconds = dx / pixelsPerSecond;   // time / ends: free, in seconds (kept between the neighbours by span())
     repaint();
 }
 
@@ -760,7 +830,7 @@ void HoneyRoll::mouseUp (const MouseEvent&)
     if (! dragging) return;
     const auto [a, b] = selected >= 0 ? span (selected) : std::pair<double, double> { 0.0, 0.0 };   // (with the drag)
     dragging = false;
-    if (selected >= 0 && model != nullptr)
+    if (selected >= 0 && model != nullptr && ! model->isOriginal())
     {
         auto edit = snap.notes[static_cast<size_t> (selected)].edit;
         bool changed = false;
@@ -779,28 +849,83 @@ void HoneyRoll::mouseUp (const MouseEvent&)
             edit.length = (b - a) / std::max (1.0e-6, (n.end - n.start) / sr);
             changed = true;
         }
-        if (changed)
-        {
-            model->setEdit (selected, edit);
-            refresh();
-            if (onSelectionChanged) onSelectionChanged();
-        }
+        if (changed) apply (selected, edit);
     }
-    dragMode = Drag::undecided;
+    dragMode = pendingEdge = Drag::undecided;
     dragSeconds = 0.0;
     repaint();
 }
 
-void HoneyRoll::mouseDoubleClick (const MouseEvent& e)
+void HoneyRoll::apply (int index, const honeyui::NoteEdit& edit)
 {
-    const int hit = noteAt (e.position);
-    if (hit < 0 || model == nullptr) return;
-    auto edit = snap.notes[static_cast<size_t> (hit)].edit;
-    edit.moved = true;
-    edit.target = honeyui::keyNote (snap.notes[static_cast<size_t> (hit)].note.pitch, snap.key, snap.scale);
-    model->setEdit (hit, edit);
+    if (model == nullptr || index < 0 || index >= static_cast<int> (snap.notes.size())) return;
+    if (model->isOriginal() && onWantTuned) onWantTuned();
+    model->setEdit (index, edit);
     refresh();
     if (onSelectionChanged) onSelectionChanged();
+}
+
+void HoneyRoll::command (int index, Command c)
+{
+    if (index < 0 || index >= static_cast<int> (snap.notes.size())) return;
+    const auto& v = snap.notes[static_cast<size_t> (index)];
+    auto e = v.edit;
+    const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
+    switch (c)
+    {
+        case Command::snapToKey:   e.moved = true; e.target = honeyui::keyNote (v.note.pitch, snap.key, snap.scale); break;
+        case Command::steady:      e.drift = e.vibrato = 0.0; break;
+        case Command::resetPitch:  e.moved = false; e.target = 0.0; break;
+        case Command::resetTiming: e.shift = 0.0; e.length = 1.0; break;
+        case Command::resetTone:   e.formant = 0.0; break;
+        case Command::resetSteady: e.drift = e.vibrato = -1.0; break;
+        case Command::resetAll:    e = {}; break;
+        case Command::loop:
+            if (onLoop) onLoop (std::max (0.0, v.note.soundStart() / sr - 0.15), v.note.soundEnd() / sr + 0.15);
+            return;
+    }
+    apply (index, e);
+}
+
+void HoneyRoll::showMenu (int hit, Point<float> at)
+{
+    PopupMenu m;
+    const double playFrom = std::max (0.0, secondsAt (at.x));
+    if (hit >= 0)
+    {
+        const auto& e = snap.notes[static_cast<size_t> (hit)].edit;
+        m.addSectionHeader ("Note " + String (hit + 1));
+        m.addItem ("Snap to the key  (S)", [this, hit] { command (hit, Command::snapToKey); });
+        m.addItem ("Steady it: no drift, no vibrato  (D)", [this, hit] { command (hit, Command::steady); });
+        m.addSeparator();
+        m.addItem ("Loop and play this note  (L)", [this, hit] { command (hit, Command::loop); });
+        m.addItem ("Play from here  (Enter)", [this, playFrom] { if (onPlayFrom) onPlayFrom (playFrom); });
+        m.addSeparator();
+        m.addItem ("Reset its pitch", e.moved, false, [this, hit] { command (hit, Command::resetPitch); });
+        m.addItem ("Reset its timing", e.timed(), false, [this, hit] { command (hit, Command::resetTiming); });
+        m.addItem ("Reset its tone (formant)", std::abs (e.formant) > 1.0e-6, false, [this, hit] { command (hit, Command::resetTone); });
+        m.addItem ("Reset its drift and vibrato", e.drift >= 0.0 || e.vibrato >= 0.0, false, [this, hit] { command (hit, Command::resetSteady); });
+        m.addItem ("Reset everything on this note  (Delete)", ! e.isDefault(), false, [this, hit] { command (hit, Command::resetAll); });
+    }
+    else
+    {
+        m.addItem ("Play from here  (Enter)", [this, playFrom] { if (onPlayFrom) onPlayFrom (playFrom); });
+        m.addItem (wholeView ? "Back to the close-up view  (F)" : "Fit the whole clip  (F)", [this] { fitButton(); });
+    }
+    m.showMenuAsync (PopupMenu::Options().withTargetScreenArea (Rectangle<int> (1, 1).withPosition (localPointToGlobal (at.toInt()))));
+}
+
+void HoneyRoll::mouseDoubleClick (const MouseEvent& e)
+{
+    if (e.mods.isPopupMenu()) return;
+    if (e.position.y < (float) kRulerHeight && e.position.x >= gridArea().getX())
+    {
+        following = true;
+        if (onPlayFrom) onPlayFrom (std::max (0.0, secondsAt (e.position.x)));   // double-click the ruler: play from there
+        return;
+    }
+    const int hit = noteAt (e.position);
+    if (hit >= 0) command (hit, Command::snapToKey);
 }
 
 void HoneyRoll::mouseMove (const MouseEvent& e)
@@ -809,7 +934,7 @@ void HoneyRoll::mouseMove (const MouseEvent& e)
     const int hit = noteAt (e.position);
     if (hit != hovered) { hovered = hit; repaint(); }
     if (hit < 0) { setMouseCursor (MouseCursor::NormalCursor); return; }
-    const auto b = cellPath (hit, snap.notes[static_cast<size_t> (hit)].note.target).getBounds();
+    const auto b = cellPath (hit, shownPitch (hit)).getBounds();
     const float grab = std::min (7.0f, b.getWidth() * 0.2f);
     const bool edge = e.position.x < b.getX() + grab || e.position.x > b.getRight() - grab;
     setMouseCursor (edge ? MouseCursor::LeftRightResizeCursor : MouseCursor::UpDownLeftRightResizeCursor);
@@ -818,65 +943,112 @@ void HoneyRoll::mouseMove (const MouseEvent& e)
 void HoneyRoll::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& w)
 {
     const auto grid = gridArea();
-    if (e.mods.isCommandDown() || e.mods.isCtrlDown())
+    if (e.mods.isAltDown())
+    {
+        // Alt + wheel: zoom up / down (taller or shorter rows), the note under the mouse stays put.
+        const double at = midiAt (e.position.y);
+        rowHeight = jlimit (kMinRow, kMaxRow, rowHeight * std::pow (1.15, (std::abs (w.deltaY) > 0.0f ? w.deltaY : w.deltaX) * 4.0));
+        topMidi = at + (e.position.y - grid.getY()) / rowHeight;
+    }
+    else if (e.mods.isCommandDown() || e.mods.isCtrlDown())
     {
         userZoomed = true;
+        wholeView = false;
         const double at = secondsAt (e.position.x);
-        pixelsPerSecond = jlimit (grid.getWidth() / std::max (1.0, snap.seconds * 1.2), 1500.0, pixelsPerSecond * std::pow (1.5, w.deltaY * 4.0));
+        pixelsPerSecond = jlimit (std::min (kMaxPixelsPerSecond, grid.getWidth() / std::max (1.0, snap.seconds * 1.2)), kMaxPixelsPerSecond,
+                                  pixelsPerSecond * std::pow (1.5, w.deltaY * 4.0));
         viewStart = at - (e.position.x - grid.getX()) / pixelsPerSecond;
+        if (playing) following = false;
     }
     else if (e.mods.isShiftDown() || std::abs (w.deltaX) > std::abs (w.deltaY))
+    {
         viewStart -= (std::abs (w.deltaX) > 0.0f ? w.deltaX : w.deltaY) * 300.0 / pixelsPerSecond;
+        if (playing) following = false;   // looking elsewhere while it plays: stop paging along (until it plays again)
+    }
     else
         topMidi += w.deltaY * 12.0;
     const double visible = grid.getWidth() / pixelsPerSecond;
     viewStart = jlimit (0.0, std::max (0.0, snap.seconds - visible * 0.5), viewStart);
-    topMidi = jlimit (kLowestMidi + grid.getHeight() / rowHeight, kHighestMidi, topMidi);
+    topMidi = clampTop (topMidi);
     updateScrollBars();
     repaint();
 }
 
 bool HoneyRoll::keyPressed (const KeyPress& k)
 {
-    if (k.getModifiers().isCommandDown() && onUndo != nullptr)
+    const auto mods = k.getModifiers();
+    if (mods.isCommandDown() && onUndo != nullptr)
     {
         const auto c = CharacterFunctions::toLowerCase (static_cast<juce_wchar> (k.getKeyCode()));
-        if (c == 'z') { onUndo (! k.getModifiers().isShiftDown()); return true; }
+        if (c == 'z') { onUndo (! mods.isShiftDown()); return true; }
         if (c == 'y') { onUndo (false); return true; }
     }
+    const auto ch = CharacterFunctions::toLowerCase (k.getTextCharacter());
     if (k.getTextCharacter() == '+' || k.getTextCharacter() == '=' || k.getTextCharacter() == '-')
     {
-        // Zoom in time around the middle of the view.
         const auto grid = gridArea();
-        const double mid = secondsAt (grid.getCentreX());
-        pixelsPerSecond = jlimit (20.0, 2000.0, pixelsPerSecond * (k.getTextCharacter() == '-' ? 1.0 / 1.4 : 1.4));
-        viewStart = std::max (0.0, mid - (grid.getWidth() * 0.5) / pixelsPerSecond);
-        userZoomed = true;
+        if (mods.isAltDown())
+        {
+            // Alt + / -: taller or shorter rows.
+            const double mid = midiAt (grid.getCentreY());
+            rowHeight = jlimit (kMinRow, kMaxRow, rowHeight * (k.getTextCharacter() == '-' ? 1.0 / 1.2 : 1.2));
+            topMidi = clampTop (mid + grid.getHeight() * 0.5 / rowHeight);
+        }
+        else
+        {
+            // Zoom in time around the middle of the view.
+            const double mid = secondsAt (grid.getCentreX());
+            pixelsPerSecond = jlimit (20.0, kMaxPixelsPerSecond, pixelsPerSecond * (k.getTextCharacter() == '-' ? 1.0 / 1.4 : 1.4));
+            viewStart = std::max (0.0, mid - (grid.getWidth() * 0.5) / pixelsPerSecond);
+            userZoomed = true;
+            wholeView = false;
+        }
         updateScrollBars();
         repaint();
         return true;
     }
+    if (k == KeyPress::returnKey)
+    {
+        following = true;
+        if (onPlayFrom) onPlayFrom (-1.0);   // play from the playhead (or stop)
+        return true;
+    }
+    if (ch == 'f' && ! mods.isAnyModifierKeyDown()) { fitButton(); return true; }
+    if (ch == 'b' && ! mods.isAnyModifierKeyDown()) { if (onToggleOriginal) onToggleOriginal(); return true; }
+    if (k == KeyPress::escapeKey) { setSelected (-1); return true; }
     if (selected < 0 || model == nullptr) return false;
-    if (k == KeyPress::deleteKey || k == KeyPress::backspaceKey)
+    if (k == KeyPress::deleteKey || k == KeyPress::backspaceKey) { command (selected, Command::resetAll); return true; }
+    if (ch == 's' && ! mods.isAnyModifierKeyDown()) { command (selected, Command::snapToKey); return true; }
+    if (ch == 'd' && ! mods.isAnyModifierKeyDown()) { command (selected, Command::steady); return true; }
+    if (ch == 'l' && ! mods.isAnyModifierKeyDown()) { command (selected, Command::loop); return true; }
+    if (k.getKeyCode() == KeyPress::leftKey || k.getKeyCode() == KeyPress::rightKey)
     {
-        model->setEdit (selected, {});
-        refresh();
-        if (onSelectionChanged) onSelectionChanged();
+        setSelected (jlimit (0, static_cast<int> (snap.notes.size()) - 1, selected + (k.getKeyCode() == KeyPress::leftKey ? -1 : 1)));
         return true;
     }
-    if (k == KeyPress::leftKey || k == KeyPress::rightKey)
+    if (k.getKeyCode() == KeyPress::upKey || k.getKeyCode() == KeyPress::downKey)
     {
-        setSelected (jlimit (0, static_cast<int> (snap.notes.size()) - 1, selected + (k == KeyPress::leftKey ? -1 : 1)));
-        return true;
-    }
-    if (k == KeyPress::upKey || k == KeyPress::downKey)
-    {
+        const bool up = k.getKeyCode() == KeyPress::upKey;
+        const double now = snap.notes[static_cast<size_t> (selected)].note.target;
+        double next = 0.0;
+        if (mods.isAltDown())
+            next = now + (up ? 0.05 : -0.05);   // Alt: 5 cents
+        else if (mods.isShiftDown() || snap.scale == 0)
+            next = std::round (now) + (up ? 1.0 : -1.0);   // Shift (or no scale): a semitone
+        else
+        {
+            // The next note of the key above / below.
+            next = std::round (now);
+            for (int step = 0; step < 12; ++step)
+            {
+                next += up ? 1.0 : -1.0;
+                if (std::abs (honeyui::keyNote (next, snap.key, snap.scale) - next) < 1.0e-6) break;
+            }
+        }
         auto edit = snap.notes[static_cast<size_t> (selected)].edit;
         edit.moved = true;
-        edit.target = std::round (snap.notes[static_cast<size_t> (selected)].note.target) + (k == KeyPress::upKey ? 1.0 : -1.0);
-        model->setEdit (selected, edit);
-        refresh();
-        if (onSelectionChanged) onSelectionChanged();
+        edit.target = jlimit (kLowestMidi, kHighestMidi, next);
+        apply (selected, edit);
         return true;
     }
     return false;

@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.73.1. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.74.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.73.1**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.74.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -390,21 +390,24 @@ Honey Tune shows each sung note as its waveform on a piano roll, so you can fix 
 **Top bar**
 
 - **KEY / SCALE**: Auto finds the key in this order: the key you pick, the project's key (Cubase key signature), the key Voxology's Pitch uses on this track (from the beat on its side-chain, or picked there), Voxology's beat key (any Voxology in the project that hears the beat: on its side-chain or in BEAT mode), then the voice. On Auto, SCALE shows the key in use (**Auto: F Minor**) and the status line says where it came from. If it says **KEY UNSURE** in red, pick your song's key.
-- **SNAP TO NOTE**: how hard every note is pulled onto the key (100 % = all of them).
+- **SNAP TO NOTE**: how hard the notes are pulled onto the key. 100 % = every note all the way. Below that, the notes that are further off are pulled harder: at 70 % a note sung 50 cents off ends about 4 cents off, while one only 5 cents off is barely touched (it keeps its life). Click the **SNAP TO NOTE ▾** label for starting points: **Natural** (fixes what sounds wrong, keeps the life), **Polished**, **Tight** (modern pop, steady notes), **Hard** (the tuned effect).
 - **KEEP DRIFT / KEEP VIBRATO**: how much of the movement inside each note stays, for every note you haven't changed with its own sliders. Drift is the slow part (the note sagging or creeping, slower than about 2.5 times a second); vibrato is everything faster, including the wobble of a shaky voice. Both at 0 % = steady notes.
-- **Original / Tuned**: hear and see the clip as recorded or with your edits.
-- **Fit**: zoom to show the whole clip. **Undo / Redo**.
+- **Original / Tuned** (or press **B**): hear and see the clip as recorded or with your edits. While Original is on, the status line says so in red: what plays, and what an export gets, is the untuned take.
+- **Fit** (or **F**): the whole clip; click again for the close-up view around the playhead. **Undo / Redo** take back note edits and changes to KEY, SCALE and the three sliders alike.
 
 **Editing a note** (click it to select):
 
-- Drag up / down: move by whole notes. Hold **Alt** for free, cent-by-cent moves.
-- Drag the middle sideways: move it in time. Drag an end: make it longer or shorter.
-- Double-click: snap it to the key. **Delete**: reset it. Arrow keys: up / down = one semitone, left / right = next note.
+- Drag up / down: move it to the next notes of the key (**Shift**: any semitone; **Alt**: free, cent by cent).
+- Drag the middle sideways: move it in time. Drag an end: make it longer or shorter. A note stops at its neighbours and at the clip's ends (it can't be pushed into another note).
+- Double-click: snap it to the key. **Delete**: reset it. Arrow keys: up / down = the next note of the key (**Shift**: a semitone, **Alt**: 5 cents), left / right = next note.
+- **Right-click** a note for its menu: snap to the key, steady it, loop and play it, play from here, and reset just its pitch, its timing, its tone or its drift and vibrato (or everything).
+- Keys: **S** snap, **D** steady (no drift, no vibrato), **L** loop and play the note in your DAW, **Enter** play / stop from the playhead, **Esc** deselect.
+- Steadying keeps the very start and end of a note as you sang them (the scoop into it and the fall off it, up to 60 ms each): only the sustain goes straight, so it doesn't sound robotic.
 - Bottom bar for the selected note: **NOTE DRIFT**, **NOTE VIBRATO**, **NOTE FORMANT** (+ thinner, − deeper; pitch stays), **Snap note to key**, **Reset note**, **Reset all notes**.
 - **A wobbly note**: moving a note (or snapping it) keeps its wobble, on purpose: it moves the note as sung. To steady it, set **NOTE DRIFT** and **NOTE VIBRATO** to 0 (both: the wobble of a shaky voice is mostly "vibrato", and DRIFT alone leaves most of it). The note's line says "wobbles 30 cents..." while it moves, and "steadied" after; the line through the note goes flat. For the whole clip use KEEP DRIFT / KEEP VIBRATO. A very wobbly note can show as two notes: steady both.
 - Every slider (top and bottom bar): click the number box next to it to type an exact value, then press **Enter**.
-- **Ctrl+Z** undo, **Ctrl+Y** redo. Mouse wheel scrolls; Ctrl+wheel or + / − zooms.
-- **Playhead**: it follows the song while it plays and stays where playback stops (or wherever the DAW's cursor is), so you can see where you are while you edit. Click or drag the ruler to move it.
+- **Ctrl+Z** undo, **Ctrl+Y** redo. Mouse wheel scrolls; Ctrl+wheel or + / − zooms in time; **Alt+wheel** or **Alt + / −** makes the rows taller or shorter.
+- **Playhead**: it follows the song while it plays and stays where playback stops (or wherever the DAW's cursor is), so you can see where you are while you edit. Click or drag the ruler to move it; **double-click the ruler** to play from there. Scroll away while it plays and the view stays where you look (until the next play, a ruler click or F).
 
 Your edits are saved with the Cubase project.
 

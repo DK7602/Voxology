@@ -42,7 +42,24 @@ struct NoteEdit
     double formant = 0.0;      // semitones: + thinner, - deeper
     bool timed() const { return std::abs (shift) > 1.0e-6 || std::abs (length - 1.0) > 1.0e-6; }
     bool isDefault() const { return ! moved && drift < 0.0 && vibrato < 0.0 && ! timed() && std::abs (formant) < 1.0e-6; }
+    bool operator== (const NoteEdit& o) const
+    {
+        auto same = [] (double a, double b) { return std::abs (a - b) < 1.0e-9; };
+        return moved == o.moved && (! moved || same (target, o.target)) && same (drift, o.drift) && same (vibrato, o.vibrato)
+               && same (shift, o.shift) && same (length, o.length) && same (formant, o.formant);
+    }
 };
+
+/** SNAP TO NOTE (0..1) for a note `semis` from the key's note: how far of the way it's pulled. Not the same share for
+    every note (Melodyne's "correct pitch" idea): the further off, the harder the pull, so a partial setting fixes the
+    notes you hear as wrong first and leaves the nearly-right ones (and their life) alone. 0 = none, 1 = all the way;
+    a note a quarter tone off is pulled exactly `snap` of the way. (70 %: 50 cents off -> 4.5 cents, 5 cents -> 4.) */
+inline double snapPull (double semis, double snap)
+{
+    snap = std::clamp (snap, 0.0, 1.0);
+    if (snap >= 1.0) return 1.0;
+    return 1.0 - std::pow (1.0 - snap, std::abs (semis) / 0.25);
+}
 
 /** Values from outside (a project's archive: damaged, or from a newer / older version) made safe: inside the ranges
     the editor offers, never NaN or inf (a NaN target or a huge shift broke the render's time map). */
@@ -168,15 +185,22 @@ inline double keyNote (double pitch, int key, int scale)
     return vox::PitchCorrector::targetNote (pitch, key, scale, -1);
 }
 
-/** The notes as they will sound: hand edits first, then the settings. */
+/** A note moved or stretched in time stays this far from its neighbours (and inside the clip). */
+constexpr double kTimeGapSeconds = 0.005, kMinNoteSeconds = 0.03;
+
+/** The notes as they will sound: hand edits first, then the settings. A note moved / stretched in time is kept between
+    its neighbours (as they sound) and inside the clip (clipSamples; <= 0 = the clip's end isn't known): the render
+    never squeezes one note into another, whatever an edit (or a damaged project) says. */
 inline std::vector<vox::honey::Note> applyEdits (std::vector<vox::honey::Note> notes, const std::vector<NoteEdit>& edits,
-                                                 const Settings& s, int key, int scale, double sampleRate = 48000.0)
+                                                 const Settings& s, int key, int scale, double sampleRate = 48000.0,
+                                                 double clipSamples = 0.0)
 {
     for (size_t i = 0; i < notes.size(); ++i)
     {
         auto& n = notes[i];
         const NoteEdit e = i < edits.size() ? edits[i] : NoteEdit {};
-        n.target = e.moved ? e.target : n.pitch + (keyNote (n.pitch, key, scale) - n.pitch) * s.snap;
+        const double toKey = keyNote (n.pitch, key, scale) - n.pitch;
+        n.target = e.moved ? e.target : n.pitch + toKey * snapPull (toKey, s.snap);
         n.drift = e.drift >= 0.0 ? e.drift : s.drift;
         n.vibrato = e.vibrato >= 0.0 ? e.vibrato : s.vibrato;
         n.formant = e.formant;
@@ -187,6 +211,20 @@ inline std::vector<vox::honey::Note> applyEdits (std::vector<vox::honey::Note> n
             n.outEnd = n.outStart + (n.end - n.start) * std::max (0.1, e.length);
         }
         n.edited = true;
+    }
+    // Between the neighbours, in order (each after the one before as it now sounds, before the next as it would).
+    const double gap = kTimeGapSeconds * sampleRate, minLen = kMinNoteSeconds * sampleRate;
+    for (size_t i = 0; i < notes.size(); ++i)
+    {
+        auto& n = notes[i];
+        if (n.outStart < 0.0 && n.outEnd < 0.0) continue;
+        const double lo = i > 0 ? notes[i - 1].soundEnd() + gap : 0.0;
+        double hi = i + 1 < notes.size() ? notes[i + 1].soundStart() - gap : (clipSamples > 0.0 ? clipSamples - gap : 1.0e300);
+        if (clipSamples > 0.0) hi = std::min (hi, clipSamples - gap);
+        if (hi - lo < minLen) { n.outStart = n.outEnd = -1.0; continue; }   // no room at all: where it was sung
+        const double len = std::clamp (n.soundEnd() - n.soundStart(), minLen, hi - lo);
+        n.outStart = std::clamp (n.soundStart(), lo, hi - len);
+        n.outEnd = n.outStart + len;
     }
     return notes;
 }
@@ -261,7 +299,8 @@ inline Snapshot makeSnapshot (std::shared_ptr<const vox::honey::Track> track, co
     snap.keyUnsure = keyUnsure (s, guess, host);
     if (track != nullptr && ! track->time.empty())
         snap.seconds = track->time.back() / track->sampleRate;
-    const auto sounding = applyEdits (notes, edits, s, snap.key, snap.scale, track != nullptr ? track->sampleRate : 48000.0);
+    const auto sounding = applyEdits (notes, edits, s, snap.key, snap.scale, track != nullptr ? track->sampleRate : 48000.0,
+                                      track != nullptr && ! track->level.empty() ? static_cast<double> (track->level.size()) * vox::honey::Track::kLevelHopSeconds * track->sampleRate : 0.0);
     for (size_t i = 0; i < notes.size(); ++i)
     {
         NoteView v;
@@ -422,6 +461,10 @@ struct Model
     virtual bool isOriginal() = 0;
     /** Ask the host to move its playhead to this clip time (seconds). */
     virtual void seek (double /*clipSeconds*/) {}
+    /** Ask the host to play from this clip time (seconds; < 0: from where its playhead is, or stop it if it plays). */
+    virtual void playFrom (double /*clipSeconds*/) {}
+    /** Ask the host to loop this stretch of the clip (seconds) and play it. */
+    virtual void loop (double /*fromSeconds*/, double /*toSeconds*/) {}
 };
 
 } // namespace honeyui

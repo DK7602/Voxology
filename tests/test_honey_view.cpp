@@ -272,3 +272,52 @@ TEST_CASE ("Honey Tune: the status line says what Voxology's Pitch does on this 
     CHECK (wobbleText (2.0, 30.0) == "steadied: wobble 30 -> 2 cents");
     CHECK (wobbleText (3.0, 4.0).empty());   // a steady note: nothing to say
 }
+
+TEST_CASE ("Honey Tune: SNAP TO NOTE pulls the notes that are further off harder", "[honey][view]")
+{
+    CHECK (snapPull (0.3, 0.0) == 0.0);
+    CHECK (snapPull (0.03, 1.0) == 1.0);
+    CHECK (snapPull (0.5, 1.0) == 1.0);
+    CHECK (std::abs (snapPull (0.25, 0.6) - 0.6) < 1.0e-12);    // a quarter tone off: exactly the setting
+    CHECK (std::abs (snapPull (-0.25, 0.6) - 0.6) < 1.0e-12);   // (either side)
+    // 70 %: 50 cents off ends 4.5 cents off; 5 cents off is barely touched (ends 4 cents off).
+    CHECK (std::abs (50.0 * (1.0 - snapPull (0.5, 0.7)) - 4.5) < 0.05);
+    CHECK (5.0 * (1.0 - snapPull (0.05, 0.7)) > 3.5);
+    // Rising with the distance and with the setting.
+    for (double s : { 0.2, 0.5, 0.8 })
+        for (double d = 0.02; d < 0.6; d += 0.04) { CHECK (snapPull (d + 0.04, s) > snapPull (d, s)); CHECK (snapPull (d, s + 0.1) > snapPull (d, s)); }
+    // In applyEdits: a C4 sung 40 cents sharp at 50 % lands closer than half way; one 10 cents sharp stays nearer as sung.
+    Settings s;
+    s.key = 0;
+    s.scale = 1;
+    s.snap = 0.5;
+    const auto out = applyEdits ({ note (60.4, 0.0), note (62.1, 0.5) }, std::vector<NoteEdit> (2), s, 0, 1);
+    CHECK (out[0].target - 60.0 < 0.2);
+    CHECK (out[1].target - 62.0 > 0.05);
+}
+
+TEST_CASE ("Honey Tune: a note moved or stretched in time stays between its neighbours and inside the clip", "[honey][view]")
+{
+    const double sr = 48000.0, gap = kTimeGapSeconds * sr;
+    // Notes at 0, 0.5, 1.0 s (0.4 s long); the clip is 1.6 s.
+    const std::vector<vox::honey::Note> notes { note (60, 0.0), note (62, 0.5), note (64, 1.0) };
+    std::vector<NoteEdit> edits (3);
+    edits[1].shift = 0.4;   // onto the next note
+    auto out = applyEdits (notes, edits, Settings {}, 0, 1, sr, 1.6 * sr);
+    CHECK (out[1].soundEnd() <= out[2].soundStart() - gap + 1.0);
+    CHECK (out[1].soundStart() >= out[0].soundEnd() + gap - 1.0);
+    CHECK (std::abs ((out[1].soundEnd() - out[1].soundStart()) - 0.4 * sr) < 1.0);   // its length kept while it fits
+    edits[1] = {};
+    edits[2].length = 5.0;   // stretched far past the clip's end
+    out = applyEdits (notes, edits, Settings {}, 0, 1, sr, 1.6 * sr);
+    CHECK (out[2].soundEnd() <= 1.6 * sr - gap + 1.0);
+    edits[2] = {};
+    edits[0].shift = -3.0;   // before the clip's start
+    out = applyEdits (notes, edits, Settings {}, 0, 1, sr, 1.6 * sr);
+    CHECK (out[0].soundStart() >= 0.0);
+    // Edits that compare equal: nothing to undo.
+    NoteEdit a, b;
+    CHECK (a == b);
+    b.formant = 1.0;
+    CHECK_FALSE (a == b);
+}

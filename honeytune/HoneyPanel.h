@@ -46,7 +46,8 @@ private:
     static juce::String howToOpen();   // where this DAW opens ARA plug-ins on a clip (the status before a clip)
     void applySettings();
     void updateNoteControls();
-    void applyNoteEdit();
+    void applyNoteEdit (const juce::Slider* which);
+    void mouseDown (const juce::MouseEvent&) override;
 
     juce::Rectangle<float> frameArea() const;
     /** Lays out the top and bottom bars, each on one row or two; returns whether each fitted on the rows it was given. */
