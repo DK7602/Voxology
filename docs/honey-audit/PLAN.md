@@ -96,7 +96,12 @@ Measured with the engine review's own tools (scratch: /tmp/claude-0/audit-eng-wo
   no drift carried out of unvoiced grains (a squeeze over a breath made the next note's attack late). Measured: +80 ms
   s 124 -> 82 ms (as sung), t one 4.5 ms burst (was 2 peaks, 9 ms); +150 ms B on time (was 40 ms late), s 159 -> 82,
   the next note identical (was -30 dB off); -60 ms t whole, s 42 ms (was 50: no silence to squeeze there).
-- AUDIT-ENGINE.md #13 octave errors (high / breathy / raspy voices): see its "Fixed in Beta 40".
+- AUDIT-ENGINE.md #13 octave errors (high / breathy / raspy voices; details in its "Fixed in Beta 40"): analyse() checks
+  each reading at the full rate (checkPeriods: P / 2 ... P / 16 up to 1600 Hz, then the loudness-weighted choice within
+  130 ms; readings stamped in silence dropped), holdVoicing (breathy gaps up to 80 ms), findNotes' average not across a
+  3-semitone jump, aiCheck's stretch vote with the waveform's last word. 784 / 988 / 1175 Hz: 30 / 32 / 100 % wrong
+  octave -> 0, one note each; breathy HNR 14 dB 24 - 54 % -> 0, 6 notes for 6. Not fixed: rasp at 50 %. Side effect:
+  notes now keep the attack that used to be a separate fragment, so a moved note's first 40 ms measures 7 c further off.
 
 ## Next (in order; proposed to the user on 2026-11-22, no objection yet)
 1. Beta 41: note level and mute (+ blob height), "notes to check" finder (amber dot, N next, D fix), time edits snap

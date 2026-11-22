@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.75.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.76.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.75.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.76.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -363,7 +363,7 @@ Without a beat, Auto-Edit works exactly as before. The pro numbers come from 143
 
 Honey Tune shows each sung note as its waveform on a piano roll, so you can fix single notes by hand. It needs a DAW with ARA (Cubase Artist or Pro, Studio One, Logic, Reaper, Cakewalk). Cubase Elements has no ARA.
 
-**Open it in Cubase**: select the vocal clip, then **Audio > Extensions > Honey Tune**. It listens to the clip first (a few seconds per minute of audio), including an AI pitch check that fixes octave slips and finds missed notes. The status line reports what it found. The **?** button at the top right opens this manual.
+**Open it in Cubase**: select the vocal clip, then **Audio > Extensions > Honey Tune**. It listens to the clip first (a few seconds per minute of audio), including an AI pitch check that fixes octave slips and finds missed notes. High notes (up past a soprano's top C) and breathy or raspy voices are read in the octave you sang, each as one note. The status line reports what it found. The **?** button at the top right opens this manual.
 
 **Other DAWs** (before a clip is open, Honey Tune's status line says how for yours):
 

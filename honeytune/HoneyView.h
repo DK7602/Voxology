@@ -441,8 +441,8 @@ inline rack::Module rackModule (const Settings& s, const RackTrack& t, bool full
     m.summary = sum;
     if (full)
     {
-        const auto knob = [&] (const char* name, std::string text, float norm, const char* key = "") {
-            m.values.push_back ({ name, std::move (text), norm, false, key });
+        const auto knob = [&] (const char* name, std::string text, float norm, const char* param = "") {
+            m.values.push_back ({ name, std::move (text), norm, false, param });
         };
         knob ("Key", autoKey ? (t.keyKnown && ! t.unsure && t.scale != 0 ? "Auto: " + note : std::string ("Auto")) : note,
               autoKey ? 1.0f : static_cast<float> (std::clamp (s.key, 0, 11)) / 11.0f);

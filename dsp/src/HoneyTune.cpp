@@ -1133,7 +1133,7 @@ void matchLoudness (const Channels& in, Channels& out, size_t offset, const std:
         if (std::abs (g - 1.0) < 0.01) continue;
         if (gain.empty()) gain.assign (hi - lo, 1.0);
         const double from = n.start - edge, to = n.end + edge;
-        for (auto i = static_cast<size_t> (std::max (static_cast<double> (lo), from)); i < std::min (static_cast<double> (hi), to); ++i)
+        for (auto i = static_cast<size_t> (std::max (static_cast<double> (lo), from)); static_cast<double> (i) < std::min (static_cast<double> (hi), to); ++i)
         {
             const double x = std::clamp (std::min (static_cast<double> (i) - from, to - static_cast<double> (i)) / (2.0 * edge), 0.0, 1.0);
             const double w = 0.5 - 0.5 * std::cos (std::numbers::pi * x);

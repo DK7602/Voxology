@@ -2194,3 +2194,8 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   render() / renderPart() / warp() now take Channels (mono overloads kept). Track::filled marks the attack / release
   readings analyse() fills in. The review's tools: /tmp/claude-0/audit-eng-work (scratch; `mine/` = builds against this
   tree). Private decoded audio there: delete when done (audio/).
+- v0.76.0 (Beta 40): split / join notes (vox::honey::Layout, reshape, HNY5 archive; Alt + double-click, J), hear a
+  note while stopped (HoneyEditorRenderer; untested without an ARA host: check in Cubase), consonants move whole with
+  their note (timeMap with the track; AUDIT-ENGINE.md #5), octave errors on high / breathy voices (checkPeriods,
+  holdVoicing; AUDIT-ENGINE.md #13). docs/honey-audit/PLAN.md "Beta 40" has the numbers. Next: PLAN.md "Next"
+  (Beta 41 needs the user's go).
