@@ -1615,6 +1615,7 @@ bool HoneyRoll::keyPressed (const KeyPress& k)
         if (onPlayFrom) onPlayFrom (-1.0);   // play from the playhead (or stop)
         return true;
     }
+    if (k.getTextCharacter() == '?' || k.getKeyCode() == KeyPress::F1Key) { if (onHelp) onHelp(); return true; }
     if (ch == 'f' && ! mods.isAnyModifierKeyDown()) { fitButton(); return true; }
     if (ch == 'b' && ! mods.isAnyModifierKeyDown()) { if (onToggleOriginal) onToggleOriginal(); return true; }
     if (k == KeyPress::escapeKey) { setSelected (-1); if (model != nullptr) model->stopAudition(); return true; }

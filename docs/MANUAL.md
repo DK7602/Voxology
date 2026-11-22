@@ -363,6 +363,49 @@ Without a beat, Auto-Edit works exactly as before. The pro numbers come from 143
 
 Honey Tune shows each sung note as its waveform on a piano roll, so you can fix single notes by hand. It needs a DAW with ARA (Cubase Artist or Pro, Studio One, Logic, Reaper, Cakewalk). Cubase Elements has no ARA.
 
+**Quick start** (the **?** button, or the **?** key, opens this page)
+
+1. Open Honey Tune on your vocal clip and wait a few seconds while it listens.
+2. Check **KEY**: Auto finds it. If it says **KEY UNSURE** in red, pick your song's key.
+3. Set **SNAP TO NOTE**: click its **▾** for a starting point (**Natural** suits most songs).
+4. Press **N** to go through the notes with an **amber dot** (notes to check): each plays, its line says what's up, and **D** fixes it.
+5. Drag any note that still sounds wrong: up / down for pitch, sideways for timing. Press **B** to compare with the original, **Ctrl+Z** to undo.
+
+**Keys and mouse** (on a Mac: Cmd for Ctrl, Option for Alt)
+
+| Key / mouse | What it does |
+| --- | --- |
+| Click a note | Select it (and hear it while your DAW is stopped) |
+| Ctrl-click, Shift-click, drag a box | Select several notes |
+| Drag a note up / down | Pitch: the next notes of the key (Shift: any semitone; Alt: free, in cents) |
+| Drag a note sideways | Earlier / later, onto the beat (Alt: anywhere) |
+| Drag a note's end | Longer / shorter |
+| Ctrl + drag up / down | Louder / quieter |
+| Double-click a note | Snap it to the key |
+| Alt + double-click a note | Split it in two there |
+| Click a key on the left | Select every note at that pitch |
+| Alt + click a key on the left | That note into / out of the key |
+| Right-click | The note's menu (on a key: the key's notes and the tuning) |
+| S | Snap the note to the key |
+| D | Fix a note to check (any other note: steady it) |
+| N | Next note to check |
+| M | Mute / unmute |
+| J | Join with the next note |
+| Delete | Reset the note |
+| Up / Down arrow | The next note of the key (Shift: a semitone; Alt: 5 cents) |
+| Left / Right arrow | The note before / after |
+| L | Loop and play the note in your DAW |
+| Enter | Play / stop from the playhead |
+| B | Original / Tuned |
+| F | The whole clip / back to the close-up |
+| Esc | Select none, stop hearing a note |
+| Ctrl+A | Select all notes |
+| Ctrl+Z / Ctrl+Y | Undo / redo |
+| Mouse wheel | Scroll up / down (Shift: in time; Ctrl, or + / -: zoom) |
+| Alt + wheel, Alt + / - | Taller / shorter rows |
+| ? | This page |
+
+
 **Open it in Cubase**: select the vocal clip, then **Audio > Extensions > Honey Tune**. It listens to the clip first (a few seconds per minute of audio), including an AI pitch check that fixes octave slips and finds missed notes. High notes (up past a soprano's top C) and breathy or raspy voices are read in the octave you sang, each as one note. The status line reports what it found. The **?** button at the top right opens this manual.
 
 **Other DAWs** (before a clip is open, Honey Tune's status line says how for yours):
@@ -384,6 +427,8 @@ Honey Tune shows each sung note as its waveform on a piano roll, so you can fix 
 | Gold note | Honey Tune pulled it onto the key |
 | Red glow | It will play off-key (also when you drag a note onto an off-key note) |
 | Dashed outline | Where the note was sung, after you move it |
+| Dashed outline, no fill | A muted note (M brings it back) |
+| Amber dot | A note to check: press N to go to it, D to fix it |
 | Black line | The pitch the note will play, with its drift and vibrato as you keep them (Original: as sung). A note you steady draws flat. It runs on into the next note when you sang them in one breath: the slide between them |
 | Sand-gold lanes | Notes outside the key (on Chromatic: the black keys) |
 

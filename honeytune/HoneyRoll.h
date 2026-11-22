@@ -53,6 +53,7 @@ public:
     std::function<void (double)> onPlayFrom;  // play from there (clip seconds; < 0 = from the playhead, or stop if playing)
     std::function<void (double, double)> onLoop;   // loop and play this stretch (clip seconds)
     std::function<void()> onSettingsChanged;       // a note switched into / out of the key, the tuning
+    std::function<void()> onHelp;                  // ? (or F1): the quick guide and every key
 
     void paint (juce::Graphics&) override;
     void resized() override;

@@ -73,8 +73,9 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     for (auto* l : { &keyLabel, &scaleLabel, &snapLabel, &driftLabel, &vibratoLabel })
         l->setVisible (false);   // painted in gold by the panel
     for (auto* b : { &snapNote, &resetNote, &resetAll, &fit, &original, &tuned, &undoBtn, &redoBtn, &help }) addAndMakeVisible (*b);
-    help.setTooltip ("Open the manual: how to use Honey Tune and Voxology");
+    help.setTooltip ("How to use Honey Tune, and every key (?)");
     help.onClick = [this] { manual.setVisible (true); manual.toFront (true); };
+    roll.onHelp = [this] { if (help.onClick) help.onClick(); };
     addChildComponent (manual);
     manual.onClose = [this] { manual.setVisible (false); };
     undoBtn.setTooltip ("Undo the last edit (Ctrl + Z)");
@@ -652,45 +653,66 @@ HoneyManual::HoneyManual()
         flush();
     };
     const auto md = String::fromUTF8 (HoneyAssets::MANUAL_md, HoneyAssets::MANUAL_mdSize);
-    const auto lines = StringArray::fromLines (md);
-    for (int i = 0; i < lines.size(); ++i)
+    const auto all = StringArray::fromLines (md);
+    auto show = [&] (const StringArray& lines)
     {
-        const auto line = lines[i].trimEnd();
-        const auto t = line.trimStart();
-        if (t.isEmpty()) continue;
-        if (t.startsWith ("# "))
-            put (t.substring (2) + "\n\n", 24.0f, true, goldDeep, goldDeep);
-        else if (t.startsWith ("## "))
+        for (int i = 0; i < lines.size(); ++i)
         {
-            put ("\n" + t.substring (3).toUpperCase() + "\n", 18.0f, true, goldDeep, goldDeep);
-            put ("\n", 6.0f, false, ink, ink);
-        }
-        else if (t.startsWith ("|"))
-        {
-            const auto isRule = [] (const String& l) { return l.trim().startsWith ("|") && l.containsOnly ("|-: "); };
-            if (isRule (t)) continue;
-            auto cells = StringArray::fromTokens (t.substring (1, t.endsWithChar ('|') ? t.length() - 1 : t.length()), "|", {});
-            cells.trim();
-            const bool header = i + 1 < lines.size() && isRule (lines[i + 1]);
-            if (header)
-                put (cells.joinIntoString ("  /  ").toUpperCase() + "\n", 12.0f, true, goldDeep, goldDeep);
-            else
+            const auto line = lines[i].trimEnd();
+            const auto t = line.trimStart();
+            if (t.isEmpty()) continue;
+            if (t.startsWith ("# "))
+                put (t.substring (2) + "\n\n", 24.0f, true, goldDeep, goldDeep);
+            else if (t.startsWith ("## "))
             {
-                put ("   " + cells[0], 15.0f, true, blueDeep, blueDeep);
-                cells.remove (0);
-                put ("  -  " + cells.joinIntoString ("  -  ") + "\n", 15.0f, false, ink, blueDeep);
+                put ("\n" + t.substring (3).toUpperCase() + "\n", 18.0f, true, goldDeep, goldDeep);
+                put ("\n", 6.0f, false, ink, ink);
             }
-            if (i + 1 >= lines.size() || ! lines[i + 1].trimStart().startsWith ("|")) put ("\n", 8.0f, false, ink, ink);
+            else if (t.startsWith ("|"))
+            {
+                const auto isRule = [] (const String& l) { return l.trim().startsWith ("|") && l.containsOnly ("|-: "); };
+                if (isRule (t)) continue;
+                auto cells = StringArray::fromTokens (t.substring (1, t.endsWithChar ('|') ? t.length() - 1 : t.length()), "|", {});
+                cells.trim();
+                const bool header = i + 1 < lines.size() && isRule (lines[i + 1]);
+                if (header)
+                    put (cells.joinIntoString ("  /  ").toUpperCase() + "\n", 12.0f, true, goldDeep, goldDeep);
+                else
+                {
+                    put ("   " + cells[0], 15.0f, true, blueDeep, blueDeep);
+                    cells.remove (0);
+                    put ("  -  " + cells.joinIntoString ("  -  ") + "\n", 15.0f, false, ink, blueDeep);
+                }
+                if (i + 1 >= lines.size() || ! lines[i + 1].trimStart().startsWith ("|")) put ("\n", 8.0f, false, ink, ink);
+            }
+            else if (t.startsWith ("- ") || (t.initialSectionContainingOnly ("0123456789").isNotEmpty()
+                                             && t.fromFirstOccurrenceOf (".", false, false).startsWithChar (' ')))
+            {
+                const auto item = t.startsWith ("- ") ? String::charToString ((juce_wchar) 0x2022) + "  " + t.substring (2) : t;
+                put ("   " + item + "\n", 15.0f, false, ink, blueDeep);
+                if (i + 1 >= lines.size() || lines[i + 1].trim().isEmpty()) put ("\n", 8.0f, false, ink, ink);   // gap after the list
+            }
+            else
+                put (t + "\n\n", 15.0f, false, ink, blueDeep);
         }
-        else if (t.startsWith ("- ") || (t.initialSectionContainingOnly ("0123456789").isNotEmpty()
-                                         && t.fromFirstOccurrenceOf (".", false, false).startsWithChar (' ')))
-        {
-            const auto item = t.startsWith ("- ") ? String::charToString ((juce_wchar) 0x2022) + "  " + t.substring (2) : t;
-            put ("   " + item + "\n", 15.0f, false, ink, blueDeep);
-            if (i + 1 >= lines.size() || lines[i + 1].trim().isEmpty()) put ("\n", 8.0f, false, ink, ink);   // gap after the list
-        }
-        else
-            put (t + "\n\n", 15.0f, false, ink, blueDeep);
+    };
+    // Honey Tune's own part first (its quick start and every key, then the rest of it), then the whole manual.
+    int from = -1, to = -1;
+    for (int i = 0; i < all.size(); ++i)
+    {
+        if (from < 0 && all[i].startsWith ("## Honey Tune")) from = i;
+        else if (from >= 0 && all[i].startsWith ("## With Mixology")) { to = i; break; }
+    }
+    if (from < 0 || to < 0)
+        show (all);
+    else
+    {
+        StringArray honey, rest;
+        for (int i = 0; i < all.size(); ++i) (i >= from && i < to ? honey : rest).add (all[i]);
+        show (honey);
+        put ("\n\n", 15.0f, false, ink, ink);
+        put ("THE WHOLE MANUAL: VOXOLOGY, AND THE SUITE\n\n", 20.0f, true, goldDeep, goldDeep);
+        show (rest);
     }
     text.moveCaretToTop (false);
 }
