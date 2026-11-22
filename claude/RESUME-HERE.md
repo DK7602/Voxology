@@ -2171,3 +2171,4 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   digital silence (silence 0.06 % of a core), the background AI pass and AI renders rest half the time (pace::Gentler),
   the hiss level computed exactly (no noise made per prepare). STEP3.md "Beta 36 test". 240 engine tests pass.
   Asked the user: did Beta 35 cut out on the same re-analysis; how many tracks run Mode AI.
+  Beta 37 installer green (Mixology run 44938605290). 2026-11-22, user: "i re analyzed and no cut out". Waiting.
