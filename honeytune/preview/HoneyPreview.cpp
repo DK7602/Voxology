@@ -3,7 +3,10 @@
 // Env: HONEY_W / HONEY_H size, HONEY_BPM tempo map, HONEY_MANUAL the manual, HONEY_BEAT=key,scale a key from Voxology's
 // beat, HONEY_VOXOLOGY=1|2|3 the Voxology on this track (Pitch resting / tuning anyway / tuning), HONEY_STEADY=n note n
 // selected and steadied (NOTE DRIFT + NOTE VIBRATO 0), HONEY_PLAYHEAD=seconds, HONEY_STOPPED=1 (playback stopped),
-// HONEY_SPLIT=n note n cut in two in its middle (and selected), HONEY_JOIN=n note n joined with the next.
+// HONEY_SPLIT=n note n cut in two in its middle (and selected), HONEY_JOIN=n note n joined with the next,
+// HONEY_GAIN=n,dB note n louder / quieter, HONEY_MUTE=n note n muted, HONEY_ADD=mask / HONEY_REMOVE=mask notes switched into /
+// out of the key (bit 0 = C), HONEY_A4=Hz the tuning, HONEY_AUTOTUNE=cents the beat's tuning from Voxology (Auto),
+// HONEY_NEXT=1 N pressed (the next note to check selected).
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -32,7 +35,8 @@ struct MemoryModel final : honeyui::Model
             beat.valid = beat.fromBeat = true;
             std::sscanf (b, "%d,%d", &beat.key, &beat.scale);
         }
-        auto s = honeyui::makeSnapshot (track, notes, edits, guess, settings, beat);
+        auto s = honeyui::makeSnapshot (track, notes, edits, guess, settings, beat,
+                                        std::getenv ("HONEY_AUTOTUNE") ? std::atoi (std::getenv ("HONEY_AUTOTUNE")) : 0);
         s.status = 2;
         if (const char* v = std::getenv ("HONEY_VOXOLOGY"))
         {
@@ -94,6 +98,10 @@ int main (int argc, char** argv)
     if (argc > 4) m.settings.key = std::atoi (argv[4]);
     if (argc > 5) m.settings.scale = std::atoi (argv[5]);
     m.settings.snap = argc > 6 ? std::atof (argv[6]) : 0.0;   // show the notes as sung (glow), unless asked
+    if (const char* a = std::getenv ("HONEY_ADD")) m.settings.added = std::atoi (a);
+    if (const char* r = std::getenv ("HONEY_REMOVE")) m.settings.removed = std::atoi (r);
+    if (const char* a4 = std::getenv ("HONEY_A4")) m.settings.a4 = std::atof (a4);
+    m.settings = honeyui::sanitised (m.settings);
 
     HoneyPanel panel;
     panel.setSize (500, 300);   // hosts open small, then enlarge
@@ -120,8 +128,17 @@ int main (int argc, char** argv)
         auto& e = m.edits[static_cast<size_t> (pick)];
         e.drift = e.vibrato = 0.0;
     }
+    if (const char* g = std::getenv ("HONEY_GAIN"))
+    {
+        int n = 0;
+        double db = 0.0;
+        if (std::sscanf (g, "%d,%lf", &n, &db) == 2 && n > 0 && n <= static_cast<int> (m.edits.size())) m.edits[static_cast<size_t> (n - 1)].gainDb = db;
+    }
+    if (const char* mu = std::getenv ("HONEY_MUTE"); mu != nullptr && std::atoi (mu) > 0 && std::atoi (mu) <= static_cast<int> (m.edits.size()))
+        m.edits[static_cast<size_t> (std::atoi (mu) - 1)].muted = true;
     panel.refresh();
     panel.roll.setSelected (pick);
+    if (std::getenv ("HONEY_NEXT")) { panel.roll.setSelected (-1); panel.roll.nextCheck(); }
     if (const char* sp = std::getenv ("HONEY_SPLIT"); sp != nullptr && std::atoi (sp) > 0)
     {
         const int n = std::min (std::atoi (sp), static_cast<int> (m.notes.size())) - 1;
@@ -147,6 +164,10 @@ int main (int argc, char** argv)
                     if (auto* l = dynamic_cast<Label*> (k))
                         std::printf ("label '%s' text %s bg %s\n", l->getText().toRawUTF8(), l->findColour (Label::textColourId).toString().toRawUTF8(),
                                      l->findColour (Label::backgroundColourId).toString().toRawUTF8());
+    if (std::getenv ("HONEY_NOTES"))
+        for (const auto& v : panel.roll.getSnapshot().notes)
+            std::printf ("note %.3f-%.3f s  sung %.2f  plays %.2f  check %d (other %.2f, join %d)\n", v.note.start / sr, v.note.end / sr,
+                         v.note.pitch, v.note.target, static_cast<int> (v.check.why), v.check.other, v.check.joinWith);
     const auto img = panel.createComponentSnapshot (panel.getLocalBounds(), true, 1.0f);
     File out (File::getCurrentWorkingDirectory().getChildFile (argv[3]));
     out.deleteFile();

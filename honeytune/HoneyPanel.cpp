@@ -128,6 +128,7 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     fit.onClick = [this] { roll.fitButton(); };   // the whole clip; again: back to the close-up view
     fit.setTooltip ("Fit the whole clip (F); click again for the close-up view");
     roll.onSelectionChanged = [this] { updateNoteControls(); };
+    roll.onSettingsChanged = [this] { refresh(); };
     roll.onSeek = [this] (double t)
     {
         if (model != nullptr) model->seek (t);
@@ -182,8 +183,10 @@ void HoneyPanel::refresh()
                                         + (s.guess.ambiguous ? String (" or ") + vox::kNoteNames[static_cast<size_t> (s.guess.altKey)] + (s.guess.altMinor ? " minor" : " major") : String())
                                         + "); until then notes snap to the nearest note, any note  |  "
                                   : String())
+                   + (s.checks > 0 ? String (s.checks) + (s.checks == 1 ? " note to check (N)  |  " : " notes to check (N = next)  |  ") : String())
                    + String (s.notes.size()) + " notes  |  key " + vox::kNoteNames[static_cast<size_t> (s.key)] + " "
-                   + vox::kScaleNames[static_cast<size_t> (s.scale)] + honeyui::keySourceText (s)
+                   + vox::kScaleNames[static_cast<size_t> (s.scale)] + scaleExtras (s.grid) + honeyui::keySourceText (s)
+                   + tuningText (s)
                    + (! voxWarning && voxLine.isNotEmpty() ? "  |  " + voxLine : String())
                    + "  |  sung off-key " + String (sungOff) + ", fixed " + String (fixed)
                    + ", still off-key " + String (off) + "  |  " + String (edited) + " changed by hand  |  heard " + vox::kNoteNames[static_cast<size_t> (s.guess.key)]
@@ -220,6 +223,27 @@ void HoneyPanel::refresh()
     repaint();
 }
 
+juce::String HoneyPanel::scaleExtras (const honeyui::KeyGrid& g)
+{
+    // " + F#, - B": the notes you switched into / out of the key.
+    String add, out;
+    for (int n = 0; n < 12; ++n)
+    {
+        if ((g.added >> n) & 1) add << (add.isEmpty() ? "" : ", ") << vox::kNoteNames[static_cast<size_t> (n)];
+        if ((g.removed >> n) & 1) out << (out.isEmpty() ? "" : ", ") << vox::kNoteNames[static_cast<size_t> (n)];
+    }
+    return (add.isNotEmpty() ? " + " + add : String()) + (out.isNotEmpty() ? " - " + out : String());
+}
+
+juce::String HoneyPanel::tuningText (const honeyui::Snapshot& s)
+{
+    // The tuning, when it isn't A = 440 (Auto: the beat's, from the Voxology on this track).
+    const double cents = s.grid.tune * 100.0;
+    if (std::abs (cents) < 0.5) return {};
+    const double hz = 440.0 * std::pow (2.0, cents / 1200.0);
+    return "  |  tuning A = " + String (hz, 1) + " Hz" + (s.tuneAuto ? " (the beat's, from Voxology)" : "");
+}
+
 juce::String HoneyPanel::howToOpen()
 {
     // Honey Tune is an ARA plug-in: it works on a clip, opened the way the DAW opens ARA editors (like Melodyne).
@@ -253,9 +277,12 @@ void HoneyPanel::setPlayhead (double seconds, bool playing)
 void HoneyPanel::applySettings()
 {
     if (model == nullptr) return;
-    honeyui::Settings s;
-    s.key = key.getSelectedId() - 1;
-    s.scale = scale.getSelectedId() - 1;
+    // (The notes switched in / out of the key and the tuning stay; another key or scale starts from its own notes.)
+    auto s = model->getSettings();
+    const int newKey = key.getSelectedId() - 1, newScale = scale.getSelectedId() - 1;
+    if (newKey != s.key || newScale != s.scale) s.added = s.removed = 0;
+    s.key = newKey;
+    s.scale = newScale;
     s.snap = snap.getValue() / 100.0;
     s.drift = drift.getValue() / 100.0;
     s.vibrato = vibrato.getValue() / 100.0;
@@ -275,7 +302,8 @@ void HoneyPanel::updateNoteControls()
     resetNote.setButtonText (many > 1 ? "Reset notes" : "Reset note");
     if (! has)
     {
-        noteInfo = "Click a note (Ctrl-click / drag a box / Ctrl+A for several). Drag up / down = pitch (Alt: fine), sideways = earlier / later, its ends = longer / shorter. Alt + double-click = split, J = join. Right-click for more.";
+        noteInfo = s.checks > 0 ? "Amber dot = a note to check: N goes to the next one, D does what its line says. Click a note; drag up / down = pitch, sideways = earlier / later (onto the beat; Alt: anywhere), Ctrl + drag = level, M = mute. Right-click for more."
+                                : "Click a note (Ctrl-click / drag a box / Ctrl+A for several). Drag up / down = pitch (Alt: fine), sideways = earlier / later (onto the beat; Alt: anywhere), its ends = longer / shorter. Ctrl + drag = level, M = mute. Alt + double-click = split, J = join. Right-click for more.";
         repaint();
         return;
     }
@@ -301,12 +329,17 @@ void HoneyPanel::updateNoteControls()
         asSung.drift = asSung.vibrato = 1.0;
         wobble = honeyui::wobbleText (vox::honey::movementCents (*s.track, n.note), vox::honey::movementCents (*s.track, asSung));
     }
-    noteInfo = "Note " + String (i + 1) + ": sung " + noteName (sung) + " " + cents (sung - std::round (sung))
+    const String level = n.edit.muted ? "  |  MUTED (M)"
+                       : std::abs (n.edit.gainDb) > 0.05 ? "  |  " + String (n.edit.gainDb >= 0.0 ? "+" : "") + String (n.edit.gainDb, 1) + " dB"
+                                                        : String();
+    const String check = n.check.any() ? String (honeyui::checkText (n)) + "  |  " : String();
+    noteInfo = check + "Note " + String (i + 1) + ": sung " + noteName (sung) + " " + cents (sung - std::round (sung))
              + "  ->  plays " + noteName (now) + (std::abs (now - std::round (now)) > 0.005 ? " " + cents (now - std::round (now)) : String())
              + (n.off ? "  (off-key)" : n.wasOff ? "  (was off-key, fixed)" : "  (in key)")
              + (n.edit.timed() ? "  |  " + (std::abs (n.edit.shift) > 0.0005 ? String (n.edit.shift >= 0 ? "+" : "") + String (roundToInt (n.edit.shift * 1000.0)) + " ms" : String())
                                        + (std::abs (n.edit.length - 1.0) > 0.005 ? String (std::abs (n.edit.shift) > 0.0005 ? ", " : "") + String (roundToInt (n.edit.length * 100.0)) + " % long" : String())
                                      : String())
+             + level
              + (n.edit.isDefault() ? "" : "  - changed by hand")
              + (wobble.isNotEmpty() ? "  |  " + wobble : String());
     repaint();

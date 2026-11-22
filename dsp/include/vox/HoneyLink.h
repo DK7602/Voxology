@@ -20,7 +20,7 @@
 
 namespace vox::honeylink {
 
-constexpr std::uint32_t kLayout = 1;
+constexpr std::uint32_t kLayout = 2;   // 2: Voxology's tuning too
 constexpr int kSlots = 64;
 // (8 s, not less: the plug-ins' timers run on the DAW's window thread, which can stall for seconds on a busy computer;
 // a stall must not make Pitch start tuning a track Honey Tune tunes.)
@@ -52,6 +52,7 @@ struct VoxInfo
     int key = 0;                  // 0 = C .. 11 = B, what Pitch uses now
     int scale = 0;                // vox::kScaleNames
     KeyFrom keyFrom = KeyFrom::none;
+    int tuneCents = 0;            // the tuning Pitch uses, vs A = 440 Hz (the beat's: 0 unless keyFrom is beat)
 };
 
 /** One track with a Honey Tune clip. sharedName: Honey Tune sees two tracks with this name. */
@@ -95,7 +96,7 @@ public:
         std::atomic<std::uint64_t> owner;       // 0 = free
         std::atomic<std::uint64_t> heartbeat;   // ms; 0 = free
         std::atomic<std::uint32_t> nameHash, flags, pitch, keyFrom;
-        std::atomic<std::int32_t> key, scale;
+        std::atomic<std::int32_t> key, scale, tune;
     };
     struct Block
     {

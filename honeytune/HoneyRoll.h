@@ -8,8 +8,10 @@
     sung waveform (how loud it was, moment to moment). Notes that will play off the key glow red; pulled into the key
     they fill gold. Drag a cell up / down to move it (whole notes;
     hold Alt for cents), double-click to snap it to the key, Delete to reset it; Alt + double-click splits it there, J joins
-    it to the next note (or the selected notes into one). While the host is stopped, a note you click or change plays (on
-    its track only).
+    it to the next note (or the selected notes into one). Ctrl + drag up / down sets its level, M mutes it. Moved in time
+    it lands on the beat (Alt: anywhere). An amber dot = a note to check: N goes to the next, D does what its line says.
+    Alt + click a key on the left switches that note into / out of the key (right-click a key: that, and the tuning).
+    While the host is stopped, a note you click or change plays (on its track only).
     Mouse wheel scrolls up / down, Shift + wheel scrolls in time, Ctrl + wheel (or + / -) zooms. */
 class HoneyRoll final : public juce::Component,
                         private juce::ScrollBar::Listener
@@ -27,7 +29,8 @@ public:
         all of them. */
     std::vector<int> getSelection() const;
     /** What the menu, the keys and the bottom bar's buttons do (to `index`'s selection, or just that note). */
-    enum class Command { snapToKey, steady, resetPitch, resetTiming, resetTone, resetSteady, resetAll, loop };
+    enum class Command { snapToKey, steady, resetPitch, resetTiming, resetTone, resetSteady, resetAll, loop,
+                         louder, quieter, mute, resetLevel, fix, fine };
     void command (int index, Command);
     /** Cut a note in two where it's shown at this time (seconds); join a note with the next one (or, on a selection of
         neighbours, all of them into one). */
@@ -35,6 +38,10 @@ public:
     bool join (int index);
     /** What join (index) would make one: the first and last note (first == last: nothing to join). */
     std::pair<int, int> joinRange (int index) const;
+    /** N: select the next note to check after the selected one (around to the first), show it and play it. */
+    bool nextCheck();
+    /** A note's key on the left in / out of the key (Alt + click). */
+    void toggleScaleNote (int midi);
     int selectionSize() const;
     bool isSelected (int index) const;
     const honeyui::Snapshot& getSnapshot() const { return snap; }
@@ -45,6 +52,7 @@ public:
     std::function<void()> onToggleOriginal;   // B
     std::function<void (double)> onPlayFrom;  // play from there (clip seconds; < 0 = from the playhead, or stop if playing)
     std::function<void (double, double)> onLoop;   // loop and play this stretch (clip seconds)
+    std::function<void()> onSettingsChanged;       // a note switched into / out of the key, the tuning
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -96,7 +104,7 @@ private:
     /** The note as drawn: its sung waveform around its pitch, one pixel column at a time: the outline = its peaks
         (Track::level), the body = its RMS (Track::power), in dB; as tall as it was loud (the clip's loud singing = 1.7 rows). */
     struct Wave { juce::Path outline, body; };
-    Wave wavePaths (int index, double midi) const;
+    Wave wavePaths (int index, double midi, double gainDb = 0.0) const;
     int noteAt (juce::Point<float>) const;
     void drawBackground (juce::Graphics&, juce::Rectangle<float> grid);
     void drawCell (juce::Graphics&, int index);
@@ -129,8 +137,17 @@ private:
     float dragStartY = 0.0f, dragStartX = 0.0f;
     // What a drag does: up / down = pitch; sideways = move in time (decided by the first 6 px);
     // grabbing a note's left / right end stretches it from that end.
-    enum class Drag { undecided, pitch, time, leftEdge, rightEdge } dragMode = Drag::undecided, pendingEdge = Drag::undecided;
+    enum class Drag { undecided, pitch, time, leftEdge, rightEdge, level } dragMode = Drag::undecided, pendingEdge = Drag::undecided;
     double dragSeconds = 0.0;   // how far the time / edge has moved
+    double dragDb = 0.0;        // Ctrl + drag: how much louder / quieter
+    int ctrlPending = -1;       // Ctrl went down on this note: a click toggles it in / out of the selection, a drag sets levels
+    /** Time moves land on the beat (the host's bars and beats; finer when zoomed in), unless Alt is held: the shift that
+        puts `seconds` on the nearest line (and that line, for drawing; < 0: none). */
+    double toBeat (double seconds, double& line) const;
+    double beatLine = -1.0;     // the line a time drag lands on (drawn while dragging)
+    /** A note's level as shown (with a level drag in progress), dB; muted. */
+    double shownGain (int index) const;
+    void showKeyMenu (int midi, juce::Point<float> at);
     /** Where a note is shown in time (seconds): as sung in Original, else as it will sound (with the drag). */
     std::pair<double, double> span (int index) const;
     /** A moment of the note as sung (seconds) -> where it's shown. */

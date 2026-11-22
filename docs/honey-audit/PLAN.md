@@ -103,7 +103,32 @@ Measured with the engine review's own tools (scratch: /tmp/claude-0/audit-eng-wo
   octave -> 0, one note each; breathy HNR 14 dB 24 - 54 % -> 0, 6 notes for 6. Not fixed: rasp at 50 %. Side effect:
   notes now keep the attack that used to be a separate fragment, so a moved note's first 40 ms measures 7 c further off.
 
-## Next (in order; proposed to the user on 2026-11-22, no objection yet)
-1. Beta 41: note level and mute (+ blob height), "notes to check" finder (amber dot, N next, D fix), time edits snap
-   to the beat (Alt free), key extras (click a key to add / remove a scale note; the beat's A4 tuning from Voxology).
-2. Later: several clips at once and copies tuned independently (ARA audio modifications), MIDI export, tighten timing.
+## Beta 41 (Voxology 0.77.0; the user: "go ahead with Beta 41")
+
+- F1 note level and mute: NoteEdit.gainDb (-30 .. +12 dB) / muted -> Note.gainDb / muted; render / renderPart apply them
+  after matchLoudness (applyLevels: one gain per note, a 10 ms raised-cosine ease around it, centred on the gap's middle
+  when a neighbour is nearer; 0 dB notes untouched sample for sample); sameNote compares them (a level edit re-renders
+  only around the note). UI: Ctrl + drag up / down (0.2 dB / px, Shift 0.05; a Ctrl-click still toggles the
+  selection), M mutes / unmutes, the menu's Louder / Quieter (3 dB), Mute, Reset level; the blob is drawn as loud as it
+  will be (up to 1.25 x full height), a muted one as a dashed outline. Archive HNY6.
+- M1 / M2 notes to check (findChecks, HoneyView.h): split (a < 80 ms piece touching a neighbour at its pitch, or two
+  notes within 35 c under 15 ms apart: D joins), outOfKey (sung within 30 c of a note outside the key that Snap moves a
+  semitone or more: D keeps it), between (40 - 60 c from the key's note, the other one not much further: D takes the
+  other), wobbly (0.3 s +, its slow wander alone 15 c + as it will sound: D sets drift 0, vibrato kept). Only notes you
+  haven't changed; NoteEdit.checked ("It's fine") stops it (saved, isBlank vs isDefault). Amber dot on the blob, the
+  status line counts them, N selects the next (scrolls to it, plays it while stopped), D fixes (any other note: steady
+  as before), the note line says what and what D does.
+- G1 beat grid: time drags put the note's start (or the dragged end) on the nearest beat (halves / quarters at >= 48 /
+  96 px a beat: Timeline::nearestLine), a line shows where; Alt = free.
+- H1 key notes: Settings.added / removed (pitch classes), KeyGrid (key, scale, added, removed, tune) replaces keyNote
+  in Snap, red / gold, drags, arrows and the rows; Alt + click a key toggles it, right-click a key for the menu (and
+  Back to the key's own notes); another KEY / SCALE clears them.
+- H2 tuning: Settings.a4 (0 = Auto); Auto = the beat's tuning from the Voxology on this track (honeylink layout 2:
+  VoxInfo.tuneCents, published from meters.bkTune when its key follows the beat; Honey Tune ignores < 2 c changes).
+  KeyGrid.tune moves every key note. Right-click a key > Tuning (Auto, 432 - 446 Hz). The status line shows it.
+- Attack of moved notes (Beta 40's side effect): see AUDIT-ENGINE.md.
+- Tests: tests/test_honey_edit.cpp ([level], [keygrid], [checks], [beat], [link]).
+
+## Next (in order)
+1. Later: several clips at once and copies tuned independently (ARA audio modifications), MIDI export, tighten timing
+   (G2), even out levels (F2), vertical zoom / fit fixes (I1, I2).

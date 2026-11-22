@@ -30,6 +30,7 @@ namespace
     constexpr int64 kArchiveV3 = 0x484e5933;   // "HNY3": edits also hold timing, length and formant
     constexpr int64 kArchiveV4 = 0x484e5934;   // "HNY4": note starts in seconds (were samples: wrong after a rate change)
     constexpr int64 kArchiveV5 = 0x484e5935;   // "HNY5": each clip's splits and joins too
+    constexpr int64 kArchiveV6 = 0x484e5936;   // "HNY6": notes switched in / out of the key, A4; each note's level, mute, checked
 
     /** A hand edit as saved: tied to the note's start (seconds), so it finds its note again after re-analysis. */
     struct SavedEdit { double start = 0.0; NoteEdit edit; };
@@ -178,7 +179,7 @@ namespace
             if (track == nullptr) return pending;
             std::vector<SavedEdit> out;
             for (size_t i = 0; i < notes.size() && i < edits.size(); ++i)
-                if (! edits[i].isDefault()) out.push_back ({ notes[i].start / track->sampleRate, edits[i] });
+                if (! edits[i].isBlank()) out.push_back ({ notes[i].start / track->sampleRate, edits[i] });
             return out;
         }
     };
@@ -358,6 +359,8 @@ public:
         const ScopedLock sl (settingsLock);
         return honeyui::outsideKey (keyProject, keyBeat, st.trackKey);
     }
+    /** Auto tuning for this recording: the beat's, as the Voxology on its track uses it (cents; call with its dataLock held). */
+    static int autoTune (const SourceState& st) { return st.trackKey.tuned ? st.trackKey.tuneCents : 0; }
     void activeChanged (int delta) { active += delta; }
 
     /** The song's key from the host (its key signature / scale track: the first one), for Auto. Message thread. */
@@ -440,11 +443,13 @@ public:
                         if (auto* seq = region->getRegionSequence()) name = trackName (seq);
             vox::honeylink::VoxInfo v;
             const bool here = ! name.empty() && named[name] == 1 && link.voxologyOn (suite::nameHash (name), v, now);
-            const auto key = here ? honeyui::trackKeyFrom (v) : honeyui::HostKey {};
+            auto key = here ? honeyui::trackKeyFrom (v) : honeyui::HostKey {};
             auto& st = *src->state;
             bool keyChanged = false, changed = false;
             {
                 const ScopedLock sl (st.dataLock);
+                // (The beat's tuning as heard wanders a cent either way: every change re-tunes the clip. 2 cents or more.)
+                if (key.tuned && st.trackKey.tuned && std::abs (key.tuneCents - st.trackKey.tuneCents) < 2) key.tuneCents = st.trackKey.tuneCents;
                 keyChanged = ! (key == st.trackKey);
                 changed = keyChanged || here != st.voxologyHere || (here && v.pitch != st.voxologyPitch);
                 st.trackKey = key;
@@ -589,7 +594,7 @@ public:
         honeyui::Snapshot snap;
         {
             const ScopedLock sl (st->dataLock);
-            snap = honeyui::makeSnapshot (st->track, st->notes, st->edits, st->guess, s, getHostKey (*st));
+            snap = honeyui::makeSnapshot (st->track, st->notes, st->edits, st->guess, s, getHostKey (*st), autoTune (*st));
             snap.voxologyHere = st->voxologyHere;
             snap.voxologyPitch = st->voxologyPitch;
         }
@@ -670,7 +675,7 @@ public:
         const auto s = getSettings();
         {
             const ScopedLock sl (st->dataLock);
-            if (std::all_of (st->edits.begin(), st->edits.end(), [] (const NoteEdit& e) { return e.isDefault(); })) return;
+            if (std::all_of (st->edits.begin(), st->edits.end(), [] (const NoteEdit& e) { return e.isBlank(); })) return;
             st->pushUndo (-1, s, true);
             st->edits.assign (st->notes.size(), {});
         }
@@ -849,7 +854,8 @@ protected:
     bool doRestoreObjectsFromStream (ARAInputStream& input, const ARARestoreObjectsFilter* filter) noexcept override
     {
         const auto first = input.readInt64();
-        const bool v5 = first == kArchiveV5;
+        const bool v6 = first == kArchiveV6;
+        const bool v5 = first == kArchiveV5 || v6;
         const bool v4 = first == kArchiveV4 || v5;
         const bool v3 = first == kArchiveV3 || v4;
         const bool v2 = first == kArchiveV2 || v3;
@@ -860,6 +866,12 @@ protected:
         s.snap = input.readDouble();
         s.drift = input.readDouble();
         s.vibrato = input.readDouble();
+        if (v6)
+        {
+            s.added = static_cast<int> (input.readInt64() & 0xfff);
+            s.removed = static_cast<int> (input.readInt64() & 0xfff);
+            s.a4 = input.readDouble();
+        }
         if (input.failed())
             return false;
         s = honeyui::sanitised (s);   // (a damaged or hand-made archive: NaN, huge values)
@@ -887,6 +899,12 @@ protected:
                     se.edit.shift = input.readDouble();
                     se.edit.length = input.readDouble();
                     se.edit.formant = input.readDouble();
+                }
+                if (v6)
+                {
+                    se.edit.gainDb = input.readDouble();
+                    se.edit.muted = input.readBool();
+                    se.edit.checked = input.readBool();
                 }
                 se.edit = honeyui::sanitised (se.edit);
                 if (std::isfinite (se.start) && se.start >= 0.0)
@@ -930,8 +948,9 @@ protected:
     bool doStoreObjectsToStream (ARAOutputStream& output, const ARAStoreObjectsFilter* filter) noexcept override
     {
         const auto s = getSettings();
-        bool ok = output.writeInt64 (kArchiveV5) && output.writeInt64 (s.key) && output.writeInt64 (s.scale)
-               && output.writeDouble (s.snap) && output.writeDouble (s.drift) && output.writeDouble (s.vibrato);
+        bool ok = output.writeInt64 (kArchiveV6) && output.writeInt64 (s.key) && output.writeInt64 (s.scale)
+               && output.writeDouble (s.snap) && output.writeDouble (s.drift) && output.writeDouble (s.vibrato)
+               && output.writeInt64 (s.added) && output.writeInt64 (s.removed) && output.writeDouble (s.a4);
         std::vector<const HoneyAudioSource*> toStore;
         if (filter != nullptr)
             toStore = filter->getAudioSourcesToStore<HoneyAudioSource>();
@@ -951,7 +970,8 @@ protected:
             for (const auto& se : saved)
                 ok = ok && output.writeDouble (se.start) && output.writeBool (se.edit.moved) && output.writeDouble (se.edit.target)
                         && output.writeDouble (se.edit.drift) && output.writeDouble (se.edit.vibrato)
-                        && output.writeDouble (se.edit.shift) && output.writeDouble (se.edit.length) && output.writeDouble (se.edit.formant);
+                        && output.writeDouble (se.edit.shift) && output.writeDouble (se.edit.length) && output.writeDouble (se.edit.formant)
+                        && output.writeDouble (se.edit.gainDb) && output.writeBool (se.edit.muted) && output.writeBool (se.edit.checked);
             for (const auto* list : { &layout.splits, &layout.joins })
             {
                 ok = ok && output.writeInt64 (static_cast<int64> (list->size()));
@@ -1110,7 +1130,8 @@ private:
             int key = 0, scale = 0;
             honeyui::resolveKey (s, st.guess, key, scale, getHostKey (st));
             track = st.track;
-            notes = honeyui::applyEdits (st.notes, st.edits, s, key, scale, st.sampleRate, static_cast<double> (st.original->front().size()));
+            notes = honeyui::applyEdits (st.notes, st.edits, s, honeyui::keyGrid (s, key, scale, autoTune (st)), st.sampleRate,
+                                         static_cast<double> (st.original->front().size()));
         }
         // An edit to a few notes: re-render only around them (from the gap before to the gap after),
         // on top of the current render. A new analysis, the key / settings moving most notes: all of it.

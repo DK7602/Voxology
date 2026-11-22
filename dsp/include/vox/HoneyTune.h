@@ -56,6 +56,8 @@ struct Note
     int firstReading = 0, lastReading = 0;
     double outStart = -1.0, outEnd = -1.0;   // where it sounds in time (samples); < 0 = where it was sung
     double formant = 0.0;                    // semitones: + thinner / younger, - deeper (the note only)
+    double gainDb = 0.0;                     // its level: louder (+) / quieter (-), dB
+    bool muted = false;                      // silent (its consonant before it stays)
     double soundStart() const { return outStart >= 0.0 ? outStart : start; }
     double soundEnd() const { return outEnd >= 0.0 ? outEnd : end; }
     bool timeMoved() const { return std::abs (soundStart() - start) > 0.5 || std::abs (soundEnd() - end) > 0.5; }
@@ -117,7 +119,8 @@ double movementCents (const Track& track, const Note& note);
 inline constexpr double kTransitionMs = 25.0;
 
 /** The clip with the edits (same length, aligned with the input). All channels through one shifter (a stereo image
-    stays put); every changed note as loud as it was sung. */
+    stays put); every changed note as loud as it was sung, then louder / quieter / muted as its gainDb / muted say
+    (eased in and out over 10 ms around the note: centred on the middle of the gap when its neighbour is nearer). */
 Channels render (const Channels& channels, double sampleRate, const Track& track, const std::vector<Note>& notes,
                  double transitionMs = kTransitionMs, const std::atomic<bool>* cancel = nullptr);
 std::vector<float> render (const std::vector<float>& mono, double sampleRate, const Track& track,

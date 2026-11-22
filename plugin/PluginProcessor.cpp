@@ -235,6 +235,8 @@ void VoxologyAudioProcessor::updateHoneyLink()
               : meters.bkState.load() != 1 ? K::none
               : source == 1 || source == 2 ? K::beat
               : source == 3 ? K::voice : K::none;
+    // The beat's tuning (Honey Tune's Auto tuning lines its notes up with it), in whole cents.
+    v.tuneCents = v.keyFrom == K::beat ? static_cast<int> (std::lround (juce::jlimit (-50.0f, 50.0f, meters.bkTune.load()))) : 0;
     link.publishVox (suiteId, v, now);
     honeyPublished = true;
 }

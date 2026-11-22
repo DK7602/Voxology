@@ -44,6 +44,8 @@ public:
 
 private:
     static juce::String howToOpen();   // where this DAW opens ARA plug-ins on a clip (the status before a clip)
+    static juce::String scaleExtras (const honeyui::KeyGrid&);   // " + F#, - B"
+    static juce::String tuningText (const honeyui::Snapshot&);   // "  |  tuning A = 443.0 Hz ..." ("" at 440)
     void applySettings();
     void updateNoteControls();
     void applyNoteEdit (const juce::Slider* which);

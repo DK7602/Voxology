@@ -1146,6 +1146,42 @@ void matchLoudness (const Channels& in, Channels& out, size_t offset, const std:
             if (i - offset < ch.size()) ch[i - offset] = static_cast<float> (ch[i - offset] * gain[i - lo]);
 }
 
+/** Each note's level (Note::gainDb, Note::muted), in output time (notes at where they sound): one gain per note,
+    eased in over 10 ms before its start and out over 10 ms after its end (where a neighbour is nearer than that, the
+    ease is centred on the middle of the gap: two touching notes cross from one gain to the other). Notes at 0 dB are
+    left exactly as they are. `out`: samples from `offset`; samples [lo, hi). */
+void applyLevels (Channels& out, size_t offset, const std::vector<Note>& notes, double sr, size_t lo, size_t hi)
+{
+    if (out.empty() || hi <= lo) return;
+    const double h = 0.005 * sr;   // half the ease
+    std::vector<double> gain;
+    for (size_t k = 0; k < notes.size(); ++k)
+    {
+        const auto& n = notes[k];
+        const double g = n.muted ? 0.0 : std::pow (10.0, std::clamp (n.gainDb, -60.0, 24.0) / 20.0);
+        if (std::abs (g - 1.0) < 1.0e-6) continue;
+        const double s = n.soundStart(), e = n.soundEnd();
+        const double before = k > 0 ? s - notes[k - 1].soundEnd() : 1.0e300;
+        const double after = k + 1 < notes.size() ? notes[k + 1].soundStart() - e : 1.0e300;
+        const double c0 = before >= 2.0 * h ? s - h : s - 0.5 * std::max (0.0, before);   // the ease in's middle
+        const double c1 = after >= 2.0 * h ? e + h : e + 0.5 * std::max (0.0, after);     // ... and out's
+        if (gain.empty()) gain.assign (hi - lo, 1.0);
+        const auto i0 = static_cast<size_t> (std::max (static_cast<double> (lo), std::ceil (c0 - h)));
+        const auto i1 = static_cast<size_t> (std::clamp (std::floor (c1 + h) + 1.0, static_cast<double> (lo), static_cast<double> (hi)));
+        for (size_t i = i0; i < i1; ++i)
+        {
+            const double x = static_cast<double> (i);
+            const double up = std::clamp ((x - (c0 - h)) / (2.0 * h), 0.0, 1.0), down = std::clamp (((c1 + h) - x) / (2.0 * h), 0.0, 1.0);
+            const double w = 0.5 - 0.5 * std::cos (std::numbers::pi * std::min (up, down));
+            gain[i - lo] += (g - 1.0) * w;
+        }
+    }
+    if (gain.empty()) return;
+    for (auto& ch : out)
+        for (size_t i = lo; i < hi; ++i)
+            if (i >= offset && i - offset < ch.size()) ch[i - offset] = static_cast<float> (ch[i - offset] * std::max (0.0, gain[i - lo]));
+}
+
 /** The clip as heard after moves / stretches: warped audio, the readings at their new times, the notes at
     their new places (only when something moved). */
 struct Retimed
@@ -1452,11 +1488,13 @@ Channels render (const Channels& chans, double sr, const Track& t, const std::ve
     {
         runShifter (pointers (chans), sr, t, planShift (t, notes, transitionMs), planFormant (t, notes), 0, size, cancel, put);
         matchLoudness (chans, out, 0, notes, sr, 0, size);
+        applyLevels (out, 0, notes, sr, 0, size);
         return out;
     }
     const auto r = retime (chans, sr, t, notes, map, 0, size);
     runShifter (pointers (r.audio), sr, r.track, planShift (r.track, r.notes, transitionMs), planFormant (r.track, r.notes), 0, size, cancel, put);
     matchLoudness (r.audio, out, 0, r.notes, sr, 0, size);
+    applyLevels (out, 0, r.notes, sr, 0, size);
     return out;
 }
 
@@ -1472,7 +1510,7 @@ bool sameNote (const Note& a, const Note& b)
     return a.start == b.start && a.end == b.end && std::abs (a.target - b.target) < 1.0e-9
            && std::abs (a.drift - b.drift) < 1.0e-9 && std::abs (a.vibrato - b.vibrato) < 1.0e-9
            && std::abs (a.formant - b.formant) < 1.0e-9 && std::abs (a.soundStart() - b.soundStart()) < 0.5
-           && std::abs (a.soundEnd() - b.soundEnd()) < 0.5;
+           && std::abs (a.soundEnd() - b.soundEnd()) < 0.5 && std::abs (a.gainDb - b.gainDb) < 1.0e-9 && a.muted == b.muted;
 }
 
 /** changedRegion() for notes split or joined (a different number of notes): the notes the same at both ends of the two
@@ -1598,6 +1636,7 @@ void renderPart (const Channels& chans, double sr, const Track& t, const std::ve
                 [&] (size_t c, size_t o, double v) { fresh[c][o - a] = static_cast<float> (v); });
     if (cancel != nullptr && cancel->load (std::memory_order_relaxed)) return;
     matchLoudness (src, fresh, a, nts, sr, a, b);
+    applyLevels (fresh, a, nts, sr, a, b);
     for (size_t o = a; o < b; ++o)
     {
         const double x = static_cast<double> (o);

@@ -25,12 +25,18 @@ struct Settings
     double snap = 1.0;         // 0..1 of the way to the note
     double drift = 1.0;        // keep 0..1
     double vibrato = 1.0;      // keep 0..1
+    int added = 0, removed = 0;   // notes you switched into / out of the key (bit n: 0 = C .. 11 = B)
+    double a4 = 0.0;           // tuning: A = this many Hz (0 = Auto: the beat's, from Voxology on the track; else 440)
     bool operator== (const Settings& o) const
     {
         auto same = [] (double a, double b) { return std::abs (a - b) < 1.0e-9; };
-        return key == o.key && scale == o.scale && same (snap, o.snap) && same (drift, o.drift) && same (vibrato, o.vibrato);
+        return key == o.key && scale == o.scale && same (snap, o.snap) && same (drift, o.drift) && same (vibrato, o.vibrato)
+               && added == o.added && removed == o.removed && same (a4, o.a4);
     }
 };
+
+/** The tunings offered (A = Hz; 0 = Auto). */
+inline constexpr double kTunings[] = { 0.0, 432.0, 436.0, 438.0, 439.0, 440.0, 441.0, 442.0, 443.0, 444.0, 446.0 };
 
 /** A change you made to one note. Negative drift / vibrato = follow the settings. */
 struct NoteEdit
@@ -41,15 +47,26 @@ struct NoteEdit
     double shift = 0.0;        // seconds: moved earlier (-) / later (+)
     double length = 1.0;       // stretched (> 1) / shortened (< 1)
     double formant = 0.0;      // semitones: + thinner, - deeper
+    double gainDb = 0.0;       // its level: louder (+) / quieter (-)
+    bool muted = false;
+    bool checked = false;      // you checked it ("notes to check" leaves it alone); changes nothing you hear
     bool timed() const { return std::abs (shift) > 1.0e-6 || std::abs (length - 1.0) > 1.0e-6; }
-    bool isDefault() const { return ! moved && drift < 0.0 && vibrato < 0.0 && ! timed() && std::abs (formant) < 1.0e-6; }
+    bool levelled() const { return muted || std::abs (gainDb) > 1.0e-6; }
+    /** Nothing changed that you'd hear (a note only `checked` still counts as untouched). */
+    bool isDefault() const { return ! moved && drift < 0.0 && vibrato < 0.0 && ! timed() && std::abs (formant) < 1.0e-6 && ! levelled(); }
+    /** ... nor checked: nothing to save. */
+    bool isBlank() const { return isDefault() && ! checked; }
     bool operator== (const NoteEdit& o) const
     {
         auto same = [] (double a, double b) { return std::abs (a - b) < 1.0e-9; };
         return moved == o.moved && (! moved || same (target, o.target)) && same (drift, o.drift) && same (vibrato, o.vibrato)
-               && same (shift, o.shift) && same (length, o.length) && same (formant, o.formant);
+               && same (shift, o.shift) && same (length, o.length) && same (formant, o.formant) && same (gainDb, o.gainDb)
+               && muted == o.muted && checked == o.checked;
     }
 };
+
+/** A note's level: Ctrl + drag, the menu (+ / - 3 dB) and M (mute). */
+inline constexpr double kMinGainDb = -30.0, kMaxGainDb = 12.0;
 
 /** SNAP TO NOTE (0..1) for a note `semis` from the key's note: how far of the way it's pulled. Not the same share for
     every note (Melodyne's "correct pitch" idea): the further off, the harder the pull, so a partial setting fixes the
@@ -72,6 +89,10 @@ inline Settings sanitised (Settings s)
     s.snap = std::clamp (finiteOr (s.snap, 1.0), 0.0, 1.0);
     s.drift = std::clamp (finiteOr (s.drift, 1.0), 0.0, 1.0);
     s.vibrato = std::clamp (finiteOr (s.vibrato, 1.0), 0.0, 1.0);
+    s.added &= 0xfff;
+    s.removed &= 0xfff & ~s.added;
+    s.a4 = finiteOr (s.a4, 0.0);
+    s.a4 = s.a4 <= 0.0 ? 0.0 : std::clamp (s.a4, 415.0, 466.0);
     return s;
 }
 inline NoteEdit sanitised (NoteEdit e)
@@ -84,6 +105,7 @@ inline NoteEdit sanitised (NoteEdit e)
     e.shift = std::clamp (finiteOr (e.shift, 0.0), -3600.0, 3600.0);
     e.length = std::clamp (finiteOr (e.length, 1.0), 0.1, 1000.0);
     e.formant = std::clamp (finiteOr (e.formant, 0.0), -vox::kMaxFormant, vox::kMaxFormant);
+    e.gainDb = std::clamp (finiteOr (e.gainDb, 0.0), kMinGainDb, kMaxGainDb);
     return e;
 }
 
@@ -97,9 +119,12 @@ struct HostKey
     bool fromBeat = false;   // Voxology's beat key (on the beat, or a beat on a Voxology's side-chain)
     bool fromTrack = false;  // the key the Voxology on this clip's track uses (its beat, or picked there)
     bool weak = false;       // ... which that Voxology learned from the singing: the clip's own sure key comes first
+    bool tuned = false;      // ... and the beat's tuning it uses (fromTrack, from the beat)
+    int tuneCents = 0;       // vs A = 440 Hz
     bool operator== (const HostKey& o) const
     {
-        return valid == o.valid && (! valid || (key == o.key && scale == o.scale && fromBeat == o.fromBeat && fromTrack == o.fromTrack && weak == o.weak));
+        return valid == o.valid && (! valid || (key == o.key && scale == o.scale && fromBeat == o.fromBeat && fromTrack == o.fromTrack && weak == o.weak
+                                                && tuned == o.tuned && tuneCents == o.tuneCents));
     }
 };
 
@@ -113,6 +138,8 @@ inline HostKey trackKeyFrom (const vox::honeylink::VoxInfo& v)
     h.scale = std::clamp (v.scale, 0, vox::kScales - 1);
     h.fromTrack = true;
     h.weak = v.keyFrom == vox::honeylink::KeyFrom::voice;
+    h.tuned = v.keyFrom == vox::honeylink::KeyFrom::beat;
+    h.tuneCents = h.tuned ? std::clamp (v.tuneCents, -50, 50) : 0;
     return h;
 }
 
@@ -186,6 +213,54 @@ inline double keyNote (double pitch, int key, int scale)
     return vox::PitchCorrector::targetNote (pitch, key, scale, -1);
 }
 
+/** Semitones from A = 440 Hz to A = hz (0: none). */
+inline double tuneOf (double hz) { return hz > 0.0 ? 12.0 * std::log2 (hz / 440.0) : 0.0; }
+
+/** The notes a note can land on: the key's scale with the notes you switched in / out, in a tuning (the whole grid a
+    few cents up or down: a beat tuned to A = 443 Hz puts every "in tune" note 12 cents up). */
+struct KeyGrid
+{
+    int key = 0, scale = 0;
+    int added = 0, removed = 0;   // bit n: 0 = C .. 11 = B
+    double tune = 0.0;            // semitones from A = 440 Hz
+    int mask() const { return vox::PitchCorrector::allowedMask (key, scale, added, 0, removed); }
+    /** In the key (a row of the roll, MIDI as untuned). */
+    bool has (int midi) const { return ((mask() >> (((midi % 12) + 12) % 12)) & 1) != 0; }
+    /** The nearest note it may land on (MIDI, in the tuning). */
+    double note (double pitch) const
+    {
+        return vox::PitchCorrector::targetNote (pitch - tune, key, scale, -1, added, 0, removed) + tune;
+    }
+    /** The note it may land on next to `pitch`'s, above (+1) / below (-1) (in the tuning). */
+    double step (double pitch, int dir) const
+    {
+        double next = std::round (pitch - tune);
+        for (int k = 0; k < 12; ++k)
+        {
+            next += dir > 0 ? 1.0 : -1.0;
+            if (has (static_cast<int> (next))) break;
+        }
+        return next + tune;
+    }
+};
+
+/** The grid for these settings: the key and scale used, the notes switched in / out (never all of them out), the
+    tuning (A4 set, else Auto: `autoCents`, the beat's tuning from Voxology on the track). */
+inline KeyGrid keyGrid (const Settings& s, int key, int scale, int autoCents = 0)
+{
+    KeyGrid g;
+    g.key = key;
+    g.scale = scale;
+    g.added = s.added & 0xfff;
+    g.removed = s.removed & 0xfff & ~g.added;
+    g.tune = s.a4 > 0.0 ? tuneOf (s.a4) : std::clamp (autoCents, -50, 50) / 100.0;
+    if (g.mask() == 0) g.removed = 0;
+    return g;
+}
+
+/** keyNote() on a grid. */
+inline double keyNote (double pitch, const KeyGrid& g) { return g.note (pitch); }
+
 /** A note moved or stretched in time stays this far from its neighbours (and inside the clip). */
 constexpr double kTimeGapSeconds = 0.005, kMinNoteSeconds = 0.03;
 
@@ -193,18 +268,20 @@ constexpr double kTimeGapSeconds = 0.005, kMinNoteSeconds = 0.03;
     its neighbours (as they sound) and inside the clip (clipSamples; <= 0 = the clip's end isn't known): the render
     never squeezes one note into another, whatever an edit (or a damaged project) says. */
 inline std::vector<vox::honey::Note> applyEdits (std::vector<vox::honey::Note> notes, const std::vector<NoteEdit>& edits,
-                                                 const Settings& s, int key, int scale, double sampleRate = 48000.0,
+                                                 const Settings& s, const KeyGrid& grid, double sampleRate = 48000.0,
                                                  double clipSamples = 0.0)
 {
     for (size_t i = 0; i < notes.size(); ++i)
     {
         auto& n = notes[i];
         const NoteEdit e = i < edits.size() ? edits[i] : NoteEdit {};
-        const double toKey = keyNote (n.pitch, key, scale) - n.pitch;
+        const double toKey = grid.note (n.pitch) - n.pitch;
         n.target = e.moved ? e.target : n.pitch + toKey * snapPull (toKey, s.snap);
         n.drift = e.drift >= 0.0 ? e.drift : s.drift;
         n.vibrato = e.vibrato >= 0.0 ? e.vibrato : s.vibrato;
         n.formant = e.formant;
+        n.gainDb = e.gainDb;
+        n.muted = e.muted;
         if (e.timed())
         {
             // Not before the clip's start (a negative start means "where it was sung": the note jumped back).
@@ -230,6 +307,13 @@ inline std::vector<vox::honey::Note> applyEdits (std::vector<vox::honey::Note> n
         n.outEnd = n.outStart + len;
     }
     return notes;
+}
+/** ... with the key and scale alone (the settings' notes switched in / out and A4; Auto tuning = 440). */
+inline std::vector<vox::honey::Note> applyEdits (std::vector<vox::honey::Note> notes, const std::vector<NoteEdit>& edits,
+                                                 const Settings& s, int key, int scale, double sampleRate = 48000.0,
+                                                 double clipSamples = 0.0)
+{
+    return applyEdits (std::move (notes), edits, s, keyGrid (s, key, scale), sampleRate, clipSamples);
 }
 
 /** Your edits carried over to the notes after a split or a join (by the readings the notes share): a part of a split note
@@ -264,6 +348,16 @@ inline std::vector<NoteEdit> carryEdits (const std::vector<vox::honey::Note>& be
     return out;
 }
 
+/** "Notes to check": a note Honey Tune isn't sure it got right, and what D does about it. */
+struct NoteCheck
+{
+    enum class Why { none, split, between, outOfKey, wobbly };
+    Why why = Why::none;
+    double other = 0.0;   // between / outOfKey: the note D moves it to (MIDI, in the tuning)
+    int joinWith = -1;    // split: the neighbour D joins it with
+    bool any() const { return why != Why::none; }
+};
+
 struct NoteView
 {
     vox::honey::Note note;     // target / drift / vibrato as they will sound
@@ -271,6 +365,7 @@ struct NoteView
     bool wasOff = false;       // sung more than 25 cents from the key's nearest note
     bool off = false;          // where it will SOUND is more than 25 cents from the key's nearest note
     bool fixed = false;        // was off-key, now lands on a note of the key
+    NoteCheck check;
 };
 
 /** The host's bars and beats over the clip (from the song's tempo map and time signatures), in clip
@@ -282,6 +377,29 @@ struct Timeline
     double songOffset = 0.0;   // song time = clip time + songOffset
 
     bool valid() const { return lines.size() >= 2; }
+
+    /** The line a time move lands on nearest to `clipSeconds`: a beat, or a half / quarter of one when they're at least
+        48 / 96 px apart at this zoom (pixels per second). -1: none (no bars and beats from the host). */
+    double nearestLine (double clipSeconds, double pixelsPerSecond) const
+    {
+        if (! valid()) return -1.0;
+        size_t k = 1;
+        while (k + 1 < lines.size() && lines[k].seconds < clipSeconds) ++k;
+        double best = -1.0;
+        for (size_t j = k > 1 ? k - 1 : 1; j <= std::min (k + 1, lines.size() - 1); ++j)
+        {
+            const double a = lines[j - 1].seconds, beat = lines[j].seconds - a;
+            if (beat <= 1.0e-6) continue;
+            const double px = beat * pixelsPerSecond;
+            const int parts = px >= 96.0 ? 4 : px >= 48.0 ? 2 : 1;
+            for (int q = 0; q <= parts; ++q)
+            {
+                const double at = a + beat * q / parts;
+                if (best < 0.0 || std::abs (at - clipSeconds) < std::abs (best - clipSeconds)) best = at;
+            }
+        }
+        return best;
+    }
 
     /** "Bar 5 . 2" style position for a clip time, plus the song time. */
     std::string describe (double clipSeconds) const
@@ -317,11 +435,116 @@ struct Snapshot
     vox::honeylink::Pitch voxologyPitch = vox::honeylink::Pitch::off;
     bool keyUnsure = false;    // Auto couldn't tell the key from the voice: snapping to any note
     double seconds = 0.0;
+    KeyGrid grid;              // the notes they land on (the key, notes switched in / out, the tuning)
+    bool tuneAuto = true;      // the tuning is Auto (the beat's from Voxology on the track, else A = 440)
+    int autoCents = 0;         // what Auto tuning is (cents vs A = 440: the beat's, from Voxology on the track)
+    int checks = 0;            // notes to check
 };
+
+/** Notes to check (the amber dot; N goes to the next, D does what it says). For notes you haven't changed or checked:
+    - split: a piece under 80 ms touching a neighbour (under 30 ms apart) sung at its pitch (within a semitone), or two
+      notes at the same pitch (within 35 cents) under 15 ms apart: one note cut in two. D joins them.
+    - outOfKey: sung within 30 cents of a note outside the key, and Snap pulls it a semitone or more to the key: maybe you
+      meant that note. D keeps the note you sang (tuned to it); or switch it into the key (Alt + click its key).
+    - between: sung 40 - 60 cents from the nearest note of the key, the next one not much further: Snap may pick the
+      wrong one. D moves it to the other.
+    - wobbly: 0.3 s or longer, and its slow wander (vibrato left out: that's sung on purpose) still 15 cents or more as it
+      will sound. D holds it steady (no drift; its vibrato kept).
+    The first that fits, in that order. Nothing while Snap is at 0 (but splits and wobbles). */
+inline std::vector<NoteCheck> findChecks (const vox::honey::Track* track, const std::vector<NoteView>& notes, const KeyGrid& grid,
+                                          const Settings& s, double sampleRate)
+{
+    std::vector<NoteCheck> out (notes.size());
+    const double sr = sampleRate > 0.0 ? sampleRate : 48000.0;
+    for (size_t i = 0; i < notes.size(); ++i)
+    {
+        const auto& v = notes[i];
+        if (! v.edit.isDefault() || v.edit.checked) continue;
+        auto& c = out[i];
+        const auto& n = v.note;
+        const double len = (n.end - n.start) / sr;
+        // One note cut in two?
+        int join = -1;
+        double nearest = 1.0e9;
+        for (int d : { -1, 1 })
+        {
+            const auto j = static_cast<long> (i) + d;
+            if (j < 0 || j >= static_cast<long> (notes.size())) continue;
+            const auto& m = notes[static_cast<size_t> (j)].note;
+            const double gap = (d < 0 ? n.start - m.end : m.start - n.end) / sr;
+            const double apart = std::abs (m.pitch - n.pitch);
+            const bool piece = len < 0.08 && gap < 0.03 && apart < 1.0;
+            const bool twin = gap < 0.015 && apart < 0.35;
+            if ((piece || twin) && apart < nearest) { nearest = apart; join = static_cast<int> (j); }
+        }
+        if (join >= 0) { c.why = NoteCheck::Why::split; c.joinWith = join; continue; }
+        if (s.snap > 0.0)
+        {
+            const double sung = n.pitch - grid.tune;   // on the untuned grid
+            const double toKey = grid.note (n.pitch) - n.pitch;
+            const double semi = std::round (sung);
+            if (std::abs (sung - semi) < 0.3 && ! grid.has (static_cast<int> (semi)) && std::abs (toKey) >= 0.7)
+            {
+                c.why = NoteCheck::Why::outOfKey;
+                c.other = semi + grid.tune;
+                continue;
+            }
+            // The note of the key on its other side.
+            const double first = grid.note (n.pitch), d1 = std::abs (toKey);
+            const double second = grid.step (first, n.pitch > first ? 1 : -1);
+            if (d1 >= 0.4 && d1 <= 0.6 && std::abs (second - n.pitch) - d1 < 0.3)
+            {
+                c.why = NoteCheck::Why::between;
+                c.other = second;
+                continue;
+            }
+        }
+        if (track != nullptr && len >= 0.3 && n.drift > 0.05)
+        {
+            // Its slow wander alone (vibrato is sung on purpose: left out).
+            auto slow = n;
+            slow.vibrato = 0.0;
+            if (vox::honey::movementCents (*track, slow) >= 15.0) c.why = NoteCheck::Why::wobbly;
+        }
+    }
+    return out;
+}
+
+/** What the note's line says about a note to check (and what D does). */
+inline std::string checkText (const NoteView& v)
+{
+    const auto name = [] (double midi)
+    {
+        const int m = static_cast<int> (std::lround (midi));
+        return std::string (vox::kNoteNames[static_cast<size_t> ((m % 12 + 12) % 12)]) + std::to_string (m / 12 - 1);
+    };
+    using W = NoteCheck::Why;
+    switch (v.check.why)
+    {
+        case W::split:    return "CHECK: this looks like one note cut in two. D joins it with its neighbour";
+        case W::outOfKey: return "CHECK: sung as " + name (v.check.other) + ", which isn't in the key: Snap moves it to " + name (v.note.target)
+                                 + ". D keeps " + name (v.check.other) + " (or Alt + click its key to add it to the key)";
+        case W::between:  return "CHECK: sung between " + name (std::min (v.note.target, v.check.other)) + " and " + name (std::max (v.note.target, v.check.other))
+                                 + ": Snap picks " + name (v.note.target) + ". D moves it to " + name (v.check.other);
+        case W::wobbly:   return "CHECK: this long note wanders off pitch. D holds it steady (its vibrato kept)";
+        case W::none:     break;
+    }
+    return {};
+}
+
+/** D on a note to check: the edit it makes (split: nothing here, the caller joins). */
+inline NoteEdit checkFix (const NoteView& v)
+{
+    auto e = v.edit;
+    using W = NoteCheck::Why;
+    if (v.check.why == W::outOfKey || v.check.why == W::between) { e.moved = true; e.target = v.check.other; }
+    if (v.check.why == W::wobbly) e.drift = 0.0;
+    return e;
+}
 
 inline Snapshot makeSnapshot (std::shared_ptr<const vox::honey::Track> track, const std::vector<vox::honey::Note>& notes,
                               const std::vector<NoteEdit>& edits, const vox::KeyGuess& guess, const Settings& s,
-                              const HostKey& host = {})
+                              const HostKey& host = {}, int autoTuneCents = 0)
 {
     Snapshot snap;
     snap.track = track;
@@ -334,17 +557,27 @@ inline Snapshot makeSnapshot (std::shared_ptr<const vox::honey::Track> track, co
     snap.keyUnsure = keyUnsure (s, guess, host);
     if (track != nullptr && ! track->time.empty())
         snap.seconds = track->time.back() / track->sampleRate;
-    const auto sounding = applyEdits (notes, edits, s, snap.key, snap.scale, track != nullptr ? track->sampleRate : 48000.0,
+    snap.grid = keyGrid (s, snap.key, snap.scale, autoTuneCents);
+    snap.tuneAuto = s.a4 <= 0.0;
+    snap.autoCents = std::clamp (autoTuneCents, -50, 50);
+    const double sr = track != nullptr ? track->sampleRate : 48000.0;
+    const auto sounding = applyEdits (notes, edits, s, snap.grid, sr,
                                       track != nullptr && ! track->level.empty() ? static_cast<double> (track->level.size()) * vox::honey::Track::kLevelHopSeconds * track->sampleRate : 0.0);
     for (size_t i = 0; i < notes.size(); ++i)
     {
         NoteView v;
         v.note = sounding[i];
         v.edit = i < edits.size() ? edits[i] : NoteEdit {};
-        v.wasOff = std::abs (notes[i].pitch - keyNote (notes[i].pitch, snap.key, snap.scale)) > 0.25;
-        v.off = std::abs (v.note.target - keyNote (v.note.target, snap.key, snap.scale)) > 0.25;
+        v.wasOff = std::abs (notes[i].pitch - snap.grid.note (notes[i].pitch)) > 0.25;
+        v.off = std::abs (v.note.target - snap.grid.note (v.note.target)) > 0.25;
         v.fixed = v.wasOff && ! v.off;
         snap.notes.push_back (v);
+    }
+    const auto checks = findChecks (track.get(), snap.notes, snap.grid, s, sr);
+    for (size_t i = 0; i < checks.size(); ++i)
+    {
+        snap.notes[i].check = checks[i];
+        snap.checks += checks[i].any() ? 1 : 0;
     }
     return snap;
 }

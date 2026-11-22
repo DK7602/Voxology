@@ -42,7 +42,7 @@ void beginWrite (Link::Slot& s)
 void endWrite (Link::Slot& s) { s.seq.fetch_add (1, kRelease); }
 
 /** A consistent copy of a slot (false: it was being written every time we looked). */
-struct Copy { std::uint64_t owner = 0, heartbeat = 0; std::uint32_t nameHash = 0, flags = 0, pitch = 0, keyFrom = 0; std::int32_t key = 0, scale = 0; };
+struct Copy { std::uint64_t owner = 0, heartbeat = 0; std::uint32_t nameHash = 0, flags = 0, pitch = 0, keyFrom = 0; std::int32_t key = 0, scale = 0, tune = 0; };
 bool read (const Link::Slot& s, Copy& c)
 {
     for (int attempt = 0; attempt < 64; ++attempt)
@@ -57,6 +57,7 @@ bool read (const Link::Slot& s, Copy& c)
         c.keyFrom = s.keyFrom.load (kRelaxed);
         c.key = s.key.load (kRelaxed);
         c.scale = s.scale.load (kRelaxed);
+        c.tune = s.tune.load (kRelaxed);
         std::atomic_thread_fence (kAcquire);
         if (s.seq.load (kRelaxed) == before) return true;
     }
@@ -240,6 +241,7 @@ void Link::publishVox (std::uint64_t owner, const VoxInfo& info, std::uint64_t n
     mine->key.store (info.key, kRelaxed);
     mine->scale.store (info.scale, kRelaxed);
     mine->keyFrom.store (static_cast<std::uint32_t> (info.keyFrom), kRelaxed);
+    mine->tune.store (std::clamp (info.tuneCents, -50, 50), kRelaxed);
     endWrite (*mine);
     mine->heartbeat.store (now, kRelease);
 }
@@ -286,6 +288,7 @@ bool Link::voxologyOn (std::uint32_t nameHash, VoxInfo& out, std::uint64_t now) 
         v.key = std::clamp (c.key, 0, 11);
         v.scale = std::max (0, c.scale);
         v.keyFrom = static_cast<KeyFrom> (std::min<std::uint32_t> (c.keyFrom, 3u));
+        v.tuneCents = std::clamp (c.tune, -50, 50);
     }
     if (found != 1) return false;
     out = v;
