@@ -2,7 +2,7 @@
 // HoneyPreview <mono float32 raw> <sample rate> <out.png> [key 0-11|12=auto] [scale] [snap]
 // Env: HONEY_W / HONEY_H size, HONEY_BPM tempo map, HONEY_MANUAL the manual, HONEY_BEAT=key,scale a key from Voxology's
 // beat, HONEY_VOXOLOGY=1|2|3 the Voxology on this track (Pitch resting / tuning anyway / tuning), HONEY_STEADY=n note n
-// selected and steadied (NOTE DRIFT + NOTE VIBRATO 0).
+// selected and steadied (NOTE DRIFT + NOTE VIBRATO 0), HONEY_PLAYHEAD=seconds, HONEY_STOPPED=1 (playback stopped).
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -101,7 +101,7 @@ int main (int argc, char** argv)
     }
     panel.refresh();
     panel.roll.setSelected (pick);
-    panel.setPlayhead (2.5);
+    panel.setPlayhead (std::getenv ("HONEY_PLAYHEAD") ? std::atof (std::getenv ("HONEY_PLAYHEAD")) : 2.5, std::getenv ("HONEY_STOPPED") == nullptr);
 
     if (std::getenv ("HONEY_MANUAL"))   // show the manual (the ? button)
         for (auto* c : panel.getChildren())

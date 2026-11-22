@@ -4,8 +4,9 @@
 
 #include "HoneyView.h"
 
-/** The honeycomb note editor: every note is a gold-rimmed marble cell on a piano roll.
-    Off-key notes glow blue; once fixed they fill gold. Drag a cell up / down to move it (whole notes;
+/** The honeycomb note editor: every note is a gold-rimmed light blue marble shape on a piano roll, the outline of its
+    sung waveform (how loud it was, moment to moment). Notes that will play off the key glow red; pulled into the key
+    they fill gold. Drag a cell up / down to move it (whole notes;
     hold Alt for cents), double-click to snap it to the key, Delete to reset it.
     Mouse wheel scrolls up / down, Shift + wheel scrolls in time, Ctrl + wheel (or + / -) zooms. */
 class HoneyRoll final : public juce::Component,
@@ -35,9 +36,12 @@ public:
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     bool keyPressed (const juce::KeyPress&) override;
 
-    /** Where playback is in the clip (seconds); negative = stopped. The view follows it. */
-    void setPlayhead (double seconds);
+    /** Where the host's playhead is in the clip (seconds; negative = not in this clip). It stays drawn when playback stops
+        (where it stopped, or wherever the host's cursor is then). The view follows it while playing; when stopped it
+        scrolls to it only when it moves out of view (you can look around freely). */
+    void setPlayhead (double seconds, bool isPlaying);
     double getPlayhead() const { return playhead; }
+    bool isPlaying() const { return playing; }
 
     /** Fit the whole clip and its notes into view. */
     bool fitAll();   // false (nothing changed) while the roll is too small
@@ -51,11 +55,17 @@ private:
     double secondsAt (float x) const;
     float yOf (double midi) const;
     double midiAt (float y) const;
-    juce::Path cellPath (int index, double midi) const;
+    juce::Path cellPath (int index, double midi) const;   // where a note can be grabbed (a hexagon, a row high)
+    /** The note as drawn: its sung waveform around its pitch, one pixel column at a time: the outline = its peaks
+        (Track::level), the body = its RMS (Track::power), in dB; as tall as it was loud (the clip's loud singing = 1.7 rows). */
+    struct Wave { juce::Path outline, body; };
+    Wave wavePaths (int index, double midi) const;
     int noteAt (juce::Point<float>) const;
     void drawBackground (juce::Graphics&, juce::Rectangle<float> grid);
     void drawCell (juce::Graphics&, int index);
     void drawKeyboard (juce::Graphics&);
+    void drawPitchLine (juce::Graphics&, juce::Rectangle<float> visible);
+    void drawName (juce::Graphics&, int index);
     void drawRuler (juce::Graphics&);
 
     honeyui::Model* model = nullptr;
@@ -64,6 +74,7 @@ private:
     float lastGridHeight = 0.0f;
     bool userZoomed = false;
     double playhead = -1.0;
+    bool playing = false;
     void drawPlayhead (juce::Graphics&);
 
     double viewStart = 0.0, pixelsPerSecond = 40.0;   // time axis
@@ -87,4 +98,5 @@ private:
     juce::Image honeycomb;   // the faint background pattern (cached per size)
 
     static constexpr int kKeysWidth = 46, kRulerHeight = 20, kBar = 12;
+    static constexpr float kWaveRangeDb = 36.0f;   // a note's waveform: the clip's loud singing = full height, this far under = flat
 };

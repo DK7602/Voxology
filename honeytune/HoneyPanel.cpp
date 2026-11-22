@@ -139,7 +139,8 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
     roll.onSeek = [this] (double t)
     {
         if (model != nullptr) model->seek (t);
-        lastPosition = t;   // the readout shows it straight away
+        lastPosition = t;   // the readout and the playhead show it straight away
+        roll.setPlayhead (t, roll.isPlaying());
         repaint (readoutArea.toNearestInt());
     };
     updateNoteControls();
@@ -240,12 +241,13 @@ void HoneyPanel::showOriginal (bool o)
     roll.repaint();
 }
 
-void HoneyPanel::setPlayhead (double seconds)
+void HoneyPanel::setPlayhead (double seconds, bool playing)
 {
-    roll.setPlayhead (seconds);
-    if (seconds >= 0.0 && std::abs (seconds - lastPosition) > 0.0005)
+    const bool wasPlaying = roll.isPlaying();
+    roll.setPlayhead (seconds, playing);
+    if ((seconds >= 0.0 && std::abs (seconds - lastPosition) > 0.0005) || playing != wasPlaying)
     {
-        lastPosition = seconds;
+        if (seconds >= 0.0) lastPosition = seconds;
         repaint (readoutArea.toNearestInt());
     }
 }
@@ -332,7 +334,7 @@ void HoneyPanel::paint (Graphics& g)
     if (const auto img = title(); img.isValid())
     {
         // A soft dark halo first, so the marble letters stand off the marble bar.
-        const auto placed = RectanglePlacement (RectanglePlacement::xLeft | RectanglePlacement::yBottom).appliedTo (img.getBounds().toFloat(), titleArea);
+        const auto placed = RectanglePlacement (RectanglePlacement::xLeft | RectanglePlacement::yMid).appliedTo (img.getBounds().toFloat(), titleArea);
         const auto scaled = img.rescaled (roundToInt (placed.getWidth()), roundToInt (placed.getHeight()), Graphics::highResamplingQuality);
         Graphics::ScopedSaveState save (g);
         g.addTransform (AffineTransform::translation (placed.getX(), placed.getY()));
@@ -374,7 +376,7 @@ void HoneyPanel::paint (Graphics& g)
 
     // Time readout (bars . beats like the host, and the song time), synced to playback.
     {
-        const bool playing = roll.getPlayhead() >= 0.0;
+        const bool playing = roll.isPlaying();
         drawGlass (g, readoutArea, 7.0f, 0.85f);
         g.setColour (playing ? Colour (0xff1e7d32) : Colour (0xff8d641f));
         g.setFont (FontOptions (13.0f, Font::bold));
@@ -393,7 +395,7 @@ void HoneyPanel::paint (Graphics& g)
     g.setFont (FontOptions (11.5f, Font::bold));
     g.drawFittedText (status, statusArea.reduced (10.0f, 0.0f).toNearestInt(), Justification::centredLeft, 1);
 
-    // Gold: the drips, the frame and the bars between the sections.
+    // Gold: the frame and the bars between the sections.
     drawGoldFrame (g, fr, kFrame, 12.0f);
     for (const auto& sep : { Rectangle<float> (inner.getX(), topBar.getBottom(), inner.getWidth(), kSeparator),
                              Rectangle<float> (inner.getX(), bottomBar.getY() - kSeparator, inner.getWidth(), kSeparator) })
@@ -408,25 +410,9 @@ void HoneyPanel::paint (Graphics& g)
 
 void HoneyPanel::paintOverChildren (Graphics&) {}
 
-void HoneyPanel::drawDrips (Graphics& g, Rectangle<float> fr)
-{
-    // Honey running off the bottom of the frame (the drips from the mockup art). Drawn before the
-    // frame, with their tops tucked under it, so they flow out of it.
-    g.setOpacity (1.0f);
-    const float positions[] = { 0.26f, 0.61f, 0.87f };
-    for (int k = 0; k < 3; ++k)
-    {
-        const auto img = honeytheme::drip (k);
-        if (! img.isValid()) continue;
-        const float h = kDripRoom + kFrame + 12.0f, w = h * (float) img.getWidth() / (float) img.getHeight();
-        const float x = fr.getX() + fr.getWidth() * positions[k] - (k == 2 ? w * 0.5f : 0.0f);
-        g.drawImage (img, { std::min (x, fr.getRight() - w - 4.0f), fr.getBottom() - kFrame + 0.5f, w, h }, RectanglePlacement::stretchToFit);
-    }
-}
-
 Rectangle<float> HoneyPanel::frameArea() const
 {
-    return getLocalBounds().toFloat().reduced (6.0f).withTrimmedBottom (kDripRoom);
+    return getLocalBounds().toFloat().reduced (6.0f);
 }
 
 void HoneyPanel::resized()
@@ -442,7 +428,7 @@ std::pair<bool, bool> HoneyPanel::layoutBars (bool twoRowTop, bool twoRowBottom)
 {
     const auto inner = frameArea().reduced (kFrame);
     auto r = inner;
-    topBar = r.removeFromTop (twoRowTop ? 76.0f + 52.0f : 76.0f);
+    topBar = r.removeFromTop (twoRowTop ? kTopBar + 52.0f : kTopBar);
     r.removeFromTop (kSeparator);
     bottomBar = r.removeFromBottom (twoRowBottom ? 78.0f + 32.0f : 78.0f);
     r.removeFromBottom (kSeparator);
@@ -451,12 +437,12 @@ std::pair<bool, bool> HoneyPanel::layoutBars (bool twoRowTop, bool twoRowBottom)
     cards.clear();
 
     // Top: title | key | scale | snap | drift | vibrato | fit ... legend | logo (two rows: the sliders under key ... legend).
-    // The title's drips run down to just above the gold trim.
-    titleArea = topBar.withHeight (76.0f).withTrimmedLeft (10.0f).withTrimmedTop (5.0f).withTrimmedBottom (3.0f).withWidth (190.0f);
-    auto band = topBar.reduced (8.0f, 4.0f);
+    // The title (no drips: the bar is only as tall as the controls, the room goes to the notes).
+    titleArea = topBar.withHeight (kTopBar).withTrimmedLeft (10.0f).reduced (0.0f, 6.0f).withWidth (190.0f);
+    auto band = topBar.reduced (8.0f, 3.0f);
     band.removeFromLeft (192.0f);
     band.removeFromLeft (6.0f);
-    auto top = band.removeFromTop (68.0f).withSizeKeepingCentre (band.getWidth(), 54.0f);
+    auto top = band.removeFromTop (kTopBar - 6.0f).withSizeKeepingCentre (band.getWidth(), 54.0f);
     auto sliderRow = twoRowTop ? band : top;
     // The logo only when there's room; the controls come first. The legend goes before the sliders would.
     constexpr float kKeyW = 70.0f, kScaleW = 136.0f, kGap = 8.0f, kLegend = 6.0f + 122.0f + 10.0f, kButtons = 30.0f + 6.0f + 52.0f + 6.0f + 148.0f + 8.0f;

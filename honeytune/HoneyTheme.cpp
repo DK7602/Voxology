@@ -11,19 +11,11 @@ Image goldTexture() { return ImageCache::getFromMemory (HoneyAssets::gold_jpg, H
 Image logo()        { return ImageCache::getFromMemory (HoneyAssets::logo_png, HoneyAssets::logo_pngSize); }
 Image creamPanel()  { return ImageCache::getFromMemory (HoneyAssets::marble_cream_panel_jpg, HoneyAssets::marble_cream_panel_jpgSize); }
 Image title()       { return ImageCache::getFromMemory (HoneyAssets::title_png, HoneyAssets::title_pngSize); }
-Image drip (int which)
-{
-    switch (which)
-    {
-        case 0:  return ImageCache::getFromMemory (HoneyAssets::drip_a_png, HoneyAssets::drip_a_pngSize);
-        case 1:  return ImageCache::getFromMemory (HoneyAssets::drip_b_png, HoneyAssets::drip_b_pngSize);
-        default: return ImageCache::getFromMemory (HoneyAssets::drip_c_png, HoneyAssets::drip_c_pngSize);
-    }
-}
+Image creamMarble() { return ImageCache::getFromMemory (HoneyAssets::marble_cream_jpg, HoneyAssets::marble_cream_jpgSize); }
 
-void drawMarble (Graphics& g, Rectangle<float> area, float wash, Point<float> offset)
+void drawMarble (Graphics& g, Rectangle<float> area, float wash, Point<float> offset, bool cream)
 {
-    const auto img = marble();
+    const auto img = cream ? creamMarble() : marble();
     if (img.isValid())
     {
         Graphics::ScopedSaveState save (g);
@@ -133,34 +125,6 @@ void drawGoldFrame (Graphics& g, Rectangle<float> r, float t, float corner)
     g.drawRoundedRectangle (r.reduced (t - 0.5f), std::max (0.0f, corner - t), 1.0f);
     g.setColour (goldLight.withAlpha (0.8f));
     g.drawRoundedRectangle (r.reduced (1.5f), corner, 0.8f);
-}
-
-void drawDrips (Graphics& g, float x0, float x1, float edgeY, float maxLength, int count, int seed)
-{
-    Random rnd (seed);
-    for (int i = 0; i < count; ++i)
-    {
-        const float x = x0 + (x1 - x0) * (((float) i + 0.2f + rnd.nextFloat() * 0.6f) / (float) count);
-        const float len = maxLength * (0.35f + rnd.nextFloat() * 0.65f);
-        const float w = 3.5f + rnd.nextFloat() * 4.5f, r = w * 0.75f;
-        const float tipY = edgeY + len;
-        Path d;
-        d.startNewSubPath (x - w * 1.8f, edgeY - 1.0f);
-        d.cubicTo (x - w * 0.9f, edgeY + 1.0f, x - w * 0.55f, edgeY + len * 0.35f, x - w * 0.5f, tipY - r * 1.2f);
-        d.cubicTo (x - r * 1.25f, tipY - r * 0.2f, x - r * 0.9f, tipY + r, x, tipY + r);
-        d.cubicTo (x + r * 0.9f, tipY + r, x + r * 1.25f, tipY - r * 0.2f, x + w * 0.5f, tipY - r * 1.2f);
-        d.cubicTo (x + w * 0.55f, edgeY + len * 0.35f, x + w * 0.9f, edgeY + 1.0f, x + w * 1.8f, edgeY - 1.0f);
-        d.closeSubPath();
-        g.setColour (Colours::black.withAlpha (0.18f));   // soft shadow
-        g.fillPath (d, AffineTransform::translation (1.5f, 2.0f));
-        ColourGradient grad (goldLight, x - w, edgeY, goldDeep, x + w, tipY + r, false);
-        grad.addColour (0.5, gold);
-        g.setGradientFill (grad);
-        g.fillPath (d);
-        g.setColour (Colours::white.withAlpha (0.55f));   // highlights
-        g.fillEllipse (x - r * 0.55f, tipY - r * 0.2f, r * 0.45f, r * 0.55f);
-        g.drawLine (x - w * 0.3f, edgeY + 3.0f, x - w * 0.3f, tipY - r * 1.4f, 0.9f);
-    }
 }
 
 void drawGlass (Graphics& g, Rectangle<float> r, float corner, float alpha)

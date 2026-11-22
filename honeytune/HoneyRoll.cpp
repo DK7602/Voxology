@@ -94,17 +94,20 @@ bool HoneyRoll::fitAll()
     return true;
 }
 
-void HoneyRoll::setPlayhead (double seconds)
+void HoneyRoll::setPlayhead (double seconds, bool isPlaying)
 {
-    if (std::abs (seconds - playhead) < 1.0e-4) return;
+    const bool moved = std::abs (seconds - playhead) >= 1.0e-4;
+    if (! moved && isPlaying == playing) return;
     const auto grid = gridArea();
     auto area = [&] (double t) { return Rectangle<float> (xOf (t) - 12.0f, 0.0f, 24.0f, (float) getHeight()); };
     if (playhead >= 0.0) repaint (area (playhead).toNearestInt());
     playhead = seconds;
+    playing = isPlaying;
     if (playhead < 0.0) return;
-    // Follow: page along when it reaches the right edge (or is out of view), unless you're dragging a note.
+    // Keep it in view: page along when it reaches the right edge (or is out of view), unless you're dragging a note.
+    // Stopped, it pages only when it moved there (the host's cursor), so you can scroll around a stopped song.
     const double visible = grid.getWidth() / pixelsPerSecond;
-    if (! dragging && (playhead > viewStart + visible * 0.92 || playhead < viewStart))
+    if (! dragging && moved && (playhead > viewStart + visible * 0.92 || playhead < viewStart))
     {
         viewStart = std::max (0.0, playhead - visible * 0.08);
         updateScrollBars();
@@ -120,8 +123,8 @@ void HoneyRoll::drawPlayhead (Graphics& g)
     const auto grid = gridArea();
     const float x = xOf (playhead);
     if (x < grid.getX() || x > grid.getRight()) return;
-    // A bright line with a blue glow, and a gold marker on the ruler.
-    g.setColour (glowBlue.withAlpha (0.35f));
+    // A bright line with a blue glow, and a marker on the ruler (stopped: the same line, a little quieter).
+    g.setColour (glowBlue.withAlpha (playing ? 0.35f : 0.22f));
     g.fillRect (x - 3.0f, grid.getY(), 6.0f, grid.getHeight());
     g.setColour (Colours::white.withAlpha (0.95f));
     g.fillRect (x - 0.75f, grid.getY(), 1.5f, grid.getHeight());
@@ -233,6 +236,50 @@ Path HoneyRoll::cellPath (int index, double midi) const
     return p;
 }
 
+HoneyRoll::Wave HoneyRoll::wavePaths (int index, double midi) const
+{
+    const auto [t0, t1] = span (index);
+    const float x0 = xOf (t0), x1 = std::max (x0 + 12.0f, xOf (t1));
+    const float yc = yOf (midi), row = static_cast<float> (rowHeight);
+    const auto& n = snap.notes[static_cast<size_t> (index)].note;
+    const auto* track = snap.track.get();
+    const double sr = track != nullptr ? track->sampleRate : 48000.0;
+    // The moments of the note as sung (shown stretched / moved when it was), one pixel column at a time: its loudest
+    // sample (the outline) and its RMS (the body), against the clip's loud singing, mirrored around the pitch.
+    const double s0 = n.start / sr, s1 = n.end / sr;
+    const int steps = std::clamp (static_cast<int> (std::ceil (x1 - x0)), 4, 8000);
+    const float top = track != nullptr && track->levelTop > 0.0f ? track->levelTop : 0.0f;
+    std::vector<float> peak (static_cast<size_t> (steps + 1), 0.6f), body (static_cast<size_t> (steps + 1), 0.4f);
+    if (top > 0.0f)
+        for (int k = 0; k <= steps; ++k)
+        {
+            const double a = std::max (s0, s0 + (s1 - s0) * (k - 0.5) / steps), b = std::min (s1, s0 + (s1 - s0) * (k + 0.5) / steps);
+            // In dB (like a DAW's logarithmic waveform): a quiet verse still shows its shape, a 6 dB swell shows plainly.
+            const auto shape = [top] (float v) { return std::clamp (1.0f + 20.0f * std::log10 (std::max (v, 1.0e-6f) / top) / kWaveRangeDb, 0.0f, 1.0f); };
+            peak[static_cast<size_t> (k)] = shape (vox::honey::levelOver (*track, a, b));
+            body[static_cast<size_t> (k)] = shape (vox::honey::rmsOver (*track, a, b));
+        }
+    const float minHalf = std::max (1.5f, row * 0.08f), maxHalf = row * 0.85f;
+    const float tip = std::min ({ 6.0f, row * 0.25f, (x1 - x0) * 0.2f });   // closed, lightly pointed ends
+    auto at = [&] (int k, const std::vector<float>& h)
+    {
+        const float x = x0 + (x1 - x0) * static_cast<float> (k) / static_cast<float> (steps);
+        const float taper = std::sqrt (std::clamp (std::min (x - x0, x1 - x) / std::max (1.0f, tip), 0.0f, 1.0f));
+        return std::pair { x, taper * (minHalf + (maxHalf - minHalf) * h[static_cast<size_t> (k)]) };
+    };
+    auto mirrored = [&] (const std::vector<float>& h)
+    {
+        Path p;
+        p.startNewSubPath (x0, yc);
+        for (int k = 1; k < steps; ++k) { const auto [x, y] = at (k, h); p.lineTo (x, yc - y); }
+        p.lineTo (x1, yc);
+        for (int k = steps - 1; k >= 1; --k) { const auto [x, y] = at (k, h); p.lineTo (x, yc + y); }
+        p.closeSubPath();
+        return p;
+    };
+    return { mirrored (peak), mirrored (body) };
+}
+
 int HoneyRoll::noteAt (Point<float> pt) const
 {
     for (int i = static_cast<int> (snap.notes.size()); --i >= 0;)
@@ -247,36 +294,13 @@ int HoneyRoll::noteAt (Point<float> pt) const
 void HoneyRoll::paint (Graphics& g)
 {
     const auto grid = gridArea();
-    g.fillAll (Colour (0xfff5f8fb));
+    g.fillAll (Colour (0xfff6f0e2));
     drawBackground (g, grid);
 
     {
         Graphics::ScopedSaveState save (g);
         g.reduceClipRegion (grid.toNearestInt());
         const auto vis = g.getClipBounds().toFloat();
-        // Phrase connectors: a black line from each note's end to the next note's start when they're sung
-        // in one breath (gap under 0.2 s); a longer gap (a pause) leaves a space.
-        {
-            const bool original = model != nullptr && model->isOriginal();
-            auto shown = [&] (int i)
-            {
-                const auto& v = snap.notes[static_cast<size_t> (i)];
-                return original ? v.note.pitch : (dragging && i == selected) ? dragTarget : v.note.target;
-            };
-            Path links;
-            for (int i = 0; i + 1 < static_cast<int> (snap.notes.size()); ++i)
-            {
-                if (span (i + 1).first - span (i).second > 0.2) continue;
-                const auto pa = cellPath (i, shown (i)).getBounds(), pb = cellPath (i + 1, shown (i + 1)).getBounds();
-                if (pa.getRight() < vis.getX() - 50.0f || pb.getX() > vis.getRight() + 50.0f) continue;
-                links.startNewSubPath (pa.getRight(), pa.getCentreY());
-                links.lineTo (std::max (pb.getX(), pa.getRight() + 1.0f), pb.getCentreY());
-            }
-            g.setColour (Colours::white.withAlpha (0.5f));   // a light edge so it reads on gold bars too
-            g.strokePath (links, PathStrokeType (3.6f, PathStrokeType::curved, PathStrokeType::rounded));
-            g.setColour (Colours::black.withAlpha (0.88f));
-            g.strokePath (links, PathStrokeType (2.0f, PathStrokeType::curved, PathStrokeType::rounded));
-        }
         for (int i = 0; i < static_cast<int> (snap.notes.size()); ++i)
         {
             const auto [t0, t1] = span (i);
@@ -284,6 +308,12 @@ void HoneyRoll::paint (Graphics& g)
             if (i != selected) drawCell (g, i);
         }
         if (selected >= 0) drawCell (g, selected);   // on top
+        drawPitchLine (g, vis);
+        for (int i = 0; i < static_cast<int> (snap.notes.size()); ++i)
+        {
+            const auto [t0, t1] = span (i);
+            if (xOf (t1) >= vis.getX() && xOf (t0) <= vis.getRight()) drawName (g, i);
+        }
     }
     drawKeyboard (g);
     drawRuler (g);
@@ -306,10 +336,8 @@ void HoneyRoll::paint (Graphics& g)
 
 void HoneyRoll::drawBackground (Graphics& g, Rectangle<float> grid)
 {
-    // Blue / white marble (a little lighter so the notes read) with the gold honeycomb on it.
-    honeytheme::drawMarble (g, grid, 0.42f);
-    g.setColour (Colour (0xffdfe8f1).withAlpha (0.25f));
-    g.fillRect (grid);
+    // Quiet cream marble (the notes stand out on it) with the gold honeycomb on it.
+    honeytheme::drawMarble (g, grid, 0.12f, {}, true);
 
     if (! honeycomb.isValid() || honeycomb.getWidth() != getWidth() || honeycomb.getHeight() != getHeight())
     {
@@ -328,9 +356,9 @@ void HoneyRoll::drawBackground (Graphics& g, Rectangle<float> grid)
         for (float y = 0; y < static_cast<float> (getHeight()) + r; y += r * 1.5f, ++row)
             for (float x = (row % 2) ? w / 2 : 0.0f; x < static_cast<float> (getWidth()) + w; x += w)
             {
-                hg.setColour (Colours::white.withAlpha (0.45f));
+                hg.setColour (Colours::white.withAlpha (0.5f));
                 hg.strokePath (hex, PathStrokeType (0.8f), AffineTransform::translation (x + 0.7f, y + 0.9f));
-                hg.setColour (goldDeep.withAlpha (0.55f));
+                hg.setColour (goldDeep.withAlpha (0.3f));
                 hg.strokePath (hex, PathStrokeType (1.0f), AffineTransform::translation (x, y));
             }
     }
@@ -340,29 +368,33 @@ void HoneyRoll::drawBackground (Graphics& g, Rectangle<float> grid)
         g.setOpacity (1.0f);
         g.drawImageAt (honeycomb, 0, 0);
 
-        // Rows outside the key are raised gold bars (black keys when chromatic); the key's root glows cream.
+        // Rows outside the key are quiet sand-gold lanes (black keys when chromatic), the key's rows stay cream and its
+        // root row is a touch warmer; a fine gold hairline between every two rows (a stronger one between two rows of
+        // the key: E-F, B-C).
         const int top = static_cast<int> (std::ceil (topMidi)), bottom = static_cast<int> (std::floor (midiAt (grid.getBottom())));
+        auto outside = [&] (int m)
+        {
+            return snap.scale == 0 ? vox::kNoteNames[static_cast<size_t> ((m % 12 + 12) % 12)][1] == '#'
+                                   : ! inScale (m, snap.key, snap.scale);
+        };
         for (int m = top; m >= bottom; --m)
         {
             const float y = yOf (m) - static_cast<float> (rowHeight) / 2;
             const auto row = Rectangle<float> (grid.getX(), y, grid.getWidth(), static_cast<float> (rowHeight));
-            const bool root = ((m - snap.key) % 12 + 12) % 12 == 0;
-            const bool bar = snap.scale == 0 ? vox::kNoteNames[static_cast<size_t> ((m % 12 + 12) % 12)][1] == '#'
-                                             : ! inScale (m, snap.key, snap.scale);
-            if (bar)
-                honeytheme::drawGoldBar (g, row.reduced (0.0f, 1.5f));
-            else if (root)
+            if (outside (m))
             {
-                g.setColour (Colour (0xfffff3d6).withAlpha (0.55f));
+                g.setGradientFill (ColourGradient (Colour (0xffe6d6b2).withAlpha (0.78f), 0.0f, row.getY(),
+                                                   Colour (0xffdcc89e).withAlpha (0.78f), 0.0f, row.getBottom(), false));
                 g.fillRect (row);
             }
-        }
-        // Thin gold line between two neighbouring rows of the key (E-F, B-C).
-        for (int m = top; m >= bottom; --m)
-        {
-            const bool here = snap.scale == 0 || inScale (m, snap.key, snap.scale), below = snap.scale == 0 || inScale (m - 1, snap.key, snap.scale);
-            if (snap.scale != 0 && here && below)
-                honeytheme::drawGoldBar (g, { grid.getX(), yOf (m) + static_cast<float> (rowHeight) / 2 - 1.0f, grid.getWidth(), 2.0f }, 0.5f);
+            else if (((m - snap.key) % 12 + 12) % 12 == 0)
+            {
+                g.setColour (gold.withAlpha (0.13f));
+                g.fillRect (row);
+            }
+            const bool keyPair = snap.scale != 0 && ! outside (m) && ! outside (m - 1);
+            g.setColour (goldDeep.withAlpha (keyPair ? 0.5f : 0.2f));
+            g.fillRect (grid.getX(), row.getBottom() - (keyPair ? 0.6f : 0.5f), grid.getWidth(), keyPair ? 1.2f : 1.0f);
         }
 
         // Bar lines (raised gold) and beat lines (fine) from the host's tempo; seconds when it has none.
@@ -416,7 +448,7 @@ void HoneyRoll::drawCell (Graphics& g, int index)
     // Where it was sung (dashed ghost) when it has moved.
     if (moved)
     {
-        const auto ghost = cellPath (index, v.note.pitch);
+        const auto ghost = wavePaths (index, v.note.pitch).outline;
         Path dashed;
         const float dashes[] = { 4.0f, 3.0f };
         PathStrokeType (1.2f).createDashedStroke (dashed, ghost, dashes, 2);
@@ -424,7 +456,8 @@ void HoneyRoll::drawCell (Graphics& g, int index)
         g.fillPath (dashed);
     }
 
-    const auto cell = cellPath (index, target);
+    const auto wave = wavePaths (index, target);   // drawn as its waveform
+    const auto& cell = wave.outline;
     const auto b = cell.getBounds();
 
     // A glow behind every note, like the knobs: red when it will play off-key, cream when in key (gold body =
@@ -439,15 +472,22 @@ void HoneyRoll::drawCell (Graphics& g, int index)
     g.setColour (Colours::black.withAlpha (0.22f));
     g.fillPath (cell, AffineTransform::translation (0.8f, 1.6f));
 
-    // Blue / white marble, or polished gold once fixed.
-    if (filled) honeytheme::fillGold (g, cell, b);
+    // Light blue marble, or polished gold once fixed: the waveform's peaks; its body (RMS) a deeper shade inside.
+    if (filled)
+    {
+        honeytheme::fillGold (g, cell, b);
+        g.setColour (Colour (0xff8a5a10).withAlpha (0.55f));
+        g.fillPath (wave.body);
+    }
     else
     {
-        // Blue marble: a deep blue body with the white veins of the marble over it.
-        g.setGradientFill (ColourGradient (Colour (off ? 0xff6aa6dc : 0xff4f8cc6), b.getX(), b.getY(),
-                                           Colour (off ? 0xff3a73ab : 0xff24507f), b.getX(), b.getBottom(), false));
+        // Light blue marble: a light blue body with the white veins of the marble over it.
+        g.setGradientFill (ColourGradient (Colour (off ? 0xffb4dcf7 : 0xff9ccbee), b.getX(), b.getY(),
+                                           Colour (off ? 0xff7ab4e2 : 0xff5d97cc), b.getX(), b.getBottom(), false));
         g.fillPath (cell);
-        honeytheme::fillMarble (g, cell, index, 0.0f, 0.42f);
+        honeytheme::fillMarble (g, cell, index, 0.0f, 0.28f);
+        g.setGradientFill (ColourGradient (Colour (0xff5a98d2), b.getX(), b.getY(), Colour (0xff336fa9), b.getX(), b.getBottom(), false));
+        g.fillPath (wave.body);
     }
     {
         // Glassy top highlight
@@ -455,37 +495,16 @@ void HoneyRoll::drawCell (Graphics& g, int index)
         g.reduceClipRegion (cell);
         g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.45f), 0, b.getY(), Colours::transparentWhite, 0, b.getCentreY(), false));
         g.fillRect (b);
-
-        // The pitch line inside the cell: Tuned = as it will play (moved with the note, its drift and vibrato as kept:
-        // a note steadied with NOTE DRIFT / NOTE VIBRATO draws flat); Original = as sung.
-        if (snap.track != nullptr && b.getWidth() > 8.0f)
-        {
-            const auto& t = *snap.track;
-            const auto sounding = original ? std::vector<double> {} : vox::honey::soundingLine (t, v.note);
-            const double shift = original ? 0.0 : target - v.note.target;   // (a drag in progress)
-            Path line;
-            bool started = false;
-            for (int r = v.note.firstReading; r <= v.note.lastReading && r < static_cast<int> (t.midi.size()); ++r)
-            {
-                const auto k = static_cast<size_t> (r - v.note.firstReading);
-                const double m = original ? t.midi[static_cast<size_t> (r)] : k < sounding.size() ? sounding[k] : 0.0;
-                if (m <= 0.0) { started = false; continue; }
-                const Point<float> p { xOf (shownTime (index, t.time[static_cast<size_t> (r)] / t.sampleRate)), yOf (m + shift) };
-                if (! started) { line.startNewSubPath (p); started = true; } else line.lineTo (p);
-            }
-            g.setColour (filled ? goldDeep.darker (0.5f).withAlpha (0.8f) : Colours::white.withAlpha (0.9f));
-            g.strokePath (line, PathStrokeType (1.3f, PathStrokeType::curved, PathStrokeType::rounded));
-        }
     }
 
     // Gold rim, heavier (on a dark outline) when selected.
     if (isSel)
     {
         g.setColour (ink);
-        g.strokePath (cell, PathStrokeType (5.0f));
+        g.strokePath (cell, PathStrokeType (4.4f));
     }
     Path rim;
-    PathStrokeType (isSel ? 3.4f : 2.6f).createStrokedPath (rim, cell);
+    PathStrokeType (isSel ? 2.8f : 1.8f).createStrokedPath (rim, cell);
     honeytheme::fillGold (g, rim, b);
     g.setColour (goldDeep);
     g.strokePath (cell, PathStrokeType (0.6f));
@@ -496,34 +515,109 @@ void HoneyRoll::drawCell (Graphics& g, int index)
         g.setColour (Colour (0xfffff3c4).withAlpha (0.9f));
         g.strokePath (cell, PathStrokeType (0.8f), AffineTransform::translation (0.0f, -0.6f));
     }
-    g.setColour (Colours::black.withAlpha (0.25f));
-    g.strokePath (cell, PathStrokeType (0.6f), AffineTransform::scale (0.94f, 0.82f, b.getCentreX(), b.getCentreY()));
     if (index == hovered && ! isSel)
     {
         g.setColour (Colours::white.withAlpha (0.7f));
         g.strokePath (cell, PathStrokeType (1.0f));
     }
+}
 
-    // Note name when there's room.
-    if (b.getWidth() > 34.0f && rowHeight >= 14.0)
+void HoneyRoll::drawName (Graphics& g, int index)
+{
+    // The note's name when there's room, over the pitch line (a dark edge on the blue notes, a light one on the gold).
+    const auto& v = snap.notes[static_cast<size_t> (index)];
+    const bool original = model != nullptr && model->isOriginal();
+    const double target = original ? v.note.pitch : (dragging && index == selected) ? dragTarget : v.note.target;
+    const bool off = original ? v.wasOff : std::abs (target - honeyui::keyNote (target, snap.key, snap.scale)) > 0.25;
+    const bool filled = ! original && v.wasOff && ! off;
+    const auto [t0, t1] = span (index);
+    const float x0 = xOf (t0), x1 = xOf (t1);
+    if (x1 - x0 <= 34.0f || rowHeight < 14.0) return;
+    const auto row = static_cast<float> (rowHeight);
+    const Rectangle<float> textArea (x0 + std::min (8.0f, (x1 - x0) * 0.12f), yOf (target) - row * 0.5f, x1 - x0 - 16.0f, row);
+    const auto name = noteName (target);
+    g.setFont (FontOptions (std::min (12.0f, row * 0.62f), Font::bold));
+    g.setColour (filled ? Colour (0xfffff6dc).withAlpha (0.9f) : Colour (0xff0d1c2e).withAlpha (0.85f));
+    for (auto [dx, dy] : { std::pair { -1.0f, 0.0f }, { 1.0f, 0.0f }, { 0.0f, -1.0f }, { 0.0f, 1.0f }, { 1.0f, 1.0f } })
+        g.drawText (name, textArea.translated (dx, dy), Justification::centredLeft, false);
+    g.setColour (filled ? Colours::black : Colour (0xffffd56a));   // black on the gold (fixed) notes, bright gold on the blue
+    g.drawText (name, textArea, Justification::centredLeft, false);
+}
+
+void HoneyRoll::drawPitchLine (Graphics& g, Rectangle<float> vis)
+{
+    // One black line, as sung: through each note (Tuned = as it will play: moved with the note, its drift and vibrato as
+    // kept, so a steadied note draws flat; Original = as sung), and on from one note into the next when they're sung in
+    // one breath (gap under 0.2 s): the real slide between them (moved along with both notes), or a smooth curve
+    // across a consonant. A longer gap (a pause) leaves a space.
+    if (snap.track == nullptr || snap.notes.empty()) return;
+    const auto& t = *snap.track;
+    const bool original = model != nullptr && model->isOriginal();
+    const auto readings = static_cast<int> (t.midi.size());
+    auto shiftOf = [&] (int i)   // how far note i moves, with a drag in progress
     {
-        g.setFont (FontOptions (std::min (12.0f, static_cast<float> (rowHeight) * 0.62f), Font::bold));
-        const auto textArea = b.reduced (b.getHeight() * 0.45f, 0.0f);
-        if (filled)
-        {
-            g.setColour (Colours::black);   // black on the gold (fixed) notes
-            g.drawText (noteName (target), textArea, Justification::centredLeft, false);
-        }
+        const auto& v = snap.notes[static_cast<size_t> (i)];
+        return original ? 0.0 : (dragging && i == selected) ? dragTarget - v.note.pitch : v.note.target - v.note.pitch;
+    };
+    Path line;
+    bool open = false;          // a stroke is under way
+    Point<float> last;
+    auto put = [&] (Point<float> p) { if (! open) { line.startNewSubPath (p); open = true; } else line.lineTo (p); last = p; };
+    int prevShown = -1;         // the note drawn last (its line can carry on)
+    for (int i = 0; i < static_cast<int> (snap.notes.size()); ++i)
+    {
+        const auto [t0, t1] = span (i);
+        if (xOf (t1) < vis.getX() - 80.0f || xOf (t0) > vis.getRight() + 80.0f) { open = false; prevShown = -1; continue; }
+        const auto& n = snap.notes[static_cast<size_t> (i)].note;
+        // On from the note before?
+        const bool joined = prevShown == i - 1 && open && t0 - span (i - 1).second <= 0.2;
+        if (! joined) open = false;
         else
         {
-            // Bright gold on the blue notes, with a thin dark edge so it reads over the white pitch line.
-            g.setColour (Colour (0xff0d1c2e).withAlpha (0.85f));
-            for (auto [dx, dy] : { std::pair { -1.0f, 0.0f }, { 1.0f, 0.0f }, { 0.0f, -1.0f }, { 0.0f, 1.0f }, { 1.0f, 1.0f } })
-                g.drawText (noteName (target), textArea.translated (dx, dy), Justification::centredLeft, false);
-            g.setColour (Colour (0xffffd56a));
-            g.drawText (noteName (target), textArea, Justification::centredLeft, false);
+            const auto& pn = snap.notes[static_cast<size_t> (i - 1)].note;
+            const double shA = shiftOf (i - 1), shB = shiftOf (i);
+            const double inA = t.time[static_cast<size_t> (std::clamp (pn.lastReading, 0, readings - 1))];
+            const double inB = t.time[static_cast<size_t> (std::clamp (n.firstReading, 0, readings - 1))];
+            const double outA = span (i - 1).second, outB = t0;
+            // (Readings between notes far outside the two notes' range are a consonant misheard: skipped.)
+            const double from = t.midi[static_cast<size_t> (std::clamp (pn.lastReading, 0, readings - 1))];
+            const double to = t.midi[static_cast<size_t> (std::clamp (n.firstReading, 0, readings - 1))];
+            const double lo = std::min (from > 0.0 ? from : to, to > 0.0 ? to : from) - 1.5, hi = std::max (from, to) + 1.5;
+            for (int r = pn.lastReading + 1; r < n.firstReading && r < readings; ++r)
+            {
+                const double m = t.midi[static_cast<size_t> (r)];
+                if (m <= 0.0 || m < lo || m > hi) continue;   // (unsung moments: the curve below bridges them)
+                const double f = std::clamp ((t.time[static_cast<size_t> (r)] - inA) / std::max (1.0, inB - inA), 0.0, 1.0);
+                put ({ xOf (outA + (outB - outA) * f), yOf (m + shA + (shB - shA) * f) });
+            }
         }
+        // Through the note.
+        const auto sounding = original ? std::vector<double> {} : vox::honey::soundingLine (t, n);
+        const double drag = original ? 0.0 : shiftOf (i) - (n.target - n.pitch);   // (a drag in progress)
+        bool first = true;
+        for (int r = n.firstReading; r <= n.lastReading && r < readings; ++r)
+        {
+            const auto k = static_cast<size_t> (r - n.firstReading);
+            const double m = original ? t.midi[static_cast<size_t> (r)] : k < sounding.size() ? sounding[k] : 0.0;
+            if (m <= 0.0) { open = false; first = false; continue; }
+            if (std::abs (t.midi[static_cast<size_t> (r)] - n.pitch) > 6.0) continue;   // a reading misheard at the note's edge
+            const Point<float> p { xOf (shownTime (i, t.time[static_cast<size_t> (r)] / t.sampleRate)), yOf (m + drag) };
+            if (first && open && joined && p.getDistanceFrom (last) > 1.0f)
+            {
+                // Across a gap with nothing sung in it: an S-curve, level at both ends.
+                const float mx = 0.5f * (last.x + p.x);
+                line.cubicTo ({ mx, last.y }, { mx, p.y }, p);
+                last = p;
+            }
+            else put (p);
+            first = false;
+        }
+        prevShown = i;
     }
+    g.setColour (Colours::white.withAlpha (0.6f));   // a light edge, so it reads on the notes and the lanes
+    g.strokePath (line, PathStrokeType (3.4f, PathStrokeType::curved, PathStrokeType::rounded));
+    g.setColour (Colour (0xff10161e).withAlpha (0.92f));
+    g.strokePath (line, PathStrokeType (1.6f, PathStrokeType::curved, PathStrokeType::rounded));
 }
 
 void HoneyRoll::drawKeyboard (Graphics& g)
@@ -532,7 +626,7 @@ void HoneyRoll::drawKeyboard (Graphics& g)
     const Rectangle<float> keys (0.0f, grid.getY(), kKeysWidth, grid.getHeight());
     Graphics::ScopedSaveState save (g);
     g.reduceClipRegion (keys.toNearestInt());
-    honeytheme::drawMarble (g, keys, 0.3f);
+    honeytheme::drawMarble (g, keys, 0.2f, {}, true);
     const int top = static_cast<int> (std::ceil (topMidi)), bottom = static_cast<int> (std::floor (midiAt (grid.getBottom())));
     for (int m = top; m >= bottom; --m)
     {

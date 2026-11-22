@@ -26,7 +26,18 @@ struct Track
     std::vector<double> midi;      // fractional MIDI note; 0 = no note (breath, consonant, silence)
     std::vector<double> clarity;   // 0..1
     int aiChecked = 0, aiFixed = 0, aiFound = 0;   // AI check: moments checked, octave slips fixed, skipped notes found
+    // The clip's waveform (the editor draws each note as its waveform): per kLevelHopSeconds from the clip's start, the
+    // loudest sample (|x|) and the mean square; levelTop = how loud the singing gets (the 98th percentile of the peaks
+    // where a pitch was heard: the notes' full height in the editor).
+    static constexpr double kLevelHopSeconds = 0.001;
+    std::vector<float> level, power;
+    float levelTop = 0.0f;
 };
+
+/** The waveform's loudest sample between two clip moments (seconds; at least one step), 0 outside the clip. */
+float levelOver (const Track& track, double fromSeconds, double toSeconds);
+/** ... and its RMS there (the waveform's body, inside the peaks). */
+float rmsOver (const Track& track, double fromSeconds, double toSeconds);
 
 struct Note
 {

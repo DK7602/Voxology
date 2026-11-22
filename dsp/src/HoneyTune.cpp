@@ -161,6 +161,67 @@ void aiCheck (Track& t, const std::vector<float>& mono, double sr, const std::at
     }
 }
 
+float levelOver (const Track& t, double a, double b)
+{
+    if (t.level.empty()) return 0.0f;
+    const double hop = Track::kLevelHopSeconds;
+    const auto last = static_cast<long> (t.level.size()) - 1;
+    const auto i0 = static_cast<long> (std::floor (std::min (a, b) / hop)), i1 = static_cast<long> (std::floor (std::max (a, b) / hop));
+    if (i1 < 0 || i0 > last) return 0.0f;
+    float peak = 0.0f;
+    for (long i = std::max (0L, i0); i <= std::min (last, i1); ++i) peak = std::max (peak, t.level[static_cast<size_t> (i)]);
+    return peak;
+}
+
+float rmsOver (const Track& t, double a, double b)
+{
+    if (t.power.empty()) return 0.0f;
+    const double hop = Track::kLevelHopSeconds;
+    const auto last = static_cast<long> (t.power.size()) - 1;
+    const auto i0 = static_cast<long> (std::floor (std::min (a, b) / hop)), i1 = static_cast<long> (std::floor (std::max (a, b) / hop));
+    if (i1 < 0 || i0 > last) return 0.0f;
+    double sum = 0.0;
+    long count = 0;
+    for (long i = std::max (0L, i0); i <= std::min (last, i1); ++i, ++count) sum += t.power[static_cast<size_t> (i)];
+    return count > 0 ? static_cast<float> (std::sqrt (sum / static_cast<double> (count))) : 0.0f;
+}
+
+namespace {
+/** The waveform (Track::level, Track::power) and how loud the singing gets (levelTop: 98th percentile where a pitch was heard). */
+void measureLevel (Track& t, const std::vector<float>& mono, double sr)
+{
+    const auto hop = std::max<size_t> (1, static_cast<size_t> (std::lround (Track::kLevelHopSeconds * sr)));
+    const size_t steps = (mono.size() + hop - 1) / hop;
+    t.level.assign (steps, 0.0f);
+    t.power.assign (steps, 0.0f);
+    for (size_t k = 0; k < steps; ++k)
+    {
+        float peak = 0.0f;
+        double sum = 0.0;
+        const size_t a = k * hop, b = std::min (mono.size(), a + hop);
+        for (size_t i = a; i < b; ++i)
+        {
+            peak = std::max (peak, std::abs (mono[i]));
+            sum += static_cast<double> (mono[i]) * mono[i];
+        }
+        t.level[k] = peak;
+        t.power[k] = static_cast<float> (sum / static_cast<double> (b - a));
+    }
+    std::vector<float> sung;
+    for (size_t r = 0; r < t.midi.size(); ++r)
+        if (t.midi[r] > 0.0)
+        {
+            const auto k = static_cast<size_t> (t.time[r] / sr / Track::kLevelHopSeconds);
+            if (k < t.level.size()) sung.push_back (t.level[k]);
+        }
+    if (sung.empty()) sung = t.level;
+    if (sung.empty()) return;
+    const auto k = static_cast<long> (0.98 * static_cast<double> (sung.size() - 1));
+    std::nth_element (sung.begin(), sung.begin() + k, sung.end());
+    t.levelTop = sung[static_cast<size_t> (k)];
+}
+}
+
 Track analyse (const std::vector<float>& mono, double sr, bool ai, const std::atomic<bool>* cancel)
 {
     Track t;
@@ -224,6 +285,7 @@ Track analyse (const std::vector<float>& mono, double sr, bool ai, const std::at
         if (w.size() >= 3) t.midi[i] = median (w);
     }
     if (ai) aiCheck (t, mono, sr, cancel);
+    measureLevel (t, mono, sr);
     return t;
 }
 

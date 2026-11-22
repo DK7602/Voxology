@@ -32,8 +32,9 @@ public:
     void refresh();
     /** The Original | Tuned switch shows this (an edit made while on Original switches to Tuned: you hear what you did). */
     void showOriginal (bool o);
-    /** Playback position in the clip (seconds, negative = stopped): moves the playhead and the time readout. */
-    void setPlayhead (double seconds);
+    /** The host's position in the clip (seconds, negative = not in this clip) and whether it plays: moves the playhead
+        and the time readout. */
+    void setPlayhead (double seconds, bool playing);
 
     void paint (juce::Graphics&) override;
     void paintOverChildren (juce::Graphics&) override;
@@ -50,13 +51,12 @@ private:
     juce::Rectangle<float> frameArea() const;
     /** Lays out the top and bottom bars, each on one row or two; returns whether each fitted on the rows it was given. */
     std::pair<bool, bool> layoutBars (bool twoRowTop, bool twoRowBottom);
-    void drawDrips (juce::Graphics&, juce::Rectangle<float> frame);
 
     std::unique_ptr<honeytheme::Look> look;
     juce::Rectangle<float> topBar, bottomBar, titleArea, legendArea, logoArea, noteInfoArea, statusArea, readoutArea;
     double lastPosition = 0.0;
     std::vector<juce::Rectangle<float>> cards;
-    static constexpr float kFrame = 9.0f, kSeparator = 6.0f, kDripRoom = 0.0f;
+    static constexpr float kFrame = 9.0f, kSeparator = 6.0f, kTopBar = 60.0f;
     honeyui::Model* model = nullptr;
 
     juce::ComboBox key, scale;

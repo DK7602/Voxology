@@ -978,13 +978,14 @@ public:
     void processBlock (AudioBuffer<float>& buffer, MidiBuffer& midi) override
     {
         ScopedNoDenormals noDenormals;
-        // The song position, for the editor's playhead (the host always sends it here; the renderer's own
-        // stamp below only comes while a clip is being rendered).
+        // The song position, for the editor's playhead (the host sends it here, playing or stopped: then it's where its
+        // cursor is; the renderer's own stamp below only comes while a clip is being rendered).
         if (auto* ph = getPlayHead())
-            if (const auto pos = ph->getPosition(); pos.hasValue() && pos->getIsPlaying())
+            if (const auto pos = ph->getPosition(); pos.hasValue())
                 if (const auto t = pos->getTimeInSeconds())
                 {
                     songSeconds = *t;
+                    songPlaying = pos->getIsPlaying();
                     songStamp = Time::getMillisecondCounter();
                 }
         // Not applied as an ARA extension (or not ready): pass the audio through.
@@ -1002,7 +1003,8 @@ public:
     void setCurrentProgram (int) override {}
     const String getProgramName (int) override { return "Default"; }
     void changeProgramName (int, const String&) override {}
-    std::atomic<double> songSeconds { 0.0 };   // host song position while playing (audio thread -> editor)
+    std::atomic<double> songSeconds { 0.0 };   // host song position, playing or stopped (audio thread -> editor)
+    std::atomic<bool> songPlaying { false };
     std::atomic<uint32> songStamp { 0 };
 
     void getStateInformation (MemoryBlock&) override {}
@@ -1117,8 +1119,11 @@ private:
     void seek (double clipSeconds) override
     {
         if (dc == nullptr || state == nullptr) return;
+        // The playhead goes there at once (stopped, a host may not tell us its cursor moved until it plays).
+        heldSong = clipSeconds + panel.roll.getSnapshot().timeline.songOffset;
+        haveHeld = true;
         if (auto* playback = dc->getDocumentController()->getHostPlaybackController())
-            playback->requestSetPlaybackPosition (clipSeconds + panel.roll.getSnapshot().timeline.songOffset);
+            playback->requestSetPlaybackPosition (heldSong);
     }
 
     void onNewSelection (const ARAViewSelection& sel) override
@@ -1153,19 +1158,33 @@ private:
     {
         // While listening (or if a clip was removed), keep the status fresh.
         if (state == nullptr || ! state->alive) { state = nullptr; pickSource ({}); panel.refresh(); return; }
-        // Playhead: where the host is playing in this clip (hidden once playback stops). The song position
-        // the host gives this plug-in, mapped into the clip; else where the renderer last played the clip.
+        // Playhead: where the host is in this clip, playing or stopped. The song position the host gives this plug-in
+        // (its cursor too while stopped), mapped into the clip; else where the renderer last played the clip. When
+        // neither has spoken lately (stopped, and a host that doesn't run plug-ins then), it stays where it was last
+        // seen (song time: right for whichever clip is open).
         const auto now = Time::getMillisecondCounter();
-        double at = -1.0;
-        if (now - processor.songStamp.load() < 400)
+        const auto& tl = panel.roll.getSnapshot().timeline;
+        const double clipEnd = panel.roll.getSnapshot().seconds + 0.5;
+        const bool hostFresh = now - processor.songStamp.load() < 400, rendererFresh = now - state->playStamp.load() < 400;
+        const double rendererSong = state->playPosition.load() / std::max (1.0, state->sampleRate) + tl.songOffset;
+        bool playing = false;
+        if (hostFresh)
         {
-            const auto& tl = panel.roll.getSnapshot().timeline;
-            const double t = processor.songSeconds.load() - tl.songOffset;
-            if (t >= 0.0 && t <= panel.roll.getSnapshot().seconds + 0.5) at = t;
+            heldSong = processor.songSeconds.load();
+            playing = processor.songPlaying.load();
+            const double t = heldSong - tl.songOffset;
+            if ((t < 0.0 || t > clipEnd) && rendererFresh) { heldSong = rendererSong; playing = true; }
+            haveHeld = true;
         }
-        if (at < 0.0 && now - state->playStamp.load() < 400)
-            at = state->playPosition.load() / std::max (1.0, state->sampleRate);
-        panel.setPlayhead (at);
+        else if (rendererFresh)
+        {
+            heldSong = rendererSong;
+            playing = haveHeld = true;
+        }
+        double at = -1.0;
+        if (haveHeld)
+            if (const double t = heldSong - tl.songOffset; t >= 0.0 && t <= clipEnd) at = t;
+        panel.setPlayhead (at, playing);
         // Now and then: the status while listening, and the bars / beats if the song's tempo changed.
         if (++slowTicks % (state->status != 2 ? 15 : 45) == 0 && ! panel.roll.isMouseButtonDown()) panel.refresh();
     }
@@ -1175,6 +1194,8 @@ private:
     std::shared_ptr<SourceState> state;
     HoneyPanel panel;
     int slowTicks = 0;
+    double heldSong = 0.0;   // the playhead's last known song position (seconds)
+    bool haveHeld = false;
 };
 
 AudioProcessorEditor* HoneyProcessor::createEditor() { return new HoneyEditor (*this); }

@@ -361,7 +361,7 @@ Without a beat, Auto-Edit works exactly as before. The pro numbers come from 143
 
 ## Honey Tune: edit every note
 
-Honey Tune shows each sung note as a honeycomb cell on a piano roll, so you can fix single notes by hand. It needs a DAW with ARA (Cubase Artist or Pro, Studio One, Logic, Reaper, Cakewalk). Cubase Elements has no ARA.
+Honey Tune shows each sung note as its waveform on a piano roll, so you can fix single notes by hand. It needs a DAW with ARA (Cubase Artist or Pro, Studio One, Logic, Reaper, Cakewalk). Cubase Elements has no ARA.
 
 **Open it in Cubase**: select the vocal clip, then **Audio > Extensions > Honey Tune**. It listens to the clip first (a few seconds per minute of audio), including an AI pitch check that fixes octave slips and finds missed notes. The status line reports what it found. The **?** button at the top right opens this manual.
 
@@ -379,11 +379,13 @@ Honey Tune shows each sung note as a honeycomb cell on a piano roll, so you can 
 
 | Look | Meaning |
 | --- | --- |
-| Blue marble cell | The note plays as sung, in key |
-| Gold cell | Honey Tune pulled it onto the key |
+| Light blue note | The note plays as sung, in key |
+| Its shape | The sung waveform: taller = louder (the clip's loud singing is the full height); the darker core is its average loudness |
+| Gold note | Honey Tune pulled it onto the key |
 | Red glow | It will play off-key (also when you drag a note onto an off-key note) |
-| Dashed ghost cell | Where the note was sung, after you move it |
-| Line inside a cell | The pitch the note will play, with its drift and vibrato as you keep them (Original: as sung). A note you steady draws flat |
+| Dashed outline | Where the note was sung, after you move it |
+| Black line | The pitch the note will play, with its drift and vibrato as you keep them (Original: as sung). A note you steady draws flat. It runs on into the next note when you sang them in one breath: the slide between them |
+| Sand-gold lanes | Notes outside the key (on Chromatic: the black keys) |
 
 **Top bar**
 
@@ -399,9 +401,10 @@ Honey Tune shows each sung note as a honeycomb cell on a piano roll, so you can 
 - Drag the middle sideways: move it in time. Drag an end: make it longer or shorter.
 - Double-click: snap it to the key. **Delete**: reset it. Arrow keys: up / down = one semitone, left / right = next note.
 - Bottom bar for the selected note: **NOTE DRIFT**, **NOTE VIBRATO**, **NOTE FORMANT** (+ thinner, − deeper; pitch stays), **Snap note to key**, **Reset note**, **Reset all notes**.
-- **A wobbly note**: moving a note (or snapping it) keeps its wobble, on purpose: it moves the note as sung. To steady it, set **NOTE DRIFT** and **NOTE VIBRATO** to 0 (both: the wobble of a shaky voice is mostly "vibrato", and DRIFT alone leaves most of it). The note's line says "wobbles 30 cents..." while it moves, and "steadied" after; the line in the cell goes flat. For the whole clip use KEEP DRIFT / KEEP VIBRATO. A very wobbly note can show as two cells: steady both.
+- **A wobbly note**: moving a note (or snapping it) keeps its wobble, on purpose: it moves the note as sung. To steady it, set **NOTE DRIFT** and **NOTE VIBRATO** to 0 (both: the wobble of a shaky voice is mostly "vibrato", and DRIFT alone leaves most of it). The note's line says "wobbles 30 cents..." while it moves, and "steadied" after; the line through the note goes flat. For the whole clip use KEEP DRIFT / KEEP VIBRATO. A very wobbly note can show as two notes: steady both.
 - Every slider (top and bottom bar): click the number box next to it to type an exact value, then press **Enter**.
-- **Ctrl+Z** undo, **Ctrl+Y** redo. Click the ruler to move the playhead. Mouse wheel scrolls; Ctrl+wheel or + / − zooms.
+- **Ctrl+Z** undo, **Ctrl+Y** redo. Mouse wheel scrolls; Ctrl+wheel or + / − zooms.
+- **Playhead**: it follows the song while it plays and stays where playback stops (or wherever the DAW's cursor is), so you can see where you are while you edit. Click or drag the ruler to move it.
 
 Your edits are saved with the Cubase project.
 

@@ -460,3 +460,34 @@ TEST_CASE ("Honey Tune: the line drawn in a note is what it will play", "[honey]
     const auto y = render (x, kSr, t, one);
     CHECK (midiOf (hzAt (y, n.start / kSr + 0.4, 0.1)) == Approx (n.target).margin (0.05));
 }
+
+TEST_CASE ("Honey Tune: the waveform outline the editor draws the notes with", "[honey]")
+{
+    // Four notes, the third sung half as loud: the outline follows, notes reach the top, the gaps stay low.
+    auto x = sing (kLine);
+    const auto third = static_cast<size_t> (2 * 0.53 * kSr), thirdEnd = static_cast<size_t> ((2 * 0.53 + 0.45) * kSr);
+    for (size_t i = third; i < thirdEnd && i < x.size(); ++i) x[i] *= 0.5f;
+    const auto t = analyse (x, kSr);
+    const double hop = Track::kLevelHopSeconds;
+    REQUIRE (t.level.size() == static_cast<size_t> (std::ceil (static_cast<double> (x.size()) / std::round (hop * kSr))));
+    float peak = 0.0f;
+    for (float v : x) peak = std::max (peak, std::abs (v));
+    CHECK (*std::max_element (t.level.begin(), t.level.end()) == Approx (peak).epsilon (1.0e-6));   // the true peaks
+    const auto mid = [&] (int k) { return levelOver (t, noteMid (k) - 0.05, noteMid (k) + 0.05); };
+    REQUIRE (t.levelTop > 0.0f);
+    CHECK (t.levelTop <= peak);
+    CHECK (t.levelTop == Approx (mid (0)).epsilon (0.2));   // the full height = the loud notes (most of the singing)
+    CHECK (mid (0) == Approx (mid (1)).epsilon (0.15));
+    CHECK (mid (2) == Approx (0.5 * mid (1)).epsilon (0.15));
+    CHECK (levelOver (t, noteMid (0) + 0.24, noteMid (0) + 0.26) < 0.1f * mid (0));   // the breath between
+    // The body (RMS) sits inside the peaks, and halves with them.
+    const auto body = [&] (int k) { return rmsOver (t, noteMid (k) - 0.05, noteMid (k) + 0.05); };
+    CHECK (body (0) < mid (0));
+    CHECK (body (0) > 0.2f * mid (0));
+    CHECK (body (2) == Approx (0.5 * body (1)).epsilon (0.15));
+    REQUIRE (t.power.size() == t.level.size());
+    // At least one step even for a moment; nothing outside the clip.
+    CHECK (levelOver (t, noteMid (1), noteMid (1)) > 0.0f);
+    CHECK (levelOver (t, -1.0, -0.5) == 0.0f);
+    CHECK (levelOver (t, 1.0e3, 1.1e3) == 0.0f);
+}

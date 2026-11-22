@@ -2,21 +2,21 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-/** Honey Tune's look: blue-and-white liquid marble, polished gold, honey drips. */
+/** Honey Tune's look: cream marble behind the notes, blue-and-white marble notes, polished gold. */
 namespace honeytheme {
 
 const juce::Colour ink { 0xff142a44 }, navy { 0xff1d4f8a }, deepBlue { 0xff2c5a8a }, glow { 0xff7fd3ff };
 const juce::Colour gold { 0xffc9952f }, goldLight { 0xfff6d682 }, goldDeep { 0xff7f5a18 }, night { 0xff121a24 };
 
-juce::Image marble();   // 1600 x 1000 blue / white liquid marble
+juce::Image marble();   // 1600 x 1000 blue / white liquid marble (the notes, the slider knobs)
+juce::Image creamMarble();   // 1600 x 1000 quiet cream marble (behind the notes: the roll, the keyboard)
 juce::Image goldTexture();
 juce::Image logo();
 juce::Image title();
 juce::Image creamPanel();   // Voxology's header marble
-juce::Image drip (int which);   // 0..2: the honey drips from the mockup
 
-/** Marble across `area` (fills it, cropped), washed toward white by `wash` (0..1). */
-void drawMarble (juce::Graphics&, juce::Rectangle<float> area, float wash, juce::Point<float> offset = {});
+/** Marble across `area` (fills it, cropped), washed toward white by `wash` (0..1): the cream marble when `cream`. */
+void drawMarble (juce::Graphics&, juce::Rectangle<float> area, float wash, juce::Point<float> offset = {}, bool cream = false);
 /** Fill a path with marble (a patch chosen by `seed`, scaled down so the veins are fine). */
 void fillMarble (juce::Graphics&, const juce::Path&, int seed, float wash, float opacity = 1.0f);
 /** Fill a path with polished gold (texture + light from the top). */
@@ -31,8 +31,6 @@ void drawCreamGlass (juce::Graphics&, juce::Rectangle<float> r, float corner);
 void drawCaps (juce::Graphics&, const juce::String&, juce::Rectangle<float>, juce::Font, juce::Justification);
 /** A gold frame (bevelled border) of `thickness` around `r`, rounded. */
 void drawGoldFrame (juce::Graphics&, juce::Rectangle<float> r, float thickness, float corner);
-/** Honey drips hanging from the line y = `edgeY` between x0 and x1 (deterministic per seed). */
-void drawDrips (juce::Graphics&, float x0, float x1, float edgeY, float maxLength, int count, int seed);
 /** Translucent white glass behind text / controls so they read on marble. */
 void drawGlass (juce::Graphics&, juce::Rectangle<float> r, float corner, float alpha = 0.72f);
 
