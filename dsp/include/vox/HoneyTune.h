@@ -115,7 +115,10 @@ std::vector<double> soundingLine (const Track& track, const Note& note);
 /** How much the note still moves as it will sound (cents, rms around its middle, attack and release left out). */
 double movementCents (const Track& track, const Note& note);
 
-/** How long a moved note takes to reach its new pitch (render(), renderPart()). */
+/** How long the change from one note's move to the next takes where they're sung on into each other (render(),
+    renderPart()): made in the note that moves less (ending / starting at the join, so a moved note is at its new pitch
+    from its first moment to its last); around the join, following the singer's glide, where both move about as much or
+    the moves change against the way the singer steps. */
 inline constexpr double kTransitionMs = 25.0;
 
 /** The clip with the edits (same length, aligned with the input). All channels through one shifter (a stereo image

@@ -631,6 +631,87 @@ TEST_CASE ("Honey Tune: a moved note's attack and release move with it, and it k
     CHECK (rms (y, 0.05, 0.45) == Approx (rms (x, 0.05, 0.45)).margin (0.1));   // the untouched neighbours as they were
 }
 
+namespace {
+/** Notes sung on into each other (no breath between): `glide` seconds of pitch glide at each join, phase continuous; a
+    soft voice (harmonics falling 12 dB an octave: no sharp edge in its wave, so a click in a render stands out). */
+std::vector<float> singOn (const std::vector<double>& pitches, double noteLen, double glide)
+{
+    std::vector<float> x;
+    Biquad formant; design::apply (formant, design::bell (700.0, 9.0, 2.0, kSr));
+    double ph = 0.0;
+    const double total = static_cast<double> (pitches.size()) * noteLen;
+    for (size_t i = 0; i < static_cast<size_t> (total * kSr); ++i)
+    {
+        const double tt = static_cast<double> (i) / kSr;
+        const auto k = std::min (pitches.size() - 1, static_cast<size_t> (tt / noteLen));
+        const double into = tt - static_cast<double> (k) * noteLen + 0.5 * glide;   // (each glide centred on its join)
+        double m = pitches[k];
+        if (k > 0 && into < glide) m = pitches[k - 1] + (pitches[k] - pitches[k - 1]) * (0.5 - 0.5 * std::cos (std::numbers::pi * into / glide));
+        else if (k + 1 < pitches.size() && into > noteLen) m = pitches[k] + (pitches[k + 1] - pitches[k]) * (0.5 - 0.5 * std::cos (std::numbers::pi * (into - noteLen) / glide));
+        const double f = 440.0 * std::pow (2.0, (m - 69.0) / 12.0);
+        ph += f / kSr;
+        double v = 0.0;
+        for (int h = 1; h * f < 8000.0; ++h) v += std::sin (2 * std::numbers::pi * h * ph) / (h * h);
+        const double env = std::min ({ 1.0, tt / 0.02, (total - tt) / 0.02 });
+        x.push_back (static_cast<float> (0.1 * env * formant.process (v)));
+    }
+    return x;
+}
+
+/** The largest step from one sample to the next in [a, b) seconds (a click is a step the voice itself never takes). */
+double steepest (const std::vector<float>& x, double a, double b)
+{
+    double most = 0.0;
+    for (auto i = static_cast<size_t> (a * kSr) + 1; i < static_cast<size_t> (b * kSr) && i < x.size(); ++i) most = std::max (most, static_cast<double> (std::abs (x[i] - x[i - 1])));
+    return most;
+}
+}
+
+TEST_CASE ("Honey Tune: a note moved away from the notes it's sung on with is at its new pitch from its first moment, without a click", "[honey]")
+{
+    // A3 C4 A3 sung on into each other (30 ms glides); only the middle one moved. Up 5 (the way the singer steps into it
+    // and out): its first and last 30 ms sound at the new pitch, the change of move is made in its unmoved neighbours'
+    // edges (it used to straddle each join, so the note slid in from the old pitch for ~20 ms: 65 cents off here, 80 on
+    // average over a moved note's first 40 ms on real vocals). Down 5 (against the singer's steps): the change follows
+    // the singer's glides around the joins, so the voice never runs on past either note's new pitch (a bump or a dip).
+    const auto x = singOn ({ 57, 60, 57 }, 0.45, 0.03);
+    const auto t = analyse (x, kSr);
+    const auto found = findNotes (t);
+    REQUIRE (found.size() == 3);
+    const double sungStart = 0.45, sungEnd = 0.9;   // note 1 as synthesised (the middle of its glides)
+    for (const double move : { 5.0, -5.0 })
+    {
+        auto notes = found;
+        notes[1].target = notes[1].pitch + move;
+        const auto y = render (x, kSr, t, notes);
+        INFO ("move " << move << ": note 1 found at " << notes[1].start / kSr << " - " << notes[1].end / kSr << " s");
+        if (move > 0.0)
+        {
+            CHECK (midiOf (hzAt (y, sungStart + 0.004, 0.03)) == Approx (60.0 + move).margin (0.25));
+            CHECK (midiOf (hzAt (y, sungEnd - 0.034, 0.03)) == Approx (60.0 + move).margin (0.25));
+        }
+        CHECK (midiOf (hzAt (y, sungStart + 0.1, 0.25)) == Approx (60.0 + move).margin (0.05));
+        CHECK (midiOf (hzAt (y, 0.2, 0.1)) == Approx (57.0).margin (0.05));   // the neighbours as sung, but for their edge
+        CHECK (midiOf (hzAt (y, 1.1, 0.1)) == Approx (57.0).margin (0.05));
+        // Where it glides from one note to the next the voice stays between their new pitches.
+        for (const double join : { sungStart, sungEnd })
+            for (double at = join - 0.04; at < join + 0.04; at += 0.01)
+            {
+                const double m = midiOf (hzAt (y, at - 0.005, 0.01));
+                INFO ("at " << at << " s: " << m);
+                CHECK (m > std::min (57.0, 60.0 + move) - 0.3);
+                CHECK (m < std::max (57.0, 60.0 + move) + 0.3);
+            }
+        // No click where the move changes: no step there steeper than the voice takes in the middle of either note.
+        const double voice = std::max (steepest (y, 0.15, 0.35), steepest (y, sungStart + 0.1, sungEnd - 0.1));
+        for (const double join : { sungStart, sungEnd })
+        {
+            INFO ("join at " << join << " s: steepest step " << steepest (y, join - 0.03, join + 0.03) / voice << " of the voice's own");
+            CHECK (steepest (y, join - 0.03, join + 0.03) < 1.25 * voice);
+        }
+    }
+}
+
 TEST_CASE ("Honey Tune: a stereo clip keeps its image (both channels through one shifter)", "[honey]")
 {
     // The same voice on both sides, the right one with a short echo (a room): after a +3 move the side signal stays as

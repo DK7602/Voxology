@@ -1003,10 +1003,22 @@ std::vector<double> planShift (const Track& t, const std::vector<Note>& notes, d
             continue;
         }
         if (std::abs (mB - mA) < 1.0e-9) continue;
+        // One moved a semitone or more further than the other (a note moved, its neighbour not): the change is made in the
+        // one that moves less, an S-curve over the transition time ending at the join (side +1: in A's end) or starting
+        // there (-1: in B's start), so the note moved further is at its new pitch from its first moment to its last. (Made
+        // around the join, the moved note slid in from its old pitch for its first ~20 ms: 80 cents off on average over
+        // its first 40 ms on real vocals, AUDIT-ENGINE.md #1.) Moves of about the same size (within half a semitone:
+        // Snap's corrections, two notes moved the same amount either way): around the join, as below; in between, part of
+        // the way. But where the singer steps / glides one way and the moves change the other way (A3 -> B3 sung, A3 moved
+        // up to B3, or B3 moved down to A3), the half of the glide in the note moved further would run on past the other
+        // note's new pitch, a bump or a dip (AUDIT-ENGINE.md #12): there the move follows the singer's glide around the join.
+        const double more = std::abs (mB) - std::abs (mA);
+        const bool against = (B.pitch - A.pitch) * (mB - mA) < 0.0 && std::abs (B.pitch - A.pitch) > 0.6;
+        const double side = against ? 0.0 : std::clamp ((std::abs (more) - 0.5) / 0.5, 0.0, 1.0) * (more > 0.0 ? 1.0 : -1.0);
         // Sung on into each other: the singer's glide between the two notes' pitches, if there is one around the join.
         const long g0 = std::max<long> (A.firstReading, fb - glideReach), g1 = std::min<long> (B.lastReading, la + glideReach);
         bool shaped = false;
-        if (std::abs (B.pitch - A.pitch) >= 0.5 && g1 > g0 + 2)
+        if (side == 0.0 && std::abs (B.pitch - A.pitch) >= 0.5 && g1 > g0 + 2)
         {
             std::vector<double> p;
             double hi = 0.0;
@@ -1026,8 +1038,11 @@ std::vector<double> planShift (const Track& t, const std::vector<Note>& notes, d
             }
         }
         if (! shaped)
-            for (long i = std::max<long> (A.firstReading, fb - edge); i <= std::min<long> (B.lastReading, la + edge); ++i)
-                base[static_cast<size_t> (i)] = mA + (mB - mA) * ease (static_cast<double> (i - (fb - edge)) / static_cast<double> (2 * edge));
+        {
+            const double c = static_cast<double> (fb) - side * static_cast<double> (edge);   // the S-curve's middle
+            for (auto i = std::max<long> (A.firstReading, static_cast<long> (std::floor (c)) - edge); i <= std::min<long> (B.lastReading, static_cast<long> (std::ceil (c)) + edge); ++i)
+                base[static_cast<size_t> (i)] = mA + (mB - mA) * ease ((static_cast<double> (i) - (c - static_cast<double> (edge))) / static_cast<double> (2 * edge));
+        }
     }
     std::vector<double> shift (n, 0.0);
     for (size_t i = 0; i < n; ++i) shift[i] = base[i] + detail[i];
