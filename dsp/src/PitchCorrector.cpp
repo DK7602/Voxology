@@ -195,7 +195,9 @@ void PitchCorrector::analyse() noexcept
         // Parabolic interpolation, then refine at full rate by normalised cross-correlation.
         const double a = cmnd[pick - 1], b = cmnd[pick], c = cmnd[pick + 1];
         const double den = a - 2.0 * b + c;
-        const double tauD = static_cast<double> (pick) + (std::abs (den) > 1.0e-12 ? 0.5 * (a - c) / den : 0.0);
+        // (Within half a lag of the pick: a nearly flat dip, a period past tauMax below ~75 Hz, made the step huge and
+        // the period negative: a NaN reading.)
+        const double tauD = static_cast<double> (pick) + (std::abs (den) > 1.0e-12 ? std::clamp (0.5 * (a - c) / den, -0.5, 0.5) : 0.0);
         const double pEst = tauD * dec;
         const int lo = std::max (8, static_cast<int> (std::floor (pEst)) - dec - 1);
         const int hi = static_cast<int> (std::ceil (pEst)) + dec + 1;

@@ -2,6 +2,8 @@
 #include "vox/HoneyTune.h"
 #include "vox/Crepe.h"
 
+#include <limits>
+
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -551,4 +553,28 @@ TEST_CASE ("Honey Tune: a note pushed into its neighbour or past the clip's end 
         for (size_t i = 1; i < map.out.size(); ++i) { REQUIRE (map.out[i] >= map.out[i - 1]); REQUIRE (map.in[i] >= map.in[i - 1]); }
         CHECK (map.out.back() == clip);
     }
+}
+
+TEST_CASE ("Honey Tune: a very low voice gives no NaN reading, and a NaN can't stall finding the notes", "[honey]")
+{
+    // C2 (65 Hz) and lower: the detector's dip sits near the end of its range (it once gave a negative period: NaN).
+    for (double midi : { 36.0, 33.0 })
+    {
+        const auto x = sing ({ { midi, 1.5, 0.2 }, { midi + 2.0, 1.0, 0.2 } });
+        const auto t = analyse (x, kSr, false);
+        for (double m : t.midi) REQUIRE (std::isfinite (m));
+        for (double c : t.clarity) REQUIRE (std::isfinite (c));
+    }
+    // A track with a NaN in it (from anywhere): findNotes still finishes and skips it.
+    Track t;
+    t.sampleRate = kSr;
+    for (int i = 0; i < 400; ++i)
+    {
+        t.time.push_back (i * 128.0);
+        t.midi.push_back (i == 150 ? std::numeric_limits<double>::quiet_NaN() : (i > 20 && i < 380 ? 60.0 : 0.0));
+        t.clarity.push_back (0.9);
+    }
+    const auto notes = findNotes (t);
+    CHECK (! notes.empty());
+    for (const auto& n : notes) CHECK (std::isfinite (n.pitch));
 }

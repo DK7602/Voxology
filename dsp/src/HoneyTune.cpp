@@ -249,9 +249,10 @@ Track analyse (const std::vector<float>& mono, double sr, bool ai, const std::at
         if (r.time > lastTime + 0.5)
         {
             lastTime = r.time;
+            const bool sung = r.voiced && std::isfinite (r.sungMidi) && r.sungMidi > 0.0;   // (never a NaN reading)
             t.time.push_back (r.time);
-            t.midi.push_back (r.voiced ? r.sungMidi : 0.0);
-            t.clarity.push_back (r.voiced ? r.clarity : 0.0);
+            t.midi.push_back (sung ? r.sungMidi : 0.0);
+            t.clarity.push_back (sung && std::isfinite (r.clarity) ? r.clarity : 0.0);
         }
     }
     const size_t n = t.midi.size();
@@ -340,7 +341,7 @@ std::vector<Note> findNotes (const Track& t)
     size_t i = 0;
     while (i < n)
     {
-        if (t.midi[i] <= 0.0) { ++i; continue; }
+        if (! (t.midi[i] > 0.0)) { ++i; continue; }   // (written so a NaN counts as unsung: it can't stall the loop)
         size_t start = i, j = i;
         double ref = sm[i];
         std::vector<double> sofar;
@@ -366,7 +367,7 @@ std::vector<Note> findNotes (const Track& t)
             notes.back().lastReading = static_cast<int> (j - 1);   // a too-short tail joins the note before
             notes.back().end = t.time[j - 1];
         }
-        i = j;
+        i = std::max (j, i + 1);   // always on
     }
     return notes;
 }
