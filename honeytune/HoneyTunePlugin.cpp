@@ -721,9 +721,10 @@ public:
             for (auto* r : editorRenderers) if (r->serves (region)) { target = r; break; }
         if (target == nullptr && editorRenderers.size() == 1) target = editorRenderers.front();   // (a host that binds none to it)
         if (st == nullptr || target == nullptr || toSec <= fromSec) { stopAudition(); return false; }
-        // The clips asked for lately stay alive here (the audio thread may still be reading the one it played).
+        // The clip asked for before stays alive here (the audio thread may still be reading it this instant; it moves
+        // on to the new request at its next block).
         held.push_back (st);
-        if (held.size() > 8) held.erase (held.begin());
+        if (held.size() > 3) held.erase (held.begin());
         const SpinLock::ScopedLockType sl (auditionLock);
         auditionNow.renderer = target;
         auditionNow.state = st.get();
