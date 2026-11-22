@@ -2199,3 +2199,11 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   their note (timeMap with the track; AUDIT-ENGINE.md #5), octave errors on high / breathy voices (checkPeriods,
   holdVoicing; AUDIT-ENGINE.md #13). docs/honey-audit/PLAN.md "Beta 40" has the numbers. Next: PLAN.md "Next"
   (Beta 41 needs the user's go).
+- v0.77.0 (Beta 41, the user's go): note level and mute (Note.gainDb / muted, applyLevels after matchLoudness; Ctrl +
+  drag, M), notes to check (findChecks: split / outOfKey / between / wobbly; amber dot, N next, D fix, "It's fine"),
+  time moves on the beat (Timeline::nearestLine; Alt free), key notes in / out (Settings.added / removed, KeyGrid; Alt +
+  click a key, right-click a key) and tuning (Settings.a4; Auto = the beat's tuneCents from Voxology, honeylink layout
+  2), archive HNY6; the ? opens Honey Tune's quick start + keys table first (HoneyManual). Moved notes' starts
+  (AUDIT-ENGINE.md #1: planShift's change in the note that moves less, Track.filled 2 voiced gaps, guided offset reset
+  at -60 dB): first 40 ms 49 / 43 / 25 -> 19 / 22 / 11 c at +5 / -5 / +2 st. Tests: tests/test_honey_edit.cpp.
+  docs/honey-audit/PLAN.md "Beta 41" has the details. Next: PLAN.md "Next" (later items need the user's go).

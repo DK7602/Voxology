@@ -126,7 +126,14 @@ Measured with the engine review's own tools (scratch: /tmp/claude-0/audit-eng-wo
 - H2 tuning: Settings.a4 (0 = Auto); Auto = the beat's tuning from the Voxology on this track (honeylink layout 2:
   VoxInfo.tuneCents, published from meters.bkTune when its key follows the beat; Honey Tune ignores < 2 c changes).
   KeyGrid.tune moves every key note. Right-click a key > Tuning (Auto, 432 - 446 Hz). The status line shows it.
-- Attack of moved notes (Beta 40's side effect): see AUDIT-ENGINE.md.
+- Attack of moved notes (Beta 40's side effect, AUDIT-ENGINE.md #1): planShift makes the change from one note's move to
+  the next in the note that moves less (ending / starting at the join) when one moves a semitone or more further, except
+  where the moves change against the singer's step (#12, kept as Beta 40); voice in a <= 30 ms gap between notes
+  (Track.filled 2) is shifted on a straight line between them when a neighbour moves > 0.55 st; the shifter's offset
+  goes back to zero at -60 dB (was -70) when guided. 13 real vocals, first 40 ms of a moved note +5 / -5 / +2 st:
+  Beta 39 42 / 36 / 23 c, Beta 40 49 / 43 / 25 c -> 19 / 22 / 11 c; middles and Snap as before; untouched notes exact
+  548 -> 612 of 2330. Costs: the unmoved neighbour's edge takes the change; clicks at -5 st 2 % above Beta 39 (1 %
+  under Beta 40). Open: against-the-step joins (~80 c), short voiced gaps (31 - 39 c).
 - Tests: tests/test_honey_edit.cpp ([level], [keygrid], [checks], [beat], [link]).
 
 ## Next (in order)
