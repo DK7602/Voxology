@@ -158,6 +158,76 @@ reading) rather than copy one value.
 *Melodyne:* the whole blob, including its attack, moves to the new pitch. Transitions are only smoothed between connected
 notes (Pitch Transition tool) *(believed)*.
 
+**Fixed in Beta 41** (`planShift`, `extendToOnsets`, `Plan` in `HoneyTune.cpp`; one guided-only line in
+`PitchCorrector.cpp`). What was left of the slow start in Beta 40 was not the attack itself: a moved note's own attack, after
+a gap, was already 11 c off (median) over its first 40 ms. 45 % of the moved notes on real vocals are sung straight on from
+the note before (gap under 6 ms), and there the change from the neighbour's move to the note's was made around the join
+(25 ms, or the singer's glide), so the note's first ~20 ms slid in from its old pitch: 80 c off (median) over its first
+40 ms. Notes after a short gap (6-60 ms) whose voice carried on through it: about 50 c, because that voice had no pitch
+reading and stayed at the old pitch right before the moved note. Beta 40 measured worse than Beta 39 because more notes
+now include their start (it used to be a separate, unmoved fragment).
+- Two notes sung on into each other whose moves differ by a semitone or more: the change is an S-curve over the transition
+  time in the note that moves less, ending at the join (or starting there), so the note moved further is at its new pitch
+  from its first moment to its last. Moves within half a semitone of each other (Snap) keep the old behaviour; so do joins
+  where the moves change against the way the singer steps (A3 -> B3 sung, A3 moved up to B3): there the moved half of the
+  glide would run on past the neighbour's new pitch (a bump or a dip, #12), so the change follows the singer's glide.
+- Voice left between two notes (an unsung stretch of at most 30 ms that repeats like a voice and is within 30 dB of the
+  notes: a soft consonant, a dip) is marked (`Track::filled` = 2, still no note's, no pitch), and the render shifts it
+  along from one note's move to the next, at a pitch straight from one note to the other, where a note next to it moves
+  by more than half a semitone (Snap's corrections leave it as sung).
+- Following a guide, the shifter's offset goes back to zero where both read positions are 60 dB down (was -70 dB, digital
+  silence only), so untouched notes after an edit come out exactly as recorded past a take's quiet gaps too (#11).
+
+Same moves on the same moments in all three builds (13 real vocals, every 4th note of 0.2 s or more as Beta 39 found
+them; each clip's median, then the mean over the clips; tools `attack_real.cpp` / `attack_syn.cpp` in
+`/tmp/claude-0/vox-attack-tools`):
+
+| Real vocals | Beta 39 | Beta 40 | Beta 41 |
+|---|---|---|---|
+| First 40 ms of a moved note, +5 / -5 / +2 st (c) | 42.3 / 35.8 / 23.3 | 48.8 / 42.5 / 24.9 | 18.6 / 21.8 / 11.4 |
+| First 20 ms, +5 / -5 / +2 (c) | 95.5 / 85.5 / 41.1 | 100.4 / 88.8 / 45.6 | 34.3 / 39.0 / 16.6 |
+| Last 40 ms, +5 / -5 / +2 (c) | 25.6 / 21.0 / 13.8 | 26.4 / 21.4 / 15.2 | 18.1 / 16.2 / 10.6 |
+| Middle, +5 / -5 / +2 (c) | 3.2 / 2.3 / 2.3 | 3.3 / 2.3 / 2.3 | 3.3 / 2.3 / 2.2 |
+| Snap 100 %: first 40 / first 20 / last 40 ms (c) | 5.1 / 7.2 / 5.1 | 4.9 / 6.3 / 5.0 | 4.8 / 6.2 / 4.9 |
+| Clicks, +5 / -5 / +2 (input 3951) | 3745 / 4603 / 3921 | 3758 / 4783 / 3910 | 3768 / 4689 / 3972 |
+| Clicks, -3 / -4 / -5 / -6 st together | 18367 | 18720 | 18523 |
+| Untouched notes sample-exact, +5 / -5 / +2 | 552 / 541 / 552 of 2441 | 548 / 548 / 555 of 2330 | 612 / 616 / 633 of 2330 |
+| Unmoved neighbour's 40 ms next to a moved note it's sung on with, +5 / -5 / +2 (c) | 62.4 / 61.9 / 29.8 | 66.9 / 67.7 / 27.2 | 55.3 / 68.7 / 30.7 |
+
+Synthetic notes (8 voices 110-440 Hz, each with soft, scooped, after-"s", after-"t" and breathy starts, a legato pair, a
+legato trio and a quick run of syllables through level dips; first 40 ms vs input + move):
+
+| Synthetic | Beta 39 | Beta 40 | Beta 41 |
+|---|---|---|---|
+| Every note moved +5 / -5 / +2 / -2 / +12 (c) | 28.4 / 21.8 / 18.2 / 20.5 / 36.0 | 28.7 / 21.5 / 18.3 / 19.9 / 34.4 | 11.2 / 10.9 / 5.8 / 6.2 / 26.1 |
+| Some notes moved, their neighbours not, +5 / -5 / +2 / -2 (c) | 73.8 / 59.4 / 47.8 / 48.0 | 75.3 / 60.8 / 48.2 / 47.2 | 44.4 / 58.1 / 28.8 / 40.1 |
+| Same, the unmoved neighbours' 40 ms next to them (c) | 41.4 / 35.4 / 25.1 / 26.4 | 39.8 / 35.2 / 25.7 / 24.6 | 55.9 / 48.9 / 34.9 / 32.1 |
+| Middle / last 40 ms / settle / level | | | as Beta 40 (within 0.1 c / 0.3 c / 2 ms / 0.15 dB) |
+| Clicks, all synthetic renders (ideal 3881) | 3961 | 3991 | 4021 |
+
+Unchanged (identical output to Beta 40): isolated notes (`audit_render shift`), time moves and stretches, unvoiced sounds
+between moved notes, legato pairs moved apart or one of them against the singer's step, stereo. Render time the same
+(1.19-1.29 s/min against 1.21-1.23 on one clip); analysis without the AI the same. (With the AI on, the analysis time
+moved by up to 15 % between builds of the same code linked differently, so it isn't a usable comparison here.)
+
+What it costs, and what is still open:
+- The change of move now happens in the unmoved neighbour's edge (a 21 ms S-curve) instead of around the join, so that
+  edge is further off its own pitch in some cases (synthetic +5: 40 -> 56 c over its 40 ms next to the moved note; real
+  vocals about as before). Some change has to happen somewhere; it now happens in the note the user didn't move.
+- Joins where the moves change against the singer's step keep Beta 40's behaviour: there the moved note's first 40 ms
+  are still about 80 c off input + move (median; 16 % of the moved notes at +5, 26 % at -5, on real vocals). Making the
+  change in the neighbour there too, then holding the voice between the two new pitches, measured better (first 40 ms
+  17 c at +5 and -5) but still dipped 0.9 semitone on a fast 30 ms glide (the pitch readings lag such a glide), where
+  Beta 40 doesn't dip; not done. Synthetic "some notes moved" -5 is mostly such joins.
+- By kind, real vocals, +5 / -5 st, median first 40 ms, Beta 40 -> 41: sung straight on, with the step 77 / 82 -> 11 / 15 c;
+  against it 83 / 82 -> 84 / 81 c; after a short voiced gap 52 / 49 -> 39 / 31 c (the gap's pitch is a straight line
+  between the notes, not tracked); after a longer gap 11 / 11 -> 12 / 9 c.
+- Clicks on downward moves: still 1 % more than Beta 39 over -3 ... -6 st together (18523 vs 18367; Beta 40 18720), 2 %
+  at -5 alone. Not from the attacks (at moved notes' starts, -5: Beta 39 209, Beta 41 181). The count follows where the grains fall on the
+  voice's pulses: grains centred on a pulse read as clicks 10-20 times as often as grains centred between two (one -5
+  note: 0 clicks in Beta 39, 39 in Beta 40, same track, same code, its grains' phase only). Centring the grains between
+  pulses cuts the count but puts two half pulses in each grain (the old pitch leaks); not done (#10).
+
 ### 2. Moved notes get quieter, mostly upward (2-5 dB)
 
 **Measured.**
@@ -364,6 +434,10 @@ is "eased back to 0 in breaths" (`PitchCorrector.h:236`), which is stale.
 or jump it at a near-silent sample. With drift 0 and ratio 1, untouched notes come out bit-exact again (the existing
 "untouched = exact" property).
 
+**Beta 41:** following a guide, the offset now goes back to zero where both read positions are 60 dB down (was 70 dB:
+digital silence only). On 13 real vocals with every 4th note moved, untouched notes that come out sample-exact: 548 -> 612
+(+5 st), 548 -> 616 (-5), 555 -> 633 (+2) of 2330. Notes sung on (no quiet gap) after a moved note are still offset.
+
 ### 12. Neighbouring legato notes moved in opposite directions: a V-shaped dip
 
 **Measured.** 57 → 59 legato with a 50 ms glide, moved +2 / -2. The output dips to 56.0 at -20 ms (-294 c below the path)
@@ -465,7 +539,8 @@ octave-ambiguous passage and one acapella, which is slightly worse. CREPE, where
 87 % of that time (3.9 of 4.5 s) and the old one in 11 %. Renders, with the same moments moved in both: the middle and
 end of moved notes are as before or better, and Snap 100 % starts and ends improved (5.9 -> 4.7 c, 5.0 -> 4.1 c). The first 40 ms of a moved note is worse on average at +5 / -5 st (mean 42 -> 49 c, 36 -> 43 c), and a -5
 render has 4 % more clicks. Most of this comes from notes that now include their attack (a fragment before the note used
-to stay unmoved); the attack is the hardest part to shift (#1, #6, #10).
+to stay unmoved); the attack is the hardest part to shift (#1, #6, #10). (Beta 41: mostly notes sung straight on from an
+unmoved one, where the change of move straddled the join; fixed, see #1. The extra clicks were not at the attacks.)
 
 **Still open.**
 - A synthetic 1319 Hz "o" whose F1 / F2 lie far below the pitch (noise-dominated, not how sopranos sing) is read an octave
