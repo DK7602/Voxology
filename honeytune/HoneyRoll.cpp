@@ -1047,7 +1047,7 @@ void HoneyRoll::mouseDrag (const MouseEvent& e)
     repaint();
 }
 
-void HoneyRoll::mouseUp (const MouseEvent&)
+void HoneyRoll::mouseUp (const MouseEvent& ev)
 {
     seeking = false;
     if (banding)
@@ -1083,11 +1083,37 @@ void HoneyRoll::mouseUp (const MouseEvent&)
                 edits.push_back ({ i, e });
             }
     }
+    const bool clicked = dragMode == Drag::undecided;
     dragging = false;
     dragMode = pendingEdge = Drag::undecided;
     dragSeconds = 0.0;
-    if (! edits.empty()) applyMany (edits);
+    if (! edits.empty())
+    {
+        std::vector<int> changed;
+        for (const auto& edit : edits) changed.push_back (edit.first);
+        applyMany (edits);
+        hear (changed, true);   // how it sounds now
+    }
+    else if (clicked && selected >= 0 && ! ev.mods.isCommandDown() && ! ev.mods.isShiftDown())
+        hear ({ selected }, false);
     repaint();
+}
+
+void HoneyRoll::hear (const std::vector<int>& which, bool afterRender)
+{
+    if (model == nullptr || ! hearOnClick || playing || which.empty()) return;
+    double a = 1.0e18, b = -1.0;
+    for (int i : which)
+    {
+        if (i < 0 || i >= static_cast<int> (snap.notes.size())) continue;
+        const auto [t0, t1] = span (i);
+        a = std::min (a, t0);
+        b = std::max (b, t1);
+    }
+    if (b <= a) return;
+    // A little before (the consonant) and after (the release); a long selection: its first 4 seconds.
+    a = std::max (0.0, a - 0.03);
+    model->audition (a, std::min (b + 0.08, a + 4.0), afterRender);
 }
 
 void HoneyRoll::apply (int index, const honeyui::NoteEdit& edit)
@@ -1144,6 +1170,7 @@ void HoneyRoll::command (int index, Command c)
         edits.push_back ({ i, e });
     }
     applyMany (edits);
+    hear (which, true);
 }
 
 void HoneyRoll::showMenu (int hit, Point<float> at)
@@ -1188,12 +1215,14 @@ void HoneyRoll::showMenu (int hit, Point<float> at)
         m.addItem ("Reset everything on " + these + "  (Delete)", any, false, [this, hit] { command (hit, Command::resetAll); });
         m.addSeparator();
         m.addItem ("Select all notes  (Ctrl+A)", [this] { selectMany (std::vector<char> (snap.notes.size(), 1), selected); });
+        m.addItem ("Hear notes as you click and change them (while stopped)", true, hearOnClick, [this] { hearOnClick = ! hearOnClick; });
     }
     else
     {
         m.addItem ("Play from here  (Enter)", [this, playFrom] { if (onPlayFrom) onPlayFrom (playFrom); });
         m.addItem (wholeView ? "Back to the close-up view  (F)" : "Fit the whole clip  (F)", [this] { fitButton(); });
         m.addItem ("Select all notes  (Ctrl+A)", [this] { selectMany (std::vector<char> (snap.notes.size(), 1), -1); });
+        m.addItem ("Hear notes as you click and change them (while stopped)", true, hearOnClick, [this] { hearOnClick = ! hearOnClick; });
     }
     m.showMenuAsync (PopupMenu::Options().withTargetScreenArea (Rectangle<int> (1, 1).withPosition (localPointToGlobal (at.toInt()))));
 }
@@ -1301,7 +1330,7 @@ bool HoneyRoll::keyPressed (const KeyPress& k)
     }
     if (ch == 'f' && ! mods.isAnyModifierKeyDown()) { fitButton(); return true; }
     if (ch == 'b' && ! mods.isAnyModifierKeyDown()) { if (onToggleOriginal) onToggleOriginal(); return true; }
-    if (k == KeyPress::escapeKey) { setSelected (-1); return true; }
+    if (k == KeyPress::escapeKey) { setSelected (-1); if (model != nullptr) model->stopAudition(); return true; }
     if (mods.isCommandDown() && ch == 'a') { selectMany (std::vector<char> (snap.notes.size(), 1), selected); return true; }
     if (selected < 0 || model == nullptr) return false;
     if (k == KeyPress::deleteKey || k == KeyPress::backspaceKey) { command (selected, Command::resetAll); return true; }
@@ -1342,6 +1371,9 @@ bool HoneyRoll::keyPressed (const KeyPress& k)
             edits.push_back ({ i, edit });
         }
         applyMany (edits);
+        std::vector<int> changed;
+        for (const auto& edit : edits) changed.push_back (edit.first);
+        hear (changed, true);
         return true;
     }
     return false;

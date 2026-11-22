@@ -303,6 +303,37 @@ private:
 };
 
 //==============================================================================
+/** Plays a note you click in the editor while the host is stopped (ARA's editor renderer: on the track the clip is on,
+    the host's playhead stays where it is). What to play comes from the document controller (audition()). */
+class HoneyEditorRenderer final : public ARAEditorRenderer
+{
+public:
+    explicit HoneyEditorRenderer (ARA::PlugIn::DocumentController* dc);
+    ~HoneyEditorRenderer() override;
+
+    void prepareToPlay (double sampleRateIn, int, int, AudioProcessor::ProcessingPrecision, AlwaysNonRealtime) override
+    {
+        sampleRate = sampleRateIn;
+    }
+    bool processBlock (AudioBuffer<float>& buffer, AudioProcessor::Realtime realtime,
+                       const AudioPlayHead::PositionInfo& positionInfo) noexcept override;
+    using ARAEditorRenderer::processBlock;
+
+    /** Does it play this clip's event (message thread: its regions, or the region's track)? */
+    bool serves (const ARAPlaybackRegion* region)
+    {
+        for (auto* r : getPlaybackRegions<ARAPlaybackRegion>()) if (r == region) return true;
+        for (auto* seq : getRegionSequences<ARARegionSequence>()) if (seq == region->getRegionSequence()) return true;
+        return false;
+    }
+
+private:
+    double sampleRate = 48000.0;
+    uint32 serial = 0;          // the request being played
+    bool active = false, started = false;
+    double position = 0.0;      // in the clip (its samples)
+};
+
 class HoneyDocumentController final : public ARADocumentControllerSpecialisation
 {
 public:
@@ -672,6 +703,60 @@ public:
         return true;
     }
 
+    /** Hearing a stretch of a clip while stopped: which editor renderer plays it (the one on the event's track), what
+        (the clip's samples) and from when (afterRender: once the clip's render has caught up with this request). */
+    struct Audition
+    {
+        const HoneyEditorRenderer* renderer = nullptr;   // compared only
+        SourceState* state = nullptr;                    // held alive by `held`
+        double from = 0.0, to = 0.0;
+        int wanted = 0;
+        uint32 serial = 0, stamp = 0;
+    };
+    /** false: no editor renderer plays that event (a host without them: nothing to hear). Message thread. */
+    bool audition (const std::shared_ptr<SourceState>& st, const ARAPlaybackRegion* region, double fromSec, double toSec, bool afterRender)
+    {
+        const HoneyEditorRenderer* target = nullptr;
+        if (region != nullptr)
+            for (auto* r : editorRenderers) if (r->serves (region)) { target = r; break; }
+        if (target == nullptr && editorRenderers.size() == 1) target = editorRenderers.front();   // (a host that binds none to it)
+        if (st == nullptr || target == nullptr || toSec <= fromSec) { stopAudition(); return false; }
+        // The clips asked for lately stay alive here (the audio thread may still be reading the one it played).
+        held.push_back (st);
+        if (held.size() > 8) held.erase (held.begin());
+        const SpinLock::ScopedLockType sl (auditionLock);
+        auditionNow.renderer = target;
+        auditionNow.state = st.get();
+        auditionNow.from = fromSec * st->sampleRate;
+        auditionNow.to = toSec * st->sampleRate;
+        auditionNow.wanted = afterRender ? st->wanted.load() : 0;
+        auditionNow.stamp = Time::getMillisecondCounter();
+        ++auditionNow.serial;
+        return true;
+    }
+    void stopAudition()
+    {
+        const SpinLock::ScopedLockType sl (auditionLock);
+        auditionNow.renderer = nullptr;
+        auditionNow.state = nullptr;
+        ++auditionNow.serial;
+    }
+    /** Audio thread: the current request (false: the lock was busy this instant). */
+    bool readAudition (Audition& out)
+    {
+        const SpinLock::ScopedTryLockType sl (auditionLock);
+        if (! sl.isLocked()) return false;
+        out = auditionNow;
+        return true;
+    }
+    void addEditorRenderer (HoneyEditorRenderer* r) { editorRenderers.push_back (r); }
+    void removeEditorRenderer (HoneyEditorRenderer* r)
+    {
+        editorRenderers.erase (std::remove (editorRenderers.begin(), editorRenderers.end(), r), editorRenderers.end());
+        const SpinLock::ScopedLockType sl (auditionLock);
+        if (auditionNow.renderer == r) { auditionNow.renderer = nullptr; auditionNow.state = nullptr; ++auditionNow.serial; }
+    }
+
     /** A / B for the whole document: play the recordings as they were (edits kept). */
     void setOriginal (bool o)
     {
@@ -754,6 +839,10 @@ protected:
     ARAPlaybackRenderer* doCreatePlaybackRenderer() noexcept override
     {
         return new HoneyPlaybackRenderer (getDocumentController());
+    }
+    ARAEditorRenderer* doCreateEditorRenderer() noexcept override
+    {
+        return new HoneyEditorRenderer (getDocumentController());
     }
 
     bool doRestoreObjectsFromStream (ARAInputStream& input, const ARARestoreObjectsFilter* filter) noexcept override
@@ -1086,6 +1175,10 @@ private:
     const std::uint64_t linkId = (static_cast<std::uint64_t> (Random::getSystemRandom().nextInt64()) ^ reinterpret_cast<std::uintptr_t> (this)) | 1u;
     std::atomic<bool> playOriginal { false };
     std::atomic<bool> closing { false };   // the document is going: jobs stop early, no new ones
+    std::vector<HoneyEditorRenderer*> editorRenderers;   // (message thread: created / destroyed by the host there)
+    SpinLock auditionLock;
+    Audition auditionNow;
+    std::vector<std::shared_ptr<SourceState>> held;   // the clips auditioned lately (message thread)
     ThreadPool pool { 1, 0, Thread::Priority::low };   // (the DAW and its audio come first)
 };
 
@@ -1093,6 +1186,75 @@ void HoneyPlaybackRenderer::rendererActive (ARA::PlugIn::DocumentController* dc,
 {
     if (auto* c = ARADocumentControllerSpecialisation::getSpecialisedDocumentController<HoneyDocumentController> (dc))
         c->activeChanged (delta);
+}
+
+HoneyEditorRenderer::HoneyEditorRenderer (ARA::PlugIn::DocumentController* dc) : ARAEditorRenderer (dc)
+{
+    if (auto* c = ARADocumentControllerSpecialisation::getSpecialisedDocumentController<HoneyDocumentController> (dc))
+        c->addEditorRenderer (this);
+}
+
+HoneyEditorRenderer::~HoneyEditorRenderer()
+{
+    if (auto* c = ARADocumentControllerSpecialisation::getSpecialisedDocumentController<HoneyDocumentController> (getDocumentController()))
+        c->removeEditorRenderer (this);
+}
+
+bool HoneyEditorRenderer::processBlock (AudioBuffer<float>& buffer, AudioProcessor::Realtime realtime,
+                                        const AudioPlayHead::PositionInfo& positionInfo) noexcept
+{
+    auto* dc = ARADocumentControllerSpecialisation::getSpecialisedDocumentController<HoneyDocumentController> (getDocumentController());
+    if (dc == nullptr || realtime != AudioProcessor::Realtime::yes) return true;
+    HoneyDocumentController::Audition req;
+    bool got = false;
+    for (int tries = 0; tries < 8 && ! got; ++tries) got = dc->readAudition (req);
+    if (! got) return true;
+    if (req.serial != serial)
+    {
+        serial = req.serial;
+        active = req.renderer == this && req.state != nullptr;
+        started = false;
+        position = req.from;
+    }
+    if (! active) return true;
+    if (positionInfo.getIsPlaying()) { active = false; return true; }   // the host plays: its playback, not ours
+    auto* st = req.state;
+    if (! started)
+    {
+        if (st->done.load() < req.wanted)   // the edit's render is on its way
+        {
+            if (Time::getMillisecondCounter() - req.stamp > 6000) active = false;   // (never came: forget it)
+            return true;
+        }
+        started = true;
+    }
+    const auto rendered = st->getPlayback (true);
+    if (rendered == nullptr || rendered->empty()) return true;
+    const auto& chans = *rendered;
+    const double ratio = st->sampleRate > 0.0 ? st->sampleRate / sampleRate : 1.0;
+    const double fadeIn = 0.005 * st->sampleRate, fadeOut = 0.02 * st->sampleRate;
+    const int n = buffer.getNumSamples();
+    for (int c = 0; c < buffer.getNumChannels(); ++c)
+    {
+        const auto& ch = chans[static_cast<size_t> (std::min<int> (c, static_cast<int> (chans.size()) - 1))];
+        const auto size = static_cast<int64> (ch.size());
+        auto sample = [&ch, size] (int64 k) { return k >= 0 && k < size ? ch[static_cast<size_t> (k)] : 0.0f; };
+        auto* out = buffer.getWritePointer (c);
+        for (int i = 0; i < n; ++i)
+        {
+            const double pos = position + i * ratio;
+            if (pos >= req.to) break;
+            const auto k = static_cast<int64> (std::floor (pos));
+            const auto f = static_cast<float> (pos - static_cast<double> (k));
+            const float ym1 = sample (k - 1), y0 = sample (k), y1 = sample (k + 1), y2 = sample (k + 2);
+            const float c1 = 0.5f * (y1 - ym1), c2 = ym1 - 2.5f * y0 + 2.0f * y1 - 0.5f * y2, c3 = 0.5f * (y2 - ym1) + 1.5f * (y0 - y1);
+            const auto gain = static_cast<float> (std::clamp (std::min ((pos - req.from) / fadeIn, (req.to - pos) / fadeOut), 0.0, 1.0));
+            out[i] += gain * (((c3 * f + c2) * f + c1) * f + y0);
+        }
+    }
+    position += n * ratio;
+    if (position >= req.to) active = false;
+    return true;
 }
 
 //==============================================================================
@@ -1323,6 +1485,12 @@ private:
         seek (from);
         pb->requestStartPlayback();
     }
+
+    void audition (double from, double to, bool afterRender) override
+    {
+        if (dc != nullptr && state != nullptr) dc->audition (state, shownRegion(), from, to, afterRender);
+    }
+    void stopAudition() override { if (dc != nullptr) dc->stopAudition(); }
 
     void onNewSelection (const ARAViewSelection& sel) override
     {

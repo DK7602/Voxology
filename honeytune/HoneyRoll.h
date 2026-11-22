@@ -8,7 +8,8 @@
     sung waveform (how loud it was, moment to moment). Notes that will play off the key glow red; pulled into the key
     they fill gold. Drag a cell up / down to move it (whole notes;
     hold Alt for cents), double-click to snap it to the key, Delete to reset it; Alt + double-click splits it there, J joins
-    it to the next note (or the selected notes into one).
+    it to the next note (or the selected notes into one). While the host is stopped, a note you click or change plays (on
+    its track only).
     Mouse wheel scrolls up / down, Shift + wheel scrolls in time, Ctrl + wheel (or + / -) zooms. */
 class HoneyRoll final : public juce::Component,
                         private juce::ScrollBar::Listener
@@ -89,6 +90,9 @@ private:
     void selectMany (std::vector<char> pick, int primary);
     void groupLimits();
     void showMenu (int hit, juce::Point<float> at);
+    /** While the host is stopped: hear these notes (as they'll play; afterRender: once the edit just made is rendered). */
+    void hear (const std::vector<int>& which, bool afterRender);
+    bool hearOnClick = true;   // the right-click menu turns it off / on
     /** The note as drawn: its sung waveform around its pitch, one pixel column at a time: the outline = its peaks
         (Track::level), the body = its RMS (Track::power), in dB; as tall as it was loud (the clip's loud singing = 1.7 rows). */
     struct Wave { juce::Path outline, body; };

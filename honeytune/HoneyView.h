@@ -506,6 +506,10 @@ struct Model
     virtual void playFrom (double /*clipSeconds*/) {}
     /** Ask the host to loop this stretch of the clip (seconds) and play it. */
     virtual void loop (double /*fromSeconds*/, double /*toSeconds*/) {}
+    /** Hear this stretch of the clip (seconds) while the host is stopped, as it will play (on this track only, the
+        host's playhead stays put). afterRender: once the edit just made has been rendered. */
+    virtual void audition (double /*fromSeconds*/, double /*toSeconds*/, bool /*afterRender*/) {}
+    virtual void stopAudition() {}
 };
 
 } // namespace honeyui
