@@ -20,12 +20,16 @@
     incomplete, to be thrown away. */
 namespace vox::honey {
 
+using Channels = std::vector<std::vector<float>>;   // a clip's channels (the same length)
+
 struct Track
 {
     double sampleRate = 48000.0;
     std::vector<double> time;      // input time of each reading (samples)
     std::vector<double> midi;      // fractional MIDI note; 0 = no note (breath, consonant, silence)
     std::vector<double> clarity;   // 0..1
+    std::vector<char> filled;      // 1: a moment before / after what the detector heard, given the note's pitch (its attack
+                                   // or release); findNotes decides the notes without these, then gives them to their note
     int aiChecked = 0, aiFixed = 0, aiFound = 0;   // AI check: moments checked, octave slips fixed, skipped notes found
     // The clip's waveform (the editor draws each note as its waveform): per kLevelHopSeconds from the clip's start, the
     // loudest sample (|x|) and the mean square; levelTop = how loud the singing gets (the 98th percentile of the peaks
@@ -69,7 +73,9 @@ struct TimeMap
 TimeMap timeMap (const std::vector<Note>& notes, double clipSamples, double sampleRate);
 
 /** The clip re-timed by the map (pitch and tone kept: pitch-synchronous grains, a period repeated or
-    skipped where it's stretched / squeezed), output samples [from, to) filled (rest 0). */
+    skipped where it's stretched / squeezed), output samples [from, to) filled (rest 0). Every channel with the same
+    grains (placed on their mix). */
+Channels warp (const Channels& channels, double sampleRate, const Track& track, const TimeMap& map, size_t from, size_t to);
 std::vector<float> warp (const std::vector<float>& mono, double sampleRate, const Track& track, const TimeMap& map,
                          size_t from, size_t to);
 
@@ -106,7 +112,10 @@ double movementCents (const Track& track, const Note& note);
 /** How long a moved note takes to reach its new pitch (render(), renderPart()). */
 inline constexpr double kTransitionMs = 25.0;
 
-/** The clip with the edits (same length, aligned with the input). */
+/** The clip with the edits (same length, aligned with the input). All channels through one shifter (a stereo image
+    stays put); every changed note as loud as it was sung. */
+Channels render (const Channels& channels, double sampleRate, const Track& track, const std::vector<Note>& notes,
+                 double transitionMs = kTransitionMs, const std::atomic<bool>* cancel = nullptr);
 std::vector<float> render (const std::vector<float>& mono, double sampleRate, const Track& track,
                            const std::vector<Note>& notes, double transitionMs = kTransitionMs, const std::atomic<bool>* cancel = nullptr);
 
@@ -117,6 +126,9 @@ std::vector<float> render (const std::vector<float>& mono, double sampleRate, co
 bool changedRegion (const std::vector<Note>& before, const std::vector<Note>& after, double clipSamples, double sampleRate,
                     double& from, double& to);
 /** Re-renders only [from, to) of `previous` (the clip's earlier render), crossfading 10 ms at each join. */
+void renderPart (const Channels& channels, double sampleRate, const Track& track, const std::vector<Note>& notes,
+                 Channels& previous, double from, double to, double transitionMs = kTransitionMs,
+                 const std::atomic<bool>* cancel = nullptr);
 void renderPart (const std::vector<float>& mono, double sampleRate, const Track& track, const std::vector<Note>& notes,
                  std::vector<float>& previous, double from, double to, double transitionMs = kTransitionMs,
                  const std::atomic<bool>* cancel = nullptr);

@@ -116,23 +116,9 @@ HoneyPanel::HoneyPanel() : look (std::make_unique<honeytheme::Look>())
         s->onValueChange = [this, s] { if (! s->isMouseButtonDown()) applyNoteEdit (s); };
     }
 
-    snapNote.onClick = [this]
-    {
-        const int i = roll.getSelected();
-        if (i < 0 || model == nullptr) return;
-        const auto& snapData = roll.getSnapshot();
-        auto e = snapData.notes[static_cast<size_t> (i)].edit;
-        e.moved = true;
-        e.target = honeyui::keyNote (snapData.notes[static_cast<size_t> (i)].note.pitch, snapData.key, snapData.scale);
-        model->setEdit (i, e);
-        refresh();
-    };
-    resetNote.onClick = [this]
-    {
-        if (roll.getSelected() < 0 || model == nullptr) return;
-        model->setEdit (roll.getSelected(), {});
-        refresh();
-    };
+    // (for every selected note)
+    snapNote.onClick = [this] { if (roll.getSelected() >= 0) roll.command (roll.getSelected(), HoneyRoll::Command::snapToKey); };
+    resetNote.onClick = [this] { if (roll.getSelected() >= 0) roll.command (roll.getSelected(), HoneyRoll::Command::resetAll); };
     resetAll.onClick = [this]
     {
         if (model == nullptr) return;
@@ -282,15 +268,28 @@ void HoneyPanel::updateNoteControls()
     const int i = roll.getSelected();
     const auto& s = roll.getSnapshot();
     const bool has = i >= 0 && i < static_cast<int> (s.notes.size());
+    const int many = roll.selectionSize();
     for (Component* c : { (Component*) &noteDrift, (Component*) &noteVibrato, (Component*) &noteFormant, (Component*) &snapNote, (Component*) &resetNote })
         c->setEnabled (has);
+    snapNote.setButtonText (many > 1 ? "Snap notes to key" : "Snap note to key");
+    resetNote.setButtonText (many > 1 ? "Reset notes" : "Reset note");
     if (! has)
     {
-        noteInfo = "Click a note. Drag up / down = pitch (Alt: fine), sideways = earlier / later, its ends = longer / shorter. Double-click = snap, Delete = reset, Ctrl + Z = undo.";
+        noteInfo = "Click a note (Ctrl-click / drag a box / Ctrl+A for several). Drag up / down = pitch (Alt: fine), sideways = earlier / later, its ends = longer / shorter. Right-click for more.";
         repaint();
         return;
     }
     const auto& n = s.notes[static_cast<size_t> (i)];
+    if (many > 1)
+    {
+        noteDrift.setValue (n.note.drift * 100.0, dontSendNotification);
+        noteVibrato.setValue (n.note.vibrato * 100.0, dontSendNotification);
+        noteFormant.setValue (n.edit.formant, dontSendNotification);
+        noteInfo = String (many) + " notes selected: drag one to move them all; the sliders and buttons below set all of them (showing note "
+                 + String (i + 1) + "'s values). Esc = none.";
+        repaint();
+        return;
+    }
     noteDrift.setValue (n.note.drift * 100.0, dontSendNotification);
     noteVibrato.setValue (n.note.vibrato * 100.0, dontSendNotification);
     noteFormant.setValue (n.edit.formant, dontSendNotification);
@@ -315,24 +314,22 @@ void HoneyPanel::updateNoteControls()
 
 void HoneyPanel::applyNoteEdit (const Slider* which)
 {
-    const int i = roll.getSelected();
-    if (i < 0 || model == nullptr) return;
-    const auto& v = roll.getSnapshot().notes[static_cast<size_t> (i)];
-    auto e = v.edit;
-    if (which == &noteDrift)
+    // Every selected note gets this slider's value (only this one: their other values keep following the clip's).
+    if (roll.getSelected() < 0 || model == nullptr) return;
+    const auto& notes = roll.getSnapshot().notes;
+    std::vector<std::pair<int, honeyui::NoteEdit>> edits;
+    for (int i : roll.getSelection())
     {
-        if (std::abs (noteDrift.getValue() / 100.0 - v.note.drift) < 0.005) return;   // (unchanged: still following the clip's)
-        e.drift = noteDrift.getValue() / 100.0;
+        const auto& v = notes[static_cast<size_t> (i)];
+        auto e = v.edit;
+        if (which == &noteDrift && std::abs (noteDrift.getValue() / 100.0 - v.note.drift) >= 0.005) e.drift = noteDrift.getValue() / 100.0;
+        if (which == &noteVibrato && std::abs (noteVibrato.getValue() / 100.0 - v.note.vibrato) >= 0.005) e.vibrato = noteVibrato.getValue() / 100.0;
+        if (which == &noteFormant) e.formant = noteFormant.getValue();
+        if (! (e == v.edit)) edits.push_back ({ i, e });
     }
-    if (which == &noteVibrato)
-    {
-        if (std::abs (noteVibrato.getValue() / 100.0 - v.note.vibrato) < 0.005) return;
-        e.vibrato = noteVibrato.getValue() / 100.0;
-    }
-    if (which == &noteFormant) e.formant = noteFormant.getValue();
-    if (e == v.edit) return;
+    if (edits.empty()) return;
     if (model->isOriginal()) { model->setOriginal (false); showOriginal (false); }   // you hear what you change
-    model->setEdit (i, e);
+    model->setEdits (edits);
     refresh();
 }
 

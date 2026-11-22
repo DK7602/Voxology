@@ -150,6 +150,7 @@ private:
 
     PitchParams params;
     const Guide* guide = nullptr;
+    static constexpr double kSilentGrain = 1.0e-7;   // a grain's mean square under this (-70 dB) is silence
     double sr = 48000.0;
     int channels = 2;
     int latency = 1536;
@@ -233,7 +234,7 @@ private:
     double synthPos = 0.0;             // next output grain centre (input time)
     double anaPos = 0.0;               // analysis mark (input time)
     double noteEnergy = 0.0;           // recent grain energy (join timing)
-    double drift = 0.0;                // anaPos - synthPos, eased back to 0 in breaths
+    double drift = 0.0;                // anaPos - synthPos; holds through breaths (back to 0 in silence when guided)
     double gPeriod = 0.0, gRatio = 1.0;
     bool wasNeutral = true;
     double grainMix = 0.0, grainFade = 0.0;   // the grains' share vs the delayed input: switching on / off crossfades (20 ms)

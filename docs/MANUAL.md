@@ -3,7 +3,7 @@
 Voxology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list they are all under Sonicology.
 
-Manual for version 0.74.0. It's built into both plug-ins (the ? button) and updated with every release.
+Manual for version 0.75.0. It's built into both plug-ins (the ? button) and updated with every release.
 
 ## Install and first run
 
@@ -20,7 +20,7 @@ Close your DAW first, run it and keep the plug-ins it ticks. On a Mac it's the o
    Replace the old ones if Windows asks. (INSTALL.txt in the download has the Mac steps.)
 3. Close Cubase if it is open, then start it. Open **Studio > VST Plug-in Manager** and click **Rescan** if the new
    version does not show. Both are listed under Sonicology.
-4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.74.0**).
+4. Check the version: Voxology shows it at the bottom right (for example **VOXOLOGY v0.75.0**).
 
 Needs Windows 10 or 11 (64-bit), or macOS 11.3 or newer.
 
@@ -395,6 +395,8 @@ Honey Tune shows each sung note as its waveform on a piano roll, so you can fix 
 - **Original / Tuned** (or press **B**): hear and see the clip as recorded or with your edits. While Original is on, the status line says so in red: what plays, and what an export gets, is the untuned take.
 - **Fit** (or **F**): the whole clip; click again for the close-up view around the playhead. **Undo / Redo** take back note edits and changes to KEY, SCALE and the three sliders alike.
 
+**Selecting notes**: click a note; **Ctrl-click** adds or removes one; **Shift-click** takes every note from the selected one to that one; drag a box on the empty grid (Ctrl: adds to what's selected); **Ctrl+A** selects all; click a key on the left keyboard for every note at that pitch; **Esc** selects none. Everything below then works on all the selected notes at once (one Undo step): dragging one moves them all by the same step (in time: as far as the nearest note that isn't selected lets them), the keys, the right-click menu and the bottom bar's sliders and buttons.
+
 **Editing a note** (click it to select):
 
 - Drag up / down: move it to the next notes of the key (**Shift**: any semitone; **Alt**: free, cent by cent).
@@ -403,6 +405,7 @@ Honey Tune shows each sung note as its waveform on a piano roll, so you can fix 
 - **Right-click** a note for its menu: snap to the key, steady it, loop and play it, play from here, and reset just its pitch, its timing, its tone or its drift and vibrato (or everything).
 - Keys: **S** snap, **D** steady (no drift, no vibrato), **L** loop and play the note in your DAW, **Enter** play / stop from the playhead, **Esc** deselect.
 - Steadying keeps the very start and end of a note as you sang them (the scoop into it and the fall off it, up to 60 ms each): only the sustain goes straight, so it doesn't sound robotic.
+- A moved note moves whole: its attack and release go with it (no scoop from the old pitch), it stays as loud as you sang it, and between two notes sung straight into each other the change follows your own slide. Notes you didn't change come out exactly as recorded, and a stereo take keeps its stereo image.
 - Bottom bar for the selected note: **NOTE DRIFT**, **NOTE VIBRATO**, **NOTE FORMANT** (+ thinner, − deeper; pitch stays), **Snap note to key**, **Reset note**, **Reset all notes**.
 - **A wobbly note**: moving a note (or snapping it) keeps its wobble, on purpose: it moves the note as sung. To steady it, set **NOTE DRIFT** and **NOTE VIBRATO** to 0 (both: the wobble of a shaky voice is mostly "vibrato", and DRIFT alone leaves most of it). The note's line says "wobbles 30 cents..." while it moves, and "steadied" after; the line through the note goes flat. For the whole clip use KEEP DRIFT / KEEP VIBRATO. A very wobbly note can show as two notes: steady both.
 - Every slider (top and bottom bar): click the number box next to it to type an exact value, then press **Enter**.

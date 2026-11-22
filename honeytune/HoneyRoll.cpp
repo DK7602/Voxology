@@ -41,6 +41,8 @@ void HoneyRoll::refresh()
     if (model == nullptr) return;
     snap = model->snapshot();
     if (selected >= static_cast<int> (snap.notes.size())) selected = -1;
+    chosen.resize (snap.notes.size(), 0);   // (a new analysis: the notes changed)
+    if (selected >= 0 && ! chosen[static_cast<size_t> (selected)]) chosen[static_cast<size_t> (selected)] = 1;
     if (! fitted && snap.status == 2 && ! snap.notes.empty())
         fitted = fitAll();   // false while the roll is still too small to fit into: resized() tries again
     updateScrollBars();
@@ -49,8 +51,42 @@ void HoneyRoll::refresh()
 
 void HoneyRoll::setSelected (int index)
 {
-    if (index == selected) return;
+    const bool single = index < 0 ? selectionSize() == 0 : selectionSize() == 1 && isSelected (index);
+    if (index == selected && single) return;
+    chosen.assign (snap.notes.size(), 0);
+    if (index >= 0 && index < static_cast<int> (chosen.size())) chosen[static_cast<size_t> (index)] = 1;
     selected = index;
+    repaint();
+    if (onSelectionChanged) onSelectionChanged();
+}
+
+std::vector<int> HoneyRoll::getSelection() const
+{
+    std::vector<int> out;
+    for (size_t i = 0; i < chosen.size() && i < snap.notes.size(); ++i)
+        if (chosen[i]) out.push_back (static_cast<int> (i));
+    return out;
+}
+
+int HoneyRoll::selectionSize() const
+{
+    int count = 0;
+    for (size_t i = 0; i < chosen.size() && i < snap.notes.size(); ++i) count += chosen[i] ? 1 : 0;
+    return count;
+}
+
+bool HoneyRoll::isSelected (int i) const
+{
+    return i >= 0 && static_cast<size_t> (i) < chosen.size() && chosen[static_cast<size_t> (i)] != 0;
+}
+
+void HoneyRoll::selectMany (std::vector<char> pick, int primary)
+{
+    pick.resize (snap.notes.size(), 0);
+    chosen = std::move (pick);
+    selected = isSelected (primary) ? primary : -1;
+    if (selected < 0)
+        for (size_t i = 0; i < chosen.size(); ++i) if (chosen[i]) { selected = static_cast<int> (i); break; }
     repaint();
     if (onSelectionChanged) onSelectionChanged();
 }
@@ -239,6 +275,12 @@ std::pair<double, double> HoneyRoll::span (int index) const
     const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
     if (model != nullptr && model->isOriginal()) return { n.start / sr, n.end / sr };
     double a = n.soundStart() / sr, b = n.soundEnd() / sr;
+    if (dragging && dragMode == Drag::time && isSelected (index))
+    {
+        // The selection moves together, as far as the nearest note that isn't selected lets every one of them.
+        const double d = std::clamp (dragSeconds, groupMin, groupMax);
+        return { a + d, b + d };
+    }
     if (dragging && index == selected && dragMode != Drag::pitch && dragMode != Drag::undecided)
     {
         // Between the neighbours as they sound (a note can't be moved into another) and inside the clip.
@@ -332,7 +374,9 @@ double HoneyRoll::shownPitch (int i) const
 {
     const auto& v = snap.notes[static_cast<size_t> (i)];
     if (model != nullptr && model->isOriginal()) return v.note.pitch;   // Original: where it was sung
-    return (dragging && i == selected) ? dragTarget : v.note.target;
+    if (dragging && dragMode == Drag::pitch && isSelected (i))
+        return i == selected ? dragTarget : jlimit (kLowestMidi, kHighestMidi, v.note.target + (dragTarget - dragStartTarget));
+    return v.note.target;
 }
 
 int HoneyRoll::noteAt (Point<float> pt) const
@@ -359,10 +403,22 @@ void HoneyRoll::paint (Graphics& g)
         {
             const auto [t0, t1] = span (i);
             if (xOf (t1) < vis.getX() || xOf (t0) > vis.getRight()) continue;
-            if (i != selected) drawCell (g, i);
+            if (! isSelected (i)) drawCell (g, i);
         }
-        if (selected >= 0) drawCell (g, selected);   // on top
+        for (int i : getSelection())   // on top
+        {
+            const auto [t0, t1] = span (i);
+            if (xOf (t1) >= vis.getX() && xOf (t0) <= vis.getRight()) drawCell (g, i);
+        }
         drawPitchLine (g, vis);
+        if (banding)
+        {
+            const auto band = Rectangle<float> (bandFrom, bandTo);
+            g.setColour (Colour (0xff8cc3eb).withAlpha (0.18f));
+            g.fillRect (band);
+            g.setColour (goldDeep.withAlpha (0.85f));
+            g.drawRect (band, 1.2f);
+        }
         for (int i = 0; i < static_cast<int> (snap.notes.size()); ++i)
         {
             const auto [t0, t1] = span (i);
@@ -489,10 +545,10 @@ void HoneyRoll::drawBackground (Graphics& g, Rectangle<float> grid)
 void HoneyRoll::drawCell (Graphics& g, int index)
 {
     const auto& v = snap.notes[static_cast<size_t> (index)];
-    const bool isSel = index == selected;
+    const bool isSel = isSelected (index);
     const bool original = model != nullptr && model->isOriginal();
     // Original (A / B): every note where it was sung, judged as sung.
-    const double target = original ? v.note.pitch : (dragging && isSel) ? dragTarget : v.note.target;
+    const double target = shownPitch (index);
     const bool moved = ! original && std::abs (target - v.note.pitch) > 0.04;
     const bool off = original ? v.wasOff
                               : std::abs (target - honeyui::keyNote (target, snap.key, snap.scale)) > 0.25;   // where it lands
@@ -581,7 +637,7 @@ void HoneyRoll::drawName (Graphics& g, int index)
     // The note's name when there's room, over the pitch line (a dark edge on the blue notes, a light one on the gold).
     const auto& v = snap.notes[static_cast<size_t> (index)];
     const bool original = model != nullptr && model->isOriginal();
-    const double target = original ? v.note.pitch : (dragging && index == selected) ? dragTarget : v.note.target;
+    const double target = shownPitch (index);
     const bool off = original ? v.wasOff : std::abs (target - honeyui::keyNote (target, snap.key, snap.scale)) > 0.25;
     const bool filled = ! original && v.wasOff && ! off;
     const auto [t0, t1] = span (index);
@@ -611,7 +667,7 @@ void HoneyRoll::drawPitchLine (Graphics& g, Rectangle<float> vis)
     auto shiftOf = [&] (int i)   // how far note i moves, with a drag in progress
     {
         const auto& v = snap.notes[static_cast<size_t> (i)];
-        return original ? 0.0 : (dragging && i == selected) ? dragTarget - v.note.pitch : v.note.target - v.note.pitch;
+        return original ? 0.0 : shownPitch (i) - v.note.pitch;
     };
     Path line;
     bool open = false;          // a stroke is under way
@@ -763,35 +819,98 @@ void HoneyRoll::drawRuler (Graphics& g)
 void HoneyRoll::mouseDown (const MouseEvent& e)
 {
     grabKeyboardFocus();
+    const auto grid = gridArea();
     // Click (or drag) on the ruler: move the host's playhead there (and follow it again).
-    if (e.position.y < (float) kRulerHeight && e.position.x >= gridArea().getX())
+    if (e.position.y < (float) kRulerHeight && e.position.x >= grid.getX())
     {
         seeking = true;
         following = true;
         if (onSeek) onSeek (std::max (0.0, secondsAt (e.position.x)));
         return;
     }
+    // A key on the left: every note sung at that pitch (Ctrl / Cmd: added to the selection).
+    if (e.position.x < (float) kKeysWidth && e.position.y >= grid.getY())
+    {
+        const int midi = static_cast<int> (std::round (midiAt (e.position.y)));
+        auto pick = e.mods.isCommandDown() ? chosen : std::vector<char> (snap.notes.size(), 0);
+        int first = -1;
+        for (size_t i = 0; i < snap.notes.size(); ++i)
+            if (static_cast<int> (std::round (shownPitch (static_cast<int> (i)))) == midi) { pick[i] = 1; if (first < 0) first = static_cast<int> (i); }
+        selectMany (pick, first);
+        return;
+    }
     const int hit = noteAt (e.position);
     if (e.mods.isPopupMenu())
     {
-        // Right-click: a menu, never a drag.
-        if (hit >= 0) setSelected (hit);
+        // Right-click: a menu, never a drag. On a note of the selection: for all of them.
+        if (hit >= 0 && ! isSelected (hit)) setSelected (hit);
         showMenu (hit, e.position);
         return;
     }
-    setSelected (hit);
-    if (hit >= 0)
+    if (hit < 0)
     {
-        dragging = true;
-        dragStartTarget = dragTarget = snap.notes[static_cast<size_t> (hit)].note.target;
-        dragStartY = e.position.y;
-        dragStartX = e.position.x;
-        dragSeconds = 0.0;
-        const auto b = cellPath (hit, shownPitch (hit)).getBounds();
-        const float grab = std::min (7.0f, b.getWidth() * 0.2f);
-        dragMode = e.position.x < b.getX() + grab ? Drag::leftEdge : e.position.x > b.getRight() - grab ? Drag::rightEdge : Drag::undecided;
-        pendingEdge = dragMode;
-        dragMode = Drag::undecided;   // (an edge drag starts once it moves: a click on an edge only selects)
+        // The empty grid: a rubber band (Ctrl / Cmd: added to the selection).
+        banding = true;
+        bandFrom = bandTo = e.position;
+        bandBase = e.mods.isCommandDown() ? chosen : std::vector<char> (snap.notes.size(), 0);
+        if (! e.mods.isCommandDown()) setSelected (-1);
+        return;
+    }
+    if (e.mods.isCommandDown())
+    {
+        // Ctrl / Cmd: this note in or out of the selection.
+        auto pick = chosen;
+        pick.resize (snap.notes.size(), 0);
+        pick[static_cast<size_t> (hit)] = pick[static_cast<size_t> (hit)] ? 0 : 1;
+        selectMany (pick, hit);
+        if (! isSelected (hit)) return;
+    }
+    else if (e.mods.isShiftDown() && selected >= 0)
+    {
+        // Shift: every note from the one selected to this one.
+        std::vector<char> pick (snap.notes.size(), 0);
+        for (int i = std::min (selected, hit); i <= std::max (selected, hit); ++i) pick[static_cast<size_t> (i)] = 1;
+        selectMany (pick, hit);
+    }
+    else if (isSelected (hit) && selectionSize() > 1)
+    {
+        selected = hit;   // a note of the selection: drag them all
+        if (onSelectionChanged) onSelectionChanged();
+    }
+    else
+        setSelected (hit);
+    dragging = true;
+    dragStartTarget = dragTarget = snap.notes[static_cast<size_t> (hit)].note.target;
+    dragStartY = e.position.y;
+    dragStartX = e.position.x;
+    dragSeconds = 0.0;
+    const auto b = cellPath (hit, shownPitch (hit)).getBounds();
+    const float grab = std::min (7.0f, b.getWidth() * 0.2f);
+    pendingEdge = e.position.x < b.getX() + grab ? Drag::leftEdge : e.position.x > b.getRight() - grab ? Drag::rightEdge : Drag::undecided;
+    dragMode = Drag::undecided;   // (an edge drag starts once it moves: a click on an edge only selects)
+}
+
+void HoneyRoll::groupLimits()
+{
+    // How far the selection can move in time together: each selected note up to the nearest note that isn't selected
+    // (they keep 5 ms apart) and the clip's ends.
+    const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
+    const double gap = honeyui::kTimeGapSeconds;
+    const auto count = static_cast<int> (snap.notes.size());
+    groupMin = -1.0e9;
+    groupMax = 1.0e9;
+    for (int i = 0; i < count; ++i)
+    {
+        if (! isSelected (i)) continue;
+        const auto& n = snap.notes[static_cast<size_t> (i)].note;
+        const double a = n.soundStart() / sr, b = n.soundEnd() / sr;
+        int p = i - 1, q = i + 1;
+        while (p >= 0 && isSelected (p)) --p;
+        while (q < count && isSelected (q)) ++q;
+        const double lo = p >= 0 ? snap.notes[static_cast<size_t> (p)].note.soundEnd() / sr + gap : 0.0;
+        const double hi = q < count ? snap.notes[static_cast<size_t> (q)].note.soundStart() / sr - gap : snap.seconds - gap;
+        groupMin = std::max (groupMin, std::min (0.0, lo - a));
+        groupMax = std::min (groupMax, std::max (0.0, hi - b));
     }
 }
 
@@ -802,18 +921,37 @@ void HoneyRoll::mouseDrag (const MouseEvent& e)
         if (onSeek) onSeek (std::max (0.0, secondsAt (jmax (gridArea().getX(), e.position.x))));
         return;
     }
+    if (banding)
+    {
+        bandTo = e.position;
+        const auto band = Rectangle<float> (bandFrom, bandTo);
+        auto pick = bandBase;
+        pick.resize (snap.notes.size(), 0);
+        int first = -1;
+        for (int i = 0; i < static_cast<int> (snap.notes.size()); ++i)
+            if (cellPath (i, shownPitch (i)).getBounds().intersects (band)) { pick[static_cast<size_t> (i)] = 1; if (first < 0) first = i; }
+        chosen = std::move (pick);
+        selected = isSelected (selected) ? selected : first;
+        if (selected < 0)
+            for (size_t i = 0; i < chosen.size(); ++i) if (chosen[i]) { selected = static_cast<int> (i); break; }
+        repaint();
+        return;
+    }
     if (! dragging || selected < 0 || e.mods.isPopupMenu()) return;
     const float dx = e.position.x - dragStartX, dy = e.position.y - dragStartY;
     if (dragMode == Drag::undecided && std::max (std::abs (dx), std::abs (dy)) > 6.0f)
     {
+        // (an end of a note: that note only, even in a selection)
         dragMode = pendingEdge != Drag::undecided ? pendingEdge : std::abs (dx) > std::abs (dy) ? Drag::time : Drag::pitch;
+        if (dragMode == Drag::leftEdge || dragMode == Drag::rightEdge) { auto keep = selected; setSelected (keep); }
+        if (dragMode == Drag::time) groupLimits();
         // An edit while you look at the Original: switch to Tuned (you hear and see what you do), then edit as tuned.
         if (model != nullptr && model->isOriginal() && onWantTuned) onWantTuned();
     }
     if (dragMode == Drag::pitch)
     {
         const double raw = dragStartTarget - dy / rowHeight;
-        // Whole notes of the key (Shift: any semitone; Alt: free, in cents).
+        // Whole notes of the key (Shift: any semitone; Alt: free, in cents). A selection moves by the same step.
         dragTarget = e.mods.isAltDown() ? raw
                    : (e.mods.isShiftDown() || snap.scale == 0) ? std::round (raw)
                                                                 : honeyui::keyNote (raw, snap.key, snap.scale);
@@ -827,64 +965,100 @@ void HoneyRoll::mouseDrag (const MouseEvent& e)
 void HoneyRoll::mouseUp (const MouseEvent&)
 {
     seeking = false;
-    if (! dragging) return;
-    const auto [a, b] = selected >= 0 ? span (selected) : std::pair<double, double> { 0.0, 0.0 };   // (with the drag)
-    dragging = false;
-    if (selected >= 0 && model != nullptr && ! model->isOriginal())
+    if (banding)
     {
-        auto edit = snap.notes[static_cast<size_t> (selected)].edit;
-        bool changed = false;
-        if (dragMode == Drag::pitch && std::abs (dragTarget - dragStartTarget) > 1.0e-6)
-        {
-            edit.moved = true;
-            edit.target = dragTarget;
-            changed = true;
-        }
-        else if ((dragMode == Drag::time || dragMode == Drag::leftEdge || dragMode == Drag::rightEdge) && std::abs (dragSeconds) > 0.002)
-        {
-            // Back to a shift (from where it was sung) and a length (vs as sung).
-            const auto& n = snap.notes[static_cast<size_t> (selected)].note;
-            const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
-            edit.shift = a - n.start / sr;
-            edit.length = (b - a) / std::max (1.0e-6, (n.end - n.start) / sr);
-            changed = true;
-        }
-        if (changed) apply (selected, edit);
+        banding = false;
+        repaint();
+        if (onSelectionChanged) onSelectionChanged();
+        return;
     }
+    if (! dragging) return;
+    // Where everything ends up (with the drag), before it stops.
+    std::vector<std::pair<int, honeyui::NoteEdit>> edits;
+    const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
+    if (model != nullptr && ! model->isOriginal())
+    {
+        if (dragMode == Drag::pitch && std::abs (dragTarget - dragStartTarget) > 1.0e-6)
+            for (int i : getSelection())
+            {
+                auto e = snap.notes[static_cast<size_t> (i)].edit;
+                e.moved = true;
+                e.target = shownPitch (i);
+                edits.push_back ({ i, e });
+            }
+        else if ((dragMode == Drag::time || dragMode == Drag::leftEdge || dragMode == Drag::rightEdge) && std::abs (dragSeconds) > 0.002)
+            for (int i : (dragMode == Drag::time ? getSelection() : std::vector<int> { selected }))
+            {
+                // Back to a shift (from where it was sung) and a length (vs as sung).
+                const auto& n = snap.notes[static_cast<size_t> (i)].note;
+                const auto [a, b] = span (i);
+                auto e = snap.notes[static_cast<size_t> (i)].edit;
+                e.shift = a - n.start / sr;
+                e.length = (b - a) / std::max (1.0e-6, (n.end - n.start) / sr);
+                edits.push_back ({ i, e });
+            }
+    }
+    dragging = false;
     dragMode = pendingEdge = Drag::undecided;
     dragSeconds = 0.0;
+    if (! edits.empty()) applyMany (edits);
     repaint();
 }
 
 void HoneyRoll::apply (int index, const honeyui::NoteEdit& edit)
 {
-    if (model == nullptr || index < 0 || index >= static_cast<int> (snap.notes.size())) return;
+    applyMany ({ { index, edit } });
+}
+
+void HoneyRoll::applyMany (const std::vector<std::pair<int, honeyui::NoteEdit>>& edits)
+{
+    if (model == nullptr || edits.empty()) return;
+    for (const auto& [i, e] : edits)
+        if (i < 0 || i >= static_cast<int> (snap.notes.size())) return;
     if (model->isOriginal() && onWantTuned) onWantTuned();
-    model->setEdit (index, edit);
+    model->setEdits (edits);   // (one undo step)
     refresh();
     if (onSelectionChanged) onSelectionChanged();
+}
+
+std::vector<int> HoneyRoll::targets (int index) const
+{
+    // A command on a note of the selection is for the whole selection; on any other note, for that note.
+    if (isSelected (index) && selectionSize() > 1) return getSelection();
+    return { index };
 }
 
 void HoneyRoll::command (int index, Command c)
 {
     if (index < 0 || index >= static_cast<int> (snap.notes.size())) return;
-    const auto& v = snap.notes[static_cast<size_t> (index)];
-    auto e = v.edit;
     const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
-    switch (c)
+    const auto which = targets (index);
+    if (c == Command::loop)
     {
-        case Command::snapToKey:   e.moved = true; e.target = honeyui::keyNote (v.note.pitch, snap.key, snap.scale); break;
-        case Command::steady:      e.drift = e.vibrato = 0.0; break;
-        case Command::resetPitch:  e.moved = false; e.target = 0.0; break;
-        case Command::resetTiming: e.shift = 0.0; e.length = 1.0; break;
-        case Command::resetTone:   e.formant = 0.0; break;
-        case Command::resetSteady: e.drift = e.vibrato = -1.0; break;
-        case Command::resetAll:    e = {}; break;
-        case Command::loop:
-            if (onLoop) onLoop (std::max (0.0, v.note.soundStart() / sr - 0.15), v.note.soundEnd() / sr + 0.15);
-            return;
+        double a = 1.0e18, b = 0.0;
+        for (int i : which) { a = std::min (a, snap.notes[static_cast<size_t> (i)].note.soundStart() / sr); b = std::max (b, snap.notes[static_cast<size_t> (i)].note.soundEnd() / sr); }
+        if (onLoop) onLoop (std::max (0.0, a - 0.15), b + 0.15);
+        return;
     }
-    apply (index, e);
+    std::vector<std::pair<int, honeyui::NoteEdit>> edits;
+    for (int i : which)
+    {
+        const auto& v = snap.notes[static_cast<size_t> (i)];
+        auto e = v.edit;
+        switch (c)
+        {
+            case Command::snapToKey:   e.moved = true; e.target = honeyui::keyNote (v.note.pitch, snap.key, snap.scale); break;
+            case Command::steady:      e.drift = e.vibrato = 0.0; break;
+            case Command::resetPitch:  e.moved = false; e.target = 0.0; break;
+            case Command::resetTiming: e.shift = 0.0; e.length = 1.0; break;
+            case Command::resetTone:   e.formant = 0.0; break;
+            case Command::resetSteady: e.drift = e.vibrato = -1.0; break;
+            case Command::resetAll:    e = {}; break;
+            case Command::loop:        break;
+        }
+        edits.push_back ({ i, e });
+    }
+    applyMany (edits);
 }
 
 void HoneyRoll::showMenu (int hit, Point<float> at)
@@ -893,24 +1067,35 @@ void HoneyRoll::showMenu (int hit, Point<float> at)
     const double playFrom = std::max (0.0, secondsAt (at.x));
     if (hit >= 0)
     {
-        const auto& e = snap.notes[static_cast<size_t> (hit)].edit;
-        m.addSectionHeader ("Note " + String (hit + 1));
-        m.addItem ("Snap to the key  (S)", [this, hit] { command (hit, Command::snapToKey); });
-        m.addItem ("Steady it: no drift, no vibrato  (D)", [this, hit] { command (hit, Command::steady); });
+        const auto which = targets (hit);
+        const bool many = which.size() > 1;
+        bool moved = false, timed = false, toned = false, steadied = false, any = false;
+        for (int i : which)
+        {
+            const auto& e = snap.notes[static_cast<size_t> (i)].edit;
+            moved |= e.moved; timed |= e.timed(); toned |= std::abs (e.formant) > 1.0e-6; steadied |= e.drift >= 0.0 || e.vibrato >= 0.0; any |= ! e.isDefault();
+        }
+        const String these = many ? String (static_cast<int> (which.size())) + " notes" : String ("this note");
+        m.addSectionHeader (many ? String (static_cast<int> (which.size())) + " notes selected" : "Note " + String (hit + 1));
+        m.addItem ("Snap " + String (many ? "them" : "it") + " to the key  (S)", [this, hit] { command (hit, Command::snapToKey); });
+        m.addItem ("Steady " + String (many ? "them" : "it") + ": no drift, no vibrato  (D)", [this, hit] { command (hit, Command::steady); });
         m.addSeparator();
-        m.addItem ("Loop and play this note  (L)", [this, hit] { command (hit, Command::loop); });
+        m.addItem ("Loop and play " + these + "  (L)", [this, hit] { command (hit, Command::loop); });
         m.addItem ("Play from here  (Enter)", [this, playFrom] { if (onPlayFrom) onPlayFrom (playFrom); });
         m.addSeparator();
-        m.addItem ("Reset its pitch", e.moved, false, [this, hit] { command (hit, Command::resetPitch); });
-        m.addItem ("Reset its timing", e.timed(), false, [this, hit] { command (hit, Command::resetTiming); });
-        m.addItem ("Reset its tone (formant)", std::abs (e.formant) > 1.0e-6, false, [this, hit] { command (hit, Command::resetTone); });
-        m.addItem ("Reset its drift and vibrato", e.drift >= 0.0 || e.vibrato >= 0.0, false, [this, hit] { command (hit, Command::resetSteady); });
-        m.addItem ("Reset everything on this note  (Delete)", ! e.isDefault(), false, [this, hit] { command (hit, Command::resetAll); });
+        m.addItem ("Reset pitch", moved, false, [this, hit] { command (hit, Command::resetPitch); });
+        m.addItem ("Reset timing", timed, false, [this, hit] { command (hit, Command::resetTiming); });
+        m.addItem ("Reset tone (formant)", toned, false, [this, hit] { command (hit, Command::resetTone); });
+        m.addItem ("Reset drift and vibrato", steadied, false, [this, hit] { command (hit, Command::resetSteady); });
+        m.addItem ("Reset everything on " + these + "  (Delete)", any, false, [this, hit] { command (hit, Command::resetAll); });
+        m.addSeparator();
+        m.addItem ("Select all notes  (Ctrl+A)", [this] { selectMany (std::vector<char> (snap.notes.size(), 1), selected); });
     }
     else
     {
         m.addItem ("Play from here  (Enter)", [this, playFrom] { if (onPlayFrom) onPlayFrom (playFrom); });
         m.addItem (wholeView ? "Back to the close-up view  (F)" : "Fit the whole clip  (F)", [this] { fitButton(); });
+        m.addItem ("Select all notes  (Ctrl+A)", [this] { selectMany (std::vector<char> (snap.notes.size(), 1), -1); });
     }
     m.showMenuAsync (PopupMenu::Options().withTargetScreenArea (Rectangle<int> (1, 1).withPosition (localPointToGlobal (at.toInt()))));
 }
@@ -1016,6 +1201,7 @@ bool HoneyRoll::keyPressed (const KeyPress& k)
     if (ch == 'f' && ! mods.isAnyModifierKeyDown()) { fitButton(); return true; }
     if (ch == 'b' && ! mods.isAnyModifierKeyDown()) { if (onToggleOriginal) onToggleOriginal(); return true; }
     if (k == KeyPress::escapeKey) { setSelected (-1); return true; }
+    if (mods.isCommandDown() && ch == 'a') { selectMany (std::vector<char> (snap.notes.size(), 1), selected); return true; }
     if (selected < 0 || model == nullptr) return false;
     if (k == KeyPress::deleteKey || k == KeyPress::backspaceKey) { command (selected, Command::resetAll); return true; }
     if (ch == 's' && ! mods.isAnyModifierKeyDown()) { command (selected, Command::snapToKey); return true; }
@@ -1028,27 +1214,32 @@ bool HoneyRoll::keyPressed (const KeyPress& k)
     }
     if (k.getKeyCode() == KeyPress::upKey || k.getKeyCode() == KeyPress::downKey)
     {
+        // Each selected note to the next note of the key above / below (Shift: a semitone, Alt: 5 cents).
         const bool up = k.getKeyCode() == KeyPress::upKey;
-        const double now = snap.notes[static_cast<size_t> (selected)].note.target;
-        double next = 0.0;
-        if (mods.isAltDown())
-            next = now + (up ? 0.05 : -0.05);   // Alt: 5 cents
-        else if (mods.isShiftDown() || snap.scale == 0)
-            next = std::round (now) + (up ? 1.0 : -1.0);   // Shift (or no scale): a semitone
-        else
+        std::vector<std::pair<int, honeyui::NoteEdit>> edits;
+        for (int i : targets (selected))
         {
-            // The next note of the key above / below.
-            next = std::round (now);
-            for (int step = 0; step < 12; ++step)
+            const double now = snap.notes[static_cast<size_t> (i)].note.target;
+            double next = 0.0;
+            if (mods.isAltDown())
+                next = now + (up ? 0.05 : -0.05);
+            else if (mods.isShiftDown() || snap.scale == 0)
+                next = std::round (now) + (up ? 1.0 : -1.0);
+            else
             {
-                next += up ? 1.0 : -1.0;
-                if (std::abs (honeyui::keyNote (next, snap.key, snap.scale) - next) < 1.0e-6) break;
+                next = std::round (now);
+                for (int step = 0; step < 12; ++step)
+                {
+                    next += up ? 1.0 : -1.0;
+                    if (std::abs (honeyui::keyNote (next, snap.key, snap.scale) - next) < 1.0e-6) break;
+                }
             }
+            auto edit = snap.notes[static_cast<size_t> (i)].edit;
+            edit.moved = true;
+            edit.target = jlimit (kLowestMidi, kHighestMidi, next);
+            edits.push_back ({ i, edit });
         }
-        auto edit = snap.notes[static_cast<size_t> (selected)].edit;
-        edit.moved = true;
-        edit.target = jlimit (kLowestMidi, kHighestMidi, next);
-        apply (selected, edit);
+        applyMany (edits);
         return true;
     }
     return false;

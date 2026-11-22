@@ -486,6 +486,10 @@ void PitchCorrector::synthesiseUpTo (int64_t limit) noexcept
         }
         // In breaths / consonants the offset just holds: a constant offset joins seamlessly (any
         // change in it misaligns two overlapping grains = a tick at the end of a note).
+        // Following a guide (Honey Tune, offline): in silence it goes back to none (nothing to hear there), so the notes
+        // after it that weren't changed come out exactly as recorded, not up to a period late.
+        else if (guide != nullptr && drift != 0.0 && grainEnergy (synthPos + drift, P) < kSilentGrain && grainEnergy (synthPos, P) < kSilentGrain)
+            drift = 0.0;
         anaPos = synthPos + drift;
         // Two bands only when the grains just correct the voice by a little: harmony voices, formant moves
         // and bigger moves need the whole voice in the grains (the resampled high band would take its

@@ -578,3 +578,118 @@ TEST_CASE ("Honey Tune: a very low voice gives no NaN reading, and a NaN can't s
     CHECK (! notes.empty());
     for (const auto& n : notes) CHECK (std::isfinite (n.pitch));
 }
+
+TEST_CASE ("Honey Tune: notes after an edited one (past a silence) come out exactly as recorded", "[honey]")
+{
+    // A3 C4 E4 D4 with 0.3 s silences between them (the voice stops dead: digital silence). Note 0 moved +3 semitones,
+    // the rest untouched: after the first silence the shifter is back in step, so notes 2 and 3 are the take (to 1e-9:
+    // the window overlap's rounding at their faded ends leaves ~1e-19).
+    std::vector<float> x;
+    for (double m : { 57.0, 60.0, 64.0, 62.0 })
+    {
+        auto note = sing ({ { m, 0.4, 0.0 } });
+        x.insert (x.end(), note.begin(), note.end());
+        x.insert (x.end(), static_cast<size_t> (0.3 * kSr), 0.0f);
+    }
+    const auto t = analyse (x, kSr);
+    auto notes = findNotes (t);
+    REQUIRE (notes.size() == 4);
+    notes[0].target = notes[0].pitch + 3.0;
+    const auto y = render (x, kSr, t, notes);
+    CHECK (midiOf (hzAt (y, notes[0].start / kSr + 0.1, 0.2)) == Approx (notes[0].pitch + 3.0).margin (0.05));
+    for (size_t k = 2; k < 4; ++k)
+    {
+        size_t same = 0, all = 0;
+        for (auto i = static_cast<size_t> (notes[k].start); i < static_cast<size_t> (notes[k].end); ++i, ++all) same += std::abs (y[i] - x[i]) <= 1.0e-9f ? 1 : 0;
+        INFO ("note " << k << ": " << same << " of " << all << " samples as recorded");
+        CHECK (same == all);
+    }
+}
+
+TEST_CASE ("Honey Tune: a moved note's attack and release move with it, and it keeps its loudness", "[honey]")
+{
+    // Three notes with breaths; the middle one moved +5 semitones. Its first 30 ms already sound at the new pitch (it used
+    // to start at the old one and scoop in for ~100 ms), its last 30 ms too, and it's as loud as it was sung (the
+    // grains lost ~5 dB on a fourth up).
+    const auto x = sing ({ { 57, 0.5, 0.25 }, { 60, 0.5, 0.25 }, { 62, 0.5, 0.25 } });
+    const auto t = analyse (x, kSr);
+    auto notes = findNotes (t);
+    REQUIRE (notes.size() == 3);
+    const double sungStart = 0.75, sungEnd = 1.25;   // note 1 as synthesised
+    INFO ("note 1 found at " << notes[1].start / kSr << " - " << notes[1].end / kSr << " s");
+    CHECK (notes[1].start / kSr < sungStart + 0.012);   // (the detector's own start used to be 20 - 35 ms late)
+    notes[1].target = notes[1].pitch + 5.0;
+    const auto y = render (x, kSr, t, notes);
+    CHECK (midiOf (hzAt (y, sungStart + 0.02, 0.03)) == Approx (65.0).margin (0.15));
+    CHECK (midiOf (hzAt (y, sungEnd - 0.06, 0.03)) == Approx (65.0).margin (0.15));
+    auto rms = [&] (const std::vector<float>& v, double a, double b)
+    {
+        double e = 0; for (auto i = static_cast<size_t> (a * kSr); i < static_cast<size_t> (b * kSr); ++i) e += static_cast<double> (v[i]) * v[i];
+        return 10 * std::log10 (e / ((b - a) * kSr) + 1e-30);
+    };
+    CHECK (rms (y, sungStart + 0.05, sungEnd - 0.05) == Approx (rms (x, sungStart + 0.05, sungEnd - 0.05)).margin (0.7));
+    CHECK (rms (y, 0.05, 0.45) == Approx (rms (x, 0.05, 0.45)).margin (0.1));   // the untouched neighbours as they were
+}
+
+TEST_CASE ("Honey Tune: a stereo clip keeps its image (both channels through one shifter)", "[honey]")
+{
+    // The same voice on both sides, the right one with a short echo (a room): after a +3 move the side signal stays as
+    // small as it was (separate shifters joined their grains at different moments: the image smeared).
+    const auto left = sing ({ { 57, 0.6, 0.2 }, { 60, 0.6, 0.2 } });
+    std::vector<float> right (left.size(), 0.0f);
+    const auto d = static_cast<size_t> (0.0023 * kSr);
+    for (size_t i = 0; i < left.size(); ++i) right[i] = 0.8f * left[i] + (i >= d ? 0.35f * left[i - d] : 0.0f);
+    std::vector<float> mixed (left.size());
+    for (size_t i = 0; i < left.size(); ++i) mixed[i] = 0.5f * (left[i] + right[i]);
+    const auto t = analyse (mixed, kSr);
+    auto notes = findNotes (t);
+    REQUIRE (notes.size() == 2);
+    for (auto& n : notes) n.target = n.pitch + 3.0;
+    const auto out = render (Channels { left, right }, kSr, t, notes);
+    auto sideToMid = [] (const std::vector<float>& l, const std::vector<float>& r)
+    {
+        double s = 0, m = 0;
+        for (size_t i = 0; i < l.size(); ++i) { const double a = l[i] + r[i], b = l[i] - r[i]; m += a * a; s += b * b; }
+        return 10 * std::log10 (s / (m + 1e-30));
+    };
+    const double before = sideToMid (left, right), after = sideToMid (out[0], out[1]);
+    INFO ("side / mid " << before << " dB as recorded, " << after << " dB tuned");
+    CHECK (after < before + 1.5);
+    // And one channel alone renders as the mono call does.
+    const auto one = render (Channels { left }, kSr, t, notes);
+    const auto mono = render (left, kSr, t, notes);
+    CHECK (one.front() == mono);
+}
+
+TEST_CASE ("Honey Tune: legato notes (sung on with a glide) are found one each, never split in two", "[honey]")
+{
+    // 8 notes, 0.4 s each, joined by 40 ms glides, one breath-free line (steps of 1 and 2 semitones).
+    const double pitches[] = { 57, 59, 60, 62, 60, 59, 57, 59 };
+    std::vector<float> x;
+    Biquad formant; design::apply (formant, design::bell (700.0, 9.0, 2.0, kSr));
+    double ph = 0.0;
+    const double noteLen = 0.4, glide = 0.04, total = 8 * noteLen;
+    for (size_t i = 0; i < static_cast<size_t> (total * kSr); ++i)
+    {
+        const double tt = static_cast<double> (i) / kSr;
+        const auto k = std::min<size_t> (7, static_cast<size_t> (tt / noteLen));
+        const double into = tt - static_cast<double> (k) * noteLen;
+        double m = pitches[k];
+        if (k > 0 && into < glide) m = pitches[k - 1] + (pitches[k] - pitches[k - 1]) * (0.5 - 0.5 * std::cos (std::numbers::pi * into / glide));
+        const double f = 440.0 * std::pow (2.0, (m - 69.0) / 12.0);
+        ph += f / kSr;
+        double v = 0.0;
+        for (int h = 1; h * f < 8000.0; ++h) v += std::sin (2 * std::numbers::pi * h * ph) / h;
+        const double env = std::min ({ 1.0, tt / 0.02, (total - tt) / 0.02 });
+        x.push_back (static_cast<float> (0.1 * env * formant.process (v)));
+    }
+    const auto t = analyse (x, kSr);
+    const auto notes = findNotes (t);
+    REQUIRE (notes.size() == 8);
+    for (size_t k = 0; k < 8; ++k)
+    {
+        INFO ("note " << k << " at " << notes[k].start / kSr << " s, pitch " << notes[k].pitch);
+        CHECK (notes[k].pitch == Approx (pitches[k]).margin (0.1));
+        if (k > 0) CHECK (std::abs (notes[k].start / kSr - (static_cast<double> (k) * noteLen + 0.5 * glide)) < 0.035);   // the boundary in the glide
+    }
+}

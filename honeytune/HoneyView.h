@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 /** What the Honey Tune editor shows and edits (no JUCE: shared by the plug-in and the preview tool). */
@@ -452,6 +453,8 @@ struct Model
     virtual Settings getSettings() = 0;
     virtual void setSettings (const Settings&) = 0;
     virtual void setEdit (int noteIndex, const NoteEdit& edit) = 0;
+    /** Several notes at once (a selection): one undo step. */
+    virtual void setEdits (const std::vector<std::pair<int, NoteEdit>>& edits) { for (const auto& [i, e] : edits) setEdit (i, e); }
     virtual void resetAllEdits() = 0;
     /** Undo / redo the last edit (false: nothing to undo / redo). */
     virtual bool undo() { return false; }

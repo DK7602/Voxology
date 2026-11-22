@@ -575,6 +575,24 @@ public:
         requestRender (st);
     }
 
+    /** Several notes at once (a selection): one undo step, one render. */
+    void setEdits (const std::shared_ptr<SourceState>& st, const std::vector<std::pair<int, NoteEdit>>& edits, const vox::honey::Track* forTrack)
+    {
+        const auto s = getSettings();
+        {
+            const ScopedLock sl (st->dataLock);
+            if (forTrack != nullptr && st->track.get() != forTrack) return;
+            const auto count = static_cast<int> (st->edits.size());
+            const bool any = std::any_of (edits.begin(), edits.end(), [&] (const auto& p)
+                                          { return p.first >= 0 && p.first < count && ! (st->edits[static_cast<size_t> (p.first)] == p.second); });
+            if (! any) return;
+            st->pushUndo (-1, s, true);
+            for (const auto& [i, e] : edits)
+                if (i >= 0 && i < count) st->edits[static_cast<size_t> (i)] = e;
+        }
+        requestRender (st);
+    }
+
     void resetAllEdits (const std::shared_ptr<SourceState>& st)
     {
         const auto s = getSettings();
@@ -955,17 +973,15 @@ private:
                           && current->front().size() == original.front().size()
                           && vox::honey::changedRegion (st.renderedNotes, notes, clip, st.sampleRate, from, to) && to - from < 0.6 * clip;
         if (part && to <= from) { st.status = 2; return true; }   // nothing changed
+        // All the channels through one shifter (a stereo image stays put; one per channel smeared it).
         auto out = std::make_shared<Audio>();
-        for (size_t c = 0; c < original.size(); ++c)
+        if (part)
         {
-            if (part)
-            {
-                out->push_back ((*current)[c]);
-                vox::honey::renderPart (original[c], st.sampleRate, *track, notes, out->back(), from, to, vox::honey::kTransitionMs, &closing);
-            }
-            else
-                out->push_back (vox::honey::render (original[c], st.sampleRate, *track, notes, vox::honey::kTransitionMs, &closing));
+            *out = *current;
+            vox::honey::renderPart (original, st.sampleRate, *track, notes, *out, from, to, vox::honey::kTransitionMs, &closing);
         }
+        else
+            *out = vox::honey::render (original, st.sampleRate, *track, notes, vox::honey::kTransitionMs, &closing);
         if (closing) return false;   // (stopped part way: thrown away)
         st.renderedNotes = notes;
         st.renderedTrack = track;
@@ -1171,6 +1187,11 @@ private:
     void setEdit (int i, const NoteEdit& e) override
     {
         if (dc != nullptr && state != nullptr) { toTuned(); dc->setEdit (state, i, e, panel.roll.getSnapshot().track.get()); }
+    }
+    void setEdits (const std::vector<std::pair<int, NoteEdit>>& edits) override
+    {
+        if (edits.size() == 1) { setEdit (edits.front().first, edits.front().second); return; }   // (a drag of one note: steps join up)
+        if (dc != nullptr && state != nullptr) { toTuned(); dc->setEdits (state, edits, panel.roll.getSnapshot().track.get()); }
     }
     void resetAllEdits() override { if (dc != nullptr && state != nullptr) { toTuned(); dc->resetAllEdits (state); } }
     bool undo() override { return stepEdits (true); }

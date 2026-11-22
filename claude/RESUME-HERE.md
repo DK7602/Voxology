@@ -2186,3 +2186,11 @@ model -> assess first), then 8 auto throws (delay / reverb throw on the last wor
   _ARA_SDK=/tmp/claude-0/ara); env HONEY_PLAYHEAD / HONEY_STOPPED new. Screens sent to the user.
 - Proposed next betas (PLAN.md "Next"): 39 multi-select + split / merge + hear a note while stopped + sound fixes;
   40 note level / mute, notes-to-check finder, beat grid, key extras; later multi-clip / per-copy edits.
+- Beta 38 = Voxology 2dbd9c1 (0.74.0 + the NaN hang fix: AUDIT-ENGINE.md #0), installer run 44993753339 green; told
+  the user (2026-11-22).
+- v0.75.0 (Beta 39): the engine review's sound fixes, measured (docs/honey-audit/PLAN.md "Beta 39": a moved note's
+  attack / release move with it, loudness kept, stereo through one shifter, legato not split, untouched notes exact
+  after silence) + several notes at once (Ctrl / Shift click, box, Ctrl+A, keyboard key, one undo step).
+  render() / renderPart() / warp() now take Channels (mono overloads kept). Track::filled marks the attack / release
+  readings analyse() fills in. The review's tools: /tmp/claude-0/audit-eng-work (scratch; `mine/` = builds against this
+  tree). Private decoded audio there: delete when done (audio/).

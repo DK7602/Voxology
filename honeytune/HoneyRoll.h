@@ -19,8 +19,16 @@ public:
     /** Pull the latest notes from the model (keeps the selection and the view). */
     void refresh();
 
-    int getSelected() const { return selected; }
-    void setSelected (int index);
+    int getSelected() const { return selected; }   // the note you clicked last (its values show in the bottom bar)
+    void setSelected (int index);                   // that note alone (-1: none)
+    /** Every selected note (in order; the one clicked last among them). Drags, keys, the menu and the bottom bar act on
+        all of them. */
+    std::vector<int> getSelection() const;
+    /** What the menu, the keys and the bottom bar's buttons do (to `index`'s selection, or just that note). */
+    enum class Command { snapToKey, steady, resetPitch, resetTiming, resetTone, resetSteady, resetAll, loop };
+    void command (int index, Command);
+    int selectionSize() const;
+    bool isSelected (int index) const;
     const honeyui::Snapshot& getSnapshot() const { return snap; }
     std::function<void()> onSelectionChanged;
     std::function<void (double)> onSeek;   // clicked the ruler (clip seconds)
@@ -67,9 +75,11 @@ private:
     juce::Path cellPath (int index, double midi) const;   // where a note can be grabbed (a hexagon, a row high)
     double shownPitch (int index) const;                   // where it's drawn (Original: as sung; with a drag)
     double clampTop (double top) const;
-    enum class Command { snapToKey, steady, resetPitch, resetTiming, resetTone, resetSteady, resetAll, loop };
-    void command (int index, Command);
     void apply (int index, const honeyui::NoteEdit&);
+    void applyMany (const std::vector<std::pair<int, honeyui::NoteEdit>>&);   // one undo step
+    std::vector<int> targets (int index) const;   // a command on this note: the selection if it's in it, else the note
+    void selectMany (std::vector<char> pick, int primary);
+    void groupLimits();
     void showMenu (int hit, juce::Point<float> at);
     /** The note as drawn: its sung waveform around its pitch, one pixel column at a time: the outline = its peaks
         (Track::level), the body = its RMS (Track::power), in dB; as tall as it was loud (the clip's loud singing = 1.7 rows). */
@@ -97,6 +107,11 @@ private:
     double topMidi = 72.0, rowHeight = 18.0;          // pitch axis (topMidi = the row at the top edge)
 
     int selected = -1, hovered = -1;
+    std::vector<char> chosen;                  // per note: selected
+    bool banding = false;                      // a rubber band on the empty grid
+    juce::Point<float> bandFrom, bandTo;
+    std::vector<char> bandBase;                // what was selected before it (Ctrl: it adds)
+    double groupMin = 0.0, groupMax = 0.0;     // how far the selection may move in time (seconds)
     bool dragging = false;
     double dragStartTarget = 0.0, dragTarget = 0.0;
     float dragStartY = 0.0f, dragStartX = 0.0f;

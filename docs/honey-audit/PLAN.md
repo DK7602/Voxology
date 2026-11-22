@@ -52,13 +52,35 @@ Quick wins built (AUDIT-FEATURES.md items):
 - C3 following pauses when you scroll or zoom while it plays (until the next play, a ruler click or F).
 - I1 vertical zoom (Alt + wheel, Alt + / -); I2 Fit = the whole clip, again = the close-up view.
 
+## Beta 39 (Voxology 0.75.0): the sound (AUDIT-ENGINE.md), then several notes at once
+
+Measured with the engine review's own tools (scratch: /tmp/claude-0/audit-eng-work, `mine/` builds; synthetic
+110 / 220 / 440 Hz voices, 12 notes per row; real: the owner's Gallas acapella and a pro dry lead):
+- #1 / #6 A moved note's attack and release move with it. analyse() fills each sung run back to the voice's onset (50 ms)
+  and on into its release (40 ms) where it's voice (level within 30 dB; repeats at about the note's period, or few zero
+  crossings), marked Track::filled; findNotes decides on the detected readings and then gives each note its filled edges.
+  planShift: exactly the note's move inside a note, an S-curve across a gap, the singer's own glide between legato notes
+  (no global smoothing any more). Synthetic: first 50 ms 61 - 148 c -> 1.4 - 9 c; settled 60 - 122 ms -> 5 - 13 ms; last
+  40 ms 2 - 33 c -> 0.7 - 1.7 c; note starts +20 - 35 ms late -> +5 ms. Real (every 4th note moved): Gallas first 40 ms
+  52 / 147 / 150 c (+2 / +5 / -5) -> 32 / 30 / 36 c; pro lead 61 / 156 / 159 -> 29 / 69 / 70 c (much of what's left is
+  the glide-shaped legato change, by design).
+- #2 Loudness: each changed note's energy matched to how it was sung (one gain per note, +-6 dB, eased over 12 ms):
+  +5 st -5.2 dB -> 0.0 dB (synthetic), real -1 .. -4.7 dB -> 0.0 dB.
+- #3 Stereo: every channel through one shifter, time edits with the same grains for every channel (render / renderPart /
+  warp take Channels; the plug-in renders that way). Test: side / mid kept after a +3 move.
+- #4 Segmentation: the new note's level from what's sung just after a change (not the 180 ms average still moving),
+  the boundary where the sung pitch crosses over; scraps under 100 ms sung on at the same pitch join their note. Legato
+  12-note lines: 16 - 21 notes found -> 11 - 13, boundaries 25 - 30 ms off -> 4 - 5 ms; real tail fragments 20 / 36 % ->
+  4 %. Rap syllables as before (33 - 35 of 40 one-to-one), melisma 18 -> 16 of 19 (the one trade-off).
+- #11 Following a guide, the shifter's offset goes back to 0 in silence: untouched notes after it come out as recorded.
+- Tests: attack / release / loudness, stereo image, legato line, untouched notes exact, NaN hang. All Honey Tune tests pass.
+- Several notes at once: Ctrl / Shift click, rubber band, Ctrl+A, a key on the keyboard = that pitch, Esc; drags (pitch:
+  the same step; time: as far as the nearest unselected note lets them), keys, the menu and the bottom bar act on all,
+  one undo step (Model::setEdits, HoneyDocumentController::setEdits).
+
 ## Next (in order; proposed to the user on 2026-11-22, no objection yet)
-1. Beta 39: the sound first (AUDIT-ENGINE.md, validated fixes in its scratch copy): a moved note's whole attack and
-   release move with it (no scoop in / slide back: hold the note's move between notes, extend voiced runs to the
-   audible onset / release), both channels through one shifter (stereo image), legato boundaries (no split notes),
-   moved notes' loudness kept; then multi-select (rubber band, Ctrl / Shift click, Ctrl+A, click a key = that pitch) with batch edits as one
-   undo step; split / merge notes (saved, undoable); hear a note while stopped (ARA editor renderer); the engine
-   audit's sound fixes.
-2. Beta 40: note level and mute (+ blob height), "notes to check" finder (amber dot, N next, D fix), time edits snap
+1. Beta 40: split / merge notes (saved, undoable); hear a note while stopped (ARA editor renderer); a consonant moves
+   with its note in time (AUDIT-ENGINE.md #5); high / breathy voices' octave errors (#13).
+2. Beta 41: note level and mute (+ blob height), "notes to check" finder (amber dot, N next, D fix), time edits snap
    to the beat (Alt free), key extras (click a key to add / remove a scale note; the beat's A4 tuning from Voxology).
 3. Later: several clips at once and copies tuned independently (ARA audio modifications), MIDI export, tighten timing.

@@ -1,11 +1,13 @@
 #include "vox/HoneyTune.h"
 #include "vox/Crepe.h"
+#include "vox/Modules.h"
 
 #include <thread>
 
 #include <numbers>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace vox::honey {
@@ -230,6 +232,134 @@ void measureLevel (Track& t, const std::vector<float>& mono, double sr)
 }
 }
 
+namespace {
+/** The detector says "sung" only once its window is full of voice and two readings agree: 20 - 35 ms after the voice
+    starts (more on low voices), and it lets go before the release has faded. Those moments belong to the note: moved
+    with it, its attack sounds at the new pitch (it used to start at the old pitch and scoop in, and slide back at its
+    end). Each sung run reaches back up to 50 ms to where the voice starts and on up to 40 ms into its release, while
+    the sound stays within 30 dB of the note and is voice, not noise (it repeats at about the note's period, or crosses
+    zero no faster than a voice: an "s" does neither), at the run's first / last pitch. (Audit 3, AUDIT-ENGINE.md #1 / #6: a moved note's first 50 ms 65 - 148 cents off -> a few cents.) */
+void extendToOnsets (Track& t, const std::vector<float>& mono, double sr)
+{
+    const size_t n = t.midi.size();
+    if (n < 2 || mono.empty()) return;
+    const auto w = static_cast<long> (0.005 * sr);   // +-5 ms around a moment
+    auto level = [&] (double c)
+    {
+        const long a = std::max (0L, static_cast<long> (c) - w), b = std::min (static_cast<long> (mono.size()), static_cast<long> (c) + w);
+        double e = 0.0;
+        for (long i = a; i < b; ++i) e += static_cast<double> (mono[static_cast<size_t> (i)]) * mono[static_cast<size_t> (i)];
+        return 10.0 * std::log10 (e / static_cast<double> (std::max (1L, b - a)) + 1.0e-20);
+    };
+    auto crossings = [&] (double c)   // zero crossings per second
+    {
+        const long a = std::max (1L, static_cast<long> (c) - w), b = std::min (static_cast<long> (mono.size()), static_cast<long> (c) + w);
+        int z = 0;
+        for (long i = a; i < b; ++i)
+            if ((mono[static_cast<size_t> (i)] >= 0.0f) != (mono[static_cast<size_t> (i - 1)] >= 0.0f)) ++z;
+        return z * sr / static_cast<double> (std::max (1L, b - a));
+    };
+    // Gaps between sung runs (readings): the onset takes up to 60 % of a gap, the release what's left of the rest, and
+    // 10 ms always stay unsung (two notes never run into one).
+    // Voice, not noise: the waveform repeats at about the note's period here (a scoop can be a semitone or two off), or
+    // it crosses zero no more often than a voice does. (Bright real voices cross zero a lot: the repeat test catches them.)
+    auto repeats = [&] (double c, double midi)
+    {
+        if (midi <= 0.0) return false;
+        const double P = sr / (440.0 * std::pow (2.0, (midi - 69.0) / 12.0));
+        const auto len = static_cast<long> (std::max (2.0 * P, 0.005 * sr));
+        const long a = static_cast<long> (c) - len / 2;
+        if (a < 0 || a + len + static_cast<long> (1.25 * P) + 2 >= static_cast<long> (mono.size())) return false;
+        double best = 0.0;
+        for (double lag = 0.88 * P; lag <= 1.14 * P; lag += std::max (1.0, 0.02 * P))
+        {
+            const auto L = static_cast<long> (std::lround (lag));
+            double xy = 0.0, xx = 0.0, yy = 0.0;
+            for (long i = a; i < a + len; ++i)
+            {
+                const double u = mono[static_cast<size_t> (i)], v = mono[static_cast<size_t> (i + L)];
+                xy += u * v; xx += u * u; yy += v * v;
+            }
+            best = std::max (best, xy / std::sqrt (xx * yy + 1.0e-30));
+        }
+        return best > 0.6;
+    };
+    auto voiceLike = [&] (double c, double midi) { return crossings (c) <= 3500.0 || repeats (c, midi); };
+    const auto sung = t.midi;
+    t.filled.assign (n, 0);
+    const double hop = n > 1 ? (t.time.back() - t.time.front()) / static_cast<double> (n - 1) : 128.0;
+    const auto keep = static_cast<size_t> (std::ceil (0.01 * sr / hop));
+    size_t i = 0;
+    while (i < n && ! (sung[i] > 0.0)) ++i;
+    // (the first run's onset: the gap is everything before it)
+    size_t prevEnd = 0;   // one past the last run's end
+    bool first = true;
+    while (i < n)
+    {
+        size_t runEnd = i;
+        while (runEnd < n && sung[runEnd] > 0.0) ++runEnd;
+        if (t.time[runEnd - 1] - t.time[i] < 0.05 * sr)
+        {
+            // Too short to be a note (a stray reading in a breath, a ringing decay): left as it is, not grown into one.
+            i = runEnd;
+            while (i < n && ! (sung[i] > 0.0)) ++i;
+            continue;
+        }
+        // Onset: back from i.
+        const size_t gapStart = first ? 0 : prevEnd;
+        const size_t gap = i - gapStart;
+        const size_t usable = first ? gap : (gap > keep ? gap - keep : 0);
+        const size_t onsetMax = first ? usable : static_cast<size_t> (0.6 * static_cast<double> (usable));
+        size_t onset = 0;
+        if (i > 0)
+        {
+            const double ref = level (t.time[i] + 0.01 * sr);
+            for (size_t k = i; k-- > gapStart && onset < onsetMax;)
+            {
+                if (t.time[i] - t.time[k] > 0.05 * sr) break;
+                if (level (t.time[k]) < ref - 30.0 || ! voiceLike (t.time[k], sung[i])) break;
+                t.midi[k] = sung[i];
+                t.clarity[k] = t.clarity[i];
+                t.filled[k] = 1;
+                ++onset;
+            }
+        }
+        // Release of the run before, into what's left of the gap.
+        if (! first)
+        {
+            const size_t releaseMax = usable > onset ? usable - onset : 0;
+            const double ref = level (t.time[prevEnd - 1] - 0.01 * sr);
+            size_t rel = 0;
+            for (size_t k = prevEnd; k < i - onset && rel < releaseMax; ++k, ++rel)
+            {
+                if (t.time[k] - t.time[prevEnd - 1] > 0.04 * sr) break;
+                if (level (t.time[k]) < ref - 30.0 || ! voiceLike (t.time[k], sung[prevEnd - 1])) break;
+                t.midi[k] = sung[prevEnd - 1];
+                t.clarity[k] = t.clarity[prevEnd - 1];
+                t.filled[k] = 1;
+            }
+        }
+        prevEnd = runEnd;
+        first = false;
+        i = runEnd;
+        while (i < n && ! (sung[i] > 0.0)) ++i;
+    }
+    // The last run's release (nothing after it).
+    if (! first && prevEnd > 0 && prevEnd < n)
+    {
+        const double ref = level (t.time[prevEnd - 1] - 0.01 * sr);
+        for (size_t k = prevEnd; k < n; ++k)
+        {
+            if (t.time[k] - t.time[prevEnd - 1] > 0.04 * sr) break;
+            if (level (t.time[k]) < ref - 30.0 || ! voiceLike (t.time[k], sung[prevEnd - 1])) break;
+            t.midi[k] = sung[prevEnd - 1];
+            t.clarity[k] = t.clarity[prevEnd - 1];
+            t.filled[k] = 1;
+        }
+    }
+}
+}
+
 Track analyse (const std::vector<float>& mono, double sr, bool ai, const std::atomic<bool>* cancel)
 {
     Track t;
@@ -294,12 +424,18 @@ Track analyse (const std::vector<float>& mono, double sr, bool ai, const std::at
         if (w.size() >= 3) t.midi[i] = median (w);
     }
     if (ai) aiCheck (t, mono, sr, cancel);
+    extendToOnsets (t, mono, sr);
     measureLevel (t, mono, sr);
     return t;
 }
 
-std::vector<Note> findNotes (const Track& t)
+std::vector<Note> findNotes (const Track& track)
 {
+    // The notes are decided on what the detector heard: the attacks / releases analyse() filled in (one pitch copied
+    // back / on) would look like a level start to a gliding syllable and split it. Each note takes its own back after.
+    Track t = track;
+    for (size_t i = 0; i < t.midi.size() && i < track.filled.size(); ++i)
+        if (track.filled[i] != 0) t.midi[i] = 0.0;
     std::vector<Note> notes;
     const size_t n = t.midi.size();
     const double sr = t.sampleRate;
@@ -345,19 +481,40 @@ std::vector<Note> findNotes (const Track& t)
         size_t start = i, j = i;
         double ref = sm[i];
         std::vector<double> sofar;
+        size_t runEnd = i;
+        while (runEnd < n && t.midi[runEnd] > 0.0) ++runEnd;
+        size_t holdUntil = i;   // the averages still in the change to a new note: not taken as its level
+        auto nearer = [&] (size_t q, double oldLevel, double newLevel) { return std::abs (t.midi[q] - newLevel) < std::abs (t.midi[q] - oldLevel); };
         while (j < n && t.midi[j] > 0.0)
         {
-            sofar.push_back (sm[j]);
+            if (j >= holdUntil) sofar.push_back (sm[j]);
             if (sofar.size() >= 4) ref = median (sofar);
             // A new note when the (averaged) pitch stays more than 0.6 semitone away for `settle` readings.
             size_t k = j;
             while (k < n && t.midi[k] > 0.0 && std::abs (sm[k] - ref) > 0.6 && k - j < settle) ++k;
             if (k - j >= settle && j - start >= minLen)
             {
-                close (start, j);
-                start = j;
+                // The new note's level: what's sung just after the change (it's offline: look ahead), never the average
+                // still in the change (that made a second boundary once the average settled: legato notes split in two). The
+                // boundary: where the sung pitch itself is first nearer the new level (three readings running), not
+                // where the 180 ms average started to move (boundaries were ~25 ms late). (AUDIT-ENGINE.md #4.)
+                std::vector<double> ahead;   // the sung pitch 45 - 135 ms on (the 180 ms average moves ~40 ms before the note does)
+                for (size_t q = j + half / 2; q < std::min (runEnd, j + half + half / 2); ++q) ahead.push_back (t.midi[q]);
+                const double oldLevel = ref, newLevel = ahead.size() >= 3 ? median (ahead) : sm[std::min (runEnd - 1, j + half)];
+                size_t b = j;
+                for (size_t q = (j > start + minLen / 2 + 2 * half ? j - 2 * half : start + minLen / 2); q < std::min (runEnd, j + half); ++q)
+                    if (q + 2 < runEnd && nearer (q, oldLevel, newLevel) && nearer (q + 1, oldLevel, newLevel) && nearer (q + 2, oldLevel, newLevel))
+                    {
+                        b = q;
+                        break;
+                    }
+                if (b <= start + 2) b = j;
+                close (start, b);
+                start = b;
                 sofar.clear();
-                ref = sm[j];
+                ref = newLevel;
+                holdUntil = j + 2 * half;
+                j = std::max (j, b);
             }
             ++j;
         }
@@ -369,6 +526,47 @@ std::vector<Note> findNotes (const Track& t)
         }
         i = std::max (j, i + 1);   // always on
     }
+
+    // A short scrap (under 100 ms) sung on into a note at the same pitch (within 0.7 semitone, no gap between) is that
+    // note's start or end: joined to it, so moving the note takes all of it.
+    const auto touching = [] (const Note& a, const Note& b) { return b.firstReading - a.lastReading <= 2; };
+    const double scrap = 0.1 * sr;
+    for (size_t k = 0; k < notes.size();)
+    {
+        const bool shortOne = notes[k].end - notes[k].start < scrap;
+        const bool withPrev = shortOne && k > 0 && touching (notes[k - 1], notes[k]) && std::abs (notes[k - 1].pitch - notes[k].pitch) < 0.7;
+        const bool withNext = shortOne && k + 1 < notes.size() && touching (notes[k], notes[k + 1]) && std::abs (notes[k + 1].pitch - notes[k].pitch) < 0.7;
+        if (! withPrev && ! withNext) { ++k; continue; }
+        const size_t into = withPrev && (! withNext || std::abs (notes[k - 1].pitch - notes[k].pitch) <= std::abs (notes[k + 1].pitch - notes[k].pitch)) ? k - 1 : k + 1;
+        const size_t a = std::min (into, k), b = std::max (into, k);
+        const int first = notes[a].firstReading, last = notes[b].lastReading;
+        notes.erase (notes.begin() + static_cast<long> (b));
+        notes.erase (notes.begin() + static_cast<long> (a));
+        const auto before = notes.size();
+        close (static_cast<size_t> (first), static_cast<size_t> (last) + 1);   // (appends the joined note)
+        if (notes.size() > before)
+        {
+            auto joined = notes.back();
+            notes.pop_back();
+            notes.insert (notes.begin() + static_cast<long> (a), joined);
+        }
+        k = a;   // (look at the joined note again)
+    }
+
+    // Each note takes back its attack and release (the filled moments next to it, up to its neighbours).
+    if (! track.filled.empty())
+        for (size_t k = 0; k < notes.size(); ++k)
+        {
+            auto& note = notes[k];
+            const int lo = k > 0 ? notes[k - 1].lastReading + 1 : 0;
+            const int hi = k + 1 < notes.size() ? notes[k + 1].firstReading - 1 : static_cast<int> (n) - 1;
+            while (note.firstReading - 1 >= lo && track.filled[static_cast<size_t> (note.firstReading - 1)] != 0 && track.midi[static_cast<size_t> (note.firstReading - 1)] > 0.0)
+                --note.firstReading;
+            while (note.lastReading + 1 <= hi && track.filled[static_cast<size_t> (note.lastReading + 1)] != 0 && track.midi[static_cast<size_t> (note.lastReading + 1)] > 0.0)
+                ++note.lastReading;
+            note.start = track.time[static_cast<size_t> (note.firstReading)];
+            note.end = track.time[static_cast<size_t> (note.lastReading)];
+        }
     return notes;
 }
 
@@ -471,17 +669,66 @@ std::vector<double> planShift (const Track& t, const std::vector<Note>& notes, d
             if (shaped && t.midi[i] > 0.0) detail[i] = movementChange (m, note, i, a0, b0, noteEdge);
         }
     }
-    // Smooth the note moves (forward + backward, so it doesn't lag).
-    const double k = 1.0 - std::exp (-hopSec / std::max (0.001, transitionMs / 1000.0));
-    for (int pass = 0; pass < 2; ++pass)
+    // Between notes. Inside a note it's exactly the note's move, from its first moment to its last (its attack used to
+    // sit on a move smoothed out over 25 ms either side of the gap: a moved note started off its new pitch and scooped
+    // in, by 50 - 160 cents on real vocals with short gaps, and slid back at its end; AUDIT-ENGINE.md #1, #12):
+    // - across a gap: an S-curve from one note's move to the next one's inside the gap (nothing sung there to hear it);
+    // - two notes sung straight into each other: the move follows the singer's own glide from one to the other (where
+    //   the sung pitch is between them), or an S-curve over the transition time around the boundary if there's no glide;
+    // - before the first note / after the last: their move.
+    std::vector<int> ordered;
+    for (size_t k = 0; k < notes.size(); ++k)
+        if (notes[k].lastReading >= notes[k].firstReading && notes[k].firstReading >= 0 && static_cast<size_t> (notes[k].lastReading) < n)
+            ordered.push_back (static_cast<int> (k));
+    std::sort (ordered.begin(), ordered.end(), [&] (int a, int b) { return notes[static_cast<size_t> (a)].firstReading < notes[static_cast<size_t> (b)].firstReading; });
+    auto ease = [] (double x) { x = std::clamp (x, 0.0, 1.0); return 0.5 - 0.5 * std::cos (std::numbers::pi * x); };
+    if (! ordered.empty())
     {
-        double y = 0.0;
-        for (size_t c = 0; c < n; ++c)
+        const auto& first = notes[static_cast<size_t> (ordered.front())];
+        const auto& last = notes[static_cast<size_t> (ordered.back())];
+        for (size_t i = 0; i < static_cast<size_t> (first.firstReading); ++i) base[i] = first.target - first.pitch;
+        for (auto i = static_cast<size_t> (last.lastReading) + 1; i < n; ++i) base[i] = last.target - last.pitch;
+    }
+    const auto edge = static_cast<long> (std::max (1.0, 0.5 * transitionMs / 1000.0 / hopSec));   // half the transition
+    const auto glideReach = static_cast<long> (std::max (2.0, 0.06 / hopSec));                       // where a glide is looked for
+    for (size_t q = 0; q + 1 < ordered.size(); ++q)
+    {
+        const auto& A = notes[static_cast<size_t> (ordered[q])];
+        const auto& B = notes[static_cast<size_t> (ordered[q + 1])];
+        const double mA = A.target - A.pitch, mB = B.target - B.pitch;
+        const long la = A.lastReading, fb = B.firstReading;
+        if (fb - la > 1)
         {
-            const size_t i = pass == 0 ? c : n - 1 - c;
-            y += (base[i] - y) * k;
-            base[i] = y;
+            for (long i = la + 1; i < fb; ++i)
+                base[static_cast<size_t> (i)] = mA + (mB - mA) * ease (static_cast<double> (i - la) / static_cast<double> (fb - la));
+            continue;
         }
+        if (std::abs (mB - mA) < 1.0e-9) continue;
+        // Sung on into each other: the singer's glide between the two notes' pitches, if there is one around the join.
+        const long g0 = std::max<long> (A.firstReading, fb - glideReach), g1 = std::min<long> (B.lastReading, la + glideReach);
+        bool shaped = false;
+        if (std::abs (B.pitch - A.pitch) >= 0.5 && g1 > g0 + 2)
+        {
+            std::vector<double> p;
+            double hi = 0.0;
+            for (long i = g0; i <= g1; ++i)
+            {
+                const double m = t.midi[static_cast<size_t> (i)];
+                const double x = m > 0.0 ? std::clamp ((m - A.pitch) / (B.pitch - A.pitch), 0.0, 1.0) : hi;
+                hi = std::max (hi, x);   // only ever on towards the next note
+                p.push_back (hi);
+            }
+            const double p0 = p.front(), p1 = p.back();
+            if (p1 - p0 > 0.5)
+            {
+                for (long i = g0; i <= g1; ++i)
+                    base[static_cast<size_t> (i)] = mA + (mB - mA) * std::clamp ((p[static_cast<size_t> (i - g0)] - p0) / (p1 - p0), 0.0, 1.0);
+                shaped = true;
+            }
+        }
+        if (! shaped)
+            for (long i = std::max<long> (A.firstReading, fb - edge); i <= std::min<long> (B.lastReading, la + edge); ++i)
+                base[static_cast<size_t> (i)] = mA + (mB - mA) * ease (static_cast<double> (i - (fb - edge)) / static_cast<double> (2 * edge));
     }
     std::vector<double> shift (n, 0.0);
     for (size_t i = 0; i < n; ++i) shift[i] = base[i] + detail[i];
@@ -505,45 +752,113 @@ std::vector<double> planFormant (const Track& t, const std::vector<Note>& notes)
     return f;
 }
 
-/** Runs the shifter over input [from, to) (plus its latency) and hands each output sample to put(index, value). */
+/** Runs one shifter over the channels (kMaxChannels at a time: their grains join at the same moments, so a stereo image
+    stays where it was; one shifter per channel made its own joins and smeared it) over input [from, to) plus its
+    latency, and hands each output sample to put(channel, index, value). */
 template <typename Put>
-void runShifter (const std::vector<float>& mono, double sr, const Track& t, const std::vector<double>& shift,
+void runShifter (const std::vector<const std::vector<float>*>& chans, double sr, const Track& t, const std::vector<double>& shift,
                  const std::vector<double>& formant, size_t from, size_t to, const std::atomic<bool>* cancel, Put&& put)
 {
-    Plan plan (t, shift, static_cast<double> (from), &formant);
-    PitchCorrector pc;
-    PitchParams p;
-    p.amount = 100.0;
-    pc.setParams (p);
-    pc.prepare (sr, 1);
-    pc.setGuide (&plan);
-    const auto lat = static_cast<size_t> (pc.latencySamples());
-    std::vector<double> buf (256);
-    const size_t end = std::min (mono.size(), to);
-    for (size_t s = from; s < end + lat; s += buf.size())
+    for (size_t c0 = 0; c0 < chans.size(); c0 += static_cast<size_t> (vox::kMaxChannels))
     {
-        if (cancel != nullptr && cancel->load (std::memory_order_relaxed)) return;
-        const size_t len = std::min (buf.size(), end + lat - s);
-        for (size_t i = 0; i < len; ++i) buf[i] = s + i < mono.size() ? mono[s + i] : 0.0;
-        double* ptr = buf.data();
-        pc.process (&ptr, 1, static_cast<int> (len));
-        for (size_t i = 0; i < len; ++i)
-            if (s + i >= from + lat && s + i - lat < end) put (s + i - lat, buf[i]);
+        const auto nc = std::min (static_cast<size_t> (vox::kMaxChannels), chans.size() - c0);
+        Plan plan (t, shift, static_cast<double> (from), &formant);
+        PitchCorrector pc;
+        PitchParams p;
+        p.amount = 100.0;
+        pc.setParams (p);
+        pc.prepare (sr, static_cast<int> (nc));
+        pc.setGuide (&plan);
+        const auto lat = static_cast<size_t> (pc.latencySamples());
+        const size_t size = chans[c0]->size();
+        std::array<std::vector<double>, vox::kMaxChannels> buf;
+        std::array<double*, vox::kMaxChannels> ptr {};
+        for (size_t c = 0; c < nc; ++c) { buf[c].assign (256, 0.0); ptr[c] = buf[c].data(); }
+        const size_t end = std::min (size, to);
+        for (size_t s = from; s < end + lat; s += 256)
+        {
+            if (cancel != nullptr && cancel->load (std::memory_order_relaxed)) return;
+            const size_t len = std::min<size_t> (256, end + lat - s);
+            for (size_t c = 0; c < nc; ++c)
+            {
+                const auto& x = *chans[c0 + c];
+                for (size_t i = 0; i < len; ++i) buf[c][i] = s + i < x.size() ? x[s + i] : 0.0;
+            }
+            pc.process (ptr.data(), static_cast<int> (nc), static_cast<int> (len));
+            for (size_t c = 0; c < nc; ++c)
+                for (size_t i = 0; i < len; ++i)
+                    if (s + i >= from + lat && s + i - lat < end) put (c0 + c, s + i - lat, buf[c][i]);
+        }
     }
+}
+
+std::vector<const std::vector<float>*> pointers (const Channels& chans)
+{
+    std::vector<const std::vector<float>*> p;
+    for (const auto& c : chans) p.push_back (&c);
+    return p;
+}
+
+/** A note the render changes (moved, re-shaped, its tone changed): its loudness is matched to how it was sung. */
+bool changed (const Note& n)
+{
+    return std::abs (n.target - n.pitch) > 0.01 || std::abs (n.formant) > 0.01 || std::abs (n.drift - 1.0) > 1.0e-9 || std::abs (n.vibrato - 1.0) > 1.0e-9;
+}
+
+/** Each changed note as loud as it was sung: the shifter's grains lose 1 - 6 dB on a move (more upward: their windows
+    overlap the voice's pulses; AUDIT-ENGINE.md #2). One gain per note (its middle's energy in vs out, all channels,
+    +-6 dB at most), eased in and out over 12 ms around it. `in`: the (re-timed) input, whole length; `out`: rendered
+    samples from `offset`; samples [lo, hi). */
+void matchLoudness (const Channels& in, Channels& out, size_t offset, const std::vector<Note>& notes, double sr, size_t lo, size_t hi)
+{
+    if (in.empty() || out.empty() || hi <= lo) return;
+    const double edge = 0.012 * sr, trim = 0.015 * sr;
+    std::vector<double> gain;
+    for (const auto& n : notes)
+    {
+        if (! changed (n)) continue;
+        double a = n.start + trim, b = n.end - trim;
+        if (b - a < 0.02 * sr) { a = n.start; b = n.end; }
+        const auto i0 = static_cast<size_t> (std::max (static_cast<double> (lo), a)), i1 = static_cast<size_t> (std::min (static_cast<double> (hi), b));
+        if (i1 <= i0 + static_cast<size_t> (0.01 * sr)) continue;
+        double ein = 0.0, eout = 0.0;
+        for (size_t c = 0; c < in.size() && c < out.size(); ++c)
+            for (size_t i = i0; i < i1; ++i)
+            {
+                ein += static_cast<double> (in[c][i]) * in[c][i];
+                const double y = out[c][i - offset];
+                eout += y * y;
+            }
+        if (eout < 1.0e-12 || ein < 1.0e-12) continue;
+        const double g = std::clamp (std::sqrt (ein / eout), 0.5, 2.0);
+        if (std::abs (g - 1.0) < 0.01) continue;
+        if (gain.empty()) gain.assign (hi - lo, 1.0);
+        const double from = n.start - edge, to = n.end + edge;
+        for (auto i = static_cast<size_t> (std::max (static_cast<double> (lo), from)); i < std::min (static_cast<double> (hi), to); ++i)
+        {
+            const double x = std::clamp (std::min (static_cast<double> (i) - from, to - static_cast<double> (i)) / (2.0 * edge), 0.0, 1.0);
+            const double w = 0.5 - 0.5 * std::cos (std::numbers::pi * x);
+            gain[i - lo] *= 1.0 + (g - 1.0) * w;
+        }
+    }
+    if (gain.empty()) return;
+    for (auto& ch : out)
+        for (size_t i = lo; i < hi; ++i)
+            if (i - offset < ch.size()) ch[i - offset] = static_cast<float> (ch[i - offset] * gain[i - lo]);
 }
 
 /** The clip as heard after moves / stretches: warped audio, the readings at their new times, the notes at
     their new places (only when something moved). */
 struct Retimed
 {
-    std::vector<float> audio;
+    Channels audio;
     Track track;
     std::vector<Note> notes;
 };
-Retimed retime (const std::vector<float>& mono, double sr, const Track& t, const std::vector<Note>& notes, const TimeMap& map, size_t from, size_t to)
+Retimed retime (const Channels& chans, double sr, const Track& t, const std::vector<Note>& notes, const TimeMap& map, size_t from, size_t to)
 {
     Retimed r;
-    r.audio = warp (mono, sr, t, map, from, to);
+    r.audio = warp (chans, sr, t, map, from, to);
     r.track = t;
     for (auto& tm : r.track.time) tm = map.outAt (tm);
     r.notes = notes;
@@ -594,20 +909,38 @@ TimeMap timeMap (const std::vector<Note>& notes, double clip, double sr)
     return m;
 }
 
-std::vector<float> warp (const std::vector<float>& x, double sr, const Track& t, const TimeMap& map, size_t from, size_t to)
+Channels warp (const Channels& chans, double sr, const Track& t, const TimeMap& map, size_t from, size_t to)
 {
-    std::vector<float> y (x.size(), 0.0f);
-    to = std::min (to, x.size());
-    if (from >= to) return y;
-    if (map.identity) { std::copy (x.begin() + static_cast<long> (from), x.begin() + static_cast<long> (to), y.begin() + static_cast<long> (from)); return y; }
+    Channels ys;
+    for (const auto& x : chans) ys.emplace_back (x.size(), 0.0f);
+    if (chans.empty()) return ys;
+    const size_t size = chans.front().size();
+    to = std::min (to, size);
+    if (from >= to) return ys;
+    if (map.identity)
+    {
+        for (size_t c = 0; c < chans.size(); ++c)
+            std::copy (chans[c].begin() + static_cast<long> (from), chans[c].begin() + static_cast<long> (to), ys[c].begin() + static_cast<long> (from));
+        return ys;
+    }
+
+    // The grains are placed once, on the channels' mix, and every channel is read with the same grains (the channels stay
+    // in step: a stereo image doesn't smear).
+    std::vector<float> mixed;
+    if (chans.size() > 1)
+    {
+        mixed.assign (size, 0.0f);
+        for (const auto& ch : chans)
+            for (size_t i = 0; i < size; ++i) mixed[i] += ch[i] / static_cast<float> (chans.size());
+    }
+    const auto& ref = chans.size() > 1 ? mixed : chans.front();
 
     const double uvP = 0.005 * sr, maxP = sr / PitchCorrector::kMinHz;
     const auto lo = static_cast<size_t> (std::max (0.0, static_cast<double> (from) - 3.0 * maxP));
-    const auto hi = std::min (x.size(), to + static_cast<size_t> (3.0 * maxP));
-    std::vector<double> acc (hi - lo, 0.0), ws (hi - lo, 0.0);
-    auto at = [&x] (double pos)
+    const auto hi = std::min (size, to + static_cast<size_t> (3.0 * maxP));
+    auto read = [size] (const std::vector<float>& x, double pos)
     {
-        pos = std::clamp (pos, 1.0, static_cast<double> (x.size()) - 3.0);
+        pos = std::clamp (pos, 1.0, static_cast<double> (size) - 3.0);
         const auto i = static_cast<size_t> (pos);
         const double f = pos - static_cast<double> (i);
         const double ym1 = x[i - 1], y0 = x[i], y1 = x[i + 1], y2 = x[i + 2];
@@ -634,7 +967,7 @@ std::vector<float> warp (const std::vector<float>& x, double sr, const Track& t,
             double xy = 0.0, xx = 0.0, yy = 0.0;
             for (int j = 0; j < len; j += 2)
             {
-                const double a = at (ana + j), b = at (cand + k + j);
+                const double a = read (ref, ana + j), b = read (ref, cand + k + j);
                 xy += a * b; xx += a * a; yy += b * b;
             }
             const double r = xy / std::sqrt (xx * yy + 1.0e-30);
@@ -646,6 +979,9 @@ std::vector<float> warp (const std::vector<float>& x, double sr, const Track& t,
     // Grains laid one period apart in the output, each read where the map says that moment comes from,
     // plus a drift that only changes smoothly (a period repeated / skipped at a matching point when it
     // passes half a period), exactly like the pitch shifter's.
+    const size_t nc = chans.size();
+    std::vector<std::vector<double>> acc (nc, std::vector<double> (hi - lo, 0.0));
+    std::vector<double> ws (hi - lo, 0.0);
     double tOut = static_cast<double> (lo), drift = 0.0;
     while (tOut < static_cast<double> (hi))
     {
@@ -664,19 +1000,25 @@ std::vector<float> warp (const std::vector<float>& x, double sr, const Track& t,
             if (j < static_cast<long> (lo) || j >= static_cast<long> (hi)) continue;
             const double u = static_cast<double> (j) - tOut;
             const double w = 0.5 + 0.5 * std::cos (std::numbers::pi * u / half);
-            acc[static_cast<size_t> (j) - lo] += w * at (ana + u);
+            for (size_t c = 0; c < nc; ++c) acc[c][static_cast<size_t> (j) - lo] += w * read (chans[c], ana + u);
             ws[static_cast<size_t> (j) - lo] += w;
         }
         const double step = half;
         drift += step - (map.inAt (tOut + step) - tin);
         tOut += step;
     }
-    for (size_t j = from; j < to; ++j)
-    {
-        const double w = ws[j - lo];
-        y[j] = static_cast<float> (w > 0.05 ? acc[j - lo] / w : at (map.inAt (static_cast<double> (j))));
-    }
-    return y;
+    for (size_t c = 0; c < nc; ++c)
+        for (size_t j = from; j < to; ++j)
+        {
+            const double w = ws[j - lo];
+            ys[c][j] = static_cast<float> (w > 0.05 ? acc[c][j - lo] / w : read (chans[c], map.inAt (static_cast<double> (j))));
+        }
+    return ys;
+}
+
+std::vector<float> warp (const std::vector<float>& x, double sr, const Track& t, const TimeMap& map, size_t from, size_t to)
+{
+    return std::move (warp (Channels { x }, sr, t, map, from, to).front());
 }
 
 std::vector<double> soundingLine (const Track& t, const Note& note)
@@ -712,20 +1054,31 @@ double movementCents (const Track& t, const Note& note)
     return 100.0 * std::sqrt (e / static_cast<double> (v.size()));
 }
 
+Channels render (const Channels& chans, double sr, const Track& t, const std::vector<Note>& notes, double transitionMs,
+                 const std::atomic<bool>* cancel)
+{
+    Channels out;
+    for (const auto& x : chans) out.emplace_back (x.size(), 0.0f);
+    if (chans.empty() || chans.front().empty()) return out;
+    const size_t size = chans.front().size();
+    auto put = [&out] (size_t c, size_t o, double v) { out[c][o] = static_cast<float> (v); };
+    const auto map = timeMap (notes, static_cast<double> (size), sr);
+    if (map.identity)
+    {
+        runShifter (pointers (chans), sr, t, planShift (t, notes, transitionMs), planFormant (t, notes), 0, size, cancel, put);
+        matchLoudness (chans, out, 0, notes, sr, 0, size);
+        return out;
+    }
+    const auto r = retime (chans, sr, t, notes, map, 0, size);
+    runShifter (pointers (r.audio), sr, r.track, planShift (r.track, r.notes, transitionMs), planFormant (r.track, r.notes), 0, size, cancel, put);
+    matchLoudness (r.audio, out, 0, r.notes, sr, 0, size);
+    return out;
+}
+
 std::vector<float> render (const std::vector<float>& mono, double sr, const Track& t, const std::vector<Note>& notes, double transitionMs,
                            const std::atomic<bool>* cancel)
 {
-    std::vector<float> out (mono.size(), 0.0f);
-    auto put = [&out] (size_t o, double v) { out[o] = static_cast<float> (v); };
-    const auto map = timeMap (notes, static_cast<double> (mono.size()), sr);
-    if (map.identity)
-    {
-        runShifter (mono, sr, t, planShift (t, notes, transitionMs), planFormant (t, notes), 0, mono.size(), cancel, put);
-        return out;
-    }
-    const auto r = retime (mono, sr, t, notes, map, 0, mono.size());
-    runShifter (r.audio, sr, r.track, planShift (r.track, r.notes, transitionMs), planFormant (r.track, r.notes), 0, mono.size(), cancel, put);
-    return out;
+    return std::move (render (Channels { mono }, sr, t, notes, transitionMs, cancel).front());
 }
 
 bool changedRegion (const std::vector<Note>& before, const std::vector<Note>& after, double clipSamples, double sr, double& from, double& to)
@@ -800,29 +1153,47 @@ bool changedRegion (const std::vector<Note>& before, const std::vector<Note>& af
     return true;
 }
 
-void renderPart (const std::vector<float>& mono, double sr, const Track& t, const std::vector<Note>& notes,
-                 std::vector<float>& previous, double from, double to, double transitionMs, const std::atomic<bool>* cancel)
+void renderPart (const Channels& chans, double sr, const Track& t, const std::vector<Note>& notes,
+                 Channels& previous, double from, double to, double transitionMs, const std::atomic<bool>* cancel)
 {
-    if (previous.size() != mono.size() || to <= from) return;
+    if (chans.empty() || previous.size() != chans.size() || to <= from) return;
+    const size_t size = chans.front().size();
+    for (const auto& p : previous) if (p.size() != size) return;
     // Start 0.3 s early (the shifter settles), crossfade 10 ms into the old render at both joins.
     const double xf = 0.01 * sr;
     const auto a = static_cast<size_t> (std::max (0.0, from - xf - 0.3 * sr));
-    const auto b = static_cast<size_t> (std::min (static_cast<double> (mono.size()), to + xf + 1.0));
-    const auto map = timeMap (notes, static_cast<double> (mono.size()), sr);
+    const auto b = static_cast<size_t> (std::min (static_cast<double> (size), to + xf + 1.0));
+    const auto map = timeMap (notes, static_cast<double> (size), sr);
     Retimed r;
-    if (! map.identity) r = retime (mono, sr, t, notes, map, a, b);
-    const auto& src = map.identity ? mono : r.audio;
+    if (! map.identity) r = retime (chans, sr, t, notes, map, a, b);
+    const auto& src = map.identity ? chans : r.audio;
     const auto& trk = map.identity ? t : r.track;
     const auto& nts = map.identity ? notes : r.notes;
-    runShifter (src, sr, trk, planShift (trk, nts, transitionMs), planFormant (trk, nts), a, b, cancel, [&] (size_t o, double v)
+    // Rendered into [a, b) first (each moved note's loudness matched there, like a full render), then crossfaded in.
+    Channels fresh (chans.size(), std::vector<float> (b - a, 0.0f));
+    runShifter (pointers (src), sr, trk, planShift (trk, nts, transitionMs), planFormant (trk, nts), a, b, cancel,
+                [&] (size_t c, size_t o, double v) { fresh[c][o - a] = static_cast<float> (v); });
+    if (cancel != nullptr && cancel->load (std::memory_order_relaxed)) return;
+    matchLoudness (src, fresh, a, nts, sr, a, b);
+    for (size_t o = a; o < b; ++o)
     {
         const double x = static_cast<double> (o);
         const double w = from <= 0.0 && x < from + 1.0 ? 1.0 : std::clamp (std::min ((x - (from - xf)) / xf, ((to + xf) - x) / xf), 0.0, 1.0);
-        const double wt = to >= static_cast<double> (mono.size()) && x > to - 1.0 ? 1.0 : w;
-        if (wt <= 0.0) return;
+        const double wt = to >= static_cast<double> (size) && x > to - 1.0 ? 1.0 : w;
+        if (wt <= 0.0) continue;
         const double e = 0.5 - 0.5 * std::cos (std::numbers::pi * wt);   // equal-gain S-curve
-        previous[o] = static_cast<float> ((1.0 - e) * previous[o] + e * v);
-    });
+        for (size_t c = 0; c < chans.size(); ++c)
+            previous[c][o] = static_cast<float> ((1.0 - e) * previous[c][o] + e * fresh[c][o - a]);
+    }
+}
+
+void renderPart (const std::vector<float>& mono, double sr, const Track& t, const std::vector<Note>& notes,
+                 std::vector<float>& previous, double from, double to, double transitionMs, const std::atomic<bool>* cancel)
+{
+    if (previous.size() != mono.size()) return;
+    Channels prev { std::move (previous) };
+    renderPart (Channels { mono }, sr, t, notes, prev, from, to, transitionMs, cancel);
+    previous = std::move (prev.front());
 }
 
 } // namespace vox::honey
