@@ -70,7 +70,9 @@ struct TimeMap
     double inAt (double tOut) const;    // the input moment heard at output time tOut
     double outAt (double tIn) const;
 };
-TimeMap timeMap (const std::vector<Note>& notes, double clipSamples, double sampleRate);
+/** track: the sound next to the notes that move (a consonant before or after) goes with them whole; only the silence
+    or breath between notes stretches / squeezes. */
+TimeMap timeMap (const std::vector<Note>& notes, double clipSamples, double sampleRate, const Track* track = nullptr);
 
 /** The clip re-timed by the map (pitch and tone kept: pitch-synchronous grains, a period repeated or
     skipped where it's stretched / squeezed), output samples [from, to) filled (rest 0). Every channel with the same

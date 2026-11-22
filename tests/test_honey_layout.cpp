@@ -1,4 +1,5 @@
-// Honey Tune: notes you split or join by hand (vox::honey::Layout, reshape) and the edits that go with them.
+// Honey Tune: notes you split or join by hand (vox::honey::Layout, reshape) and the edits that go with them; a note moved
+// in time takes its consonants along.
 #include "HoneyView.h"
 #include "Signals.h"
 
@@ -221,4 +222,75 @@ TEST_CASE ("Honey Tune: a split re-renders only around its note, the same as a f
     CHECK (changedRegion (after, reshape (t, before, layout), static_cast<double> (x.size()), kSr, from, to));
     CHECK (from > before[0].end);
     CHECK (to < before[2].start);
+}
+
+TEST_CASE ("Honey Tune: a note moved in time takes its consonant along whole; the note after it starts on time", "[honey][layout]")
+{
+    // "A  s-t B   C": A3, 50 ms silence, an "s" (90 ms of hiss), a 30 ms closure, a "t" burst, then B4 sung, a gap, C5.
+    std::vector<float> x;
+    const auto add = [&] (const std::vector<float>& part) { x.insert (x.end(), part.begin(), part.end()); };
+    add (sing ({ { 57.0, 0.4, 0.05 } }));
+    testsig::Rng rng (7);
+    const size_t sFrom = x.size();
+    for (int i = 0; i < static_cast<int> (0.09 * kSr); ++i)
+    {
+        const double env = std::min ({ 1.0, i / (0.01 * kSr), (0.09 * kSr - i) / (0.01 * kSr) });
+        x.push_back (static_cast<float> (0.04 * env * rng.normal()));
+    }
+    const size_t sTo = x.size();
+    x.insert (x.end(), static_cast<size_t> (0.03 * kSr), 0.0f);
+    for (int i = 0; i < static_cast<int> (0.006 * kSr); ++i) x.push_back (static_cast<float> (0.15 * std::exp (-i / (0.0015 * kSr)) * rng.normal()));
+    add (sing ({ { 59.0, 0.5, 0.3 }, { 60.0, 0.4, 0.3 } }));
+    const auto t = analyse (x, kSr, false);
+    const auto notes = findNotes (t);
+    REQUIRE (notes.size() >= 3);
+    size_t b = 0;
+    while (b < notes.size() && notes[b].start < static_cast<double> (sTo)) ++b;
+    REQUIRE (b + 1 < notes.size());
+    REQUIRE (std::abs (notes[b].pitch - 59.0) < 0.5);
+
+    // How long the hiss lasts (above 12 dB under its peak, 2 ms steps) and where it starts, in a stretch of audio.
+    const auto hiss = [] (const std::vector<float>& y, double from, double to)
+    {
+        vox::Biquad hp1, hp2;
+        vox::design::apply (hp1, vox::design::butterworth (true, 4000.0, kSr));
+        vox::design::apply (hp2, vox::design::butterworth (true, 4000.0, kSr));
+        std::vector<double> e;
+        double sum = 0.0;
+        const auto step = static_cast<size_t> (0.002 * kSr);
+        for (auto i = static_cast<size_t> (std::max (0.0, from)); i < static_cast<size_t> (to) && i < y.size(); ++i)
+        {
+            const double v = hp2.process (hp1.process (y[i]));
+            sum += v * v;
+            if ((i + 1) % step == 0) { e.push_back (sum); sum = 0.0; }
+        }
+        const double peak = *std::max_element (e.begin(), e.end());
+        int first = -1, last = -1;
+        for (int k = 0; k < static_cast<int> (e.size()); ++k)
+            if (e[static_cast<size_t> (k)] > peak * 0.063) { if (first < 0) first = k; last = k; }
+        return std::pair<double, double> { from / kSr + first * 0.002, (last - first + 1) * 0.002 };
+    };
+    const auto [sAt, sLen] = hiss (x, static_cast<double> (sFrom) - 0.03 * kSr, static_cast<double> (sTo) + 0.02 * kSr);
+
+    for (double move : { 0.08, 0.15 })
+    {
+        auto moved = notes;
+        moved[b].outStart = moved[b].start + move * kSr;
+        moved[b].outEnd = moved[b].end + move * kSr;
+        const auto y = render (x, kSr, t, moved);
+        const auto [outAt, outLen] = hiss (y, static_cast<double> (sFrom) - 0.03 * kSr + move * kSr, static_cast<double> (sTo) + 0.02 * kSr + move * kSr);
+        INFO ("moved " << move << " s: the s at " << outAt << " s for " << outLen << " s (sung at " << sAt << " for " << sLen << ")");
+        CHECK (outLen == Approx (sLen).margin (0.008));          // whole (spread over the gap, it lasted 50 - 100 % longer)
+        CHECK (outAt - sAt == Approx (move).margin (0.006));     // and with its note
+        // The note after it: as sung (a squeeze over the breath before it used to make its attack come in late).
+        const auto& c = notes[b + 1];
+        double e = 0.0, d = 0.0;
+        for (auto i = static_cast<size_t> (c.start); i < static_cast<size_t> (c.start + 0.05 * kSr); ++i)
+        {
+            e += static_cast<double> (x[i]) * x[i];
+            d += (static_cast<double> (y[i]) - x[i]) * (static_cast<double> (y[i]) - x[i]);
+        }
+        INFO ("the next note's first 50 ms: " << 10.0 * std::log10 (d / e + 1e-30) << " dB off");
+        CHECK (d < 0.01 * e);
+    }
 }

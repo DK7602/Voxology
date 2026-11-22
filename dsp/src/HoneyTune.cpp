@@ -884,13 +884,90 @@ double mapThrough (const std::vector<double>& from, const std::vector<double>& t
 double TimeMap::inAt (double tOut) const { return identity ? tOut : mapThrough (out, in, tOut); }
 double TimeMap::outAt (double tIn) const { return identity ? tIn : mapThrough (in, out, tIn); }
 
-TimeMap timeMap (const std::vector<Note>& notes, double clip, double sr)
+namespace {
+/** How long the sound right next to a note lasts (samples) going away from it (dir -1: before `edge`, +1: after), up to
+    `limit`: its consonant ("s", "t", "k" ..., a cluster with short closures inside), anything at most 32 dB under the
+    singing, up to 150 ms, short quiet holes (40 ms) inside; quieter = silence or a soft breath. */
+double soundNextTo (const Track& t, double edge, double limit, int dir)
+{
+    if (t.level.empty() || ! (t.levelTop > 0.0f)) return 0.0;
+    const double sr = t.sampleRate, hop = Track::kLevelHopSeconds * sr;
+    const float loud = t.levelTop * 0.025f;
+    const double reach = std::min (0.15 * sr, std::abs (limit - edge)), maxQuiet = 0.04 * sr;
+    double quiet = 0.0, last = 0.0;
+    for (double d = 0.5 * hop; d <= reach; d += hop)
+    {
+        const double at = edge + dir * d;
+        const auto k = static_cast<long> (std::floor (at / hop));
+        if (k < 0 || k >= static_cast<long> (t.level.size())) break;
+        if (t.level[static_cast<size_t> (k)] >= loud) { quiet = 0.0; last = d + 0.5 * hop; }
+        else if ((quiet += hop) > maxQuiet) break;
+    }
+    return std::min (last, reach);
+}
+
+/** The middle of the quietest `width` between a and b (samples; Track::level). */
+double quietestIn (const Track& t, double a, double b, double width)
+{
+    const double hop = Track::kLevelHopSeconds * t.sampleRate;
+    double best = 0.5 * (a + b), bestLevel = 1.0e30;
+    if (t.level.empty()) return best;
+    for (double c = a + 0.5 * width; c <= b - 0.5 * width; c += hop)
+    {
+        float peak = 0.0f;
+        for (double x = c - 0.5 * width; x < c + 0.5 * width; x += hop)
+            if (const auto k = static_cast<long> (std::floor (x / hop)); k >= 0 && k < static_cast<long> (t.level.size()))
+                peak = std::max (peak, t.level[static_cast<size_t> (k)]);
+        if (peak < bestLevel) { bestLevel = peak; best = c; }
+    }
+    return best;
+}
+
+/** Knots inside the gap between a note ending at pe (sounding at pe2) and one starting at ns (sounding at ns2): the
+    sound next to each note (its trailing / leading consonant) goes with it 1:1; only what's between them (silence,
+    a breath) stretches or squeezes. (Linearly over the whole gap, a "sing" moved later became "sss-ing" and a "t"
+    flammed: AUDIT-ENGINE.md #5.) */
+void consonantKnots (TimeMap& m, const Track& t, double pe, double pe2, double ns, double ns2, bool trailing, bool leading)
+{
+    const double sr = t.sampleRate, room = 0.01 * sr;   // what's between them keeps at least 10 ms
+    const double gapIn = ns - pe, gapOut = ns2 - pe2;
+    if (gapIn < 2.0 * room || gapOut < 2.0 * room) return;
+    double trail = trailing ? soundNextTo (t, pe, ns, +1) : 0.0;
+    double lead = leading ? soundNextTo (t, ns, pe, -1) : 0.0;
+    if (trail + lead > gapIn - room)
+    {
+        // Sound all through the gap: the two meet at its quietest moment.
+        const double c = quietestIn (t, pe + room, ns - room, room);
+        trail = std::min (trail, std::max (0.0, c - 0.5 * room - pe));
+        lead = std::min (lead, std::max (0.0, ns - (c + 0.5 * room)));
+    }
+    if (trail + lead > gapOut - room)
+    {
+        // Not enough room left for them whole: only the 20 ms next to each note stay whole (a "t"'s burst, a release);
+        // the rest squeezes evenly with what's between (crammed into a few ms, an "s" was cut short more).
+        const double near = 0.02 * sr;
+        trail = std::min (trail, near);
+        lead = std::min (lead, near);
+        if (trail + lead > gapOut - room)
+        {
+            const double f = std::max (0.0, gapOut - room) / (trail + lead);
+            trail *= f;
+            lead *= f;
+        }
+    }
+    if (trail > 0.5) { m.in.push_back (pe + trail); m.out.push_back (pe2 + trail); }
+    if (lead > 0.5) { m.in.push_back (ns - lead); m.out.push_back (ns2 - lead); }
+}
+}
+
+TimeMap timeMap (const std::vector<Note>& notes, double clip, double sr, const Track* track)
 {
     TimeMap m;
     m.in = { 0.0 };
     m.out = { 0.0 };
     const double minGap = 0.005 * sr, minLen = 0.03 * sr;
     double lastIn = 0.0, lastOut = 0.0;
+    bool any = false, lastMoved = false;
     for (const auto& n : notes)
     {
         if (n.start <= lastIn + 1.0 || n.end > clip - 1.0) continue;
@@ -901,10 +978,17 @@ TimeMap timeMap (const std::vector<Note>& notes, double clip, double sr)
         if (n.timeMoved()) m.identity = false;
         const double sOut = std::clamp (n.soundStart(), lastOut + minGap, clip - minGap - minLen);
         const double eOut = std::clamp (n.soundEnd(), sOut + minLen, clip - minGap);
+        const bool moved = std::abs (sOut - n.start) > 0.5 || std::abs (eOut - n.end) > 0.5;
+        if (track != nullptr && (moved || lastMoved))
+            consonantKnots (m, *track, lastIn, lastOut, n.start, sOut, any, true);
         m.in.push_back (n.start); m.out.push_back (sOut);
         m.in.push_back (n.end); m.out.push_back (eOut);
         lastIn = n.end; lastOut = eOut;
+        any = true;
+        lastMoved = moved;
     }
+    if (track != nullptr && lastMoved)
+        consonantKnots (m, *track, lastIn, lastOut, clip, clip, true, false);   // (the last note's own ending)
     m.in.push_back (clip); m.out.push_back (clip);
     return m;
 }
@@ -1004,7 +1088,9 @@ Channels warp (const Channels& chans, double sr, const Track& t, const TimeMap& 
             ws[static_cast<size_t> (j) - lo] += w;
         }
         const double step = half;
-        drift += step - (map.inAt (tOut + step) - tin);
+        // (Only between voiced grains: a squeeze across a breath left a drift of tens of ms that the next note then
+        // started with - its attack came in late, unwinding a period at a time.)
+        drift = P > 0.0 ? drift + step - (map.inAt (tOut + step) - tin) : 0.0;
         tOut += step;
     }
     for (size_t c = 0; c < nc; ++c)
@@ -1062,7 +1148,7 @@ Channels render (const Channels& chans, double sr, const Track& t, const std::ve
     if (chans.empty() || chans.front().empty()) return out;
     const size_t size = chans.front().size();
     auto put = [&out] (size_t c, size_t o, double v) { out[c][o] = static_cast<float> (v); };
-    const auto map = timeMap (notes, static_cast<double> (size), sr);
+    const auto map = timeMap (notes, static_cast<double> (size), sr, &t);
     if (map.identity)
     {
         runShifter (pointers (chans), sr, t, planShift (t, notes, transitionMs), planFormant (t, notes), 0, size, cancel, put);
@@ -1201,7 +1287,7 @@ void renderPart (const Channels& chans, double sr, const Track& t, const std::ve
     const double xf = 0.01 * sr;
     const auto a = static_cast<size_t> (std::max (0.0, from - xf - 0.3 * sr));
     const auto b = static_cast<size_t> (std::min (static_cast<double> (size), to + xf + 1.0));
-    const auto map = timeMap (notes, static_cast<double> (size), sr);
+    const auto map = timeMap (notes, static_cast<double> (size), sr, &t);
     Retimed r;
     if (! map.identity) r = retime (chans, sr, t, notes, map, a, b);
     const auto& src = map.identity ? chans : r.audio;
