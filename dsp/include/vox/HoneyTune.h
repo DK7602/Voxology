@@ -30,7 +30,9 @@ struct Track
     std::vector<double> midi;      // fractional MIDI note; 0 = no note (breath, consonant, silence)
     std::vector<double> clarity;   // 0..1
     std::vector<char> filled;      // 1: a moment before / after what the detector heard, given the note's pitch (its attack
-                                   // or release); findNotes decides the notes without these, then gives them to their note
+                                   // or release); findNotes decides the notes without these, then gives them to their note.
+                                   // 2: voice left between two such (a gap of at most 30 ms, sung on through): no note's,
+                                   // no pitch (midi 0); the render shifts it on the way from one note's move to the next
     int aiChecked = 0, aiFixed = 0, aiFound = 0;   // AI check: moments checked, octave slips fixed, skipped notes found
     // The clip's waveform (the editor draws each note as its waveform): per kLevelHopSeconds from the clip's start, the
     // loudest sample (|x|) and the mean square; levelTop = how loud the singing gets (the 98th percentile of the peaks

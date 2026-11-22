@@ -99,7 +99,23 @@ class Plan final : public PitchCorrector::Guide
 public:
     /** offset: the clip sample the shifter's first input sample is (a re-render that starts mid-clip). */
     Plan (const Track& t, const std::vector<double>& shifts, double offset = 0.0, const std::vector<double>* formants = nullptr)
-        : track (t), shift (shifts), start (offset), formant (formants) {}
+        : track (t), shift (shifts), start (offset), formant (formants), midi (t.midi)
+    {
+        // The voice between two notes that analyse() marked (filled 2: no note's, no pitch read) is shifted too, at the
+        // pitch going straight from the one before to the one after, where a note next to it moves by more than Snap's
+        // corrections do (half a semitone or less: left as sung, as that guessed pitch can be further off than they are).
+        const size_t n = std::min ({ midi.size(), t.filled.size(), shift.size() });
+        for (size_t i = 1; i < n; ++i)
+        {
+            if (t.filled[i] != 2 || midi[i] > 0.0 || ! (midi[i - 1] > 0.0)) continue;
+            size_t j = i;
+            while (j < n && t.filled[j] == 2 && ! (midi[j] > 0.0)) ++j;
+            if (j < n && midi[j] > 0.0 && std::max (std::abs (shift[i - 1]), std::abs (shift[j])) > 0.55)
+                for (size_t k = i; k < j; ++k)
+                    midi[k] = midi[i - 1] + (midi[j] - midi[i - 1]) * static_cast<double> (k - i + 1) / static_cast<double> (j - i + 1);
+            i = j;
+        }
+    }
 
     double formantAt (double shifterTime) const override
     {
@@ -119,7 +135,7 @@ public:
         const auto it = std::lower_bound (tm.begin(), tm.end(), time);
         const auto i1 = static_cast<size_t> (std::max<long> (1, it - tm.begin()));
         const size_t i0 = i1 - 1;
-        const double m0 = track.midi[i0], m1 = track.midi[std::min (i1, tm.size() - 1)];
+        const double m0 = midi[i0], m1 = midi[std::min (i1, tm.size() - 1)];
         if (m0 <= 0.0 || m1 <= 0.0)
         {
             // Edge of a note: use the nearer side, so a note's last grains keep its pitch.
@@ -141,6 +157,7 @@ private:
     const std::vector<double>& shift;
     double start = 0.0;
     const std::vector<double>* formant = nullptr;
+    std::vector<double> midi;   // the track's pitch, the voice between notes bridged
 };
 
 } // namespace
@@ -463,6 +480,20 @@ void extendToOnsets (Track& t, const std::vector<float>& mono, double sr)
                 t.midi[k] = sung[prevEnd - 1];
                 t.clarity[k] = t.clarity[prevEnd - 1];
                 t.filled[k] = 1;
+            }
+            // What's left between them (at most 30 ms), if it's all voice (the two sung on through a soft consonant or a
+            // dip): marked 2, still no note's (midi 0), so the render shifts it on the way from one note's move to the
+            // next instead of leaving it at the old pitch right before a moved note (AUDIT-ENGINE.md #1: a voice there
+            // sounded the note's first ms at the old pitch).
+            const size_t from = prevEnd + rel, to = i - onset;
+            if (to > from && t.time[to - 1] - t.time[from] <= 0.03 * sr)
+            {
+                const double floorDb = std::min (ref, level (t.time[i] + 0.01 * sr)) - 30.0;
+                bool voice = true;
+                for (size_t k = from; k < to && voice; ++k)
+                    voice = ! (sung[k] > 0.0) && level (t.time[k]) >= floorDb && (voiceLike (t.time[k], sung[prevEnd - 1]) || voiceLike (t.time[k], sung[i]));
+                if (voice)
+                    for (size_t k = from; k < to; ++k) t.filled[k] = 2;
             }
         }
         prevEnd = runEnd;
