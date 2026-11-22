@@ -15,6 +15,7 @@
 
 #include <ARA_Library/Utilities/ARATimelineConversion.h>
 
+#include <functional>
 #include <limits>
 #include <map>
 #include <memory>
@@ -28,6 +29,7 @@ namespace
     constexpr int64 kArchiveV2 = 0x484e5932;   // "HNY2"
     constexpr int64 kArchiveV3 = 0x484e5933;   // "HNY3": edits also hold timing, length and formant
     constexpr int64 kArchiveV4 = 0x484e5934;   // "HNY4": note starts in seconds (were samples: wrong after a rate change)
+    constexpr int64 kArchiveV5 = 0x484e5935;   // "HNY5": each clip's splits and joins too
 
     /** A hand edit as saved: tied to the note's start (seconds), so it finds its note again after re-analysis. */
     struct SavedEdit { double start = 0.0; NoteEdit edit; };
@@ -58,7 +60,9 @@ namespace
         // Shared (dataLock)
         CriticalSection dataLock;
         std::shared_ptr<const vox::honey::Track> track;
-        std::vector<vox::honey::Note> notes;
+        std::vector<vox::honey::Note> found;   // the notes as the analysis found them
+        vox::honey::Layout layout;             // your splits and joins (seconds: they outlive a re-analysis)
+        std::vector<vox::honey::Note> notes;   // = reshape (found, layout)
         vox::KeyGuess guess;
         std::vector<NoteEdit> edits;           // one per note
         std::vector<SavedEdit> pending;        // restored from the project, waiting for the notes
@@ -113,12 +117,11 @@ namespace
             retired.erase (std::remove_if (retired.begin(), retired.end(), [] (const auto& a) { return a.use_count() == 1; }), retired.end());
         }
 
-        /** Hand edits re-attached to the notes by start time (within 30 ms). Call with dataLock held. */
-        // Undo / redo (dataLock): whole edit lists, with the clip-wide settings (Key, Scale, Snap, Drift, Vibrato) as
-        // they were then. One step per gesture: changes to the same note (or to the settings) less than 0.7 s apart
-        // (a drag, typing) count as one. kSettingsStep: the index a settings change pushes with.
+        // Undo / redo (dataLock): whole edit lists and the splits / joins, with the clip-wide settings (Key, Scale, Snap,
+        // Drift, Vibrato) as they were then. One step per gesture: changes to the same note (or to the settings) less than
+        // 0.7 s apart (a drag, typing) count as one. kSettingsStep: the index a settings change pushes with.
         static constexpr int kSettingsStep = -2;
-        struct UndoStep { std::vector<NoteEdit> edits; Settings settings; };
+        struct UndoStep { std::vector<NoteEdit> edits; Settings settings; vox::honey::Layout layout; };
         std::vector<UndoStep> undoStack, redoStack;
         uint32 lastPushMs = 0;
         int lastPushIndex = -1;
@@ -127,7 +130,7 @@ namespace
             const auto ms = Time::getMillisecondCounter();
             if (force || index != lastPushIndex || ms - lastPushMs > 700)
             {
-                undoStack.push_back ({ edits, now });
+                undoStack.push_back ({ edits, now, layout });
                 if (undoStack.size() > 100) undoStack.erase (undoStack.begin());
                 redoStack.clear();
             }
@@ -139,15 +142,20 @@ namespace
         {
             auto& from = back ? undoStack : redoStack;
             auto& to = back ? redoStack : undoStack;
-            if (from.empty() || from.back().edits.size() != edits.size()) return false;
-            to.push_back ({ edits, current });
+            if (from.empty() || track == nullptr) return false;
+            auto then = from.back().layout == layout ? notes : vox::honey::reshape (*track, found, from.back().layout);
+            if (from.back().edits.size() != then.size()) return false;
+            to.push_back ({ edits, current, layout });
             edits = from.back().edits;
+            layout = from.back().layout;
+            notes = std::move (then);
             current = from.back().settings;
             from.pop_back();
             lastPushIndex = -1;
             return true;
         }
 
+        /** Hand edits re-attached to the notes by start time (within 30 ms). Call with dataLock held. */
         void attach (const std::vector<SavedEdit>& saved)
         {
             undoStack.clear();
@@ -593,6 +601,39 @@ public:
         requestRender (st);
     }
 
+    /** A note split / notes joined (`change` edits the layout; false: nothing to do): the notes re-made, your edits
+        carried over to them, one undo step, the stretch around them re-rendered. */
+    bool reshape (const std::shared_ptr<SourceState>& st, const vox::honey::Track* forTrack,
+                  const std::function<bool (vox::honey::Layout&, const vox::honey::Track&, const std::vector<vox::honey::Note>&)>& change)
+    {
+        const auto s = getSettings();
+        {
+            const ScopedLock sl (st->dataLock);
+            if (st->track == nullptr || (forTrack != nullptr && st->track.get() != forTrack)) return false;
+            auto layout = st->layout;
+            if (! change (layout, *st->track, st->notes)) return false;
+            auto notes = vox::honey::reshape (*st->track, st->found, layout);
+            if (notes.size() == st->notes.size()) return false;   // (it didn't take: nothing changes)
+            st->pushUndo (-1, s, true);
+            st->edits = honeyui::carryEdits (st->notes, st->edits, notes, st->track->sampleRate);
+            st->notes = std::move (notes);
+            st->layout = std::move (layout);
+        }
+        requestRender (st);
+        changes.sendChangeMessage();   // (the editor's note count and status line)
+        return true;
+    }
+    bool splitNote (const std::shared_ptr<SourceState>& st, int index, double seconds, const vox::honey::Track* forTrack)
+    {
+        return reshape (st, forTrack, [&] (auto& layout, const auto& track, const auto& notes)
+                        { return vox::honey::addSplit (layout, track, notes, index, seconds); });
+    }
+    bool joinNotes (const std::shared_ptr<SourceState>& st, int first, int last, const vox::honey::Track* forTrack)
+    {
+        return reshape (st, forTrack, [&] (auto& layout, const auto& track, const auto& notes)
+                        { return vox::honey::addJoin (layout, track, notes, first, last); });
+    }
+
     void resetAllEdits (const std::shared_ptr<SourceState>& st)
     {
         const auto s = getSettings();
@@ -718,7 +759,8 @@ protected:
     bool doRestoreObjectsFromStream (ARAInputStream& input, const ARARestoreObjectsFilter* filter) noexcept override
     {
         const auto first = input.readInt64();
-        const bool v4 = first == kArchiveV4;
+        const bool v5 = first == kArchiveV5;
+        const bool v4 = first == kArchiveV4 || v5;
         const bool v3 = first == kArchiveV3 || v4;
         const bool v2 = first == kArchiveV2 || v3;
         Settings s;
@@ -760,6 +802,14 @@ protected:
                 if (std::isfinite (se.start) && se.start >= 0.0)
                     saved.push_back (se);
             }
+            vox::honey::Layout layout;   // (HNY5 on)
+            if (v5)
+                for (auto* list : { &layout.splits, &layout.joins })
+                {
+                    const auto count = input.readInt64();
+                    for (int64 c = 0; c < count && ! input.failed(); ++c)
+                        if (const double v = input.readDouble(); std::isfinite (v) && v >= 0.0 && list->size() < 100000) list->push_back (v);
+                }
             const bool inSamples = ! v4;   // (HNY2 / HNY3: samples at the recording's rate, converted below)
             HoneyAudioSource* target = nullptr;
             if (filter != nullptr)
@@ -774,7 +824,12 @@ protected:
                 for (auto& se : saved) se.start /= std::max (1.0, target->getSampleRate());
             {
                 const ScopedLock sl (st->dataLock);
-                if (st->track != nullptr) st->attach (saved);
+                st->layout = layout;
+                if (st->track != nullptr)
+                {
+                    st->notes = vox::honey::reshape (*st->track, st->found, st->layout);
+                    st->attach (saved);
+                }
                 else st->pending = saved;
             }
             requestRender (st);
@@ -785,7 +840,7 @@ protected:
     bool doStoreObjectsToStream (ARAOutputStream& output, const ARAStoreObjectsFilter* filter) noexcept override
     {
         const auto s = getSettings();
-        bool ok = output.writeInt64 (kArchiveV4) && output.writeInt64 (s.key) && output.writeInt64 (s.scale)
+        bool ok = output.writeInt64 (kArchiveV5) && output.writeInt64 (s.key) && output.writeInt64 (s.scale)
                && output.writeDouble (s.snap) && output.writeDouble (s.drift) && output.writeDouble (s.vibrato);
         std::vector<const HoneyAudioSource*> toStore;
         if (filter != nullptr)
@@ -796,15 +851,22 @@ protected:
         for (auto* src : toStore)
         {
             std::vector<SavedEdit> saved;
+            vox::honey::Layout layout;
             {
                 const ScopedLock sl (src->state->dataLock);
                 saved = src->state->saved();
+                layout = src->state->layout;
             }
             ok = ok && output.writeString (String (src->getPersistentID())) && output.writeInt64 (static_cast<int64> (saved.size()));
             for (const auto& se : saved)
                 ok = ok && output.writeDouble (se.start) && output.writeBool (se.edit.moved) && output.writeDouble (se.edit.target)
                         && output.writeDouble (se.edit.drift) && output.writeDouble (se.edit.vibrato)
                         && output.writeDouble (se.edit.shift) && output.writeDouble (se.edit.length) && output.writeDouble (se.edit.formant);
+            for (const auto* list : { &layout.splits, &layout.joins })
+            {
+                ok = ok && output.writeInt64 (static_cast<int64> (list->size()));
+                for (double v : *list) ok = ok && output.writeDouble (v);
+            }
         }
         return ok;
     }
@@ -895,7 +957,7 @@ private:
         const auto& mono = chans->size() > 1 ? mixed : chans->front();
         auto track = std::make_shared<vox::honey::Track> (vox::honey::analyse (mono, sr, true, &closing));
         if (closing) return;
-        auto notes = vox::honey::findNotes (*track);
+        auto found = vox::honey::findNotes (*track);
         std::vector<double> sung;
         for (double m : track->midi) if (m > 0.0) sung.push_back (m);
         const auto guess = vox::detectKey (sung);
@@ -903,7 +965,8 @@ private:
             const ScopedLock sl (state->dataLock);
             const auto keep = state->saved();   // hand edits (or the ones restored from the project)
             state->track = track;
-            state->notes = std::move (notes);
+            state->found = std::move (found);
+            state->notes = vox::honey::reshape (*track, state->found, state->layout);   // your splits / joins kept
             state->guess = guess;
             state->attach (keep);
             state->pending.clear();
@@ -1194,6 +1257,18 @@ private:
         if (dc != nullptr && state != nullptr) { toTuned(); dc->setEdits (state, edits, panel.roll.getSnapshot().track.get()); }
     }
     void resetAllEdits() override { if (dc != nullptr && state != nullptr) { toTuned(); dc->resetAllEdits (state); } }
+    bool splitNote (int index, double seconds) override
+    {
+        if (dc == nullptr || state == nullptr) return false;
+        toTuned();
+        return dc->splitNote (state, index, seconds, panel.roll.getSnapshot().track.get());
+    }
+    bool joinNotes (int first, int last) override
+    {
+        if (dc == nullptr || state == nullptr) return false;
+        toTuned();
+        return dc->joinNotes (state, first, last, panel.roll.getSnapshot().track.get());
+    }
     bool undo() override { return stepEdits (true); }
     bool redo() override { return stepEdits (false); }
     bool stepEdits (bool back)

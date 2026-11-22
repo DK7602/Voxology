@@ -213,14 +213,16 @@ inline std::vector<vox::honey::Note> applyEdits (std::vector<vox::honey::Note> n
         }
         n.edited = true;
     }
-    // Between the neighbours, in order (each after the one before as it now sounds, before the next as it would).
+    // Between the neighbours, in order (each after the one before as it now sounds, before the next as it would): 5 ms
+    // apart, or as close as they were sung (the parts of a split note follow on as they did).
     const double gap = kTimeGapSeconds * sampleRate, minLen = kMinNoteSeconds * sampleRate;
+    const auto apart = [&] (const vox::honey::Note& a, const vox::honey::Note& b) { return std::min (gap, std::max (1.0, b.start - a.end)); };
     for (size_t i = 0; i < notes.size(); ++i)
     {
         auto& n = notes[i];
         if (n.outStart < 0.0 && n.outEnd < 0.0) continue;
-        const double lo = i > 0 ? notes[i - 1].soundEnd() + gap : 0.0;
-        double hi = i + 1 < notes.size() ? notes[i + 1].soundStart() - gap : (clipSamples > 0.0 ? clipSamples - gap : 1.0e300);
+        const double lo = i > 0 ? notes[i - 1].soundEnd() + apart (notes[i - 1], n) : 0.0;
+        double hi = i + 1 < notes.size() ? notes[i + 1].soundStart() - apart (n, notes[i + 1]) : (clipSamples > 0.0 ? clipSamples - gap : 1.0e300);
         if (clipSamples > 0.0) hi = std::min (hi, clipSamples - gap);
         if (hi - lo < minLen) { n.outStart = n.outEnd = -1.0; continue; }   // no room at all: where it was sung
         const double len = std::clamp (n.soundEnd() - n.soundStart(), minLen, hi - lo);
@@ -228,6 +230,38 @@ inline std::vector<vox::honey::Note> applyEdits (std::vector<vox::honey::Note> n
         n.outEnd = n.outStart + len;
     }
     return notes;
+}
+
+/** Your edits carried over to the notes after a split or a join (by the readings the notes share): a part of a split note
+    keeps the note's edit (a move as the same step from its own pitch; its timing so the parts stay together as they
+    sounded); a joined note keeps the edit of its first edited part (a stretch starts again from 1). */
+inline std::vector<NoteEdit> carryEdits (const std::vector<vox::honey::Note>& before, const std::vector<NoteEdit>& edits,
+                                         const std::vector<vox::honey::Note>& after, double sampleRate)
+{
+    std::vector<NoteEdit> out (after.size());
+    for (size_t j = 0; j < after.size(); ++j)
+    {
+        const auto& n = after[j];
+        std::vector<size_t> from;
+        for (size_t i = 0; i < before.size(); ++i)
+            if (before[i].lastReading >= n.firstReading && before[i].firstReading <= n.lastReading) from.push_back (i);
+        if (from.empty()) continue;
+        size_t src = from.front();
+        for (size_t i : from) if (i < edits.size() && ! edits[i].isDefault()) { src = i; break; }
+        if (src >= edits.size()) continue;
+        const auto& old = before[src];
+        auto e = edits[src];
+        if (e.moved) e.target = std::clamp (n.pitch + (e.target - old.pitch), 0.0, 127.0);
+        if (from.size() == 1)
+        {
+            // A part: where it sounded inside the note (stretched as the note was).
+            if (e.timed()) e.shift += (e.length - 1.0) * (n.start - old.start) / sampleRate;
+        }
+        else
+            e.length = 1.0;
+        out[j] = e;
+    }
+    return out;
 }
 
 struct NoteView
@@ -456,6 +490,10 @@ struct Model
     /** Several notes at once (a selection): one undo step. */
     virtual void setEdits (const std::vector<std::pair<int, NoteEdit>>& edits) { for (const auto& [i, e] : edits) setEdit (i, e); }
     virtual void resetAllEdits() = 0;
+    /** Cut note `index` in two at this clip time (seconds) / make notes first .. last one: one undo step each, saved with
+        the project. false: not here (too near the note's ends, nothing to join). */
+    virtual bool splitNote (int /*index*/, double /*clipSeconds*/) { return false; }
+    virtual bool joinNotes (int /*first*/, int /*last*/) { return false; }
     /** Undo / redo the last edit (false: nothing to undo / redo). */
     virtual bool undo() { return false; }
     virtual bool redo() { return false; }

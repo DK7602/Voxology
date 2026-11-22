@@ -39,9 +39,17 @@ HoneyRoll::HoneyRoll()
 void HoneyRoll::refresh()
 {
     if (model == nullptr) return;
+    const auto before = snap.notes.size();
     snap = model->snapshot();
+    if (snap.notes.size() != before)
+    {
+        // Other notes (a new analysis, a split / join, its undo): the old note numbers mean nothing now.
+        chosen.assign (snap.notes.size(), 0);
+        selected = -1;
+        splitHover = hovered = -1;
+    }
     if (selected >= static_cast<int> (snap.notes.size())) selected = -1;
-    chosen.resize (snap.notes.size(), 0);   // (a new analysis: the notes changed)
+    chosen.resize (snap.notes.size(), 0);
     if (selected >= 0 && ! chosen[static_cast<size_t> (selected)]) chosen[static_cast<size_t> (selected)] = 1;
     if (! fitted && snap.status == 2 && ! snap.notes.empty())
         fitted = fitAll();   // false while the roll is still too small to fit into: resized() tries again
@@ -309,6 +317,73 @@ double HoneyRoll::shownTime (int index, double sung) const
     return a + (sung - s0) * (b - a) / std::max (1.0e-6, s1 - s0);
 }
 
+double HoneyRoll::sungTime (int index, double shown) const
+{
+    const auto& n = snap.notes[static_cast<size_t> (index)].note;
+    const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
+    const auto [a, b] = span (index);
+    const double s0 = n.start / sr, s1 = n.end / sr;
+    return s0 + (shown - a) * (s1 - s0) / std::max (1.0e-6, b - a);
+}
+
+bool HoneyRoll::splitAt (int index, double shownSeconds)
+{
+    if (model == nullptr || index < 0 || index >= static_cast<int> (snap.notes.size())) return false;
+    if (model->isOriginal() && onWantTuned) onWantTuned();
+    if (! model->splitNote (index, sungTime (index, shownSeconds))) return false;
+    refresh();
+    setSelected (index);   // the first part (the second is index + 1)
+    return true;
+}
+
+std::pair<int, int> HoneyRoll::joinRange (int index) const
+{
+    const auto count = static_cast<int> (snap.notes.size());
+    if (index < 0 || index >= count) return { index, index };
+    if (isSelected (index) && selectionSize() > 1)
+    {
+        // Selected neighbours (in one run, nothing unselected between them) into one.
+        const auto sel = getSelection();
+        for (size_t k = 1; k < sel.size(); ++k)
+            if (sel[k] != sel[k - 1] + 1) return { index, index };
+        return { sel.front(), sel.back() };
+    }
+    if (index + 1 < count) return { index, index + 1 };
+    return { index - 1, index };   // the last note: with the one before
+}
+
+bool HoneyRoll::join (int index)
+{
+    const auto [first, last] = joinRange (index);
+    if (model == nullptr || last <= first || first < 0) return false;
+    if (model->isOriginal() && onWantTuned) onWantTuned();
+    if (! model->joinNotes (first, last)) return false;
+    refresh();
+    setSelected (first);
+    return true;
+}
+
+void HoneyRoll::updateSplitHover (Point<float> at, bool alt)
+{
+    int hit = -1;
+    if (alt && at.y >= (float) kRulerHeight)
+        hit = noteAt (at);
+    const float x = at.x;
+    if (hit == splitHover && (hit < 0 || std::abs (x - splitX) < 0.5f)) return;
+    splitHover = hit;
+    splitX = x;
+    if (hit >= 0) setMouseCursor (MouseCursor::IBeamCursor);
+    repaint();
+}
+
+void HoneyRoll::modifierKeysChanged (const ModifierKeys& mods)
+{
+    if (! isMouseOver()) { if (splitHover >= 0) { splitHover = -1; repaint(); } return; }
+    const bool was = splitHover >= 0;
+    updateSplitHover (getMouseXYRelative().toFloat(), mods.isAltDown());
+    if (was && splitHover < 0) setMouseCursor (MouseCursor::NormalCursor);   // (the note's own grip again on the next move)
+}
+
 Path HoneyRoll::cellPath (int index, double midi) const
 {
     const auto [t0, t1] = span (index);
@@ -423,6 +498,16 @@ void HoneyRoll::paint (Graphics& g)
         {
             const auto [t0, t1] = span (i);
             if (xOf (t1) >= vis.getX() && xOf (t0) <= vis.getRight()) drawName (g, i);
+        }
+        if (splitHover >= 0 && splitHover < static_cast<int> (snap.notes.size()) && ! dragging)
+        {
+            // Alt over a note: where a double-click splits it.
+            const auto cell = cellPath (splitHover, shownPitch (splitHover)).getBounds();
+            const float x = jlimit (cell.getX() + 1.0f, cell.getRight() - 1.0f, splitX);
+            g.setColour (Colours::white.withAlpha (0.8f));
+            g.fillRect (x - 1.5f, cell.getY() - 3.0f, 3.0f, cell.getHeight() + 6.0f);
+            g.setColour (Colour (0xff1a1206));
+            g.fillRect (x - 0.75f, cell.getY() - 3.0f, 1.5f, cell.getHeight() + 6.0f);
         }
     }
     drawKeyboard (g);
@@ -1083,6 +1168,19 @@ void HoneyRoll::showMenu (int hit, Point<float> at)
         m.addItem ("Loop and play " + these + "  (L)", [this, hit] { command (hit, Command::loop); });
         m.addItem ("Play from here  (Enter)", [this, playFrom] { if (onPlayFrom) onPlayFrom (playFrom); });
         m.addSeparator();
+        {
+            // Split / join: where the click was; the selected neighbours, or this note and the next.
+            const double sr = snap.track != nullptr ? snap.track->sampleRate : 48000.0;
+            const auto& n = snap.notes[static_cast<size_t> (hit)].note;
+            const double cut = sungTime (hit, secondsAt (at.x)) * sr;
+            const bool canSplit = cut - n.start >= vox::honey::kMinPartSeconds * sr && n.end - cut >= vox::honey::kMinPartSeconds * sr;
+            m.addItem ("Split the note here  (Alt + double-click)", canSplit, false, [this, hit, x = secondsAt (at.x)] { splitAt (hit, x); });
+            const auto [first, last] = joinRange (hit);
+            const String joinText = last - first > 1 ? "Join the " + String (last - first + 1) + " notes into one  (J)"
+                                  : first < hit ? String ("Join with the note before  (J)") : String ("Join with the next note  (J)");
+            m.addItem (joinText, last > first, false, [this, hit] { join (hit); });
+        }
+        m.addSeparator();
         m.addItem ("Reset pitch", moved, false, [this, hit] { command (hit, Command::resetPitch); });
         m.addItem ("Reset timing", timed, false, [this, hit] { command (hit, Command::resetTiming); });
         m.addItem ("Reset tone (formant)", toned, false, [this, hit] { command (hit, Command::resetTone); });
@@ -1110,15 +1208,18 @@ void HoneyRoll::mouseDoubleClick (const MouseEvent& e)
         return;
     }
     const int hit = noteAt (e.position);
+    if (hit >= 0 && e.mods.isAltDown()) { splitAt (hit, secondsAt (e.position.x)); return; }   // Alt: split it there
     if (hit >= 0) command (hit, Command::snapToKey);
 }
 
 void HoneyRoll::mouseMove (const MouseEvent& e)
 {
+    updateSplitHover (e.position, e.mods.isAltDown());
     if (e.position.y < (float) kRulerHeight) { setMouseCursor (MouseCursor::PointingHandCursor); return; }
     const int hit = noteAt (e.position);
     if (hit != hovered) { hovered = hit; repaint(); }
     if (hit < 0) { setMouseCursor (MouseCursor::NormalCursor); return; }
+    if (splitHover >= 0) return;   // (the split cursor)
     const auto b = cellPath (hit, shownPitch (hit)).getBounds();
     const float grab = std::min (7.0f, b.getWidth() * 0.2f);
     const bool edge = e.position.x < b.getX() + grab || e.position.x > b.getRight() - grab;
@@ -1207,6 +1308,7 @@ bool HoneyRoll::keyPressed (const KeyPress& k)
     if (ch == 's' && ! mods.isAnyModifierKeyDown()) { command (selected, Command::snapToKey); return true; }
     if (ch == 'd' && ! mods.isAnyModifierKeyDown()) { command (selected, Command::steady); return true; }
     if (ch == 'l' && ! mods.isAnyModifierKeyDown()) { command (selected, Command::loop); return true; }
+    if (ch == 'j' && ! mods.isAnyModifierKeyDown()) { join (selected); return true; }
     if (k.getKeyCode() == KeyPress::leftKey || k.getKeyCode() == KeyPress::rightKey)
     {
         setSelected (jlimit (0, static_cast<int> (snap.notes.size()) - 1, selected + (k.getKeyCode() == KeyPress::leftKey ? -1 : 1)));

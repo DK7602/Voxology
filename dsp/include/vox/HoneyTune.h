@@ -121,8 +121,9 @@ std::vector<float> render (const std::vector<float>& mono, double sampleRate, co
 
 /** After an edit: the stretch to re-render (moved / stretched notes take their neighbours along: the
     gaps between them change), from the middle of the gap before the first changed note to
-    the middle of the gap after the last (neighbours sung in one breath come along). false = the notes
-    don't line up (re-analysed: render it all); from == to = nothing changed. Samples. */
+    the middle of the gap after the last (neighbours sung in one breath come along). Notes split or joined (the lists
+    differ in length): around the notes that differ. false = the notes don't line up (re-analysed: render it all);
+    from == to = nothing changed. Samples. */
 bool changedRegion (const std::vector<Note>& before, const std::vector<Note>& after, double clipSamples, double sampleRate,
                     double& from, double& to);
 /** Re-renders only [from, to) of `previous` (the clip's earlier render), crossfading 10 ms at each join. */
@@ -132,5 +133,33 @@ void renderPart (const Channels& channels, double sampleRate, const Track& track
 void renderPart (const std::vector<float>& mono, double sampleRate, const Track& track, const std::vector<Note>& notes,
                  std::vector<float>& previous, double from, double to, double transitionMs = kTransitionMs,
                  const std::atomic<bool>* cancel = nullptr);
+
+/** Note boundaries you set by hand, on top of findNotes(): a note cut in two at a moment (a split), two neighbours made
+    one (a join: at the middle of the gap between them). Seconds from the clip's start: saved with the project, and kept
+    when the clip is analysed again (a boundary that no longer finds its notes does nothing). */
+struct Layout
+{
+    std::vector<double> splits, joins;
+    bool empty() const { return splits.empty() && joins.empty(); }
+    bool operator== (const Layout& o) const { return splits == o.splits && joins == o.joins; }
+};
+/** Each part of a split note is at least this long. */
+inline constexpr double kMinPartSeconds = 0.03;
+/** A boundary finds its notes again this near (seconds). */
+inline constexpr double kLayoutReach = 0.03;
+/** The boundary between two neighbouring notes (seconds): the middle of the gap between them. */
+double boundarySeconds (const Track& track, const Note& a, const Note& b);
+/** The reading a note is split at (the first one from this moment on), or -1 when the moment isn't inside the note far
+    enough from its ends for both parts to last kMinPartSeconds. */
+int splitReading (const Track& track, const Note& note, double seconds);
+/** findNotes()'s notes with your boundaries (the joins first, then the splits). Each part's pitch is the middle of its
+    own singing (a split note snaps each part on its own: that's what a split is for). */
+std::vector<Note> reshape (const Track& track, std::vector<Note> notes, const Layout& layout);
+/** Note `index` (of reshape()'s notes) cut at this moment: the split goes into the layout, or a join there comes out
+    (the notes as they were found come back). false: not a place to split. */
+bool addSplit (Layout& layout, const Track& track, const std::vector<Note>& notes, int index, double seconds);
+/** Notes first .. last (reshape()'s, neighbours) made one: the joins go into the layout, or your splits there come out.
+    false: nothing to join. */
+bool addJoin (Layout& layout, const Track& track, const std::vector<Note>& notes, int first, int last);
 
 } // namespace vox::honey

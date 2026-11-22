@@ -275,7 +275,7 @@ void HoneyPanel::updateNoteControls()
     resetNote.setButtonText (many > 1 ? "Reset notes" : "Reset note");
     if (! has)
     {
-        noteInfo = "Click a note (Ctrl-click / drag a box / Ctrl+A for several). Drag up / down = pitch (Alt: fine), sideways = earlier / later, its ends = longer / shorter. Right-click for more.";
+        noteInfo = "Click a note (Ctrl-click / drag a box / Ctrl+A for several). Drag up / down = pitch (Alt: fine), sideways = earlier / later, its ends = longer / shorter. Alt + double-click = split, J = join. Right-click for more.";
         repaint();
         return;
     }

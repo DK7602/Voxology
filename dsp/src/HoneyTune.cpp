@@ -1081,16 +1081,54 @@ std::vector<float> render (const std::vector<float>& mono, double sr, const Trac
     return std::move (render (Channels { mono }, sr, t, notes, transitionMs, cancel).front());
 }
 
+namespace {
+bool sameNote (const Note& a, const Note& b)
+{
+    return a.start == b.start && a.end == b.end && std::abs (a.target - b.target) < 1.0e-9
+           && std::abs (a.drift - b.drift) < 1.0e-9 && std::abs (a.vibrato - b.vibrato) < 1.0e-9
+           && std::abs (a.formant - b.formant) < 1.0e-9 && std::abs (a.soundStart() - b.soundStart()) < 0.5
+           && std::abs (a.soundEnd() - b.soundEnd()) < 0.5;
+}
+
+/** changedRegion() for notes split or joined (a different number of notes): the notes the same at both ends of the two
+    lists stay; what's between them changed. A note re-timed there: false (all of it). */
+bool reshapedRegion (const std::vector<Note>& before, const std::vector<Note>& after, double clipSamples, double sr, double& from, double& to)
+{
+    const size_t nb = before.size(), na = after.size();
+    size_t p = 0, q = 0;
+    while (p < nb && p < na && sameNote (before[p], after[p])) ++p;
+    while (q < nb - p && q < na - p && sameNote (before[nb - 1 - q], after[na - 1 - q])) ++q;
+    if (p + q >= nb || p + q >= na) return false;   // (one list inside the other: not a split or a join)
+    double lo = 1.0e300, hi = -1.0e300;
+    auto cover = [&] (const std::vector<Note>& l, size_t a, size_t b)
+    {
+        for (size_t i = a; i < b; ++i)
+        {
+            if (l[i].timeMoved()) return false;
+            lo = std::min (lo, l[i].start);
+            hi = std::max (hi, l[i].end);
+        }
+        return true;
+    };
+    if (! cover (before, p, nb - q) || ! cover (after, p, na - q)) return false;
+    // With the neighbours sung in one breath (the moves between notes are smoothed across gaps under 0.15 s).
+    const double tight = 0.15 * sr;
+    int first = static_cast<int> (p), last = static_cast<int> (na - q) - 1;
+    while (first > 0 && after[static_cast<size_t> (first)].start - after[static_cast<size_t> (first - 1)].end < tight) --first;
+    while (last + 1 < static_cast<int> (na) && after[static_cast<size_t> (last + 1)].start - after[static_cast<size_t> (last)].end < tight) ++last;
+    lo = std::min (lo, after[static_cast<size_t> (first)].soundStart());
+    hi = std::max (hi, after[static_cast<size_t> (last)].soundEnd());
+    from = first > 0 ? 0.5 * (after[static_cast<size_t> (first - 1)].soundEnd() + lo) : 0.0;
+    to = last + 1 < static_cast<int> (na) ? 0.5 * (hi + after[static_cast<size_t> (last + 1)].soundStart()) : clipSamples;
+    return true;
+}
+}
+
 bool changedRegion (const std::vector<Note>& before, const std::vector<Note>& after, double clipSamples, double sr, double& from, double& to)
 {
-    if (before.size() != after.size() || after.empty()) return false;
-    auto same = [] (const Note& a, const Note& b)
-    {
-        return a.start == b.start && a.end == b.end && std::abs (a.target - b.target) < 1.0e-9
-               && std::abs (a.drift - b.drift) < 1.0e-9 && std::abs (a.vibrato - b.vibrato) < 1.0e-9
-               && std::abs (a.formant - b.formant) < 1.0e-9 && std::abs (a.soundStart() - b.soundStart()) < 0.5
-               && std::abs (a.soundEnd() - b.soundEnd()) < 0.5;
-    };
+    if (after.empty() || before.empty()) return false;
+    if (before.size() != after.size()) return reshapedRegion (before, after, clipSamples, sr, from, to);
+    const auto same = sameNote;
     int first = -1, last = -1;
     bool timing = false;
     for (size_t i = 0; i < after.size(); ++i)
@@ -1194,6 +1232,139 @@ void renderPart (const std::vector<float>& mono, double sr, const Track& t, cons
     Channels prev { std::move (previous) };
     renderPart (Channels { mono }, sr, t, notes, prev, from, to, transitionMs, cancel);
     previous = std::move (prev.front());
+}
+
+double boundarySeconds (const Track& t, const Note& a, const Note& b)
+{
+    return 0.5 * (a.end + b.start) / t.sampleRate;
+}
+
+int splitReading (const Track& t, const Note& note, double seconds)
+{
+    const double at = seconds * t.sampleRate, minPart = kMinPartSeconds * t.sampleRate;
+    if (! std::isfinite (at) || at - note.start < minPart || note.end - at < minPart) return -1;
+    for (int k = note.firstReading + 1; k <= note.lastReading; ++k)
+        if (static_cast<size_t> (k) < t.time.size() && t.time[static_cast<size_t> (k)] >= at)
+            return t.time[static_cast<size_t> (k)] - note.start >= minPart && note.end - t.time[static_cast<size_t> (k - 1)] >= minPart ? k : -1;
+    return -1;
+}
+
+namespace {
+/** A note over readings first .. last, its pitch from the middle of what was sung there (as findNotes: slides in and
+    out don't count; the filled attack / release only when nothing else was heard). */
+Note noteOver (const Track& t, int first, int last)
+{
+    Note n;
+    n.firstReading = first;
+    n.lastReading = last;
+    n.start = t.time[static_cast<size_t> (first)];
+    n.end = t.time[static_cast<size_t> (last)];
+    const int cut = (last - first + 1) / 6;
+    std::vector<double> heard, any;
+    for (int k = first + cut; k <= last - cut; ++k)
+    {
+        const double m = t.midi[static_cast<size_t> (k)];
+        if (! (m > 0.0)) continue;
+        any.push_back (m);
+        if (static_cast<size_t> (k) >= t.filled.size() || t.filled[static_cast<size_t> (k)] == 0) heard.push_back (m);
+    }
+    if (any.empty())
+        for (int k = first; k <= last; ++k)
+            if (const double m = t.midi[static_cast<size_t> (k)]; m > 0.0) any.push_back (m);
+    n.pitch = n.target = median (heard.size() >= 3 ? heard : any);
+    return n;
+}
+
+bool validNote (const Track& t, const Note& n)
+{
+    return n.firstReading >= 0 && n.lastReading >= n.firstReading && static_cast<size_t> (n.lastReading) < t.time.size()
+           && t.midi.size() == t.time.size();
+}
+
+/** The neighbours whose boundary is at this moment (the first of the two), or -1. */
+int boundaryAt (const Track& t, const std::vector<Note>& notes, double seconds)
+{
+    int best = -1;
+    double bestDist = kLayoutReach;
+    for (size_t k = 0; k + 1 < notes.size(); ++k)
+    {
+        // At the middle of the gap, or anywhere in it (a gap re-analysed a little wider or narrower).
+        const double a = notes[k].end / t.sampleRate, b = notes[k + 1].start / t.sampleRate;
+        const double d = seconds >= a && seconds <= b ? 0.0 : std::abs (boundarySeconds (t, notes[k], notes[k + 1]) - seconds);
+        if (d <= bestDist) { bestDist = d; best = static_cast<int> (k); }
+    }
+    return best;
+}
+
+/** The value in `list` within kLayoutReach of `seconds` (its index), or -1. */
+int nearIn (const std::vector<double>& list, double seconds)
+{
+    int best = -1;
+    double bestDist = kLayoutReach;
+    for (size_t i = 0; i < list.size(); ++i)
+        if (const double d = std::abs (list[i] - seconds); d <= bestDist) { bestDist = d; best = static_cast<int> (i); }
+    return best;
+}
+}
+
+std::vector<Note> reshape (const Track& t, std::vector<Note> notes, const Layout& layout)
+{
+    if (layout.empty() || notes.empty()) return notes;
+    for (const auto& n : notes) if (! validNote (t, n)) return notes;
+    auto joins = layout.joins;
+    std::sort (joins.begin(), joins.end());
+    for (double j : joins)
+    {
+        const int k = boundaryAt (t, notes, j);
+        if (k < 0) continue;
+        const auto joined = noteOver (t, notes[static_cast<size_t> (k)].firstReading, notes[static_cast<size_t> (k) + 1].lastReading);
+        notes[static_cast<size_t> (k)] = joined;
+        notes.erase (notes.begin() + k + 1);
+    }
+    auto splits = layout.splits;
+    std::sort (splits.begin(), splits.end());
+    for (double sp : splits)
+        for (size_t k = 0; k < notes.size(); ++k)
+        {
+            const int r = splitReading (t, notes[k], sp);
+            if (r < 0) continue;
+            const auto first = noteOver (t, notes[k].firstReading, r - 1), second = noteOver (t, r, notes[k].lastReading);
+            notes[k] = first;
+            notes.insert (notes.begin() + static_cast<long> (k) + 1, second);
+            break;
+        }
+    return notes;
+}
+
+bool addSplit (Layout& layout, const Track& t, const std::vector<Note>& notes, int index, double seconds)
+{
+    if (index < 0 || index >= static_cast<int> (notes.size()) || ! validNote (t, notes[static_cast<size_t> (index)])) return false;
+    const auto& n = notes[static_cast<size_t> (index)];
+    // A join of yours inside this note, near here: undone instead (the boundary as found comes back).
+    if (const int j = nearIn (layout.joins, seconds); j >= 0 && seconds * t.sampleRate > n.start && seconds * t.sampleRate < n.end)
+    {
+        layout.joins.erase (layout.joins.begin() + j);
+        return true;
+    }
+    const int r = splitReading (t, n, seconds);
+    if (r < 0) return false;
+    // Saved at the boundary it makes (the reading's own moment: it finds the same reading again).
+    layout.splits.push_back (0.5 * (t.time[static_cast<size_t> (r - 1)] + t.time[static_cast<size_t> (r)]) / t.sampleRate);
+    return true;
+}
+
+bool addJoin (Layout& layout, const Track& t, const std::vector<Note>& notes, int first, int last)
+{
+    first = std::max (first, 0);
+    last = std::min (last, static_cast<int> (notes.size()) - 1);
+    if (last <= first) return false;
+    for (int k = first; k < last; ++k)
+    {
+        const double b = boundarySeconds (t, notes[static_cast<size_t> (k)], notes[static_cast<size_t> (k) + 1]);
+        if (const int s = nearIn (layout.splits, b); s >= 0) layout.splits.erase (layout.splits.begin() + s);   // your split: undone
+        else layout.joins.push_back (b);
+    }
+    return true;
 }
 
 } // namespace vox::honey

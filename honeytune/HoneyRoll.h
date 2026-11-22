@@ -7,7 +7,8 @@
 /** The honeycomb note editor: every note is a gold-rimmed light blue marble shape on a piano roll, the outline of its
     sung waveform (how loud it was, moment to moment). Notes that will play off the key glow red; pulled into the key
     they fill gold. Drag a cell up / down to move it (whole notes;
-    hold Alt for cents), double-click to snap it to the key, Delete to reset it.
+    hold Alt for cents), double-click to snap it to the key, Delete to reset it; Alt + double-click splits it there, J joins
+    it to the next note (or the selected notes into one).
     Mouse wheel scrolls up / down, Shift + wheel scrolls in time, Ctrl + wheel (or + / -) zooms. */
 class HoneyRoll final : public juce::Component,
                         private juce::ScrollBar::Listener
@@ -27,6 +28,12 @@ public:
     /** What the menu, the keys and the bottom bar's buttons do (to `index`'s selection, or just that note). */
     enum class Command { snapToKey, steady, resetPitch, resetTiming, resetTone, resetSteady, resetAll, loop };
     void command (int index, Command);
+    /** Cut a note in two where it's shown at this time (seconds); join a note with the next one (or, on a selection of
+        neighbours, all of them into one). */
+    bool splitAt (int index, double shownSeconds);
+    bool join (int index);
+    /** What join (index) would make one: the first and last note (first == last: nothing to join). */
+    std::pair<int, int> joinRange (int index) const;
     int selectionSize() const;
     bool isSelected (int index) const;
     const honeyui::Snapshot& getSnapshot() const { return snap; }
@@ -47,6 +54,7 @@ public:
     void mouseMove (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     bool keyPressed (const juce::KeyPress&) override;
+    void modifierKeysChanged (const juce::ModifierKeys&) override;
 
     /** Where the host's playhead is in the clip (seconds; negative = not in this clip). It stays drawn when playback stops
         (where it stopped, or wherever the host's cursor is then). The view follows it while playing; when stopped it
@@ -123,6 +131,12 @@ private:
     std::pair<double, double> span (int index) const;
     /** A moment of the note as sung (seconds) -> where it's shown. */
     double shownTime (int index, double sungSeconds) const;
+    /** ... and back: where the note was sung at a moment it's shown at. */
+    double sungTime (int index, double shownSeconds) const;
+    // Alt held over a note: where a double-click would split it (a line across the note; -1: none).
+    int splitHover = -1;
+    float splitX = 0.0f;
+    void updateSplitHover (juce::Point<float> at, bool alt);
     bool seeking = false;
 
     juce::ScrollBar hBar { false }, vBar { true };

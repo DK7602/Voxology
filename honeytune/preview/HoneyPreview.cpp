@@ -2,7 +2,8 @@
 // HoneyPreview <mono float32 raw> <sample rate> <out.png> [key 0-11|12=auto] [scale] [snap]
 // Env: HONEY_W / HONEY_H size, HONEY_BPM tempo map, HONEY_MANUAL the manual, HONEY_BEAT=key,scale a key from Voxology's
 // beat, HONEY_VOXOLOGY=1|2|3 the Voxology on this track (Pitch resting / tuning anyway / tuning), HONEY_STEADY=n note n
-// selected and steadied (NOTE DRIFT + NOTE VIBRATO 0), HONEY_PLAYHEAD=seconds, HONEY_STOPPED=1 (playback stopped).
+// selected and steadied (NOTE DRIFT + NOTE VIBRATO 0), HONEY_PLAYHEAD=seconds, HONEY_STOPPED=1 (playback stopped),
+// HONEY_SPLIT=n note n cut in two in its middle (and selected), HONEY_JOIN=n note n joined with the next.
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -17,7 +18,8 @@ using namespace juce;
 struct MemoryModel final : honeyui::Model
 {
     std::shared_ptr<const vox::honey::Track> track;
-    std::vector<vox::honey::Note> notes;
+    std::vector<vox::honey::Note> found, notes;
+    vox::honey::Layout layout;
     std::vector<honeyui::NoteEdit> edits;
     vox::KeyGuess guess;
     honeyui::Settings settings;
@@ -47,6 +49,25 @@ struct MemoryModel final : honeyui::Model
     void setSettings (const honeyui::Settings& s) override { settings = s; }
     void setEdit (int i, const honeyui::NoteEdit& e) override { edits[static_cast<size_t> (i)] = e; }
     void resetAllEdits() override { edits.assign (notes.size(), {}); }
+    bool reshapeWith (const vox::honey::Layout& next)
+    {
+        auto now = vox::honey::reshape (*track, found, next);
+        if (now.size() == notes.size()) return false;
+        edits = honeyui::carryEdits (notes, edits, now, track->sampleRate);
+        notes = std::move (now);
+        layout = next;
+        return true;
+    }
+    bool splitNote (int i, double seconds) override
+    {
+        auto next = layout;
+        return vox::honey::addSplit (next, *track, notes, i, seconds) && reshapeWith (next);
+    }
+    bool joinNotes (int first, int last) override
+    {
+        auto next = layout;
+        return vox::honey::addJoin (next, *track, notes, first, last) && reshapeWith (next);
+    }
     bool orig = false;
     void setOriginal (bool o) override { orig = o; }
     bool isOriginal() override { return orig; }
@@ -64,7 +85,7 @@ int main (int argc, char** argv)
 
     MemoryModel m;
     auto t = std::make_shared<vox::honey::Track> (vox::honey::analyse (mono, sr));
-    m.notes = vox::honey::findNotes (*t);
+    m.found = m.notes = vox::honey::findNotes (*t);
     std::vector<double> sung;
     for (double v : t->midi) if (v > 0.0) sung.push_back (v);
     m.guess = vox::detectKey (sung);
@@ -101,6 +122,17 @@ int main (int argc, char** argv)
     }
     panel.refresh();
     panel.roll.setSelected (pick);
+    if (const char* sp = std::getenv ("HONEY_SPLIT"); sp != nullptr && std::atoi (sp) > 0)
+    {
+        const int n = std::min (std::atoi (sp), static_cast<int> (m.notes.size())) - 1;
+        const auto& note = m.notes[static_cast<size_t> (n)];
+        panel.roll.splitAt (n, 0.5 * (note.soundStart() + note.soundEnd()) / sr);
+    }
+    if (const char* jn = std::getenv ("HONEY_JOIN"); jn != nullptr && std::atoi (jn) > 0)
+    {
+        panel.roll.setSelected (std::min (std::atoi (jn), static_cast<int> (m.notes.size())) - 1);
+        panel.roll.join (panel.roll.getSelected());
+    }
     panel.setPlayhead (std::getenv ("HONEY_PLAYHEAD") ? std::atof (std::getenv ("HONEY_PLAYHEAD")) : 2.5, std::getenv ("HONEY_STOPPED") == nullptr);
 
     if (std::getenv ("HONEY_MANUAL"))   // show the manual (the ? button)
