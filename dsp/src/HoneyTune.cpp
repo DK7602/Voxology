@@ -21,6 +21,78 @@ double median (std::vector<double> v)
     return v[v.size() / 2];
 }
 
+/** How badly x repeats after `lag` samples over `len` samples centred on c: sum (x - x[+lag])^2 / sum (x^2 + x[+lag]^2)
+    (0 = exactly, 1 = not at all; 2 = can't tell, at the clip's edge or in silence). scaled: each piece of `lag` samples
+    is matched at its own level (a raspy voice whose cycles alternate loud / soft still repeats at its period). */
+double repeatError (const std::vector<float>& x, long c, int lag, int len, bool scaled = false)
+{
+    const long a = c - (len + lag) / 2;
+    if (lag < 1 || a < 0 || a + len + lag >= static_cast<long> (x.size())) return 2.0;
+    const float* p = x.data() + a;
+    const float* q = p + lag;
+    if (scaled)
+    {
+        double num = 0.0, den = 0.0;
+        for (int b = 0; b < len; b += lag)
+        {
+            double xy = 0.0, xx = 0.0, yy = 0.0;
+            for (int j = b; j < std::min (len, b + lag); ++j)
+            {
+                const double u = p[j], v = q[j];
+                xy += u * v; xx += u * u; yy += v * v;
+            }
+            num += xy;
+            den += std::sqrt (xx * yy);
+        }
+        return den > 1.0e-20 ? 1.0 - num / den : 2.0;
+    }
+    double s = 0.0, e = 0.0;
+    for (int j = 0; j < len; ++j)
+    {
+        const double u = p[j], v = q[j];
+        s += (u - v) * (u - v);
+        e += u * u + v * v;
+    }
+    return e > 1.0e-20 ? s / e : 2.0;
+}
+
+/** The deepest repeatError within +-reach (1 or 2) whole lags of tau, interpolated between lags (a parabola). Where
+    the nearest lag alone is worse than `screen`, that's the answer (no dip there: a quick no). needDip: where the error
+    still falls towards shorter lags past the search it's 2, not a period (at a lag far shorter than the voice's period
+    any smooth wave repeats fairly well). */
+double dipNear (const std::vector<float>& x, long c, double tau, int reach, int len, bool scaled = false, double screen = 9.0, bool needDip = false)
+{
+    const auto mid = static_cast<int> (std::lround (tau));
+    std::array<double, 5> v {};   // lags mid - reach ... mid + reach
+    const auto at = [&] (int k) -> double& { return v[static_cast<size_t> (k + reach)]; };
+    at (0) = repeatError (x, c, mid, len, scaled);
+    if (at (0) > screen) return at (0);
+    int best = 0;
+    for (int k = -reach; k <= reach; ++k)
+    {
+        if (k != 0) at (k) = repeatError (x, c, mid + k, len, scaled);
+        if (at (k) < at (best)) best = k;
+    }
+    if (best == -reach || best == reach)
+    {
+        // At the edge of the search: no dip found here. (needDip: one lag shorter still repeats better: a slope.)
+        if (needDip && best < 0 && repeatError (x, c, mid + best - 1, len, scaled) < at (best)) return 2.0;
+        return at (best);
+    }
+    const double a = at (best - 1), b = at (best), d = at (best + 1);
+    const double den = a - 2.0 * b + d;
+    if (den <= 1.0e-12) return b;
+    const double off = std::clamp (0.5 * (a - d) / den, -0.5, 0.5);
+    return std::max (0.0, b - 0.25 * (a - d) * off);
+}
+
+/** How badly the clip repeats at the period of `midi` (times `ratio`) around input time `time`. */
+double dipAt (const std::vector<float>& x, double sr, double time, double midi, double ratio = 1.0, bool scaled = false)
+{
+    const double P = ratio * sr / (440.0 * std::pow (2.0, (midi - 69.0) / 12.0));
+    return dipNear (x, std::lround (time), P, 2, std::max (static_cast<int> (std::lround (0.008 * sr)), static_cast<int> (std::lround (1.5 * P))), scaled);
+}
+
 /** The plan the live shifter follows: for any input time, the period and the shift. */
 class Plan final : public PitchCorrector::Guide
 {
@@ -135,6 +207,59 @@ void aiCheck (Track& t, const std::vector<float>& mono, double sr, const std::at
         if (est[k].confidence > 0.6 && est[k].hz > 0.0) am[k] = 69.0 + 12.0 * std::log2 (est[k].hz / 440.0);
     }
     auto octaveApart = [] (double a, double b) { const double d = std::abs (a - b); return std::abs (d - 12.0) < 0.7 || std::abs (d - 24.0) < 0.7; };
+    // The waveform has the last word on an octave (AUDIT-ENGINE.md #13): the AI's octave down only where the voice does
+    // not repeat cleanly at P and repeats clearly better at 2P (if it repeats at P, the period is P or shorter; a raspy
+    // voice's waveform also repeats better at 2P, but it's sung at P); its octave up only where the voice repeats there
+    // too (each cycle at its own level: rasp alternates loud / soft cycles), about as well as at P for a whole stretch
+    // moved on the AI's word alone (`strict`), at least roughly for one check backed by the moments around it.
+    // > 0: allowed.
+    auto waveformMargin = [&] (double time, double midi, double shift, bool strict)
+    {
+        const double atP = dipAt (mono, sr, time, midi);
+        if (shift > 0.0)
+            return (strict ? std::max (0.25, atP + 0.1) : std::max (0.5, atP + 0.25)) - dipAt (mono, sr, time, midi, std::pow (2.0, -shift / 12.0), true);
+        return std::min (atP - 0.2, atP - 0.1 - dipAt (mono, sr, time, midi, std::pow (2.0, -shift / 12.0)));
+    };
+    // A vote over each stretch of the sung line (no gap, no jump of 1.5 semitones between readings: a note or a few joined):
+    // where most of the AI's estimates in it hear an octave (or two) apart, the whole stretch moves, if the waveform agrees
+    // (its middle reading by reading, the median). A whole note read in the wrong octave used to stay so: the AI moved a
+    // check only next to moments where both agreed, or when it was very sure.
+    size_t first = 0;   // the first check not before this stretch
+    for (size_t i = 0; i < n;)
+    {
+        if (! (t.midi[i] > 0.0)) { ++i; continue; }
+        size_t e = i + 1;
+        while (e < n && t.midi[e] > 0.0 && std::abs (t.midi[e] - t.midi[e - 1]) < 1.5) ++e;
+        int votes = 0, up = 0, up2 = 0, down = 0, down2 = 0;
+        while (first < times.size() && times[first] * sr < t.time[i]) ++first;
+        for (size_t k = first; k < times.size() && times[k] * sr <= t.time[e - 1]; ++k)
+        {
+            if (am[k] <= 0.0 || ym[k] <= 0.0) continue;
+            const double d = am[k] - ym[k];
+            ++votes;
+            if (std::abs (d - 12.0) < 0.7) ++up;
+            else if (std::abs (d - 24.0) < 0.7) ++up2;
+            else if (std::abs (d + 12.0) < 0.7) ++down;
+            else if (std::abs (d + 24.0) < 0.7) ++down2;
+        }
+        const int most = std::max ({ up, up2, down, down2 });
+        if (votes >= 3 && most > 0 && 10 * most >= 6 * votes)
+        {
+            const double shift = most == up ? 12.0 : most == up2 ? 24.0 : most == down ? -12.0 : -24.0;
+            std::vector<double> allow;
+            const size_t step = std::max<size_t> (1, (e - i) / 24);   // up to ~24 readings looked at
+            for (size_t q = i + (e - i) / 6; q < e - (e - i) / 6; q += step)
+                allow.push_back (waveformMargin (t.time[q], t.midi[q], shift, true));
+            const double m = median (allow);
+            if (! allow.empty() && m >= 0.0)
+            {
+                for (size_t q = i; q < e; ++q) t.midi[q] += shift;
+                t.aiFixed += most;
+            }
+        }
+        i = e;
+    }
+    for (size_t k = 0; k < times.size(); ++k) ym[k] = t.midi[nearest (times[k])];
     // Apply a decision to the readings within half a hop of check k.
     auto apply = [&] (size_t k, auto&& fn)
     {
@@ -158,6 +283,7 @@ void aiCheck (Track& t, const std::vector<float>& mono, double sr, const std::at
             }
             if (! aiWins) continue;
             const double shift = 12.0 * std::round ((am[k] - ym[k]) / 12.0);
+            if (waveformMargin (times[k] * sr, ym[k], shift, false) < 0.0) continue;
             apply (k, [&] (size_t i) { if (t.midi[i] > 0.0) t.midi[i] += shift; });
             ++t.aiFixed;
         }
@@ -360,6 +486,171 @@ void extendToOnsets (Track& t, const std::vector<float>& mono, double sr)
 }
 }
 
+namespace {
+/** Offline period check (Honey Tune only: the live Pitch detector is unchanged). The live detector runs YIN on a 12 kHz
+    copy with whole-sample lags and takes the first dip under its threshold. High up (800 Hz and more) the dip at the true
+    period falls between two lags and is raised, so it takes 2, 3 ... 14 periods instead, and it never reads above
+    1000 Hz; breathy noise does the same lower down. Here every pitch reading is checked at the full rate: how well the
+    waveform repeats at the period read and at its 1/2, 1/3 ... (up to kTopHz), each dip's depth interpolated between
+    lags. A voice that repeats about as well at P / k as at P has the period P / k (the shortest such, with each of its
+    multiples there a dip too). Then each reading takes the candidate nearest to what the readings around it chose (the
+    louder ones counting for more), if the waveform repeats well enough there: a reading that alone kept a wrong octave
+    follows its note. (AUDIT-ENGINE.md #13: 783 / 987 / 1174 Hz notes were read 29 / 32 / 100 % an octave or more low,
+    a breathy voice (HNR 14 dB) a quarter of it.) */
+constexpr double kTopHz = 1600.0;   // the highest pitch read offline
+constexpr int kMaxSplit = 16;       // P / 2 ... P / 16 (up high the live detector took up to 14 periods)
+
+/** Mean square level (dB) of `len` samples centred on c. */
+double levelDbAt (const std::vector<float>& x, long c, int len)
+{
+    const long a = std::max (0L, c - len / 2), b = std::min (static_cast<long> (x.size()), c + len / 2);
+    double e = 0.0;
+    for (long i = a; i < b; ++i) e += static_cast<double> (x[static_cast<size_t> (i)]) * x[static_cast<size_t> (i)];
+    return 10.0 * std::log10 (e / static_cast<double> (std::max (1L, b - a)) + 1.0e-20);
+}
+
+void checkPeriods (Track& t, const std::vector<float>& x, double sr, const std::atomic<bool>* cancel)
+{
+    const size_t n = t.midi.size();
+    if (n == 0 || x.empty()) return;
+    const double minLag = sr / kTopHz;
+    const auto minLen = static_cast<int> (std::lround (0.008 * sr));
+    // Readings in silence: the live detector looks ~27 ms back, so where a voice stops dead it goes on reading a pitch
+    // for a few tens of ms, stamped in the silence (made up from what it still saw). A reading whose own 8 ms are 50 dB
+    // under the singing (the 95th percentile of the sung readings) is unsung.
+    std::vector<double> level (n, 0.0);   // dB, the sung readings' own 8 ms
+    {
+        std::vector<double> sung;
+        for (size_t i = 0; i < n; ++i)
+            if (t.midi[i] > 0.0) sung.push_back (level[i] = levelDbAt (x, std::lround (t.time[i]), minLen));
+        if (! sung.empty())
+        {
+            const auto k = static_cast<long> (0.95 * static_cast<double> (sung.size() - 1));
+            std::nth_element (sung.begin(), sung.begin() + k, sung.end());
+            const double floorDb = sung[static_cast<size_t> (k)] - 50.0;
+            for (size_t i = 0; i < n; ++i)
+                if (t.midi[i] > 0.0 && level[i] < floorDb) { t.midi[i] = 0.0; t.clarity[i] = 0.0; }
+        }
+    }
+    using Dips = std::array<float, kMaxSplit + 1>;   // the dip at P / k, k = 1 .. kMaxSplit (> 1: not checked)
+    std::vector<Dips> dips (n);
+    std::vector<double> pick (n, 0.0);
+    for (size_t i = 0; i < n; ++i)
+    {
+        if (i % 256 == 0 && cancel != nullptr && cancel->load (std::memory_order_relaxed)) return;
+        auto& d = dips[i];
+        d.fill (9.0f);
+        if (! (t.midi[i] > 0.0)) continue;
+        const double P = sr / (440.0 * std::pow (2.0, (t.midi[i] - 69.0) / 12.0));
+        const auto c = static_cast<long> (std::lround (t.time[i]));
+        const int K = std::min (kMaxSplit, static_cast<int> (P / minLag));
+        d[1] = static_cast<float> (dipNear (x, c, P, 2, std::max (minLen, static_cast<int> (std::lround (1.5 * P)))));
+        // (A candidate whose nearest whole lag repeats worse than 0.6 isn't searched further: a quick no.)
+        const auto lenAt = [&] (double lag) { return std::max (minLen, static_cast<int> (std::lround (1.5 * lag))); };
+        for (int k = 2; k <= K; ++k)
+            d[static_cast<size_t> (k)] = static_cast<float> (dipNear (x, c, P / k, k == 2 ? 2 : 1, lenAt (P / k), false, 0.6, k >= 3));
+        // The shortest period that repeats about as well as the one read: at most twice as badly, plus 0.03, and never
+        // worse than 0.2. (A note read at 2P repeats about as well at P. A low voice whose 2nd harmonic towers over the
+        // 1st repeats nearly as well at P / 2 as at P, but not quite: 0.03 - 0.11 against 0.001.) Its first multiples
+        // must repeat as well: a true period repeats at 2 and 3 periods too.
+        const double good = std::min (0.2, 2.0 * d[1] + 0.03);
+        int best = 1;
+        for (int k = K; k >= 2 && best == 1; --k)
+        {
+            if (d[static_cast<size_t> (k)] > good) continue;
+            bool every = true;
+            for (int m = 2; m < k && every; ++m)
+                if (k % m == 0) every = d[static_cast<size_t> (k / m)] <= good;
+                else if (m <= 3) every = dipNear (x, c, m * P / k, 1, lenAt (m * P / k), false, 0.6, true) <= good;
+            if (every) best = k;
+        }
+        pick[i] = t.midi[i] + 12.0 * std::log2 (static_cast<double> (best));
+    }
+    // Each reading: the candidate nearest to what the readings around it chose (+-130 ms, within 1.5 semitones), if it
+    // repeats well enough there (within 0.3 of exactly, or 0.15 of the period read). Louder readings count for more (by
+    // their power): a fading release or a resonance ringing on after the voice stops follows the note's body.
+    const double hop = n > 1 ? (t.time.back() - t.time.front()) / static_cast<double> (n - 1) : 128.0;
+    const auto half = static_cast<size_t> (std::max (2.0, std::round (0.13 * sr / hop)));
+    std::vector<double> power (n, 0.0);
+    for (size_t i = 0; i < n; ++i) if (pick[i] > 0.0) power[i] = std::pow (10.0, 0.1 * level[i]);
+    std::vector<std::pair<double, double>> around;   // (pick, power)
+    around.reserve (2 * half + 1);
+    for (size_t i = 0; i < n; ++i)
+    {
+        if (pick[i] <= 0.0) continue;
+        around.clear();
+        double total = 0.0;
+        for (size_t j = i > half ? i - half : 0; j < std::min (n, i + half + 1); ++j)
+            if (pick[j] > 0.0)
+            {
+                around.emplace_back (pick[j], power[j]);
+                total += power[j];
+            }
+        std::sort (around.begin(), around.end());
+        double m = around.front().first, below = 0.0;
+        for (const auto& [p, w] : around)
+        {
+            m = p;
+            below += w;
+            if (below >= 0.5 * total) break;
+        }
+        const auto& d = dips[i];
+        int near = 0;
+        double nearBy = 1.5;
+        for (int k = 1; k <= kMaxSplit; ++k)
+        {
+            if (d[static_cast<size_t> (k)] > 1.0f) continue;
+            const double by = std::abs (t.midi[i] + 12.0 * std::log2 (static_cast<double> (k)) - m);
+            if (by < nearBy) { nearBy = by; near = k; }
+        }
+        const double loose = std::max (0.3, d[1] + 0.15);
+        t.midi[i] = near > 0 && d[static_cast<size_t> (near)] <= loose ? t.midi[i] + 12.0 * std::log2 (static_cast<double> (near)) : pick[i];
+    }
+}
+
+/** A breathy voice: the live detector lets go for 20 - 80 ms where the noise is strong, and each gap split the note.
+    An unsung stretch of up to 80 ms between two sung moments at the same pitch (within a semitone) is sung if the
+    waveform still repeats at that pitch (within 0.45 of exactly on the median, 0.8 at worst: noise alone doesn't) and it
+    stays about as loud as the note around it (the median within 5 dB of the note 30 ms either side, nowhere 10 dB under:
+    a consonant or a dip between two syllables is quieter, and stays a gap). */
+void holdVoicing (Track& t, const std::vector<float>& x, double sr)
+{
+    const size_t n = t.midi.size();
+    if (n < 3 || x.empty()) return;
+    const auto len = static_cast<int> (std::lround (0.008 * sr));
+    std::vector<double> repeat, level;
+    for (size_t i = 1; i + 1 < n; ++i)
+    {
+        if (t.midi[i] > 0.0 || ! (t.midi[i - 1] > 0.0)) continue;
+        size_t j = i;
+        while (j < n && ! (t.midi[j] > 0.0)) ++j;
+        if (j >= n) break;
+        const double a = t.midi[i - 1], b = t.midi[j];
+        if (t.time[j] - t.time[i - 1] <= 0.08 * sr && std::abs (a - b) < 1.0)
+        {
+            const double around = std::max (levelDbAt (x, std::lround (t.time[i - 1] - 0.03 * sr), len), levelDbAt (x, std::lround (t.time[j] + 0.03 * sr), len));
+            auto midiAt = [&] (size_t k) { return a + (b - a) * static_cast<double> (k - i + 1) / static_cast<double> (j - i + 1); };
+            bool voice = true;
+            repeat.clear();
+            level.clear();
+            for (size_t k = i; k < j && voice; ++k)
+            {
+                repeat.push_back (dipAt (x, sr, t.time[k], midiAt (k)));
+                level.push_back (levelDbAt (x, std::lround (t.time[k]), len) - around);
+                voice = repeat.back() <= 0.8 && level.back() > -10.0;
+            }
+            if (voice && median (repeat) <= 0.45 && median (level) >= -5.0)
+                for (size_t k = i; k < j; ++k)
+                {
+                    t.midi[k] = midiAt (k);
+                    t.clarity[k] = std::min (t.clarity[i - 1], t.clarity[j]);
+                }
+        }
+        i = j;
+    }
+}
+}
+
 Track analyse (const std::vector<float>& mono, double sr, bool ai, const std::atomic<bool>* cancel)
 {
     Track t;
@@ -387,6 +678,7 @@ Track analyse (const std::vector<float>& mono, double sr, bool ai, const std::at
     }
     const size_t n = t.midi.size();
     if (n == 0) return t;
+    checkPeriods (t, mono, sr, cancel);
 
     // Octave slips: compare with the median of the voiced readings around it (past AND future).
     std::vector<double> fixed = t.midi;
@@ -399,6 +691,9 @@ Track analyse (const std::vector<float>& mono, double sr, bool ai, const std::at
         const double d = t.midi[i] - m;
         if (std::abs (d) > 9.0) fixed[i] = t.midi[i] - 12.0 * std::round (d / 12.0);
     }
+    t.midi = fixed;
+    holdVoicing (t, mono, sr);
+    fixed = t.midi;
     // Bridge tiny gaps (under ~16 ms) inside a note.
     for (size_t i = 1; i + 1 < n; ++i)
     {
@@ -462,6 +757,9 @@ std::vector<Note> findNotes (const Track& track)
     // phrase): vibrato never splits a note, a real note change still does.
     const auto half = static_cast<size_t> (std::max (1.0, 0.09 / hopSec));
     std::vector<double> sm (n, 0.0);
+    // (Nor across a jump of more than 3 semitones from one reading to the next: no voice moves that fast, it's a resonance
+    // ringing on as the voice stops or a slip; averaged in, it pulled the note's average away and split the note.)
+    auto apart = [&] (size_t j) { return j > 0 && t.midi[j - 1] > 0.0 && std::abs (t.midi[j] - t.midi[j - 1]) > 3.0; };
     for (size_t k = 0; k < n; ++k)
     {
         if (t.midi[k] <= 0.0) continue;
@@ -469,6 +767,7 @@ std::vector<Note> findNotes (const Track& track)
         for (size_t j = k > half ? k - half : 0; j < std::min (n, k + half + 1); ++j)
         {
             if (t.midi[j] <= 0.0) { if (j < k) { sum = 0.0; cnt = 0; continue; } break; }
+            if (j != k && apart (j)) { if (j < k) { sum = 0.0; cnt = 0; } else break; }
             sum += t.midi[j]; ++cnt;
         }
         sm[k] = cnt ? sum / cnt : t.midi[k];

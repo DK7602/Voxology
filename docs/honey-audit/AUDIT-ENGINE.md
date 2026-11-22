@@ -414,6 +414,67 @@ floor to about 50 Hz (longer YIN window).
 - Raise the offline maximum to about 1600 Hz.
 - Take a note-level octave vote (median over the note of CREPE and the detector) instead of 30 ms windows.
 
+**Fixed in Beta 40 (offline analysis only: the live Pitch detector and its tests are unchanged).** All in
+`dsp/src/HoneyTune.cpp`:
+- `checkPeriods` (new, right after the live detector's pass in `analyse`): every pitch reading is checked again at the
+  full sample rate. How well the waveform repeats (normalised difference, dips interpolated between lags) is measured at
+  the period read and at P/2 ... P/16, up to 1600 Hz. The shortest candidate that repeats about as well is taken: at most
+  2x the error at P plus 0.03, never above 0.2, and its 2nd and 3rd multiples must repeat too. A low voice with a towering
+  2nd harmonic repeats nearly, but not quite, as well at P/2, and keeps P. Then each reading takes the candidate nearest
+  to the loudness-weighted median of the readings within 130 ms. Readings stamped in silence (50 dB under the singing)
+  are dropped: after a dead stop the live detector went on reading a made-up pitch for 20-60 ms.
+- `holdVoicing` (new): a gap of up to 80 ms between two readings at the same pitch is filled in where the waveform still
+  repeats at that pitch and the level holds (median within 5 dB). This is for breathy voices; a consonant or a level dip
+  stays a gap.
+- `findNotes`: the 180 ms average no longer reaches across a jump of more than 3 semitones between neighbouring readings.
+  A resonance ringing on after the voice stops used to pull the average and split the note.
+- `aiCheck`: a vote over each stretch of the line. Where 60 % of CREPE's estimates hear another octave, the whole stretch
+  moves. The waveform has the last word, here and for the old per-check moves: down only if P doesn't repeat cleanly and
+  2P clearly does, up only if P/2 repeats too (each cycle at its own level, so rasp still counts).
+
+Before -> after (same tools, rebuilt against the branch; the audit's numbers above are the older baseline):
+
+| Case | Before | After |
+|---|---|---|
+| High notes (`dbg_high`), detector alone: octave errors / notes for 3 | 659 Hz 3.8 % / 6, 784 Hz 29.6 % / 5, 988 Hz 32.2 % / 8, 1175 Hz 100 % / 8, 1319 Hz 100 % / 10 | 0 / 3, 0 / 3, 0 / 3, 0 / 3, 34.2 % / 3 |
+| Same, with the AI check | 0.8 % / 3, 4.2 % / 5, 22.3 % / 9, 34.2 % / 12, 66.2 % / 13 | 0 / 3, 0 / 3, 0 / 3, 0 / 3, 34.2 % / 3 |
+| Breathy, HNR 23 / 17 / 14 / 10 dB (`audit_analysis`, AI on): octave errors | 0 / 0 / 24.1 / 32.5 % | 0 / 0 / 0 / 1.4 % |
+| Same, notes for 6 | 11 / 8 / 21 / 18 | 6 / 6 / 6 / 9 |
+| Same, detector alone: octave errors, notes | 0, 0, 54.3, 57.0 %; 11, 8, 20, 17 | 0, 0, 0, 1.5 %; 6, 6, 6, 8 |
+| Rasp (subharmonic) 15 / 30 / 50 %: octave errors, AI on | 0 / 17.2 / 61.2 % | 0 / 0 / 61.2 % |
+| Same, detector alone | 0 / 17.2 / 61.2 % | 0 / 17.2 / 61.2 % |
+| Rasp / rough clips, notes for 6 (sub 15 / 30 / 50, rough) | 8 / 7 / 7 / 11 | 6 / 6 / 5 / 6 |
+| Rap syllables @48 / @55: notes for 40, one-to-one | 44 / 47, 33 / 34 | 40 / 42, 37 / 38 |
+| Legato 1-2 st (vib 0 / 25 / 60 c): notes for 12 | 13 / 12 / 11 (5.1 / 2.1 / 0 % octave errors) | 11 / 11 / 11 (0 %) |
+| Vibrato wide/slow @57 / @76: notes for 7 | 10 / 11 | 8 / 7 |
+| Quiet -20 / -50 dBFS: notes for 12, missed | 15, 0 / 14, 3 | 12, 0 / 13, 2 |
+| False voicing (unsung moments read as pitch), median over the clips | 5.4 % (p90 12.8 %) | 0.6 % (p90 3.5 %) |
+| New clips: high legato line 659-1175 Hz (8 notes) | 14 notes, 15.4 % octave errors (detector alone 39.7 %) | 8 notes, 0 % |
+| New clips: octave leaps; "u" / "i" with the 2nd harmonic on F1 | 12 / 12; 0 % | unchanged |
+| Low voices (73-130 Hz), melisma, repeated syllables, legato boundaries | | unchanged (or fewer extra boundaries) |
+| Real vocals, 13 clips: notes in all | 2693 | 2576 (-4 %; 12 clips fewer or equal, one acapella 171 -> 175) |
+| Real vocals: notes under 120 ms | 21-49 % | 15-46 % (that acapella 37.4 -> 41.1 %) |
+| Real vocals: tail fragments | 0-6.9 % | 0-5.6 % (one rap clip 2.8 -> 3.2 %, one pro lead 0.7 -> 1.0 %) |
+| Real vocals: AI octave fixes needed | 0-112 per clip | 0-63 (the detector is right on its own) |
+| analyse() speed, AI on (the 2.5 min pro lead / the owner's 1.75 min song, 4 cores) | 13.6 / 16.3 s/min | 13.3 / 16.3 s/min |
+| analyse() speed, AI off | 1.25 / 0.96 s/min | 1.39 / 1.04 s/min (+11 / +9 %) |
+
+Real vocals have no ground truth. An octave changed on 0-4 % of the sung readings (6.2 s in 16.8 min). In 10 of the 12
+clips with a change the waveform repeats as well or better at the new period. The exceptions are one rap clip's
+octave-ambiguous passage and one acapella, which is slightly worse. CREPE, where it is sure, hears the new octave in
+87 % of that time (3.9 of 4.5 s) and the old one in 11 %. Renders, with the same moments moved in both: the middle and
+end of moved notes are as before or better, and Snap 100 % starts and ends improved (5.9 -> 4.7 c, 5.0 -> 4.1 c). The first 40 ms of a moved note is worse on average at +5 / -5 st (mean 42 -> 49 c, 36 -> 43 c), and a -5
+render has 4 % more clicks. Most of this comes from notes that now include their attack (a fragment before the note used
+to stay unmoved); the attack is the hardest part to shift (#1, #6, #10).
+
+**Still open.**
+- A synthetic 1319 Hz "o" whose F1 / F2 lie far below the pitch (noise-dominated, not how sopranos sing) is read an octave
+  low.
+- Rasp at 50 % is read at its waveform's period (2P). CREPE hears it there too.
+- An extreme 2nd harmonic (18 dB over the 1st, a sharp F1) goes an octave up where CREPE says so. That was so before too
+  (19-21 % of the readings).
+- Breathy HNR 10 dB: 1.4 % octave errors and 8-9 notes for 6.
+
 ### 14. Breath noise inside moved notes is thinned
 
 **Measured** (`audit_render buzz`; breathy voice, harmonics to 3.5 kHz, so the band above 5 kHz is noise only):

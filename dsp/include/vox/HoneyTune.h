@@ -10,8 +10,9 @@
 
 /** Honey Tune: the note editor's engine (offline, the whole clip at once).
 
-    analyse()  the pitch line of the clip (the live detector, then cleaned with look-ahead: octave slips
-               fixed against the surrounding notes, small gaps bridged, a median smooths jitter)
+    analyse()  the pitch line of the clip (the live detector, every reading checked at the full rate up to 1600 Hz
+               for the period it really repeats at, then cleaned with look-ahead: octave slips fixed against the
+               surrounding notes, small gaps bridged, a median smooths jitter)
     findNotes()  splits it into notes: start / end, the note's pitch, how far off the nearest note it is
     edits      per note: target pitch, how much of its drift and vibrato to keep
     render()   the clip with the edits, using the live Pitch shifter driven by a plan (so it gets all of
@@ -81,10 +82,11 @@ Channels warp (const Channels& channels, double sampleRate, const Track& track, 
 std::vector<float> warp (const std::vector<float>& mono, double sampleRate, const Track& track, const TimeMap& map,
                          size_t from, size_t to);
 
-/** ai: also run the AI check (CREPE, see Crepe.h) every 30 ms where the voice is up: where it and the
-    detector are an octave apart, the one that agrees with the moments around it wins; loud moments the
-    detector called unvoiced (rasp) but the AI is sure about become notes. Offline only (a few seconds per
-    minute of audio, on several threads). */
+/** ai: also run the AI check (CREPE, see Crepe.h) every 30 ms where the voice is up: where most of its estimates
+    over a stretch of the line hear another octave, or where it and the detector are an octave apart and it agrees
+    with the moments around, its octave wins, if the waveform repeats there too; loud moments the detector called
+    unvoiced (rasp) but the AI is sure about become notes. Offline only (a few seconds per minute of audio, on several
+    threads). */
 Track analyse (const std::vector<float>& mono, double sampleRate, bool ai = true, const std::atomic<bool>* cancel = nullptr);
 /** The AI check on its own (analyse() runs it when ai is on). */
 void aiCheck (Track& track, const std::vector<float>& mono, double sampleRate, const std::atomic<bool>* cancel = nullptr);

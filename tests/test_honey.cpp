@@ -693,3 +693,159 @@ TEST_CASE ("Honey Tune: legato notes (sung on with a glide) are found one each, 
         if (k > 0) CHECK (std::abs (notes[k].start / kSr - (static_cast<double> (k) * noteLen + 0.5 * glide)) < 0.035);   // the boundary in the glide
     }
 }
+
+namespace {
+/** Share (%) of the readings more than half an octave off the sung pitch (where both have one). */
+double octaveErrors (const Track& t, const std::vector<double>& truth)
+{
+    int both = 0, off = 0;
+    for (size_t i = 0; i < t.time.size(); ++i)
+    {
+        const auto s = static_cast<size_t> (std::max (0.0, t.time[i]));
+        if (s >= truth.size() || truth[s] <= 0.0 || t.midi[i] <= 0.0) continue;
+        ++both;
+        if (std::abs (t.midi[i] - truth[s]) > 6.0) ++off;
+    }
+    return both > 0 ? 100.0 * off / both : 100.0;
+}
+
+/** Notes of 0.6 s (30 cent vibrato) with 0.12 s silences: harmonics (1 / h, up to 10 kHz) through resonances at
+    `formants` (gainDb, Q 4). truth: the sung pitch per sample (0 between notes). */
+std::vector<float> singThrough (const std::vector<double>& pitches, const std::vector<double>& formants, double gainDb, std::vector<double>& truth)
+{
+    std::vector<Biquad> fm (formants.size());
+    for (size_t k = 0; k < fm.size(); ++k) design::apply (fm[k], design::bell (formants[k], gainDb, 4.0, kSr));
+    std::vector<float> x;
+    double ph = 0.0;
+    for (double m : pitches)
+    {
+        const double sec = 0.6;
+        for (size_t i = 0; i < static_cast<size_t> ((sec + 0.12) * kSr); ++i)
+        {
+            const double t = static_cast<double> (i) / kSr;
+            double v = 0.0, sung = 0.0;
+            if (t < sec)
+            {
+                sung = m + 0.3 * std::sin (2 * std::numbers::pi * 5.5 * std::max (0.0, t - 0.1));
+                const double f = 440.0 * std::pow (2.0, (sung - 69.0) / 12.0);
+                ph += f / kSr;
+                ph -= std::floor (ph);
+                for (int h = 1; h * f < 10000.0; ++h) v += std::sin (2 * std::numbers::pi * h * ph) / h;
+                v *= std::min ({ 1.0, t / 0.03, (sec - t) / 0.03 });
+            }
+            for (auto& b : fm) v = b.process (v);
+            x.push_back (static_cast<float> (v));
+            truth.push_back (sung);
+        }
+    }
+    float peak = 1.0e-9f;
+    for (float s : x) peak = std::max (peak, std::abs (s));
+    for (auto& s : x) s *= 0.3f / peak;
+    return x;
+}
+
+/** A breathy "ah": harmonics (1 / h) plus aspiration noise (high-passed, pulsed with each glottal cycle), aspDb against
+    them at the source, through five vocal-tract resonances; notes of 0.5 s with 0.15 s silences. */
+std::vector<float> singBreathy (const std::vector<double>& pitches, double aspDb, std::vector<double>& truth)
+{
+    struct Resonance
+    {
+        double a = 0.0, b = 0.0, c = 0.0, y1 = 0.0, y2 = 0.0;
+        double run (double v) { const double y = a * v + b * y1 + c * y2; y2 = y1; y1 = y; return y; }
+    };
+    std::array<Resonance, 5> tract;
+    const double F[] = { 730, 1090, 2440, 3400, 4300 }, B[] = { 80, 90, 120, 180, 250 };
+    for (size_t k = 0; k < tract.size(); ++k)
+    {
+        tract[k].c = -std::exp (-2 * std::numbers::pi * B[k] / kSr);
+        tract[k].b = 2 * std::exp (-std::numbers::pi * B[k] / kSr) * std::cos (2 * std::numbers::pi * F[k] / kSr);
+        tract[k].a = 1 - tract[k].b - tract[k].c;
+    }
+    Biquad hp; design::apply (hp, design::butterworth (true, 1200.0, kSr));
+    testsig::Rng rng (7);
+    const double asp = std::pow (10.0, aspDb / 20.0);
+    std::vector<float> x;
+    double ph = 0.0;
+    for (double m : pitches)
+    {
+        const double sec = 0.5;
+        for (size_t i = 0; i < static_cast<size_t> ((sec + 0.15) * kSr); ++i)
+        {
+            const double t = static_cast<double> (i) / kSr;
+            const double noise = hp.process (rng.normal());
+            double v = 0.0, sung = 0.0;
+            if (t < sec)
+            {
+                sung = m + 0.2 * std::sin (2 * std::numbers::pi * 5.5 * std::max (0.0, t - 0.15));
+                const double f = 440.0 * std::pow (2.0, (sung - 69.0) / 12.0);
+                ph += f / kSr;
+                ph -= std::floor (ph);
+                double h = 0.0;
+                for (int k = 1; k * f < 0.45 * kSr; ++k) h += std::sin (2 * std::numbers::pi * k * ph) / k;
+                const double pulse = 0.5 + 0.5 * std::cos (2 * std::numbers::pi * ph);
+                v = std::min ({ 1.0, t / 0.03, (sec - t) / 0.05 }) * (0.35 * h + asp * 3.0 * pulse * pulse * noise);
+            }
+            for (auto& r : tract) v = r.run (v);
+            x.push_back (static_cast<float> (v));
+            truth.push_back (sung);
+        }
+    }
+    float peak = 1.0e-9f;
+    for (float s : x) peak = std::max (peak, std::abs (s));
+    for (auto& s : x) s *= 0.4f / peak;
+    return x;
+}
+}
+
+TEST_CASE ("Honey Tune: high notes (784 / 988 / 1175 Hz) are read in their own octave, one note each", "[honey]")
+{
+    // A soprano "ee": the fundamental far above F1, its 2nd and 3rd harmonics on F2 / F3. The live detector (12 kHz,
+    // whole lags, 1000 Hz at most) read these 1 - 2.5 octaves low, the notes in pieces.
+    std::vector<double> truth;
+    const auto x = singThrough ({ 79, 83, 86 }, { 2900.0, 3600.0 }, 12.0, truth);
+    for (bool ai : { false, true })
+    {
+        const auto t = analyse (x, kSr, ai);
+        const auto notes = findNotes (t);
+        INFO ("AI " << ai << ": octave errors " << octaveErrors (t, truth) << " % of the readings, " << notes.size() << " notes");
+        CHECK (octaveErrors (t, truth) < 1.0);
+        REQUIRE (notes.size() == 3);
+        const double want[] = { 79, 83, 86 };
+        for (size_t k = 0; k < 3; ++k) CHECK (notes[k].pitch == Approx (want[k]).margin (0.15));
+    }
+}
+
+TEST_CASE ("Honey Tune: a breathy voice (HNR about 12 dB) keeps its octave, its notes whole", "[honey]")
+{
+    // The noise made the live detector take two periods for one on half the readings and let go in places: 6 notes
+    // came out as 14 - 21 pieces, a third of them an octave low.
+    std::vector<double> truth;
+    const std::vector<double> sung { 55, 57, 59, 60, 59, 57 };
+    const auto x = singBreathy (sung, -9.0, truth);   // HNR 12 dB (the audit's measure)
+    for (bool ai : { false, true })
+    {
+        const auto t = analyse (x, kSr, ai);
+        const auto notes = findNotes (t);
+        INFO ("AI " << ai << ": octave errors " << octaveErrors (t, truth) << " % of the readings, " << notes.size() << " notes");
+        CHECK (octaveErrors (t, truth) < 1.0);
+        REQUIRE (notes.size() == sung.size());
+        for (size_t k = 0; k < sung.size(); ++k) CHECK (notes[k].pitch == Approx (sung[k]).margin (0.15));
+    }
+}
+
+TEST_CASE ("Honey Tune: a low voice whose 2nd harmonic towers over the 1st is not read an octave up", "[honey]")
+{
+    // F1 on the 2nd harmonic (+18 dB): the waveform repeats nearly as well at half the period. The period check must
+    // still keep the note where it's sung (and its fading end with it).
+    std::vector<double> truth;
+    const double f2 = 2.0 * 440.0 * std::pow (2.0, (50.0 - 69.0) / 12.0);
+    const auto x = singThrough ({ 50, 50.5, 49.5 }, { f2, 870.0 }, 18.0, truth);
+    for (bool ai : { false, true })
+    {
+        const auto t = analyse (x, kSr, ai);
+        const auto notes = findNotes (t);
+        INFO ("AI " << ai << ": octave errors " << octaveErrors (t, truth) << " % of the readings, " << notes.size() << " notes");
+        CHECK (octaveErrors (t, truth) < 1.0);
+        CHECK (notes.size() == 3);
+    }
+}
