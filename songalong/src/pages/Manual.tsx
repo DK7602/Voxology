@@ -237,8 +237,8 @@ const TOPICS: { title: string; body: ReactNode }[] = [
       <ul>
         <li>
           <b>Print</b> makes a chord sheet (or save it as a PDF from there): page 1 has the song’s details and the chord diagrams for your
-          instrument; the words and chords start on page 2, sized to fit on as few pages as read well (one or two for most songs;{" "}
-          <b>Two columns</b> fits more on a page). Tick <b>Lead part</b> to print the riffs and solos too, on a page of their own.
+          instrument; the words and chords start on page 2, sized to fit on as few pages as read well (one or two for most songs, in two
+          columns; untick <b>Two columns</b> for one wide column). Tick <b>Lead part</b> to print the riffs and solos too, on a page of their own.
         </li>
         <li>
           <b>Export</b>: a PDF chord sheet, ChordPro, plain text or a MIDI file, with your capo and transpose.

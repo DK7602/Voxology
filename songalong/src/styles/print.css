@@ -167,10 +167,15 @@ body.print-body::before {
   column-gap: 32px;
 }
 .print-page .sheet-block {
-  break-inside: avoid;
   margin-bottom: 0.82em;
 }
+/* short sections stay together; a long one breaks only between lines, never under its heading */
+.print-page .sheet-block.keep,
+.print-page .sheet-pair {
+  break-inside: avoid;
+}
 .print-page .sheet-section {
+  break-after: avoid;
   font-weight: 700;
   font-size: 0.94em;
   text-transform: uppercase;

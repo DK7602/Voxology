@@ -56,7 +56,8 @@ export function PrintPage() {
     chordStyle: params.get("cs") === "full" || params.get("cs") === "power" ? (params.get("cs") as "full" | "power") : "recorded",
     capoShapes: params.get("sh") !== "0",
   };
-  const columns = params.get("cols") === "2";
+  // two columns unless one is asked for: twice the words and chords on a page
+  const columns = params.get("cols") !== "1";
 
   if (error) return <div className="print-page"><p>{error}</p><Link to="/">Back</Link></div>;
   if (!record) return <div className="print-page"><p>Preparing the sheet…</p></div>;
@@ -109,7 +110,11 @@ function Sheet({
       const next = chooseFit((scale) => {
         box.style.setProperty("--fit", String(scale));
         const head = body.getBoundingClientRect().top - box.getBoundingClientRect().top;
-        const blocks = [...body.children, foot].map(outerHeight);
+        // each piece's height is the step to the next piece's top: the gap between them included
+        const starts = [...[...body.children].flatMap(pieceStarts), foot];
+        const tops = starts.map((e) => e.getBoundingClientRect().top);
+        const end = foot.getBoundingClientRect().bottom;
+        const blocks = tops.map((t, i) => (i + 1 < tops.length ? tops[i + 1] : end) - t);
         return pagesFor(blocks, columns ? 2 : 1, head);
       });
       setFit((f) => (f && f.scale === next.scale && f.pages === next.pages ? f : next));
@@ -232,10 +237,16 @@ function Sheet({
   );
 }
 
-/** outer height of an element: its box and its margins */
-function outerHeight(el: Element): number {
-  const css = getComputedStyle(el);
-  return el.getBoundingClientRect().height + (parseFloat(css.marginTop) || 0) + (parseFloat(css.marginBottom) || 0);
+/** A section of up to this many lines is kept together on a page; a longer one (or a song with no
+ *  sections, all one block) may break between its lines. */
+const KEEP_LINES = 8;
+
+/** Where each piece of a block of the words begins, the pieces printing whole: a short section all
+ *  together; a long one line by line, its heading with its first line. */
+function pieceStarts(block: Element): Element[] {
+  if (block.classList.contains("keep")) return [block];
+  const parts = [...block.children];
+  return parts[0]?.classList.contains("sheet-section") ? [parts[0], ...parts.slice(2)] : parts;
 }
 
 /** The title, artist and the song's details, at the top of the first page and of the words. */
@@ -273,7 +284,7 @@ function Words({ doc, view }: { doc: SongDoc; view: ChordView }) {
   return (
     <>
       {intro.length > 0 && (
-        <div className="sheet-block">
+        <div className="sheet-block keep">
           <div className="sheet-section">Intro</div>
           <div className="sheet-line">
             <ChordLine text="" chords={intro.map(({ c, i }) => ({ name: view.shown(c.name), col: i, key: i }))} />
@@ -281,7 +292,7 @@ function Words({ doc, view }: { doc: SongDoc; view: ChordView }) {
         </div>
       )}
       {groupSections(doc.lines.length, (i) => !!doc.lines[i].section).map((block) => (
-        <div className="sheet-block" key={block[0]}>
+        <div className={"sheet-block" + (block.length <= KEEP_LINES ? " keep" : "")} key={block[0]}>
           {doc.lines[block[0]].section && <div className="sheet-section">{doc.lines[block[0]].section}</div>}
           {block.map((i) => {
             const line = doc.lines[i];
@@ -290,7 +301,7 @@ function Words({ doc, view }: { doc: SongDoc; view: ChordView }) {
               .map((p) => ({ name: view.shown(p.chord.name), col: p.col, key: p.index }));
             const gap = gapAfterLine(doc, i);
             return (
-              <div key={i}>
+              <div key={i} className="sheet-pair">
                 <div className="sheet-line">
                   <ChordLine text={line.text} chords={placed} />
                 </div>
