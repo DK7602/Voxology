@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { SongRecord } from "../../shared/api";
-import type { Instrument } from "../../shared/types";
+import type { Instrument, SongDoc } from "../../shared/types";
 import { parseChord } from "../../shared/music/chords";
 import { prettyAccidentals } from "../../shared/music/notes";
 import { FRETTED, isFretted } from "../../shared/music/voicings";
@@ -13,12 +13,17 @@ import { FretDiagram, PianoDiagram } from "../components/ChordDiagram";
 import { Logo } from "../components/Artwork";
 import { IconPrinter } from "../components/Icons";
 import { errorText } from "../components/ui";
-import { useChordView, type ViewSettings } from "../player/hooks";
+import { useChordView, type ChordView, type ViewSettings } from "../player/hooks";
 import { ChordLine } from "./ChordLine";
+import { chooseFit, COLUMN_GAP, PAGE, pagesFor } from "./printFit";
 import { voicingFor } from "./voicing";
 import "../styles/print.css";
 
-/** A clean chord sheet for printing / saving as PDF: chords in bold red over black lyrics. */
+/**
+ * A clean chord sheet for printing / saving as PDF: chords in bold red over black lyrics. Page 1
+ * has the song's details and its chord diagrams; the words and chords start on page 2, under the
+ * title and details again, sized to fit on as few pages as read well. The lead part is optional.
+ */
 export function PrintPage() {
   const { id = "" } = useParams();
   const [params, setParams] = useSearchParams();
@@ -60,6 +65,7 @@ export function PrintPage() {
       record={record}
       settings={settings}
       columns={columns}
+      lead={params.get("lead") === "1"}
       autoPrint={params.get("print") === "1"}
       onOption={(k, v) => {
         const next = new URLSearchParams(params);
@@ -75,25 +81,51 @@ function Sheet({
   record,
   settings,
   columns,
+  lead,
   autoPrint,
   onOption,
 }: {
   record: SongRecord;
   settings: ViewSettings;
   columns: boolean;
+  lead: boolean;
   autoPrint: boolean;
   onOption: (key: string, value: string) => void;
 }) {
   const doc = record.doc;
   const view = useChordView(doc, settings);
+  const measure = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<{ scale: number; pages: number } | null>(null);
+  const settingsKey = JSON.stringify(settings);
+
+  // size the words and chords for the printed page: measured off-screen at the page's width
+  useLayoutEffect(() => {
+    let gone = false;
+    void document.fonts.ready.then(() => {
+      const box = measure.current;
+      const body = box?.querySelector<HTMLElement>(".sheet-body");
+      const foot = box?.querySelector<HTMLElement>(".sheet-foot");
+      if (gone || !box || !body || !foot) return;
+      const next = chooseFit((scale) => {
+        box.style.setProperty("--fit", String(scale));
+        const head = body.getBoundingClientRect().top - box.getBoundingClientRect().top;
+        const blocks = [...body.children, foot].map(outerHeight);
+        return pagesFor(blocks, columns ? 2 : 1, head);
+      });
+      setFit((f) => (f && f.scale === next.scale && f.pages === next.pages ? f : next));
+    });
+    return () => {
+      gone = true;
+    };
+  }, [doc, settingsKey, columns]);
 
   useEffect(() => {
     document.title = `${doc.title} – chord sheet`;
-    if (autoPrint) {
-      const t = setTimeout(() => window.print(), 600);
+    if (autoPrint && fit) {
+      const t = setTimeout(() => window.print(), 400);
       return () => clearTimeout(t);
     }
-  }, [doc.title, autoPrint]);
+  }, [doc.title, autoPrint, fit]);
 
   const legend = useMemo(() => {
     const seen = new Map<string, string>();
@@ -106,9 +138,9 @@ function Sheet({
     return [...seen.entries()];
   }, [doc.chords, view]);
 
-  const firstLine = doc.lines[0]?.beat ?? Infinity;
-  const intro = doc.chords.map((c, i) => ({ c, i })).filter(({ c }) => c.beat < firstLine);
   const instName = settings.instrument === "piano" ? "Piano" : settings.instrument === "cajon" ? "Cajon" : FRETTED[settings.instrument].name;
+  const hasLead = !!doc.lead && doc.lead.length > 0;
+  const foot = <footer className="sheet-foot">Printed from SongAlong · {new Date().toLocaleDateString()}</footer>;
 
   return (
     <div className="print-page">
@@ -127,11 +159,89 @@ function Sheet({
         <label>
           <input type="checkbox" checked={columns} onChange={(e) => onOption("cols", e.target.checked ? "2" : "1")} /> Two columns
         </label>
+        {hasLead && (
+          <label>
+            <input type="checkbox" checked={lead} onChange={(e) => onOption("lead", e.target.checked ? "1" : "0")} /> Lead part
+          </label>
+        )}
+        {fit && (
+          <span className="print-fit">
+            Words &amp; chords: {fit.pages} {fit.pages === 1 ? "page" : "pages"}
+            {fit.scale < 1 && ` (text at ${Math.round(fit.scale * 100)}%)`}
+          </span>
+        )}
         <button className="btn btn-primary btn-sm" onClick={() => window.print()}>
           <IconPrinter size={18} /> Print / Save as PDF
         </button>
       </div>
 
+      {legend.length > 0 && (
+        <section className="sheet-first">
+          <SheetTop doc={doc} view={view} settings={settings} />
+          <section className="sheet-legend">
+            <h2>Chords ({instName})</h2>
+            <div className="legend-grid">
+              {legend.map(([shown, original]) => {
+                const v = voicingFor(original, view, settings, 0);
+                return (
+                  <div key={shown} className={"legend-item" + (v?.kind === "piano" ? " piano" : "")}>
+                    <div className="legend-name"><ChordName symbol={shown} /></div>
+                    <CategoryTag symbol={view.sounding(original)} filledBy={view.filledBy(original)} />
+                    {v?.kind === "fret" && <FretDiagram voicing={v.voicing} strings={v.strings} size={v.strings > 4 ? 96 : 84} />}
+                    {v?.kind === "piano" && <PianoDiagram voicing={v.voicing} size={150} />}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </section>
+      )}
+
+      <section className={"sheet-words" + (legend.length > 0 ? " new-page" : "")} style={{ "--fit": fit?.scale ?? 1 } as CSSProperties}>
+        <SheetTop doc={doc} view={view} settings={settings} compact />
+        <div className={"sheet-body" + (columns ? " two-col" : "")}>
+          <Words doc={doc} view={view} />
+        </div>
+        {foot}
+      </section>
+
+      {lead && hasLead && (
+        <section className="sheet-lead">
+          <div className="sheet-section">Lead part</div>
+          <p className="sheet-lead-note">Notes with octave (middle C = C4) and length in beats; r = rest.</p>
+          <pre>
+            {prettyAccidentals(
+              exportLead(
+                doc.lead!.map((e) => ({ ...e, name: view.sounding(e.name) })),
+                doc.beatsPerBar,
+              ),
+            )}
+          </pre>
+        </section>
+      )}
+
+      {/* the words page as printed, out of sight, for measuring (two columns measured one column wide) */}
+      <div className="print-page print-measure no-print" ref={measure} aria-hidden="true" style={{ width: PAGE.width }}>
+        <SheetTop doc={doc} view={view} settings={settings} compact />
+        <div className="sheet-body" style={{ width: columns ? (PAGE.width - COLUMN_GAP) / 2 : PAGE.width }}>
+          <Words doc={doc} view={view} />
+        </div>
+        {foot}
+      </div>
+    </div>
+  );
+}
+
+/** outer height of an element: its box and its margins */
+function outerHeight(el: Element): number {
+  const css = getComputedStyle(el);
+  return el.getBoundingClientRect().height + (parseFloat(css.marginTop) || 0) + (parseFloat(css.marginBottom) || 0);
+}
+
+/** The title, artist and the song's details, at the top of the first page and of the words. */
+function SheetTop({ doc, view, settings, compact }: { doc: SongDoc; view: ChordView; settings: ViewSettings; compact?: boolean }) {
+  return (
+    <div className={"sheet-top" + (compact ? " compact" : "")}>
       <header className="sheet-head">
         <div>
           <h1>{doc.title || "Untitled"}</h1>
@@ -152,77 +262,52 @@ function Sheet({
         {isFretted(settings.instrument) && <span><b>Tuning</b> {FRETTED[settings.instrument].tuningNames.join(" ")}</span>}
         {settings.transpose !== 0 && <span><b>Transposed</b> {settings.transpose > 0 ? "+" : ""}{settings.transpose}</span>}
       </div>
+    </div>
+  );
+}
 
-      <section className="sheet-legend">
-        <h2>Chords ({instName})</h2>
-        <div className="legend-grid">
-          {legend.map(([shown, original]) => {
-            const v = voicingFor(original, view, settings, 0);
+/** The intro's chords, then each section of lines with its chords over the words. */
+function Words({ doc, view }: { doc: SongDoc; view: ChordView }) {
+  const firstLine = doc.lines[0]?.beat ?? Infinity;
+  const intro = doc.chords.map((c, i) => ({ c, i })).filter(({ c }) => c.beat < firstLine);
+  return (
+    <>
+      {intro.length > 0 && (
+        <div className="sheet-block">
+          <div className="sheet-section">Intro</div>
+          <div className="sheet-line">
+            <ChordLine text="" chords={intro.map(({ c, i }) => ({ name: view.shown(c.name), col: i, key: i }))} />
+          </div>
+        </div>
+      )}
+      {groupSections(doc.lines.length, (i) => !!doc.lines[i].section).map((block) => (
+        <div className="sheet-block" key={block[0]}>
+          {doc.lines[block[0]].section && <div className="sheet-section">{doc.lines[block[0]].section}</div>}
+          {block.map((i) => {
+            const line = doc.lines[i];
+            const placed = chordsInLine(doc, i)
+              .filter((p) => !p.carried || !line.text)
+              .map((p) => ({ name: view.shown(p.chord.name), col: p.col, key: p.index }));
+            const gap = gapAfterLine(doc, i);
             return (
-              <div key={shown} className={"legend-item" + (v?.kind === "piano" ? " piano" : "")}>
-                <div className="legend-name"><ChordName symbol={shown} /></div>
-                <CategoryTag symbol={view.sounding(original)} filledBy={view.filledBy(original)} />
-                {v?.kind === "fret" && <FretDiagram voicing={v.voicing} strings={v.strings} size={v.strings > 4 ? 96 : 84} />}
-                {v?.kind === "piano" && <PianoDiagram voicing={v.voicing} size={150} />}
+              <div key={i}>
+                <div className="sheet-line">
+                  <ChordLine text={line.text} chords={placed} />
+                </div>
+                {gap && (
+                  <div className="sheet-line">
+                    <ChordLine
+                      text=""
+                      chords={gap.chords.filter((p) => !p.carried).map((p, k) => ({ name: view.shown(p.chord.name), col: k, key: p.index }))}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
-      </section>
-
-      <section className={"sheet-body" + (columns ? " two-col" : "")}>
-        {intro.length > 0 && (
-          <div className="sheet-block">
-            <div className="sheet-section">Intro</div>
-            <div className="sheet-line">
-              <ChordLine text="" chords={intro.map(({ c, i }) => ({ name: view.shown(c.name), col: i, key: i }))} />
-            </div>
-          </div>
-        )}
-        {groupSections(doc.lines.length, (i) => !!doc.lines[i].section).map((block) => (
-          <div className="sheet-block" key={block[0]}>
-            {doc.lines[block[0]].section && <div className="sheet-section">{doc.lines[block[0]].section}</div>}
-            {block.map((i) => {
-              const line = doc.lines[i];
-              const placed = chordsInLine(doc, i)
-                .filter((p) => !p.carried || !line.text)
-                .map((p) => ({ name: view.shown(p.chord.name), col: p.col, key: p.index }));
-              const gap = gapAfterLine(doc, i);
-              return (
-                <div key={i}>
-                  <div className="sheet-line">
-                    <ChordLine text={line.text} chords={placed} />
-                  </div>
-                  {gap && (
-                    <div className="sheet-line">
-                      <ChordLine
-                        text=""
-                        chords={gap.chords.filter((p) => !p.carried).map((p, k) => ({ name: view.shown(p.chord.name), col: k, key: p.index }))}
-                      />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </section>
-      {doc.lead && doc.lead.length > 0 && (
-        <section className="sheet-lead">
-          <div className="sheet-section">Lead part</div>
-          <p className="sheet-lead-note">Notes with octave (middle C = C4) and length in beats; r = rest.</p>
-          <pre>
-            {prettyAccidentals(
-              exportLead(
-                doc.lead.map((e) => ({ ...e, name: view.sounding(e.name) })),
-                doc.beatsPerBar,
-              ),
-            )}
-          </pre>
-        </section>
-      )}
-      <footer className="sheet-foot">Printed from SongAlong · {new Date().toLocaleDateString()}</footer>
-    </div>
+      ))}
+    </>
   );
 }
 
